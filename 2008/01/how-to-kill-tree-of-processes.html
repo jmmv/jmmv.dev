@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="Yesterday I mentioned the need for a way to kill a tree of processes in order to effectively implement timeouts for test cases.  Let's see how the current al...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2008/01/how-to-kill-tree-of-processes.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2008/01/how-to-kill-tree-of-processes.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>How to kill a tree of processes - Julio Merino</title>
+    <meta content="How to kill a tree of processes - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>How to kill a tree of processes</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+16th,
+  
+2008
+at
+22:31 UTC
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        <a href="http://julipedia.blogspot.com/2008/01/implementing-timeouts-for-test-cases.html">Yesterday</a> I mentioned the need for a way to kill a tree of processes in order to effectively implement timeouts for test cases.  Let's see how the <a href="http://mtn-host.prjek.net/viewmtn/atf/revision/file/f51b4c7f694ff98e0e303743797eb3cccb6f9ea4/atf/procs.cpp">current algorithm</a> in ATF works:<br /><div><ol><li>The root process is stopped by sending a SIGSTOP to it so that it cannot spawn any new children while being processed.</li><li>Get the whole list of active processes and filter them to only get those that are direct children of the root process.</li><li>Iterate over all the direct children and repeat from 1, recursively.</li><li>Send the real desired signal (typically SIGTERM) to the root process.</li></ol><div>There are two major caveats in the above algorithm. First, point 2. There is no standard way to get the list of processes of a Unix system, so I have had to code three different implementations so far for this trivial requirement: one for NetBSD's KVM, one for Mac OS X's sysctl kern.proc node and one for Linux's procfs.</div><div><br /></div><div>Then, and the worst one, comes in point 4. Some systems (Linux and Mac OS X so far) do not seem to allow one to send a signal to a stopped process. Well, strictly speaking they allow it, but the second signal seems to be simply ignored whereas under NetBSD the process' execution is resumed and the signal is delivered. I do not know which behavior is right.</div><div><br /></div><div>If we cannot send the signal to the stopped process, we can run into a race condition: we have to wake it up by sending a SIGCONT and then deliver the signal, but in between these events the process may have spawned new children that we are not aware of.</div><div><br /></div><div><i>Still</i>, being able to send a signal to a stopped process does not completely resolve the race condition. If we are sending a signal that the user can reprogram (such as SIGTERM), that process may fork another one before exiting, and thus we'd not kill this one.  But... well... this is impossible to resolve with the existing kernel APIs as far as I can tell.</div><div><br /></div><div>One solution to this problem is killing a timed-out test by using SIGKILL instead of SIGTERM. SIGKILL could work on any case because means <i>die immediately</i>, without giving a chance to the process to mess with it. Therefore SIGCONT would not be needed in any case &mash;because you can simply kill a stopped process and it will die immediately as expected&mdash; and the process would not have a chance to spawn any more children after it had been stopped.</div><div><br /></div><div>Blah, after writing this I wonder why I went with all the complexity of dealing with signals that are not SIGKILL... say over-engineering if you want...</div></div>
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+          <a href="http://julipedia.meroh.net/2008/01/how-to-kill-tree-of-processes.html">Posted on
+          The Julipedia</a>
+          &middot;
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2008/01/how-to-kill-tree-of-processes.html";
+            this.page.identifier = "/2008/01/how-to-kill-tree-of-processes";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

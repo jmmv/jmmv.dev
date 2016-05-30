@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="Some of the methods of the Lua C API can raise errors. To get an initial idea on what these are, take a look at the Functions and Types section and pay atten...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2011/01/error-handling-in-lua.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2011/01/error-handling-in-lua.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>Error handling in Lua - Julio Merino</title>
+    <meta content="Error handling in Lua - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Error handling in Lua</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+7th,
+  
+2011
+at
+13:01 UTC
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        Some of the methods of the Lua C API can raise errors. To get an initial idea on what these are, take a look at the <a href="http://www.lua.org/manual/5.1/manual.html#3.7">Functions and Types</a> section and pay attention to the third field of a function description (the one denoted by 'x' in the introduction).<div><br /></div><div>Dealing with the errors raised by these functions is tricky, not to say a nightmare. Also, the <a href="http://www.lua.org/manual/5.1/manual.html#3.6">ridiculously-short documentation on this topic</a> does not help. This post is dedicated to explain how these errors may be handled along with the advantages and disadvantages of each case.</div><div><br /></div><div>The Lua C API provides two modes of execution: protected and unprotected. When in protected mode, all errors caused by Lua are caught and reported to the caller in a controlled manner. When in unprotected mode, the errors just abort the execution of the calling process by default. So, one would think: just run the code in protected mode, right? Yeah, well... entering protected mode is nontrivial and it has its own particularities that make interaction with C++ problematic.<br /><br /></div><div>Let's analyze error reporting by considering a simple example: the <tt>lua_gettable</tt> function.  The following Lua code would error out when executed:<pre>my_array = nil<br />return my_array["test"]</pre>... which is obvious because indexing a non-table object is a mistake.  Now let's consider how this code would look like in C (modulo the <tt>my_array</tt> assignment):<pre>lua_getglobal(state, "my_array");<br />lua_pushstring(state, "test");<br />lua_gettable(state, -2);</pre>Simple, huh? Sure, but as it turns out, <i>any</i> of the API calls (not just <tt>lua_gettable</tt>) in this code can raise errors (I'll call them <i>unsafe</i> functions). What this means is that, unless you run the code with a <tt>lua_pcall</tt> wrapper, your program will simply <i>exit</i> in the face of a Lua error. Uh, your scripting language can "crash" your host program out of your control? Not nice.</div><div><br /></div><div>What would be nice is if each of the Lua C API unsafe functions reported an error (as a return value or whatever) and allowed the caller to decide what to do. Ideally, no state would change in the face of an error. Unfortunately, that is not the case but it is exactly what I would like to do. I am writing a C++ wrapper for Lua in the context of Kyua and fine granularity in error reporting means that automatic cleanup of resources managed by RAII is trivial.</div><div><br /></div><div>Let's analyze the options that we have to control errors caused within the Lua C API. I will explain in a later post the one I have chosen for the wrapper in Kyua (it has to be later because I'm not settled yet!).</div><div><br /><span class="Apple-style-span"><b>Install a panic handler</b></span><div><br /></div><div>Whenever Lua code runs in an unprotected environment, one can use <tt>lua_atpanic</tt> to install a handler for errors.  The function provided by the user is executed when the error occurs and, if the panic function returns, the program exits.  To prevent exiting prematurely, one could opt for two mechanisms:<br /><ul><li>Make the panic handler raise a C++ exception.  Sounds nice, right?  Well, it does not work.  The Lua library is generally built as a C binary which means that our panic handler will be called from within a C environment.  As a result, we cannot throw an exception from our C++ handler and expect things to work: the exception won't propagate correctly from a C++ context to a C context and then back to C++.  Most likely, the program will abort as soon as we leave the C++ world and enter C to unwind the stack.</li><li>Use <tt>setjmp</tt> before the call to the unsafe Lua function and recover with <tt>longjmp</tt> from within the panic handler.  It turns out that this does work <i>but</i> with one important caveat: the stack is completely cleared before the call to the panic handler.  As a result, this prevents the requirement of "leave the stack unmodified on failure" as is desired of any function (report errors early before changing state).</li></ul><span class="Apple-style-span"><b>Run every single call in a protected environment</b></span></div><div><br /></div><div>This is doable but complex and not completely right: to do this, we need to write a C wrapper function for every unsafe API function and run it with <tt>lua_pcall</tt>. The overhead of this approach is significant: something as simple as a call to <tt>lua_gettable</tt> turns into several stack manipulation operations, a call to <tt>lua_pcall</tt> and then further stack modifications to adjust the results.</div><div><br /></div><div>Additionally, in order to prepare the call to <tt>lua_pcall</tt>, one has to use the multiple <tt>lua_push*</tt> functions to prepare the stack for the call. And, guess what, most of these functions that push values onto the stack can themselves fail. So... in order to prepare the environment for a safe call, we are already executing unsafe calls. (Granted, the errors in these case are only due to memory exhaustion... but still, the solution is not fully robust.)</div><div><br /></div><div>Lastly, note that we cannot use <tt>lua_cpcall</tt> because it does discard all return values of the executed function. Which means that we can't really wrap single Lua operations. (We could wrap a whole algorithm though.)<br /><br /><span class="Apple-style-span"><b>Run the whole algorithm in a protected environment</b></span></div><div><br /></div><div>This defeats the whole purpose of the per-function wrapping.  We would need to provide a separate C/C++ function that runs all unsafe code and then call it by means of <tt>lua_pcall</tt> (or <tt>lua_cpcall</tt>) so that errors are captured and reported in a controlled manner.  This seems very efficient... albeit not transparent and will surely cause issues.</div><div><br /></div><div>Why is this problematic? Errors that happen inside the protected environment are managed by means of a <tt>longjmp</tt>. If the code wrapped by <tt>lua_pcall</tt> is a C++ function, it can instantiate objects. These objects have destructors. A <tt>longjmp</tt> outside of the function means that no destructors will run... so objects will leak memory, file descriptors, and anything you can imagine. Doom's day.<br /><br />Yes, I know Lua can be rebuilt to report internal errors by means of exceptions which would make this particular problem a non-issue... but this rules out any pre-packaged Lua binaries (the default is to use <tt>longjmp</tt> and henceforth what packaged binaries use). I do not want to embed Lua into my source tree.  I want to use Lua binary packages shipped with pretty much any OS (hey, including NetBSD!), which means that my code needs to be able to cope with Lua binaries that use <tt>setjmp</tt>/<tt>longjmp</tt> internally.</div></div><div><br /></div><div><span class="Apple-style-span" ><b>Closing remarks</b></span></div><div><span class="Apple-style-span" ><b><br /></b></span></div><div><span class="Apple-style-span" >I hope the above description makes any sense because I had to omit many, many details in order to make the post reasonably short. It could also be that there are other alternatives I have not considered, in which case I'd love to know them. Trying to find a solution to the above problem has already sucked several days of my free time, which translates in Kyua not seeing any further development until a solution is found!</span></div>
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+          <a href="http://julipedia.meroh.net/2011/01/error-handling-in-lua.html">Posted on
+          The Julipedia</a>
+          &middot;
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2011/01/error-handling-in-lua.html";
+            this.page.identifier = "/2011/01/error-handling-in-lua";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

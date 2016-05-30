@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="Here goes another portability issue I've met multiple times while packaging software for NetBSD 2.x, where libpthread has some restrictions that other system...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2004/11/dynamic-open-of-libpthread-considered.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2004/11/dynamic-open-of-libpthread-considered.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>Dynamic open of libpthread considered harmful - Julio Merino</title>
+    <meta content="Dynamic open of libpthread considered harmful - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Dynamic open of libpthread considered harmful</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+November
+
+14th,
+  
+2004
+at
+20:21 UTC
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        <p>Here goes another portability issue I've met multiple times while packaging software for <a href="http://www.netbsd.org/">NetBSD</a> 2.x, where libpthread has some restrictions that other systems don't seem to have. Simply put, a non-threaded program cannot become threaded at run time, because, if it does, you get a nice "Abort trap". But, how can this happen?</p>  <p>Suppose you have an application that is not linked against libpthread, neither directly nor indirectly (through required libraries). The initialization code used to set up this program doesn't need to care about threads, because it's assumed that they won't be used. Hence you have a non-threaded program. Note that the important part here is <i>the initialization code used to setup the program</i>, not whether the program uses calls to <tt>pthread_*</tt> functions or not.</p>  <p>Now imagine that this non-thread program loads a shared object (be it a library or a plugin) using <tt>dlopen(3)</tt>. This is not by itself a problem. The funny part comes when the shared object being opened is linked against libpthread; that is, threaded code. There you have the "Abort trap". You have loaded threaded code into a non-threaded application. Here is a little example for you to play with:</p>  <pre>#include &lt;dlfcn.h&gt;<br />#include &lt;stdio.h&gt;<br />#include &lt;stdlib.h&gt;  <p>int<br />main(void)<br />{<br />   void *handle;<br /></p><p>    (void)printf("Loading libpthread.son");<br />   handle = dlopen("libpthread.so", RTLD_LAZY);<br />   (void)printf("libpthread.so loadedn");<br />   dlclose(handle);</p><p>    return EXIT_SUCCESS;<br />}</p></pre><p></p>  <p>Can this problem be worked around? Sure. It's as simple as linking the non-threaded application against libpthread (even if it won't make any use of threads), because this library will override the initialization code used to set up the program. I've done this, for example, in the <tt>gtk-query-immodules-2.0</tt> utility that comes with <a href="http://www.gtk.org/">GTK+</a>, because some plugins loaded by it are threaded.</p>  <p>Considering the previous example, doing: <tt>cc test.c ; ./a.out</tt> will produce a crash.  But <tt>cc -lpthread test.c ; ./a.out</tt> will not.  And even <tt>cc test.c ; LD_PRELOAD=/usr/lib/libpthread.so ./a.out</tt> will work too.  Remember?  It's the initialization code that matters, not the amount of threads used by the code.</p>  <p>Now, before thinking this is a bug in NetBSD, let me say that this was a design decision in the libpthread library. I don't remember the rationale behind it, but I guess you should be able to find it <a href="http://www.google.com/">Google</a>ing a bit ;-)</p><p class="mobile-post"></p>
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+          <a href="http://julipedia.meroh.net/2004/11/dynamic-open-of-libpthread-considered.html">Posted on
+          The Julipedia</a>
+          &middot;
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2004/11/dynamic-open-of-libpthread-considered.html";
+            this.page.identifier = "/2004/11/dynamic-open-of-libpthread-considered";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

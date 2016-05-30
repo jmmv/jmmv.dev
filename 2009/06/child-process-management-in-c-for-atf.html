@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="Let's face it: spawning child processes in Unix is a "mess". Yes, the interfaces involved (fork, wait, pipe) are really elegant and easy to understand, but e...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2009/06/child-process-management-in-c-for-atf.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2009/06/child-process-management-in-c-for-atf.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>Child-process management in C for ATF - Julio Merino</title>
+    <meta content="Child-process management in C for ATF - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Child-process management in C for ATF</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+June
+
+21st,
+  
+2009
+at
+17:40 UTC
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        Let's face it: spawning child processes in Unix is a "mess". Yes, the interfaces involved (fork, wait, pipe) are really elegant and easy to understand, but every single time you need to spawn a new child process to, later on, execute a random command, you have to write quite a bunch of error-prone code to cope with it. If you have ever used any other programming language with higher-level abstraction layers — just check Python's subprocess.Popen — you surely understand what I mean.<div><br /><div><div>The current code in ATF has many places were child processes have to be spawned. I recently had to add yet another case of this, and... enough was enough. Since then, I've been working on a C API to spawn child processes from within ATF's internals and just pushed it to the repository. It's still fairly incomplete, but with minor tweaks, it'll keep all the dirty details of process management contained in a single, one-day-to-be-portable module.</div><div><br /></div><div>The interface tries to mimic the one that was designed on my Boost.Process Summer of Code project, but in C, which is quite painful. The main idea is to have a fork function to which you pass the subroutine you want to run on the child, the behavior you want for the stdout stream and the behavior you want for the stderr steam. These behaviors can be any of capture (aka create pipes for IPC communcations), silence (aka redirect to /dev/null), redirect to file descriptor and redirect to file. For simplicity, I've omitted stdin. With all this information, the fork function returns you an opaque structure representing the child, from which you can obtain the IPC channels if you requested them and on which you can wait for finalization.</div><div><br /></div><div>Here is a little example, with tons of details such as error handling or resource finalization removed for simplicity. The code below would spawn "/bin/ls" and store its output in two files named ls.out and ls.err:</div><pre>static<br />atf_error_t<br />run_ls(const void *v)<br />{<br /> system("/bin/ls");<br /> return atf_no_error();<br />}<br /><br />static<br />void<br />some_function(...)<br />{<br /> atf_process_stream_t outsb, errsb;<br /> atf_process_child_t child;<br /> atf_process_status_t status;<br /><br /> atf_process_status_init_redirect_path(&amp;outsb, "ls.out");<br /> atf_process_status_init_redirect_path(&amp;errsb, "ls.err");<br /><br /> atf_process_fork(&amp;child, run_ls, &amp;outsb, &amp;errsb, NULL);<br /> ... yeah, here comes the concurrency! ...<br /> atf_process_child_wait(&amp;child, &amp;status);<br /><br /> if (atf_process_status_exited(&amp;status))<br />     printf("Exit: %dn", atf_process_status_exitstatus(&amp;status));<br /> else<br />     printf("Error!");<br />}</pre><div>Yeah, quite verbose, huh? Well, it's the price to pay to simulate namespaces and similar other things in C. I'm not too happy with the interface yet, though, because I've already encountered a few gotchas when trying to convert some of the existing old fork calls to the new module. But, should you want to check the whole mess, <a href="http://mtn-host.prjek.net/viewmtn/atf/revision/info/3ba2af4ab1cad67108c3fb1aea15e8e0168667ff">check out the corresponding revision</a>.</div></div></div>
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+          <a href="http://julipedia.meroh.net/2009/06/child-process-management-in-c-for-atf.html">Posted on
+          The Julipedia</a>
+          &middot;
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2009/06/child-process-management-in-c-for-atf.html";
+            this.page.identifier = "/2009/06/child-process-management-in-c-for-atf";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

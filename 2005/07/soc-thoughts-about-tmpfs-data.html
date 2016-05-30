@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="The text below is a message I just sent to NetBSD's tech-kern mailing list.  I'm reproducing it here with better formatting and with some e-mail specific sen...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2005/07/soc-thoughts-about-tmpfs-data.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2005/07/soc-thoughts-about-tmpfs-data.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>SoC: Thoughts about tmpfs data representation - Julio Merino</title>
+    <meta content="SoC: Thoughts about tmpfs data representation - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>SoC: Thoughts about tmpfs data representation</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+July
+
+19th,
+  
+2005
+at
+18:37 UTC
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        <p>The text below is a message I just sent to <a href="http://www.netbsd.org/">NetBSD</a>'s <tt>tech-kern</tt> mailing list.  I'm reproducing it here with better formatting and with some e-mail specific sentences removed.</p>  <p>The tmpfs code is up to the point where I have to start implementing the vnode operations. To do this, I have to decide how to organize the file data in memory as well as all other information needed to manage it.</p>  <p>After thinking about this for a while, it seems that the best way to do this is to follow a layout similar to the one used for existing on-disk file systems. That is, I need:</p>  <ul> <li>A set of nodes that describe files.  These could be like regular inodes.</li> <li>A set of blocks that store file contents. These could store directories as well (i.e., the "file" representing the directory contents.).</li> </ul>  <p>Suppressing the former (merging it with directory contents, thus becoming something like the FAT) means that implementing hard links becomes very complex, so the separation is worth it.</p>  <p>Now, to store these two data structures in memory. Before I started coding, I thought I could use malloc/free to allocate and deallocate blocks of memory on the fly. I.e., when a new block is needed, I do a malloc and use it. When it is useless, I do a free and its associated memory is released.</p>  <p>This is inappropriate because malloc/free operate on wired memory. Furthermore, I guess malloc is an expensive operation and should not be used intensively to avoid its overhead (think about how tmpfs could abuse it).</p>  <p>Therefore, I started reading a bit about UVM, and although I don't understand it very well yet, it seems to me that it is possible to map a region of virtual (unwired) memory and use it at will (just as if you had done a malloc). So, for now, I'm using malloc/free to allocate some (few) memory blocks, and I hope that changing this to use unwired memory will be as easy as doing some call to UVM to request a memory region and use pointers inside it for our own use.</p>  <p>With this in mind, it seems that a good way to map the data structures said before into these memory blocks could be:</p>  <ul> <li>Allocate a memory block of no. nodes * sizeof node.  This could be used to hold all nodes.  It could be handled with a bitmap.</li> <li>Allocate a memory block of no. blocks * sizeof blocks.  As before, with an associated bitmap describing its contents.</li> </ul>  <p>(Note that the number of blocks and nodes is configured by the user at mount time, and is already implemented.)</p>  <p>The advantages of this structure are:</p>  <ul> <li>Access to blocks and nodes is constant time, as they are located in known memory positions (it's a vector).</li> <li>Allocation of blocks and nodes is of linear time due to the location of empty holes in the bitmap. Can be solved with a pool of available entries (at a later time).</li> <li>Deallocation of blocks and nodes is constant time.</li> <li>It's easy to grow (and to some extent, shrink) the file system at will.</li> <li>The implementation is straightforward.</li> <li>It is very similar to traditional Unix file systems, so it will be easy to understand.</li> </ul>  <p>The code in the CVS did exactly this some revisions before HEAD. In a later change, I undid the separation explained here and used blocks for everything. But I'm starting to regret that decision because it will be very complex to store nodes if I don't want to waste much memory.</p>  <p>If you have any better ides, suggestions or you see something wrong in this rationale, please say it! :-)</p>  <p><b>Edit (Jul 20th, 00:00)</b>: Check out the <a href="http://mail-index.netbsd.org/tech-kern/2005/07/19/0000.html">original mail</a> and all its follow ups.  They include very interesting suggestions (such as <a href="http://mail-index.netbsd.org/tech-kern/2005/07/19/0001.html">this one</a>) and expose that my proposal is just wrong (frankly, I could imagine this ;).</p><p class="mobile-post"></p>
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+          <a href="http://julipedia.meroh.net/2005/07/soc-thoughts-about-tmpfs-data.html">Posted on
+          The Julipedia</a>
+          &middot;
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2005/07/soc-thoughts-about-tmpfs-data.html";
+            this.page.identifier = "/2005/07/soc-thoughts-about-tmpfs-data";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

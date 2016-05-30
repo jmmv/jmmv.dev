@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="About a week ago, I detailed the different approaches I encountered to deal with errors raised by the Lua C API. Later, I announced the new C++ interface for...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2011/01/error-handling-in-lua-kyua-approach.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2011/01/error-handling-in-lua-kyua-approach.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>Error handling in Lua: the Kyua approach - Julio Merino</title>
+    <meta content="Error handling in Lua: the Kyua approach - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Error handling in Lua: the Kyua approach</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+14th,
+  
+2011
+at
+08:04 UTC
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        About a week ago, I detailed the different approaches I encountered to <a href="http://blog.julipedia.org/2011/01/error-handling-in-lua.html">deal with errors raised by the Lua C API</a>. Later, I announced the <a href="http://blog.julipedia.org/2011/01/c-interface-to-lua.html">new C++ interface for Lua</a> implemented within <a href="http://code.google.com/p/kyua/">Kyua</a>. And today, I would like to talk about the specific mechanism I implemented in this library to deal with the Lua errors.<br /><br />The first thing to keep in mind is that the whole purpose of Lua in the context of Kyua is to parse configuration files. This is an infrequent operation, so <i>high performance does not matter</i>: it is more valuable to me to be able to write robust algorithms fast than to have them run at optimal speed. The other key point to consider is that I want Kyua to be able to use prebuilt Lua libraries, which are built as C binaries.<br /><br />The approach I took is to wrap every single unsafe Lua C API call in a "thin" (FSVO thin depending on the case) wrapper that gets called by <tt>lua_pcall</tt>. Anything that runs inside the wrapper is safe to Lua errors, as they are caught and safely reported to the caller.<br /><br />Lets examine how this works by taking a look at an example: the wrapping of <tt>lua_getglobal</tt>. We have the following code (copy pasted from the <a href="http://code.google.com/p/kyua/source/browse/trunk/kyua-cli/utils/lua/wrap.cpp?spec=svn39&r=39">utils/lua/wrap.cpp</a> file but hand-edited for publishing here):<pre>static int<br />protected_getglobal(lua_State* state)<br />{<br />    lua_getglobal(state, lua_tostring(state, -1));<br />    return 1;<br />}<br /><br />void<br />lua::state::get_global(const std::string& name)<br />{<br />    lua_pushcfunction(_pimpl->lua_state, protected_getglobal);<br />    lua_pushstring(_pimpl->lua_state, name.c_str());<br />    if (lua_pcall(_pimpl->lua_state, 1, 1, 0) != 0)<br />        throw lua::api_error::from_stack(_pimpl->lua_state,<br />            "lua_getglobal");<br />}</pre>The <tt>state::get_global</tt> method is my public wrapper for the <tt>lua_getglobal</tt> Lua C API call. This wrapper first prepares the Lua stack by pushing the address of the C function to call and its parameters and then issues a <tt>lua_pcall</tt> call that executes the C function in a Lua protected environment.<br /><br />In this case, the argument preparation for <tt>protected_getglobal</tt> is trivial because the <tt>lua_getglobal</tt> call does not require access to any preexisting values on the Lua stack. Things get much trickier when that happens as in the case of the <tt>lua_getglobal</tt> wrapper. I'll leave understanding how to do this as an exercise to the reader (but you can cheat by looking at <a href="http://code.google.com/p/kyua/source/browse/trunk/kyua-cli/utils/lua/wrap.cpp?spec=svn39&r=39#154">line 154</a>).<br /><br />Anyway. The above looks all very nice and safe and the <a href="http://code.google.com/p/kyua/source/browse/trunk/kyua-cli/utils/lua/wrap_test.cpp?spec=svn39&r=39#112">tests for the state::get_global function</a>, even the ones that intentionally cause a failure, all work fine. So we are good, right? <i>Nope!</i> Unfortunately, the code above is not fully safe to Lua errors.<br /><br />In order to prepare the <tt>lua_pcall</tt> execution, the code must push values on the stack. As it turns out, both <tt>lua_pushcfunction</tt> and <tt>lua_pushstring</tt> <i>can</i> fail if they run out of memory (OOM). Such failure would of course be captured inside a protected environment... but we have a little chicken'n'egg problem here. That said, OOM failures are rare so I'm going to leverage this fact and not worry about it.  (Note to self: install a <tt>lua_atpanic</tt> handler to complain loudly if that ever happens.)<br /><br /><b>Addendum</b>: Bundling Lua within my program and building it as a C++ binary with exception reporting enabled in <tt>luaconf.h</tt> would magically solve all my issues. I know. But I don't fancy the idea of bundling the library into my source tree for a variety of reasons.
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+          <a href="http://julipedia.meroh.net/2011/01/error-handling-in-lua-kyua-approach.html">Posted on
+          The Julipedia</a>
+          &middot;
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2011/01/error-handling-in-lua-kyua-approach.html";
+            this.page.identifier = "/2011/01/error-handling-in-lua-kyua-approach";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

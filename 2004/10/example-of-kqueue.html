@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="The documentation of kqueue is quite decent but it lacks some examples.  After reading its main manual pages (kqueue(9) and kevent(9)), I wasn't sure about h...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2004/10/example-of-kqueue.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2004/10/example-of-kqueue.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>An example of kqueue - Julio Merino</title>
+    <meta content="An example of kqueue - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>An example of kqueue</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+October
+
+18th,
+  
+2004
+at
+13:14 UTC
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        <p>The documentation of kqueue is quite decent but it lacks some examples.  After reading its main <a href="http://netbsd.gw.com/cgi-bin/man-cgi?kqueue++NetBSD-current">manual pages</a> (kqueue(9) and kevent(9)), I wasn't sure about how it worked, so I had to write a test program to verify its behavior.</p>  <p>Let's start by analyzing the test program to later see its full code.  The program will monitor changes to the <tt>/tmp/foo</tt> file and will print messages whenever it is deleted, modified or their attributes change. The program finishes when the file being monitoring is deleted.</p>  <p>The steps to use kqueue are the following:</p>  <ol> <li>Call <tt>kqueue(2)</tt> to create a new kernel event queue.  The descriptor it returns will be later used by <tt>kevent(2)</tt>.</li>  <li>Open the file to monitor and keep its descriptor around.  We'll need this to attach an event monitor to it.</li>  <li>Initialize a vector of <tt>struct kevent</tt> elements that describes the changes to monitor. Since we are only monitoring a single file, we need a one-element vector. This vector is filled up with calls to the <tt>EV_SET</tt> macro.  This macro takes: the descriptor of the kqueue, the descriptor of the file to monitor (<i>ident</i>), the <i>filter</i> to apply to it, several flags and optional arguments to the filter.  Note that an entry in this table is identified by its <i>ident/filter</i> pair.</li>  <li>Call the kevent(2) function. This system call takes the list of changes to monitor we constructed before and does not return until at least one event is received (or when an associated timeout is exhausted). The function returns the number of changes received and stores information about them in another vector of <tt>struct kevent</tt> elements (we'll only get notifications of one event at a time, hence we don't use a vector, but a simple variable).</li>  <li>Interpret the results. If kevent(2) returned a number greater than 0, we have to inspect the output vector and see which events were received. Each filter has its semantics about the results. For example, we are using the <tt>EVFILT_VNODE</tt> filter, which takes a list of conditions to monitor in the <tt>fflags</tt> field and modifies it to include only the conditions that triggered the filter.</li> </ol>  <p>With these concepts clear and with help of the manual pages, you should be able to interpret the following code easily:</p>  <pre>#include &lt;sys/event.h&gt;<br />#include &lt;sys/time.h&gt; <br />#include &lt;fcntl.h&gt;<br />#include &lt;stdio.h&gt;<br />#include &lt;stdlib.h&gt; <br /><br />int<br />main(void)<br />{<br />   int f, kq, nev;<br />   struct kevent change;<br />   struct kevent event;<br /><br />   kq = kqueue();<br />   if (kq == -1)<br />       perror("kqueue");<br /><br />   f = open("/tmp/foo", O_RDONLY);<br />   if (f == -1)<br />       perror("open");<br /><br />   EV_SET(&change, f, EVFILT_VNODE,<br />          EV_ADD | EV_ENABLE | EV_ONESHOT,<br />          NOTE_DELETE | NOTE_EXTEND | NOTE_WRITE | NOTE_ATTRIB,<br />          0, 0);<br /><br />   for (;;) {<br />       nev = kevent(kq, &change, 1, &amp;amp;event, 1, NULL);<br />       if (nev == -1)<br />           perror("kevent");<br />       else if (nev > 0) {<br />           if (event.fflags & NOTE_DELETE) {<br />               printf("File deletedn");<br />               break;<br />           }<br />           if (event.fflags & NOTE_EXTEND ||<br />               event.fflags &amp; NOTE_WRITE)<br />               printf("File modifiedn");<br />           if (event.fflags & NOTE_ATTRIB)<br />               printf("File attributes modifiedn");<br />       }<br />   }<br /><br />   close(kq);<br />   close(f);<br />   return EXIT_SUCCESS;<br />}</pre><p></p>  <p>Now compile and run the program in one terminal.  In another one, modify the <tt>/tmp/foo</tt> file and see how our test program shows the events! If you delete the file, the program will terminate. (Note that we are not monitoring all possible events; we'd watch for file renames, as well as other conditions if we needed to).</p><p class="mobile-post"></p>
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+          <a href="http://julipedia.meroh.net/2004/10/example-of-kqueue.html">Posted on
+          The Julipedia</a>
+          &middot;
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2004/10/example-of-kqueue.html";
+            this.page.identifier = "/2004/10/example-of-kqueue";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
