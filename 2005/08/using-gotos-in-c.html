@@ -10,7 +10,7 @@
       content must come *after* these tags -->
 
 <meta name="description"
-      content="It is common knowledge that usages of the goto statement are potentially dangerous in any structured programming language, as their abuse can quickly make yo...">
+      content="It is common knowledge that usages of the goto statement arepotentially dangerous in any structured programming language, as theirabuse can quickly make your...">
 <meta name="author" content="Julio Merino">
 
 <meta content="http://julio.meroh.net/2005/08/using-gotos-in-c.html" property="og:url">
@@ -616,7 +616,69 @@ at
 
     <div class="container">
       <article>
-        <p>It is common knowledge that usages of the <tt>goto</tt> statement are potentially dangerous in any structured programming language, as their abuse can quickly make your code unreadable. This is why this construction is seldom explained to people learning how to program and their use is strongly discouraged.</p><p>However, there are some situations in which it is very useful and, despite what some people might say, makes your code more readable. I had never used <tt>goto</tt>s before, but have experienced this recently while writing <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">tmpfs</a>.</p><p>One of the situations where a <tt>goto</tt> is useful is when you need break from within a set of nested loops. This is the most cited example of "correct" usage of this statement, but personally, I don't like it. FWIW some languages, such as <a href="http://www.perl.com/">Perl</a>, provide a nice <tt>break</tt> statement to do exactly this.</p><p>Another scenario where <tt>goto</tt> is useful is what I'm using it for now: to control all exit conditions from a function.  Instead of placing <tt>return</tt> statements all around inside them (after each error check, for example), I put a <tt>goto</tt> that jumps to the end of the function; that block is responsible for checking postconditions, doing any necessary cleanup and return the correct error code.</p>  <p>Here is an outline of such a function:</p><pre>int<br />foo(...)<br />{<br />    int error;<br /><br />    /* Check function preconditions here using assert(3). */<br /><br />    if (error condition one) {<br />        error = EFOO;<br />        goto out;<br />    }<br />    if (error condition two) {<br />        error = EBAR;<br />        goto out;<br />    }<br /><br />    /* Code executed when there are no errors. */<br /><br />    error = 0;<br />out:<br />    /* Release unneeded resources here. */<br /><br />    /* Check function postconditions here using assert(3). */<br />    return error;<br />}</pre><p>As you can see, if I wanted to avoid using <tt>goto</tt>s, I'd have to duplicate a lot of code inside each error condition check. Using this structure, all exit-related stuff is kept in just one place; specially postconditions (remember that they must be fulfilled whichever action the function did). And the function is far more readable (at least to my eyes).</p><p>If you have any other example of nice <tt>goto</tt> usages, or if you see another way to do what I described above, please share! ;-)</p><p><b><a href="http://julipedia.meroh.net/feeds/posts/default">Subscribe to the Julipedia</a> to stay tuned on posts similar to this one and <a href="http://julipedia.meroh.net/p/about.html">read more about this blog</a> to see what you may be missing!</b></p>
+        <p>It is common knowledge that usages of the <code class="highlighter-rouge">goto</code> statement are
+potentially dangerous in any structured programming language, as their
+abuse can quickly make your code unreadable. This is why this
+construction is seldom explained to people learning how to program and
+their use is strongly discouraged.</p>
+
+<p>However, there are some situations in which it is very useful and,
+despite what some people might say, makes your code more readable. I had
+never used <code class="highlighter-rouge">goto</code>s before, but have experienced this recently while
+writing <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">tmpfs</a>.</p>
+
+<p>One of the situations where a <code class="highlighter-rouge">goto</code> is useful is when you need break
+from within a set of nested loops. This is the most cited example of
+“correct” usage of this statement, but personally, I don’t like it. FWIW
+some languages, such as <a href="http://www.perl.com/">Perl</a>, provide a nice
+<code class="highlighter-rouge">break</code> statement to do exactly this.</p>
+
+<p>Another scenario where <code class="highlighter-rouge">goto</code> is useful is what I’m using it for now: to
+control all exit conditions from a function. Instead of placing <code class="highlighter-rouge">return</code>
+statements all around inside them (after each error check, for example),
+I put a <code class="highlighter-rouge">goto</code> that jumps to the end of the function; that block is
+responsible for checking postconditions, doing any necessary cleanup and
+return the correct error code.</p>
+
+<p>Here is an outline of such a function:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="kt">int</span>
+<span class="nf">foo</span><span class="p">(...)</span>
+<span class="p">{</span>
+    <span class="kt">int</span> <span class="n">error</span><span class="p">;</span>
+
+    <span class="cm">/* Check function preconditions here using assert(3). */</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">error</span> <span class="n">condition</span> <span class="n">one</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">error</span> <span class="o">=</span> <span class="n">EFOO</span><span class="p">;</span>
+        <span class="k">goto</span> <span class="n">out</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">error</span> <span class="n">condition</span> <span class="n">two</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">error</span> <span class="o">=</span> <span class="n">EBAR</span><span class="p">;</span>
+        <span class="k">goto</span> <span class="n">out</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="cm">/* Code executed when there are no errors. */</span>
+
+    <span class="n">error</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="nl">out:</span>
+    <span class="cm">/* Release unneeded resources here. */</span>
+
+    <span class="cm">/* Check function postconditions here using assert(3). */</span>
+    <span class="k">return</span> <span class="n">error</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<p>As you can see, if I wanted to avoid using <code class="highlighter-rouge">goto</code>s, I’d have to
+duplicate a lot of code inside each error condition check. Using this
+structure, all exit-related stuff is kept in just one place; specially
+postconditions (remember that they must be fulfilled whichever action
+the function did). And the function is far more readable (at least to my
+eyes).</p>
+
+<p>If you have any other example of nice <code class="highlighter-rouge">goto</code> usages, or if you see
+another way to do what I described above, please share! ;-)</p>
 
       </article>
 
