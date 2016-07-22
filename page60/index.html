@@ -720,6 +720,34 @@
   
     <li>
       <h2>
+        <a class="post-link" href="/2006/08/localcreds-socket-credentials.html">LOCAL_CREDS socket credentials</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+August
+
+27th,
+  
+2006
+at
+09:55 UTC
+        &middot;
+        <a href="/2006/08/localcreds-socket-credentials.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2006/08/localcreds-socket-credentials.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Socket credentials is a feature that allows a user process to receive the credentials (UID, GID, etc.) of the process at the other end of a communication socket in a safe way.  The operating system is in charge of managing this information, sent separately from the data flow, so that the user processes cannot fake it.  There are many different implementations of this concept out there as you can imagine.For some reason I assumed for a long time that NetBSD didn't support any kind of socket credentials.  However, I recently discovered that it indeed supports them through the LOCAL_CREDS socket option.  Unfortunately it behaves quite differently from other methods.  This poses some annoying portability problems in applications not designed in the first place to support it (e.g. D-Bus, the specific program I'm fighting right now).LOCAL_CREDS works as follows:The receiver interested in remote credentials uses setsockopt(2) to enable the LOCAL_CREDS option in the socket.The sender sends a message through the channel either with write(2) or sendmsg(2).  It needn't do anything special other than ensuring that the message is sent after the receiver has enabled the LOCAL_CREDS option.The receiver gets the message using recvmsg(2) and parses the out of band data stored in the control buffer: a struct sockcred message that contains the remote credentials (UID, GID, etc.).  This does not provide the PID of the remote process though, as other implementations do.The tricky part here is to ensure that the sender writes the message after the receiver has enabled the LOCAL_CREDS option.  If this is not guaranteed, a race condition appears and the behavior becomes random: some times the receiver will get socket credentials, some times it will not.To ensure this restriction there needs to be some kind of synchronization protocol between the two peers.  This is illustrated in the following example: it assumes a client/server model and a "go on" message used to synchronize.  The server could do:Wait for client connection.Set LOCAL_CREDS option on remote socket.Send a "go on" message to client.Wait for a response, which carries the credentials.Parse the credentials.And the client could do:Connect to server.Wait until "go on" message.Send any message to the server.To conclude, a sample example program that shows how to manage the LOCAL_CREDS option.  socketpair(2) is used for simplicity, but this can easily be extrapolated to two independent programs.#include &lt;sys/param.h&gt;#include &lt;sys/types.h&gt;#include &lt;sys/inttypes.h&gt;#include &lt;sys/socket.h&gt;#include &lt;sys/un.h&gt;#include &lt;err.h&gt;#include &lt;stdio.h&gt;#include &lt;stdlib.h&gt;#include &lt;string.h&gt;#include &lt;unistd.h&gt;intmain(void){    int sv[2];    int on = 1;    ssize_t len;    struct iovec iov;    struct msghdr msg;    struct {        struct cmsghdr hdr;        struct sockcred cred;        gid_t groups[NGROUPS - 1];    } cmsg;    /*     * Create a pair of interconnected sockets for simplicity:     * sv[0] - Receive end (this program).     * sv[1] - Write end (the remote program, theorically).     */    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1)        err(EXIT_FAILURE, "socketpair");    /*     * Enable the LOCAL_CREDS option on the reception socket.     */    if (setsockopt(sv[0], 0, LOCAL_CREDS, &on, sizeof(on)) == -1)        err(EXIT_FAILURE, "setsockopt");    /*     * The remote application writes the message AFTER setsockopt     * has been used by the receiver.  If you move this above the     * setsockopt call, you will see how it does not work as     * expected.     */    if (write(sv[1], &on, sizeof(on)) == -1)        err(EXIT_FAILURE, "write");    /*     * Prepare space to receive the credentials message.     */    iov.iov_base = &on;    iov.iov_len = 1;    memset(&msg, 0, sizeof(msg));    msg.msg_iov = &iov;    msg.msg_iovlen = 1;    msg.msg_control = &cmsg;    msg.msg_controllen = sizeof(struct cmsghdr) +        SOCKCREDSIZE(NGROUPS);    memset(&cmsg, 0, sizeof(cmsg));    /*     * Receive the message.     */    len = recvmsg(sv[0], &msg, 0);    if (len         err(EXIT_FAILURE, "recvmsg");    printf("Got %zu bytesn", len);    /*     * Print out credentials information, if received     * appropriately.     */    if (cmsg.hdr.cmsg_type == SCM_CREDS) {        printf("UID: %" PRIdMAX "n",               (intmax_t)cmsg.cred.sc_uid);        printf("EUID: %" PRIdMAX "n",               (intmax_t)cmsg.cred.sc_euid);        printf("GID: %" PRIdMAX "n",               (intmax_t)cmsg.cred.sc_gid);        printf("EGID: %" PRIdMAX "n",               (intmax_t)cmsg.cred.sc_egid);        if (cmsg.cred.sc_ngroups > 0) {            int i;            printf("Supplementary groups:");            for (i = 0; i                 printf(" %" PRIdMAX,                       (intmax_t)cmsg.cred.sc_groups[i]);            printf("n");        }    } else        errx(EXIT_FAILURE, "Message did not include credentials");    close(sv[0]);    close(sv[1]);    return EXIT_SUCCESS;}
+
+        <a href="/2006/08/localcreds-socket-credentials.html">[Continue reading]</a>
+      </p>
+      
+    </li>
+  
+    <li>
+      <h2>
         <a class="post-link" href="/2006/08/split-function-in-haskell.html">A split function in Haskell</a>
       </h2>
       <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
@@ -886,34 +914,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2006/08/soc-status-report-3.html">SoC: Status report 3</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-August
-
-12th,
-  
-2006
-at
-16:12 UTC
-        &middot;
-        <a href="/2006/08/soc-status-report-3.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2006/08/soc-status-report-3.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Only 8 more days and SoC will be officially over... Time has passed very fast and my project required much more work than I initially thought.  It certainly cannot be completed before the deadline but I assure you that it will not fall into oblivion afterwards; I have spent too much time on it to forget ;-)There have been many changes in Boost.Process' code base since the previous status report; let's see a brief summary:The library has been simplified removing all those bits that were aimed at "generic process management".  Now it is focused on child process managing only, although extending it to support other process-related functionality is still possible (preserving compatibility with the current API).  It'll be better to design and implement these features when really needed because they will require a lot of work and cannot be planned right now; doing so might result in an incomplete and clusmy design.  Yup... my mentor (Jeff Garland) was right when he suggested to go this simplified route at the very beginning!Due to the above simplifications, some classes are not templated any more (the stuff that depended on the template parameters is now gone).  I bet some of them could still be, but this can be easily changed later on.There is now a specialized launcher in the library to painlessly start command pipelines.  This also comes with a helper process group class to treat the set of processes as a unique entity.The user now has much more flexibility to specify how a child process' channels behave.  While documenting the previous API it became clear that it was incomplete and hard to understand.Code from all launchers has been unified in a base private class to avoid duplication and ensure consistency across those classes.  Similar changes have ocurred in the test suite, which helped in catching some obscure problems.Related to previous, many of the code used to do the actual task of spawning a process has been moved out of the individual launcher classes into some generic private functions.  This was done to share more code, improve cohesion and readability.The documentation is now much better, although it still lacks a chapter about design issues.  See the online snapshot for more details.And, of course, multiple bug fixes and cleanups.Still, I haven't had a chance to ask for a public review in Boost's developers mailing list.  The problem is that I continously find things to improve or to complete and prefer to do them before asking for the review.  However, as time is running out I'll be forced to do this in the forthcoming week to get some more feedback in time.
-
-        <a href="/2006/08/soc-status-report-3.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -986,10 +986,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (7)
+    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
      
     <ul id="archive-year-2016" class="collapse">
      
+      <li><a href="/2016/07">July 2016</a> (1)</li>
       <li><a href="/2016/05">May 2016</a> (1)</li>
       <li><a href="/2016/04">April 2016</a> (1)</li>
       <li><a href="/2016/03">March 2016</a> (2)</li>

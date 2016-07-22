@@ -720,6 +720,34 @@
   
     <li>
       <h2>
+        <a class="post-link" href="/2011/04/kyua-weekly-status-report_24.html">Kyua: Weekly status report</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+April
+
+24th,
+  
+2011
+at
+18:15 UTC
+        &middot;
+        <a href="/2011/04/kyua-weekly-status-report_24.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2011/04/kyua-weekly-status-report_24.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Ouch; I'm exhausted. I just finished a multi-hour hacking session to get the implementation of the list&nbsp;subcommand in control. It is now in a very nice user-facing shape, although its code deserves a little bit of house cleaning (coming soon).Anyway, this week's progress:Added the kyuaify.sh script. This little tool takes a test suite (say, NetBSD's /usr/tests directory) and converts all its Atffiles into Kyuafiles. The tool is no sophisticated at all; in fact, it is a pretty simple script that I haven't tested with any other test suites so far. See the announcement of kyuaify for some extra details.Added logging support for the Lua code and changed the Lua modules to spit some logging information while processing Kyuafiles and configuration files.Added a mechanism in the user interface module to consistently print informational, warning and error messages.Implemented proper test filtering (after several iterations). What does proper mean? Well, for starters, test filters are always relative to the test suite's root (although we already saw this in last week's report). But the most important thing is that the filters are now validated: nice, user-friendly errors will be reported when the collection of tests is non-disjoint, when it includes duplicate names or when any of the provided filters does not match any test case. I really need to document the rationale of these in the manual, but for now the r118 commit message includes a few details.Drafted some notes for the BSDCan 2011 conference. I am quite tempted to reuse parts of the presentation from NYCBSDCon 2010, but I really want to give more emphasis on Kyua this time. In case you don't know, Kyua was first announced in NYCBSDCon 2010 and it was still a very immature project. The project has changed a lot since then.The wishful plan for next week is to clean up the internals of the list&nbsp;command (by refactoring and adding unit tests) and implement preliminary integration tests for the test&nbsp;subcommand. The latter scares me quite a bit. But... hmm... I guess preparing the presentation for BSDCan 2011 has priority.
+
+        <a href="/2011/04/kyua-weekly-status-report_24.html">[Continue reading]</a>
+      </p>
+      
+    </li>
+  
+    <li>
+      <h2>
         <a class="post-link" href="/2011/04/kyua-weekly-status-report_17.html">Kyua: Weekly status report</a>
       </h2>
       <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
@@ -886,34 +914,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2011/01/injecting-c-functions-into-lua.html">Injecting C++ functions into Lua</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-January
-
-17th,
-  
-2011
-at
-16:09 UTC
-        &middot;
-        <a href="/2011/01/injecting-c-functions-into-lua.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2011/01/injecting-c-functions-into-lua.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the lua::state class.Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the lua_CFunction type:typedef int (*lua_CFunction)(lua_State*);Now, let's consider this code:intawesome_native_function(lua_State* state){    // Uh, we have access to s, so we bypass the lua::state!    ... do something nasty ...    // Oh, and we can throw an exception here...    //with bad consequences.}voidsetup(...){    lua::state state;    state.push_c_function(awesome_native_function);    state.set_global("myfunc");    ... run some script ...}The fact that we must pass a lua_CFunction prototype to the lua_pushcfunction object means that such function must have access to the raw lua_State* pointer... which we want to avoid.What we really want is the caller code to define a function such as:typedef int (*cxx_function)(lua::state&)In an ideal world, the lua::state class would implement a push_cxx_function that took a cxx_function, generated a thin C wrapper and injected such generated wrapper into Lua.  Unfortunately, we are not in an ideal world: C++ does not have high-order functions and thus the "generate a wrapper function" part of the previous proposal does not really work.What we can do instead, though, is to make the creation of C wrappers for these C++ functions trivial. And this is what r42 did.  The approach I took is similar to this overly-simplified (and broken) example:template&lt; cxx_function Function &gt;intwrap_cxx_function(lua_State* state){    try {        lua::state state_wrapper(state);        return Function(state_wrapper);    } catch (...) {        luaL_error(state, "Geez, don't go into C's land!");    }}This template wrapper takes a cxx_function object and generates a corresponding C function at compile time. This wrapper function ensures that C++ state does not propagate into the C world, as that often has catastrophical consequences. (Due to language limitations, the input function must have external linkage.  So no, it cannot be static.)As a result, we can rewrite our original snippet as:intawesome_native_function(lua::state& state){    // See, we cannot access lua_State* now.    ... do something ...    throw std::runtime_error("And we can even do this!");}voidsetup(...){    lua::state state;    state.push_c_function(        wrap_cxx_function);    state.set_global("myfunc");    ... run some script ...}Neat? I think so, but maybe not so much. I'm pretty sure there are cooler ways of achieving the above purpose in a cleaner way, but this one works nicely and has few overhead.
-
-        <a href="/2011/01/injecting-c-functions-into-lua.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -986,10 +986,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (7)
+    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
      
     <ul id="archive-year-2016" class="collapse">
      
+      <li><a href="/2016/07">July 2016</a> (1)</li>
       <li><a href="/2016/05">May 2016</a> (1)</li>
       <li><a href="/2016/04">April 2016</a> (1)</li>
       <li><a href="/2016/03">March 2016</a> (2)</li>

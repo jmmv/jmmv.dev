@@ -6,9 +6,788 @@
 </description>
     <link>http://julio.meroh.net/</link>
     <atom:link href="http://julio.meroh.net/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Sat, 04 Jun 2016 18:14:00 +0000</pubDate>
-    <lastBuildDate>Sat, 04 Jun 2016 18:14:00 +0000</lastBuildDate>
+    <pubDate>Fri, 22 Jul 2016 17:09:29 +0000</pubDate>
+    <lastBuildDate>Fri, 22 Jul 2016 17:09:29 +0000</lastBuildDate>
     <generator>Jekyll v3.1.2</generator>
+    
+      <item>
+        <title>Converting a Blogger site to Jekyll</title>
+        
+          <description>
+            Exporting the contents of a Blogger blog is easy: you just click a button on the administrator’s site and then receive an XML file with a very complete representation of the blog contents and its configuration.
+
+But no so fast: making use of this exported data for any purpose other than reimporting into Blogger is difficult, and is possibly the reason behind why the export functionality is called backup and not export. This is a bit sad but, with a bit of effort, one can convert the contents of the XML backup into a more manageable format.
+
+In this post, I will describe the process I followed to turn the contents of a Blogger XML backup file into a collection of standalone .html pages, one per post, with Front Matter in them to describe their metadata. I will also describe how I turned a subset of them to Markdown. The results of the conversion can be directly served by Jekyll as a blog and witnessed in this site.
+
+The conversion
+
+The conversion process consists of three steps:
+
+
+  
+    Take the Blogger XML file and extract the posts within it, discarding everything else. Output a single text file that contains all posts in raw HTML format and their corresponding metadata in Front Matter.
+  
+  
+    With a separate script, split the contents of the single text file into independent pages that Jekyll can serve as blog posts.
+  
+  
+    Convert the individual posts from HTML to Markdown, with the side-effect of discarding a lot of unnecessary ad-hoc formatting.
+  
+
+
+Let’s get started. Beware: large chunks of code follow!
+
+From Blogger XML to a text file with all posts
+
+The Blogger backup feature generates an XML file that uses the Atom schema. The file includes an accurate representation of the whole blog, including the blog’s metadata, the blog’s templates, and the blog’s actual contents—i.e. its posts and comments. For our purposes, I’ll ignore everything that is not a post.
+
+To do the conversion, I wrote a custom XSLT stylesheet and used the smallish xsltproc processor to execute it. The stylesheet descends into all entries that match the post properties, collects their metadata as variables for later formatting, and finally writes out the Front Matter for the post and the unquoted HTML contents.
+
+Here comes my parse-blogger.xsl:
+
+&lt;?xml version="1.0"?&gt;
+&lt;!-- This stylesheet parses the Atom XML file that Blogger exports as a backup
+  and generates a plain text file with the processed contents.
+
+  In the plain text file, there are markers to indicate where each post and
+  draft start.  Within these sections, there is Front Matter with the post
+  metadata and then the raw content as exported by Blogger.
+
+  Use the import-blogger.sh script to invoke this and deal with the output. --&gt;
+&lt;xsl:stylesheet version="1.0"
+                xmlns:app="http://purl.org/atom/app#"
+                xmlns:atom="http://www.w3.org/2005/Atom"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"&gt;
+
+  &lt;xsl:output method="text"/&gt;
+  &lt;xsl:preserve-space elements="atom:content" /&gt;
+
+  &lt;xsl:template match="atom:entry[atom:category[@scheme='http://schemas.google.com/g/2005#kind' and @term='http://schemas.google.com/blogger/2008/kind#post']]"&gt;
+
+    &lt;xsl:param name="title"&gt;
+      &lt;!-- Hack to workaround quoting issues below--&gt;
+      &lt;xsl:variable name="apos"&gt;&amp;apos;&lt;/xsl:variable&gt;
+      &lt;xsl:variable name="quot"&gt;&amp;quot;&lt;/xsl:variable&gt;
+
+      &lt;xsl:call-template name="string-replace-all"&gt;
+        &lt;xsl:with-param name="text" select="atom:title" /&gt;
+        &lt;xsl:with-param name="replace" select="$quot" /&gt;
+        &lt;xsl:with-param name="by" select="$apos" /&gt;
+      &lt;/xsl:call-template&gt;
+    &lt;/xsl:param&gt;
+
+    &lt;xsl:param name="draft" select="app:control/app:draft"/&gt;
+
+    &lt;xsl:param name="year" select="substring(atom:published, 1, 4)"/&gt;
+    &lt;xsl:param name="month" select="substring(atom:published, 6, 2)"/&gt;
+    &lt;xsl:param name="day" select="substring(atom:published, 9, 2)"/&gt;
+    &lt;xsl:param name="hour" select="substring(atom:published, 12, 2)"/&gt;
+    &lt;xsl:param name="minute" select="substring(atom:published, 15, 2)"/&gt;
+    &lt;xsl:param name="second" select="substring(atom:published, 18, 2)"/&gt;
+    &lt;xsl:param name="micros" select="substring(atom:published, 21, 3)"/&gt;
+    &lt;xsl:param name="tz" select="concat(substring(atom:published, 24, 3), substring(atom:published, 28, 2))"/&gt;
+
+    &lt;xsl:param name="url" select="atom:link[@rel='alternate' and @type='text/html']/@href"/&gt;
+    &lt;xsl:param name="relurl" select="substring($url, 28)"/&gt;
+    &lt;xsl:param name="name" select="substring($url, 36, string-length($url) - 40)"/&gt;
+
+    &lt;xsl:param name="date" select="concat($year, '-', $month, '-', $day, ' ', $hour, ':', $minute, ':', $second, ' ', $tz)"/&gt;
+
+    &lt;xsl:param name="output"&gt;
+      &lt;xsl:if test="not($draft = 'yes')"&gt;
+        &lt;xsl:value-of select="concat($year, '-', $month, '-', $day, '-', $name, '.html')"/&gt;
+      &lt;/xsl:if&gt;
+      &lt;xsl:if test="$draft = 'yes'"&gt;
+        &lt;xsl:value-of select="concat($year, '-', $month, '-', $day, '-', $hour, '-', $minute, '-', $second, '-', $micros, '.html')"/&gt;
+      &lt;/xsl:if&gt;
+    &lt;/xsl:param&gt;
+
+    &lt;xsl:param name="tags"&gt;
+      &lt;xsl:for-each select="atom:category[@scheme='http://www.blogger.com/atom/ns#']"&gt;
+        &lt;xsl:sort select="@term"/&gt;
+        &lt;xsl:if test="position() &amp;gt; 1"&gt;&lt;xsl:text&gt; &lt;/xsl:text&gt;&lt;/xsl:if&gt;
+        &lt;xsl:value-of select="@term"/&gt;
+      &lt;/xsl:for-each&gt;
+    &lt;/xsl:param&gt;
+
+&lt;!-- Now, dump the post.  All these lines must start on the first column. --&gt;
+&lt;xsl:text&gt;&lt;/xsl:text&gt;
+&lt;xsl:if test="not($draft = 'yes')"&gt;
+__BEGIN_POST__ &lt;xsl:value-of select="$output"/&gt;
+&lt;/xsl:if&gt;
+&lt;xsl:if test="$draft = 'yes'"&gt;
+__BEGIN_DRAFT__ &lt;xsl:value-of select="$output"/&gt;
+&lt;/xsl:if&gt;
+---
+layout: post
+title: "&lt;xsl:value-of select="$title"/&gt;"
+date: &lt;xsl:value-of select="$date"/&gt;
+categories: &lt;xsl:value-of select="$tags"/&gt;
+julipedia: &lt;xsl:value-of select="$relurl"/&gt;
+excerpt_separator: &amp;lt;/p&amp;gt;
+---
+&lt;xsl:value-of select="atom:content/text()" disable-output-escaping="yes"/&gt;
+__END__
+
+&lt;xsl:text&gt;&lt;/xsl:text&gt;
+  &lt;/xsl:template&gt;
+
+  &lt;xsl:template match="/"&gt;
+    &lt;xsl:apply-templates select="@*|node()"/&gt;
+  &lt;/xsl:template&gt;
+
+  &lt;xsl:template match="@*|node()" priority="-1"&gt;
+    &lt;xsl:apply-templates select="@*|node()"/&gt;
+  &lt;/xsl:template&gt;
+
+  &lt;!-- From: http://geekswithblogs.net/Erik/archive/2008/04/01/120915.aspx --&gt;
+  &lt;xsl:template name="string-replace-all"&gt;
+    &lt;xsl:param name="text" /&gt;
+    &lt;xsl:param name="replace" /&gt;
+    &lt;xsl:param name="by" /&gt;
+    &lt;xsl:choose&gt;
+      &lt;xsl:when test="contains($text, $replace)"&gt;
+        &lt;xsl:value-of select="substring-before($text,$replace)" /&gt;
+        &lt;xsl:value-of select="$by" /&gt;
+        &lt;xsl:call-template name="string-replace-all"&gt;
+          &lt;xsl:with-param name="text"
+          select="substring-after($text,$replace)" /&gt;
+          &lt;xsl:with-param name="replace" select="$replace" /&gt;
+          &lt;xsl:with-param name="by" select="$by" /&gt;
+        &lt;/xsl:call-template&gt;
+      &lt;/xsl:when&gt;
+      &lt;xsl:otherwise&gt;
+        &lt;xsl:value-of select="$text" /&gt;
+      &lt;/xsl:otherwise&gt;
+    &lt;/xsl:choose&gt;
+  &lt;/xsl:template&gt;
+&lt;/xsl:stylesheet&gt;
+
+
+
+
+As you may have noticed, this stylesheet exports all posts into a single text file, and delimits them with unique start/end markers of the form __BEGIN_POST__, __BEGIN_DRAFT__, and __END__. I will show in the next section how to split them up. The reason for this lies in a limitation of xsltproc: this tool is an XSLT 1.0 processor so it does not have support for the multi-file (chunked) output present since XSLT 2.0. (This is not completely accurate though: the DocBook XSL does chunking and it used to work just fine with xsltproc; I didn’t investigate how.)
+
+From the text file to individual HTML files
+
+When we run the XSLT file above with the exported contents of a Blogger site, we end up with a text file that contains all posts separated by unique markers. The script below processes this text file and outputs individual HTML documents with Front Matter for each post. I called this import-blogger.sh:
+
+# Imports the contents of a Blogger export.
+#
+# This script parses the XML file given as the input, which has to be downloaded
+# from Blogger as a backup, and generates one file per post in the corresponding
+# _drafts or _posts folder.
+
+shtk_import cleanup
+shtk_import cli
+
+PARSE_BLOGGER_XSL="$(shtk_cli_dirname)/parse-blogger.xsl"
+
+generate_files() {
+    local chunks="${1}"; shift
+    local basedir="${1}"; shift
+
+    local chunk=
+    while read line; do
+        case "${line}" in
+            __BEGIN_DRAFT__*)
+                local chunk_name="$(echo "${line}" | cut -d ' ' -f 2-)"
+                mkdir -p "${basedir}/_drafts"
+                chunk="${basedir}/_drafts/${chunk_name}"
+                [ ! -f "${chunk}" ] \
+                    || shtk_cli_error "Draft ${chunk} already exists"
+                shtk_cli_info "Writing draft ${chunk_name}"
+                ;;
+
+            __BEGIN_POST__*)
+                local chunk_name="$(echo "${line}" | cut -d ' ' -f 2-)"
+                mkdir -p "${basedir}/_posts"
+                chunk="${basedir}/_posts/${chunk_name}"
+                [ ! -f "${chunk}" ] \
+                    || shtk_cli_error "Post ${chunk} already exists"
+                shtk_cli_info "Writing post ${chunk_name}"
+                ;;
+
+            __END__)
+                chunk=
+                ;;
+
+            *)
+                [ -z "${chunk}" ] || echo "${line}" &gt;&gt;"${chunk}"
+                ;;
+        esac
+    done &lt;"${chunks}"
+}
+
+main() {
+    [ ${#} -eq 1 ] || shtk_cli_usage_error "Must provide name of Blogger" \
+        "exported data file"
+    local input="${1}"; shift
+
+    local pattern="${TMPDIR:-/tmp}/$(shtk_cli_progname).XXXXXX"
+    local tempdir="$(mktemp -d "${pattern}" 2&gt;/dev/null)"
+    [ -d "${tempdir}" ] || shtk_cli_error "Failed to create temporary directory"
+
+    eval "remove_tempdir() { rm -rf '${tempdir}'; }"
+    shtk_cleanup_register remove_tempdir
+
+    shtk_cli_info "Parsing contents of Blogger exported data"
+    local chunks="${tempdir}/chunks.txt"
+    xsltproc "${PARSE_BLOGGER_XSL}" "${input}" &gt;"${chunks}"
+
+    generate_files "${chunks}" .
+}
+
+
+
+
+Running this script results in a bunch of .html files that can be placed directly into the Jekyll’s _posts directory and served as any other post. This was what I did for the first publication of this site.
+
+From HTML to Markdown
+
+The HTML produced by Blogger is far from optimal: it contains a lot of unnecessary formatting, especially if you have previously used their WYSIWYG editor; and even if you have typed the HTML by hand, sometimes Blogger decides to “fix” it.
+
+After the first migration step, I decided to convert my most popular posts into Markdown for better looks and not to bother much with the rest. The reason was that, as part of the conversion, I would be sanitizing their markup both automatically via the translation tools and manually as an after-step. Sanity-checking the contents of a Markdown file for good markup is much easier than doing the same on a machine-generated HTML file.
+
+To do this conversion, I used the following script which I appropriately named html-to-markdown.sh:
+
+# Takes an HTML post and converts it to Markdown.
+#
+# This is intended to be used on posts imported from Blogger.
+
+shtk_import cleanup
+shtk_import cli
+
+extract_content() {
+    local input="${1}"; shift
+
+    awk '
+BEGIN {
+    count = 0
+}
+/^---$/ {
+    count += 1
+    next
+}
+{
+    if (count &lt; 2) {
+        next
+    }
+    print
+}
+    ' &lt;"${input}"
+}
+
+extract_front_matter() {
+    local input="${1}"; shift
+
+    awk '
+BEGIN {
+    count = 0
+}
+/^---$/ {
+    count += 1
+    if (count &lt;= 2) {
+        print
+    }
+    next
+}
+{
+    if (count != 1) {
+        next
+    }
+    print
+}
+    ' &lt;"${input}"
+}
+
+sed_in_place() {
+    local file="${1}"; shift
+
+    if sed "${@}" "${file}" &gt;"${file}.tmp"; then
+        mv -f "${file}.tmp" "${file}"
+    else
+        rm -f "${file}.tmp"
+        shtk_cli_error "Failed to modify ${file} in place"
+    fi
+}
+
+# In The Julipedia posts, I did not use section headings because I was not
+# clear on what Blogger expected.  In their place, I used single-line
+# paragraphs in bold, which pandoc translates to section 4 levels.  Fix
+# this here by "renumbering" the sections.
+patch_sections() {
+    local markdown="${1}"; shift
+
+    sed_in_place "${markdown}" -E \
+        -e 's,^####,#,' \
+        -e 's,^\*\*(.*)\*\*$,# \1,'
+}
+
+patch_utf8() {
+    local markdown="${1}"; shift
+
+    sed_in_place "${markdown}" \
+        -e "s,$(printf '\xc3\xa0'),\&amp;agrave;,g" \
+        -e "s,$(printf '\xc3\xa1'),\&amp;aacute;,g" \
+        -e "s,$(printf '\xc3\xa4'),\&amp;auml;,g" \
+        -e "s,$(printf '\xc3\xa7'),\&amp;ccedil;,g" \
+        -e "s,$(printf '\xc3\xa8'),\&amp;egrave;,g" \
+        -e "s,$(printf '\xc3\xa9'),\&amp;eacute;,g" \
+        -e "s,$(printf '\xc3\xab'),\&amp;euml;,g" \
+        -e "s,$(printf '\xc3\xac'),\&amp;igrave;,g" \
+        -e "s,$(printf '\xc3\xad'),\&amp;iacute;,g" \
+        -e "s,$(printf '\xc3\xaf'),\&amp;iuml;,g" \
+        -e "s,$(printf '\xc3\xb1'),\&amp;ntilde;,g" \
+        -e "s,$(printf '\xc3\xb2'),\&amp;ograve;,g" \
+        -e "s,$(printf '\xc3\xb3'),\&amp;oacute;,g" \
+        -e "s,$(printf '\xc3\xb6'),\&amp;ouml;,g" \
+        -e "s,$(printf '\xc3\xb9'),\&amp;ugrave;,g" \
+        -e "s,$(printf '\xc3\xba'),\&amp;uacute;,g" \
+        -e "s,$(printf '\xc3\xbc'),\&amp;uuml;,g" \
+        -e "s,$(printf '\xe2\x80\x93'),\&amp;ndash;,g" \
+        -e "s,$(printf '\xe2\x80\x94'),\&amp;mdash;,g" \
+        -e "s,$(printf '\xe2\x80\xa6'),\&amp;hellip;,g"
+}
+
+main() {
+    [ ${#} -eq 1 ] || shtk_cli_usage_error "Must provide an HTML input name"
+    local html_input="${1}"; shift
+
+    local markdown_output="$(echo "${html_input}" | sed -e 's,\.html$,.md,')"
+
+    local front_matter="${markdown_output}.tmp1"
+    local html_content="${markdown_output}.tmp2"
+    local markdown_content="${markdown_output}.tmp3"
+    eval "remove_temp_files() {" \
+        "    rm -f '${front_matter}' '${html_content}' '${markdown_content}';" \
+        "}"
+    shtk_cleanup_register remove_temp_files
+
+    extract_front_matter "${html_input}" \
+        | grep -v '^excerpt_separator:' &gt;"${front_matter}"
+
+    extract_content "${html_input}" &gt;"${html_content}"
+    pandoc --from=html --to=markdown_strict --output="${markdown_content}" \
+        --ascii "${html_content}" || shtk_cli_error "pandoc conversion failed"
+
+    patch_sections "${markdown_content}"
+    patch_utf8 "${markdown_content}"
+
+    git mv "${html_input}" "${markdown_output}"
+    cat "${front_matter}" "${markdown_content}" &gt;"${markdown_output}"
+    git add "${markdown_output}"
+}
+
+
+
+
+This script relies on Pandoc to do the initial conversion and then performs some custom post-processing—in particular to fix the original markup in the Blogger posts and to strip out UTF-8 characters in favor of HTML entities.
+
+Parting words
+
+That’s all! Wasn’t it simple? No, not really… this all took me various days of work to obtain palatable results.
+
+Note that you will need some stitching to put the various steps together: I purposely did not provide you with a fully-specified solution because the code above is rough and will surely need tuning for your own use case. Hopefully, though, this will serve as a decent starting point.
+
+Also note that the scripts above need shtk to function so you will need to either install that first or remove the dependency.
+
+Good luck!
+
+            &lt;a href=&quot;http://julio.meroh.net/2016/07/blogger-to-jekyll.html&quot;&gt;[Continue reading]&lt;/a&gt;
+          </description>
+        
+          <description>&lt;p&gt;Exporting the contents of a Blogger blog is easy: you just click a button on the administrator’s site and then receive an XML file with a very complete representation of the blog contents and its configuration.&lt;/p&gt;
+
+&lt;p&gt;But no so fast: making use of this exported data for any purpose other than reimporting into Blogger is difficult, and is possibly the reason behind why the export functionality is called &lt;em&gt;backup&lt;/em&gt; and not &lt;em&gt;export&lt;/em&gt;. This is a bit sad but, with a bit of effort, one can convert the contents of the XML backup into a more manageable format.&lt;/p&gt;
+
+&lt;p&gt;In this post, I will describe the process I followed to turn the contents of a Blogger XML backup file into a collection of standalone &lt;code class=&quot;highlighter-rouge&quot;&gt;.html&lt;/code&gt; pages, one per post, with Front Matter in them to describe their metadata. I will also describe how I turned a subset of them to Markdown. The results of the conversion can be directly served by &lt;a href=&quot;jekyllrb.com&quot;&gt;Jekyll&lt;/a&gt; as a blog and &lt;a href=&quot;/2016/05/homepage-v3.html&quot;&gt;witnessed in this site&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h1 id=&quot;the-conversion&quot;&gt;The conversion&lt;/h1&gt;
+
+&lt;p&gt;The conversion process consists of three steps:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;Take the Blogger XML file and extract the posts within it, discarding everything else. Output a single text file that contains all posts in raw HTML format and their corresponding metadata in Front Matter.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;With a separate script, split the contents of the single text file into independent pages that Jekyll can serve as blog posts.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Convert the individual posts from HTML to Markdown, with the side-effect of discarding a lot of unnecessary ad-hoc formatting.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;Let’s get started. Beware: large chunks of code follow!&lt;/p&gt;
+
+&lt;h2 id=&quot;from-blogger-xml-to-a-text-file-with-all-posts&quot;&gt;From Blogger XML to a text file with all posts&lt;/h2&gt;
+
+&lt;p&gt;The &lt;a href=&quot;https://support.google.com/blogger/answer/41387&quot;&gt;Blogger backup feature&lt;/a&gt; generates an XML file that uses the Atom schema. The file includes an accurate representation of the whole blog, including the blog’s metadata, the blog’s templates, and the blog’s actual contents—i.e. its posts and comments. For our purposes, I’ll ignore everything that is not a post.&lt;/p&gt;
+
+&lt;p&gt;To do the conversion, I wrote a custom XSLT stylesheet and used the smallish &lt;code class=&quot;highlighter-rouge&quot;&gt;xsltproc&lt;/code&gt; processor to execute it. The stylesheet descends into all entries that match the post properties, collects their metadata as variables for later formatting, and finally writes out the Front Matter for the post and the unquoted HTML contents.&lt;/p&gt;
+
+&lt;p&gt;Here comes my &lt;code class=&quot;highlighter-rouge&quot;&gt;parse-blogger.xsl&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;&amp;lt;?xml version=&quot;1.0&quot;?&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;&amp;lt;!-- This stylesheet parses the Atom XML file that Blogger exports as a backup
+  and generates a plain text file with the processed contents.
+
+  In the plain text file, there are markers to indicate where each post and
+  draft start.  Within these sections, there is Front Matter with the post
+  metadata and then the raw content as exported by Blogger.
+
+  Use the import-blogger.sh script to invoke this and deal with the output. --&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:stylesheet&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;version=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;1.0&quot;&lt;/span&gt;
+                &lt;span class=&quot;na&quot;&gt;xmlns:app=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;http://purl.org/atom/app#&quot;&lt;/span&gt;
+                &lt;span class=&quot;na&quot;&gt;xmlns:atom=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;http://www.w3.org/2005/Atom&quot;&lt;/span&gt;
+                &lt;span class=&quot;na&quot;&gt;xmlns:xsl=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;http://www.w3.org/1999/XSL/Transform&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:output&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;method=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;text&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:preserve-space&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;elements=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;atom:content&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:template&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;match=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;atom:entry[atom:category[@scheme=&#39;http://schemas.google.com/g/2005#kind&#39; and @term=&#39;http://schemas.google.com/blogger/2008/kind#post&#39;]]&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;title&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;c&quot;&gt;&amp;lt;!-- Hack to workaround quoting issues below--&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:variable&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;apos&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;ni&quot;&gt;&amp;amp;apos;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:variable&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:variable&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;quot&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;ni&quot;&gt;&amp;amp;quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:variable&amp;gt;&lt;/span&gt;
+
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:call-template&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;string-replace-all&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:with-param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;text&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;atom:title&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:with-param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;replace&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$quot&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:with-param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;by&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$apos&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:call-template&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:param&amp;gt;&lt;/span&gt;
+
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;draft&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;app:control/app:draft&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;year&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring(atom:published, 1, 4)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;month&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring(atom:published, 6, 2)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;day&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring(atom:published, 9, 2)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;hour&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring(atom:published, 12, 2)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;minute&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring(atom:published, 15, 2)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;second&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring(atom:published, 18, 2)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;micros&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring(atom:published, 21, 3)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;tz&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;concat(substring(atom:published, 24, 3), substring(atom:published, 28, 2))&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;url&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;atom:link[@rel=&#39;alternate&#39; and @type=&#39;text/html&#39;]/@href&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;relurl&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring($url, 28)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;name&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring($url, 36, string-length($url) - 40)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;date&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;concat($year, &#39;-&#39;, $month, &#39;-&#39;, $day, &#39; &#39;, $hour, &#39;:&#39;, $minute, &#39;:&#39;, $second, &#39; &#39;, $tz)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;output&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:if&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;test=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;not($draft = &#39;yes&#39;)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;concat($year, &#39;-&#39;, $month, &#39;-&#39;, $day, &#39;-&#39;, $name, &#39;.html&#39;)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:if&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:if&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;test=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$draft = &#39;yes&#39;&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;concat($year, &#39;-&#39;, $month, &#39;-&#39;, $day, &#39;-&#39;, $hour, &#39;-&#39;, $minute, &#39;-&#39;, $second, &#39;-&#39;, $micros, &#39;.html&#39;)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:if&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:param&amp;gt;&lt;/span&gt;
+
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:for-each&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;atom:category[@scheme=&#39;http://www.blogger.com/atom/ns#&#39;]&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:sort&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;@term&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:if&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;test=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;position() &amp;amp;gt; 1&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&amp;lt;xsl:text&amp;gt;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:text&amp;gt;&amp;lt;/xsl:if&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;@term&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:for-each&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:param&amp;gt;&lt;/span&gt;
+
+&lt;span class=&quot;c&quot;&gt;&amp;lt;!-- Now, dump the post.  All these lines must start on the first column. --&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:text&amp;gt;&amp;lt;/xsl:text&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:if&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;test=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;not($draft = &#39;yes&#39;)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+__BEGIN_POST__ &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$output&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:if&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:if&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;test=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$draft = &#39;yes&#39;&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+__BEGIN_DRAFT__ &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$output&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:if&amp;gt;&lt;/span&gt;
+---
+layout: post
+title: &quot;&lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$title&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;&quot;
+date: &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$date&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+categories: &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$tags&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+julipedia: &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$relurl&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+excerpt_separator: &lt;span class=&quot;ni&quot;&gt;&amp;amp;lt;&lt;/span&gt;/p&lt;span class=&quot;ni&quot;&gt;&amp;amp;gt;&lt;/span&gt;
+---
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;atom:content/text()&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;disable-output-escaping=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;yes&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+__END__
+
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:text&amp;gt;&amp;lt;/xsl:text&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:template&amp;gt;&lt;/span&gt;
+
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:template&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;match=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:apply-templates&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;@*|node()&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:template&amp;gt;&lt;/span&gt;
+
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:template&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;match=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;@*|node()&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;priority=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;-1&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:apply-templates&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;@*|node()&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:template&amp;gt;&lt;/span&gt;
+
+  &lt;span class=&quot;c&quot;&gt;&amp;lt;!-- From: http://geekswithblogs.net/Erik/archive/2008/04/01/120915.aspx --&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:template&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;string-replace-all&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;text&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;replace&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;by&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:choose&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:when&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;test=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;contains($text, $replace)&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring-before($text,$replace)&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$by&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:call-template&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;string-replace-all&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+          &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:with-param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;text&quot;&lt;/span&gt;
+          &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;substring-after($text,$replace)&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+          &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:with-param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;replace&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$replace&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+          &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:with-param&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;name=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;by&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$by&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:call-template&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:when&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:otherwise&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;nt&quot;&gt;&amp;lt;xsl:value-of&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;select=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;$text&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+      &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:otherwise&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:choose&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:template&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/xsl:stylesheet&amp;gt;&lt;/span&gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;As you may have noticed, this stylesheet exports all posts into a single text file, and delimits them with unique start/end markers of the form &lt;code class=&quot;highlighter-rouge&quot;&gt;__BEGIN_POST__&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;__BEGIN_DRAFT__&lt;/code&gt;, and &lt;code class=&quot;highlighter-rouge&quot;&gt;__END__&lt;/code&gt;. I will show in the next section how to split them up. The reason for this lies in a limitation of &lt;code class=&quot;highlighter-rouge&quot;&gt;xsltproc&lt;/code&gt;: this tool is an XSLT 1.0 processor so it does not have support for the multi-file (chunked) output present since XSLT 2.0. (This is not completely accurate though: the DocBook XSL does chunking and it used to work just fine with &lt;code class=&quot;highlighter-rouge&quot;&gt;xsltproc&lt;/code&gt;; I didn’t investigate how.)&lt;/p&gt;
+
+&lt;h2 id=&quot;from-the-text-file-to-individual-html-files&quot;&gt;From the text file to individual HTML files&lt;/h2&gt;
+
+&lt;p&gt;When we run the XSLT file above with the exported contents of a Blogger site, we end up with a text file that contains all posts separated by unique markers. The script below processes this text file and outputs individual HTML documents with Front Matter for each post. I called this &lt;code class=&quot;highlighter-rouge&quot;&gt;import-blogger.sh&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c&quot;&gt;# Imports the contents of a Blogger export.&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;#&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;# This script parses the XML file given as the input, which has to be downloaded&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;# from Blogger as a backup, and generates one file per post in the corresponding&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;# _drafts or _posts folder.&lt;/span&gt;
+
+shtk_import cleanup
+shtk_import cli
+
+&lt;span class=&quot;nv&quot;&gt;PARSE_BLOGGER_XSL&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;shtk_cli_dirname&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;/parse-blogger.xsl&quot;&lt;/span&gt;
+
+generate_files&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunks&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+    local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;basedir&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;while &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;read &lt;/span&gt;line; &lt;span class=&quot;k&quot;&gt;do
+        case&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;line&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;in
+            &lt;/span&gt;__BEGIN_DRAFT__&lt;span class=&quot;k&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+                &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk_name&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;echo&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;line&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; | cut -d &lt;span class=&quot;s1&quot;&gt;&#39; &#39;&lt;/span&gt; -f 2-&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+                mkdir -p &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;basedir&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;/_drafts&quot;&lt;/span&gt;
+                &lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;basedir&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;/_drafts/&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk_name&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+                &lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; ! -f &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+                    &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; shtk_cli_error &lt;span class=&quot;s2&quot;&gt;&quot;Draft &lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt; already exists&quot;&lt;/span&gt;
+                shtk_cli_info &lt;span class=&quot;s2&quot;&gt;&quot;Writing draft &lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk_name&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+                &lt;span class=&quot;p&quot;&gt;;;&lt;/span&gt;
+
+            __BEGIN_POST__&lt;span class=&quot;k&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+                &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk_name&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;echo&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;line&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; | cut -d &lt;span class=&quot;s1&quot;&gt;&#39; &#39;&lt;/span&gt; -f 2-&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+                mkdir -p &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;basedir&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;/_posts&quot;&lt;/span&gt;
+                &lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;basedir&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;/_posts/&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk_name&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+                &lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; ! -f &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+                    &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; shtk_cli_error &lt;span class=&quot;s2&quot;&gt;&quot;Post &lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt; already exists&quot;&lt;/span&gt;
+                shtk_cli_info &lt;span class=&quot;s2&quot;&gt;&quot;Writing post &lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk_name&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+                &lt;span class=&quot;p&quot;&gt;;;&lt;/span&gt;
+
+            __END__&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+                &lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;
+                &lt;span class=&quot;p&quot;&gt;;;&lt;/span&gt;
+
+            &lt;span class=&quot;k&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+                &lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; -z &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;echo&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;line&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &amp;gt;&amp;gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunk&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+                &lt;span class=&quot;p&quot;&gt;;;&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;esac&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;done&lt;/span&gt; &amp;lt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunks&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+main&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;${#}&lt;/span&gt; -eq 1 &lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; shtk_cli_usage_error &lt;span class=&quot;s2&quot;&gt;&quot;Must provide name of Blogger&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        &lt;span class=&quot;s2&quot;&gt;&quot;exported data file&quot;&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;input&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;pattern&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;TMPDIR&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:-&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;/tmp&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;shtk_cli_progname&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;.XXXXXX&quot;&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;tempdir&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;mktemp -d &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;pattern&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; 2&amp;gt;/dev/null&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; -d &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;tempdir&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; shtk_cli_error &lt;span class=&quot;s2&quot;&gt;&quot;Failed to create temporary directory&quot;&lt;/span&gt;
+
+    &lt;span class=&quot;nb&quot;&gt;eval&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;remove_tempdir() { rm -rf &#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;tempdir&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&#39;; }&quot;&lt;/span&gt;
+    shtk_cleanup_register remove_tempdir
+
+    shtk_cli_info &lt;span class=&quot;s2&quot;&gt;&quot;Parsing contents of Blogger exported data&quot;&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunks&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;tempdir&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;/chunks.txt&quot;&lt;/span&gt;
+    xsltproc &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;PARSE_BLOGGER_XSL&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;input&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &amp;gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunks&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+
+    generate_files &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;chunks&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; .
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Running this script results in a bunch of &lt;code class=&quot;highlighter-rouge&quot;&gt;.html&lt;/code&gt; files that can be placed directly into the Jekyll’s &lt;code class=&quot;highlighter-rouge&quot;&gt;_posts&lt;/code&gt; directory and served as any other post. This was what I did for the first publication of this site.&lt;/p&gt;
+
+&lt;h2 id=&quot;from-html-to-markdown&quot;&gt;From HTML to Markdown&lt;/h2&gt;
+
+&lt;p&gt;The HTML produced by Blogger is far from optimal: it contains a lot of unnecessary formatting, especially if you have previously used their WYSIWYG editor; and even if you have typed the HTML by hand, sometimes Blogger decides to “fix” it.&lt;/p&gt;
+
+&lt;p&gt;After the first migration step, I decided to convert my most popular posts into Markdown for better looks and not to bother much with the rest. The reason was that, as part of the conversion, I would be sanitizing their markup both automatically via the translation tools and manually as an after-step. Sanity-checking the contents of a Markdown file for good markup is much easier than doing the same on a machine-generated HTML file.&lt;/p&gt;
+
+&lt;p&gt;To do this conversion, I used the following script which I appropriately named &lt;code class=&quot;highlighter-rouge&quot;&gt;html-to-markdown.sh&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c&quot;&gt;# Takes an HTML post and converts it to Markdown.&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;#&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;# This is intended to be used on posts imported from Blogger.&lt;/span&gt;
+
+shtk_import cleanup
+shtk_import cli
+
+extract_content&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;input&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    &lt;/span&gt;awk &lt;span class=&quot;s1&quot;&gt;&#39;
+BEGIN {
+    count = 0
+}
+/^---$/ {
+    count += 1
+    next
+}
+{
+    if (count &amp;lt; 2) {
+        next
+    }
+    print
+}
+    &#39;&lt;/span&gt; &amp;lt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;input&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+extract_front_matter&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;input&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    &lt;/span&gt;awk &lt;span class=&quot;s1&quot;&gt;&#39;
+BEGIN {
+    count = 0
+}
+/^---$/ {
+    count += 1
+    if (count &amp;lt;= 2) {
+        print
+    }
+    next
+}
+{
+    if (count != 1) {
+        next
+    }
+    print
+}
+    &#39;&lt;/span&gt; &amp;lt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;input&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+sed_in_place&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;file&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    &lt;/span&gt;&lt;span class=&quot;k&quot;&gt;if &lt;/span&gt;sed &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;@&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;file&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &amp;gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;file&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;.tmp&quot;&lt;/span&gt;; &lt;span class=&quot;k&quot;&gt;then
+        &lt;/span&gt;mv -f &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;file&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;.tmp&quot;&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;file&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;else
+        &lt;/span&gt;rm -f &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;file&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;.tmp&quot;&lt;/span&gt;
+        shtk_cli_error &lt;span class=&quot;s2&quot;&gt;&quot;Failed to modify &lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;file&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt; in place&quot;&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;fi&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;c&quot;&gt;# In The Julipedia posts, I did not use section headings because I was not&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;# clear on what Blogger expected.  In their place, I used single-line&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;# paragraphs in bold, which pandoc translates to section 4 levels.  Fix&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;# this here by &quot;renumbering&quot; the sections.&lt;/span&gt;
+patch_sections&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    &lt;/span&gt;sed_in_place &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; -E &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s1&quot;&gt;&#39;s,^####,#,&#39;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s1&quot;&gt;&#39;s,^\*\*(.*)\*\*$,# \1,&#39;&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+patch_utf8&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    &lt;/span&gt;sed_in_place &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xa0&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;agrave;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xa1&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;aacute;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xa4&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;auml;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xa7&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;ccedil;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xa8&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;egrave;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xa9&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;eacute;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xab&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;euml;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xac&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;igrave;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xad&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;iacute;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xaf&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;iuml;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xb1&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;ntilde;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xb2&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;ograve;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xb3&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;oacute;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xb6&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;ouml;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xb9&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;ugrave;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xba&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;uacute;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xc3\xbc&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;uuml;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xe2\x80\x93&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;ndash;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xe2\x80\x94&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;mdash;,g&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        -e &lt;span class=&quot;s2&quot;&gt;&quot;s,&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;printf&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&#39;\xe2\x80\xa6&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\&amp;amp;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;hellip;,g&quot;&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+main&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;${#}&lt;/span&gt; -eq 1 &lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; shtk_cli_usage_error &lt;span class=&quot;s2&quot;&gt;&quot;Must provide an HTML input name&quot;&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_input&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;; &lt;span class=&quot;nb&quot;&gt;shift
+
+    local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_output&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;echo&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_input&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; | sed -e &lt;span class=&quot;s1&quot;&gt;&#39;s,\.html$,.md,&#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;front_matter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_output&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;.tmp1&quot;&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_content&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_output&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;.tmp2&quot;&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_content&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_output&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;.tmp3&quot;&lt;/span&gt;
+    &lt;span class=&quot;nb&quot;&gt;eval&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;remove_temp_files() {&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        &lt;span class=&quot;s2&quot;&gt;&quot;    rm -f &#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;front_matter&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&#39; &#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&#39; &#39;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&#39;;&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        &lt;span class=&quot;s2&quot;&gt;&quot;}&quot;&lt;/span&gt;
+    shtk_cleanup_register remove_temp_files
+
+    extract_front_matter &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_input&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        | grep -v &lt;span class=&quot;s1&quot;&gt;&#39;^excerpt_separator:&#39;&lt;/span&gt; &amp;gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;front_matter&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+
+    extract_content &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_input&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &amp;gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+    pandoc --from&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;html --to&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;markdown_strict --output&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;se&quot;&gt;\&lt;/span&gt;
+        --ascii &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; shtk_cli_error &lt;span class=&quot;s2&quot;&gt;&quot;pandoc conversion failed&quot;&lt;/span&gt;
+
+    patch_sections &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+    patch_utf8 &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+
+    git mv &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;html_input&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_output&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+    cat &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;front_matter&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_content&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt; &amp;gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_output&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+    git add &lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;${&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;markdown_output&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;This script relies on &lt;a href=&quot;http://pandoc.org/&quot;&gt;Pandoc&lt;/a&gt; to do the initial conversion and then performs some custom post-processing—in particular to fix the original markup in the Blogger posts and to strip out UTF-8 characters in favor of HTML entities.&lt;/p&gt;
+
+&lt;h1 id=&quot;parting-words&quot;&gt;Parting words&lt;/h1&gt;
+
+&lt;p&gt;That’s all! Wasn’t it simple? No, not really… this all took me various days of work to obtain palatable results.&lt;/p&gt;
+
+&lt;p&gt;Note that you will need some stitching to put the various steps together: I purposely did not provide you with a fully-specified solution because the code above is rough and will surely need tuning for your own use case. Hopefully, though, this will serve as a decent starting point.&lt;/p&gt;
+
+&lt;p&gt;Also note that the scripts above need &lt;a href=&quot;https://github.com/jmmv/shtk/&quot;&gt;shtk&lt;/a&gt; to function so you will need to either install that first or remove the dependency.&lt;/p&gt;
+
+&lt;p&gt;Good luck!&lt;/p&gt;
+</description>
+        
+        <pubDate>Fri, 22 Jul 2016 14:46:10 +0000</pubDate>
+        <link>http://julio.meroh.net/2016/07/blogger-to-jekyll.html</link>
+        <guid isPermaLink="true">http://julio.meroh.net/2016/07/blogger-to-jekyll.html</guid>
+        
+        
+        <category>blog</category>
+        
+      </item>
     
       <item>
         <title>Welcome to my homepage, version 3.0</title>
@@ -1636,163 +2415,6 @@ you might find it useful!  If you do, please &lt;a href=&quot;/about&quot;&gt;le
         <link>http://julio.meroh.net/2015/12/introducing-markdown2social.html</link>
         <guid isPermaLink="true">http://julio.meroh.net/2015/12/introducing-markdown2social.html</guid>
         
-        
-        <category>software</category>
-        
-      </item>
-    
-      <item>
-        <title>Compilers in the (BSD) base system</title>
-        
-          <description>
-            A commonly held axiom in the BSD community is that the C compiler belongs in the base system. “This is how things have been since the beginning of time and they define the way BSD systems are”, the proposition goes.
-
-But why is that? What makes “having a compiler in base” a BSD system? Why is the compiler a necessary part of the base system? Hold on, is it? Could we take it out?
-
-In this post, which is an extension to a reply I wrote in the “Retiring in- tree GDB” mailing list thread on freebsd- arch, I would like to examine possible answers to those questions.
-
-Why is the compiler in the base system?
-
-Traditionally, BSD systems always required a compiler to be present because building from source was the only way to keep the OS up-to-date, to tune the features of the kernel, and to install third-party software from ports or pkgsrc.
-
-There didn’t exist any decent binary-only upgrade mechanisms for the base OS, the kernel was not modular nor did not have sufficient sysctl(8) tweaks, and the tools and repositories to install binary packages were very rudimentary and inflexible.
-
-The case for FreeBSD
-
-Things have significantly changed over the last few years, especially for FreeBSD Tier 1 platforms: it’s now possible to run a fully-functional, up-to-date system, appropriately tuned for the machine at hand, with all kinds of third- party packages installed, without ever needing to compile anything.
-
-
-  Having a compiler available at all times is not a necessity any longer. One
-can get by with binaries just fine, which is a more convenient scenario.
-
-
-These days, FreeBSD would not need to ship a compiler by default any longer.  (Whether that should be done is a different story though.)
-
-In fact, as a long-time NetBSD user, I was a bit surprised when I came to FreeBSD because I found that the compiler tools were not optional. In NetBSD, the compiler tools have always been part of a comp.tgz set separate from base.tgz. Both are built from the source tree in unison, but when installing a new machine, you can easily choose not to have comp.tgz unpacked. I have run lean servers without compiler tools for a long time (by building my packages elsewhere using pkg_comp), and it was just fine.
-
-Let’s keep the compiler in base
-
-Regardless of the above, I do agree that the compiler should stay in the base system for a variety of reasons.
-
-Without going into much detail, those reasons include: having a system that can build itself out-of-the-box in a consistent manner, having a system that can be trivially cross-compiled, and having a trustworthy compiler maintained by the same people that maintain the rest of the operating system.
-
-Given the above, as a developer of the system, I do not want to have to care about the tricky integration points of a compiler with the complex source tree of an OS. These are details best left to a small team of compiler experts, who can and will do the right thing for the OS as a whole. You only need to witness NetBSD’s super-simple cross-compilation features offered by build.sh to truly appreciate what I mean.
-
-On that topic, I suggest watching the following presentation, which argues for a monolithic source tree in which the toolchain is managed by a small team of passionate experts:
-
-
-  
-    
-  
-  
-    Lessons in Sustainability, by Titus Winters. A key point of this talk is the justification for having a single "compiler team" within your infrastructure so that all the experts on the topic can work together and handle the tricky bits for you.
-  
-
-
-What should probably be done is make the installation of the compiler tools optional: when installing FreeBSD from a binary distribution, the user should have the choice to not install any of the compiler tools. I wonder what the implications of that would be though, because FreeBSD has shipped with built- in compiler tools for years and there might be subtle hidden dependencies on them.
-
-Building from source considered harmful
-
-To conclude, I’ll go on a bit of a tangent: making it a standard practice for the user to compile anything at all is, for the majority of the cases, a horrible experience.
-
-That said, there are a bunch of legitimate cases for building from source.  Namely:
-
-
-  to apply code changes (duh),
-  to tune compiler optimization settings,
-  to disable features for smaller binaries,
-  to disable features that have a measurable impact on performance—for whose run-time kill-switch is not sufficient to kill those implications, and
-  to target a new platform.
-
-
-If the cases above do not apply, then compiling from source should not be necessary: alternatives exist, and they can be implemented. If building from source is necessary, either you have done a poor job as a developer—e.g. by not allowing sufficient run-time configuration—or you do not have sufficient resources to run the project—e.g. by being unable to provide binary packages for common platforms.
-
-A pet peeve of mine are software packages whose functionality depends on the libraries chosen at build-time by means of configure switches. These kind of software packages are really problematic when the time to offer binary packages comes: “what options should you enable?” or “how will the user be able to choose a leaner installation?”. There are mechanisms to allow the modification of dependencies at run time (think of dynamically-loadable plugins), but they often are much more complex to implement than just configure switches.
-
-The next time you tell a user of your software to “go and build from source”, think if you could do something else to avoid that same situation in the future.
-
-            &lt;a href=&quot;http://julio.meroh.net/2015/10/compilers-in-the-bsd-base-system.html&quot;&gt;[Continue reading]&lt;/a&gt;
-          </description>
-        
-          <description>&lt;p&gt;A commonly held axiom in the BSD community is that the C compiler belongs in the base system. “This is how things have been since the beginning of time and they define the way BSD systems are”, the proposition goes.&lt;/p&gt;
-
-&lt;p&gt;But why is that? What makes “having a compiler in base” a BSD system? Why is the compiler a necessary part of the base system? Hold on, is it? Could we take it out?&lt;/p&gt;
-
-&lt;p&gt;In this post, which is an extension to a reply I wrote in the &lt;a href=&quot;https://lists.freebsd.org/pipermail/freebsd-arch/2015-October/017394.html&quot;&gt;“Retiring in- tree GDB” mailing list thread on freebsd- arch&lt;/a&gt;, I would like to examine possible answers to those questions.&lt;/p&gt;
-
-&lt;h1 id=&quot;why-is-the-compiler-in-the-base-system&quot;&gt;Why is the compiler in the base system?&lt;/h1&gt;
-
-&lt;p&gt;Traditionally, BSD systems always required a compiler to be present because building from source was the only way to &lt;strong&gt;keep the OS up-to-date&lt;/strong&gt;, to &lt;strong&gt;tune the features of the kernel&lt;/strong&gt;, and to &lt;strong&gt;install third-party software&lt;/strong&gt; from ports or pkgsrc.&lt;/p&gt;
-
-&lt;p&gt;There didn’t exist any decent binary-only upgrade mechanisms for the base OS, the kernel was not modular nor did not have sufficient &lt;code class=&quot;highlighter-rouge&quot;&gt;sysctl(8)&lt;/code&gt; tweaks, and the tools and repositories to install binary packages were very rudimentary and inflexible.&lt;/p&gt;
-
-&lt;h1 id=&quot;the-case-for-freebsd&quot;&gt;The case for FreeBSD&lt;/h1&gt;
-
-&lt;p&gt;Things have significantly changed over the last few years, especially for &lt;a href=&quot;https://www.freebsd.org/doc/en/articles/committers-guide/archs.html&quot;&gt;FreeBSD Tier 1 platforms&lt;/a&gt;: it’s now possible to run a fully-functional, up-to-date system, appropriately tuned for the machine at hand, with all kinds of third- party packages installed, without ever needing to compile anything.&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;Having a compiler available at all times is not a necessity any longer. One
-can get by with binaries just fine, which is a more convenient scenario.&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;These days, FreeBSD would not &lt;em&gt;need&lt;/em&gt; to ship a compiler by default any longer.  (Whether that &lt;em&gt;should&lt;/em&gt; be done is a different story though.)&lt;/p&gt;
-
-&lt;p&gt;In fact, as a long-time NetBSD user, I was a bit surprised when I came to FreeBSD because I found that the compiler tools were not optional. In NetBSD, the compiler tools have always been part of a comp.tgz set separate from base.tgz. Both are built from the source tree in unison, but when installing a new machine, you can easily choose not to have comp.tgz unpacked. I have run lean servers without compiler tools for a long time (by &lt;a href=&quot;https://wiki.netbsd.org/tutorials/pkgsrc/pkg_comp_pkg_chk/&quot;&gt;building my packages elsewhere using pkg_comp&lt;/a&gt;), and it was just fine.&lt;/p&gt;
-
-&lt;h1 id=&quot;lets-keep-the-compiler-in-base&quot;&gt;Let’s keep the compiler in base&lt;/h1&gt;
-
-&lt;p&gt;Regardless of the above, I do agree that the compiler should stay in the base system for a variety of reasons.&lt;/p&gt;
-
-&lt;p&gt;Without going into much detail, those reasons include: having a system that can build itself out-of-the-box in a consistent manner, having a system that can be trivially cross-compiled, and having a trustworthy compiler maintained by the same people that maintain the rest of the operating system.&lt;/p&gt;
-
-&lt;p&gt;Given the above, as a developer of the system, I do not want to have to care about the tricky integration points of a compiler with the complex source tree of an OS. These are details best left to a small team of compiler experts, who can and will do the right thing for the OS as a whole. You only need to witness NetBSD’s super-simple cross-compilation features offered by build.sh to truly appreciate what I mean.&lt;/p&gt;
-
-&lt;p&gt;On that topic, I suggest watching the following presentation, which argues for a monolithic source tree in which the toolchain is managed by a small team of passionate experts:&lt;/p&gt;
-
-&lt;div class=&quot;frame&quot;&gt;
-  &lt;div class=&quot;content&quot;&gt;
-    &lt;iframe width=&quot;640&quot; height=&quot;360&quot; src=&quot;https://www.youtube.com/embed/zW-i9eVGU_k&quot; frameborder=&quot;0&quot; allowfullscreen=&quot;&quot;&gt;&lt;/iframe&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;footer&quot;&gt;
-    &lt;p&gt;Lessons in Sustainability, by Titus Winters. A key point of this talk is the justification for having a single &quot;compiler team&quot; within your infrastructure so that all the experts on the topic can work together and handle the tricky bits for you.&lt;/p&gt;
-  &lt;/div&gt;
-&lt;/div&gt;
-
-&lt;p&gt;What should probably be done is make the installation of the compiler tools optional: when installing FreeBSD from a binary distribution, the user should have the choice to not install any of the compiler tools. I wonder what the implications of that would be though, because FreeBSD has shipped with built- in compiler tools for years and there might be subtle hidden dependencies on them.&lt;/p&gt;
-
-&lt;h1 id=&quot;building-from-source-considered-harmful&quot;&gt;Building from source considered harmful&lt;/h1&gt;
-
-&lt;p&gt;To conclude, I’ll go on a bit of a tangent: making it a &lt;em&gt;standard practice&lt;/em&gt; for the user to compile anything at all is, for the majority of the cases, a horrible experience.&lt;/p&gt;
-
-&lt;p&gt;That said, there are a bunch of legitimate cases for building from source.  Namely:&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;to apply code changes (duh),&lt;/li&gt;
-  &lt;li&gt;to tune compiler optimization settings,&lt;/li&gt;
-  &lt;li&gt;to disable features for smaller binaries,&lt;/li&gt;
-  &lt;li&gt;to disable features that have a measurable impact on performance—for whose run-time kill-switch is not sufficient to kill those implications, and&lt;/li&gt;
-  &lt;li&gt;to target a new platform.&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;If the cases above do &lt;em&gt;not&lt;/em&gt; apply, then compiling from source should not be &lt;em&gt;necessary&lt;/em&gt;: alternatives exist, and they can be implemented. If building from source is necessary, either &lt;strong&gt;you have done a poor job as a developer&lt;/strong&gt;—e.g. by not allowing sufficient run-time configuration—or &lt;strong&gt;you do not have sufficient resources to run the project&lt;/strong&gt;—e.g. by being unable to provide binary packages for common platforms.&lt;/p&gt;
-
-&lt;p&gt;A pet peeve of mine are software packages whose functionality depends on the libraries chosen at build-time by means of configure switches. These kind of software packages are really problematic when the time to offer binary packages comes: “what options should you enable?” or “how will the user be able to choose a leaner installation?”. There are mechanisms to allow the modification of dependencies at run time (think of dynamically-loadable plugins), but they often are &lt;em&gt;much&lt;/em&gt; more complex to implement than just configure switches.&lt;/p&gt;
-
-&lt;p&gt;The next time you tell a user of your software to “go and build from source”, think if you could do something else to avoid that same situation in the future.&lt;/p&gt;
-</description>
-        
-        <pubDate>Fri, 23 Oct 2015 16:00:00 +0000</pubDate>
-        <link>http://julio.meroh.net/2015/10/compilers-in-the-bsd-base-system.html</link>
-        <guid isPermaLink="true">http://julio.meroh.net/2015/10/compilers-in-the-bsd-base-system.html</guid>
-        
-        
-        <category>bsd</category>
-        
-        <category>compilers</category>
-        
-        <category>essay</category>
-        
-        <category>featured</category>
         
         <category>software</category>
         
