@@ -720,34 +720,6 @@
   
     <li>
       <h2>
-        <a class="post-link" href="/2011/01/injecting-c-functions-into-lua.html">Injecting C++ functions into Lua</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-January
-
-17th,
-  
-2011
-at
-16:09 UTC
-        &middot;
-        <a href="/2011/01/injecting-c-functions-into-lua.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2011/01/injecting-c-functions-into-lua.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the lua::state class.Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the lua_CFunction type:typedef int (*lua_CFunction)(lua_State*);Now, let's consider this code:intawesome_native_function(lua_State* state){    // Uh, we have access to s, so we bypass the lua::state!    ... do something nasty ...    // Oh, and we can throw an exception here...    //with bad consequences.}voidsetup(...){    lua::state state;    state.push_c_function(awesome_native_function);    state.set_global("myfunc");    ... run some script ...}The fact that we must pass a lua_CFunction prototype to the lua_pushcfunction object means that such function must have access to the raw lua_State* pointer... which we want to avoid.What we really want is the caller code to define a function such as:typedef int (*cxx_function)(lua::state&)In an ideal world, the lua::state class would implement a push_cxx_function that took a cxx_function, generated a thin C wrapper and injected such generated wrapper into Lua.  Unfortunately, we are not in an ideal world: C++ does not have high-order functions and thus the "generate a wrapper function" part of the previous proposal does not really work.What we can do instead, though, is to make the creation of C wrappers for these C++ functions trivial. And this is what r42 did.  The approach I took is similar to this overly-simplified (and broken) example:template&lt; cxx_function Function &gt;intwrap_cxx_function(lua_State* state){    try {        lua::state state_wrapper(state);        return Function(state_wrapper);    } catch (...) {        luaL_error(state, "Geez, don't go into C's land!");    }}This template wrapper takes a cxx_function object and generates a corresponding C function at compile time. This wrapper function ensures that C++ state does not propagate into the C world, as that often has catastrophical consequences. (Due to language limitations, the input function must have external linkage.  So no, it cannot be static.)As a result, we can rewrite our original snippet as:intawesome_native_function(lua::state& state){    // See, we cannot access lua_State* now.    ... do something ...    throw std::runtime_error("And we can even do this!");}voidsetup(...){    lua::state state;    state.push_c_function(        wrap_cxx_function);    state.set_global("myfunc");    ... run some script ...}Neat? I think so, but maybe not so much. I'm pretty sure there are cooler ways of achieving the above purpose in a cleaner way, but this one works nicely and has few overhead.
-
-        <a href="/2011/01/injecting-c-functions-into-lua.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
-    <li>
-      <h2>
         <a class="post-link" href="/2011/01/error-handling-in-lua-kyua-approach.html">Error handling in Lua: the Kyua approach</a>
       </h2>
       <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
@@ -914,6 +886,34 @@ at
       
     </li>
   
+    <li>
+      <h2>
+        <a class="post-link" href="/2010/12/dependency-injection-simple-class.html">Dependency injection: simple class constructors</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+December
+
+26th,
+  
+2010
+at
+10:41 UTC
+        &middot;
+        <a href="/2010/12/dependency-injection-simple-class.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2010/12/dependency-injection-simple-class.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Following my previous post on dependency injection (DI for short), I wanted to show you today another example of code in which DI helps in making the code clearer and easier to validate. In this case, the person to blame for the original piece of code being criticized is me.The atffile module in ATF provides a class to represent the contents of Atffiles. An Atffile is, basically, a file containing a list of test programs to run and a list of properties associated to these test programs. Let's consider the original implementation of this module:class atffile {    strings_vector _test_programs;    strings_vector _properties;public:    atffile(const path& file)    {        std::ifstream input(file.c_str());        _test_programs = ... parse list from input ...;        _properties = ... parse list from input ...;    }    ... getters and other read-only methods ...};According to the object-oriented programming (OOP) principles we are taught over and over again, this seems like a reasonable design. An atffile object is entirely self-contained: if the constructor finishes successfully, we know that the new object matches exactly the representation of an Atffile on disk. The other methods in the class provide read-only access to the internal attributes, which ensures that the in-memory representation remains consistent.However, this design couples the initialization of an object with external dependencies, and that is bad for two main reasons: first, because it makes testing (very) difficult; and, second, because it makes an apparently simple action (constructing an object) a potentially expensive task (reading from an external resource).To illustrate the first point, let's consider a helper free-function that deals with an atffile object:std::stringget_property(const atffile& file, const std::string& name,             const std::string& defvalue){    const strings_vector& props = file.properties();    const strings_vector::const_iterator iter =        props.find(name);    if (iter == props.end())        return defvalue;    else        return *iter;}Now, how do we write unit-tests for this function? Note that, to execute this function, we need to pass in an atffile object. And to instantiate an atffile, we need to be able to read a Atffile from disk because the only constructor for the atffile class has this dependency on an external subsystem. So, summarizing, to test this innocent function, we need to create a file on disk with valid contents, we need to instantiate an atffile object pointing to this file, and only then we can pass it to the get_property function. At this point, our unit test smells like an integration test, and it actually is for no real reason. This will cause our test suite to be more fragile (the test for this auxiliary function depends on the parsing of a file) and slow.How can we improve the situation? Easy: decoupling the dependencies on external systems from the object initialization. Take a look at this rewritten atffile class:class atffile {    strings_vector _test_programs;    strings_vector _properties;public:    atffile(const strings_vector& test_programs_,            const strings_vector& properties_) :        _test_programs(test_programs_),        _properties(properties_)    {        assert(!_test_programs.empty());    }    static atffile    parse(const path& file)    {        std::ifstream input(file.c_str());        strings_vector test_programs_ =            ... parse list from input ...;        strings_vector properties_ =            ... parse list from input ...;        return atffile(test_programs_, properties_);    }    ... getters and other read-only methods ...};Note that this new design does not necessarily violate OOP principles: yes, we can now construct an object with fake values in it by passing them to the constructor, but that does not mean that such values can be inconsistent once the object is created. In this particular example, I have added an assertion in the constructor to reenforce a check performed by parse (that an atffile must list at least one test program).With this new design in mind, it is now trivial to test the get_property function shown above: constructing an auxiliary atffile object is easy, because we can inject values into the object to later pass it to get_property: no need to create a temporary file that has to be valid and later parsed by the atffile code. Our test now follows the true sense of a unit test, which is much faster, less fragile and "to-the-point". We can later write integration tests if we so desire. Additionally, we can also write tests for atffile member functions, and we can very easily reproduce corner cases for them by, for example, injecting bad data. The only place where we need to create temporary Atffiles is when we need to test the parse class method.So, to conclude: make your class constructors as simple as possible and, in particular, do not make your class constructors depend on external systems. If you find yourself opening resources or constructing other objects from within your constructor, you are doing it wrong (with very few exceptions).I have been using the above principle for the last ~2 years and the results are neat: I am much, much more confident on my code because I write lots of more accurate test cases and I can focalize dependencies on external resources on a small subset of functions. (Yes, Kyua uses this design pattern intensively!)
+
+        <a href="/2010/12/dependency-injection-simple-class.html">[Continue reading]</a>
+      </p>
+      
+    </li>
+  
 </ul>
 
 
@@ -986,11 +986,10 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (7)
      
     <ul id="archive-year-2016" class="collapse">
      
-      <li><a href="/2016/07">July 2016</a> (1)</li>
       <li><a href="/2016/05">May 2016</a> (1)</li>
       <li><a href="/2016/04">April 2016</a> (1)</li>
       <li><a href="/2016/03">March 2016</a> (2)</li>
