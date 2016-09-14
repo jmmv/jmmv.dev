@@ -6,9 +6,88 @@
 </description>
     <link>http://julio.meroh.net/</link>
     <atom:link href="http://julio.meroh.net/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Sun, 21 Aug 2016 20:00:41 +0000</pubDate>
-    <lastBuildDate>Sun, 21 Aug 2016 20:00:41 +0000</lastBuildDate>
+    <pubDate>Wed, 14 Sep 2016 11:11:28 +0000</pubDate>
+    <lastBuildDate>Wed, 14 Sep 2016 11:11:28 +0000</lastBuildDate>
     <generator>Jekyll v3.1.2</generator>
+    
+      <item>
+        <title>#! /usr/bin/env considered harmful</title>
+        
+          <description>
+            Many programming guides recommend to begin scripts with the #! /usr/bin/env shebang in order to to automatically locate the necessary interpreter. For example, for a Python script you would use #! /usr/bin/env python, and then the saying goes, the script would “just work” on any machine with Python installed.
+
+The reason for this recommendation is that /usr/bin/env python will search the PATH for a program called python and execute the first one found… and that usually works fine on one’s own machine.
+
+Unfortunately, this advice is plagued with problems and assuming it will work is wishful thinking. Let me elaborate. I’ll use Python below for illustration purposes but the following applies equally to any other interpreted language.
+
+Problems
+
+i) The first problem is that using #! /usr/bin/env lets you find an interpreter but not necessarily the correct interpreter. In our example above, we told the system to look for an interpreter called python… but we did not say anything about the compatible versions. Did you want Python 2.x or 3.x? Or maybe “exactly 2.7”? Or “at least 3.2”? You can’t tell right? So the the computer can’t tell either; regardless, the script will probably run with whichever version happens to be called python–which could be any thanks to the alternatives system. The danger is that, if the version is mismatched, the script will fail and the failure can manifest itself at a much later stage (e.g. a syntax error in an infrequent code path) under obscure circumstances.
+
+ii) The second problem, assuming you ignore the version problem above because your script is compatible with all possible versions (hah), is that you may pick up an interpreter that does not have all prerequisite dependencies installed. Say your script decides to import a bunch of third-party modules: where are those modules located? Typically, the modules exist in a centralized repository that is specific to the interpreter installation (e.g. a .../lib/python2.7/site-packages/ directory that lives alongside the interpreter binary). So maybe your program found a Python 2.7 under /usr/local/bin/ but in reality you needed it to find the one in /usr/bin/ because that’s where all your Python modules are. If that happens, you’ll receive an obscure error that doesn’t properly describe the exact cause of the problem you got.
+
+iii) The third problem, assuming your script is portable to all versions (hah again) and that you don’t need any modules (really?), is that you are assuming that the interpreter is available via a specific name. Unfortunately, the name of the interpreter can vary. For example: pkgsrc installs all python binaries with explicitly-versioned names (e.g. python2.7 and python3.0) to avoid ambiguity, and no python symlink is created by default… which means your script won’t run at all even when Python is seemingly installed.
+
+iv) The fourth problem is that you cannot pass flags to the interpreter. The shebang line is intended to contain the name of the interpreter plus a single argument to it. Using /usr/bin/env as the interpreter name consumes the first slot and the name of the interpreter consumes the second, so there is no room to pass additional flags to the program. What happens with the rest of the arguments is platform-dependent: they may be all passed as a single string to env or they may be tokenized as individual arguments. This is not a huge deal though: one argument for flags is too restricted anyway and you can usually set up the interpreter later from within the script.
+
+v) The fifth and worst problem is that your script is at the mercy of the user’s environment configuration. If the user has a “misconfigured” PATH, your script will mysteriously fail at run time in ways that you cannot expect and in ways that may be very difficult to troubleshoot later on. I quote “misconfigured” because the problem here is very subtle. For example: I do have a shell configuration that I carry across many different machines and various operating systems; such configuration has complex logic to determine a sane PATH regardless of the system I’m in… but this, in turn, means that the PATH can end up containing more than one version of the same program. This is fine for interactive shell use, but it’s not OK for any program to assume that my PATH will match their expectations.
+
+vi) The sixth and last problem is that a script prefixed with #! /usr/bin/env is not suitable to being installed. This is justified by all the other points illustrated above: once a program is installed on the system, it must behave deterministically no matter how it is invoked. More importantly, when you install a program, you do so under a set of assumptions gathered by a configure-like script or prespecified by a package manager. To ensure things work, the installed script must see the exact same environment that was specified at installation time. In particular, the script must point at the correct interpreter version and at the interpreter that has access to all package dependencies.
+
+When is it OK?
+
+All this considered, you may still use #! /usr/bin/env for the convenience of your own throwaway scripts (those that don’t leave your machine).
+
+You may also use this shebang for documentation purposes and as a placeholder for a better default: for example, you could patch up the scripts during make install to point to the right interpreter, which is pretty much what pkgsrc (and likely any other packaging system) does automatically. Just don’t assume that the magic #! /usr/bin/env foo is sufficient or even correct for the final installed program.
+
+Bonus chatter: Did you know that the traditional shebang prefix is #!  (note the trailing space)? This 3-byte character sequence was the one that the original Unix kernel searched for to determine if an external interpreter was necessary, not just #!.
+
+            &lt;a href=&quot;http://julio.meroh.net/2016/09/env-considered-harmful.html&quot;&gt;[Continue reading]&lt;/a&gt;
+          </description>
+        
+          <description>&lt;p&gt;Many programming guides recommend to begin scripts with the &lt;code class=&quot;highlighter-rouge&quot;&gt;#! /usr/bin/env&lt;/code&gt; &lt;a href=&quot;https://en.wikipedia.org/wiki/Shebang_(Unix)&quot;&gt;shebang&lt;/a&gt; in order to to automatically locate the necessary interpreter. For example, for a Python script you would use &lt;code class=&quot;highlighter-rouge&quot;&gt;&lt;span class=&quot;c&quot;&gt;#! /usr/bin/env python&lt;/span&gt;&lt;/code&gt;, and then the saying goes, the script would “just work” on any machine with Python installed.&lt;/p&gt;
+
+&lt;p&gt;The reason for this recommendation is that &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/bin/env python&lt;/code&gt; will search the &lt;code class=&quot;highlighter-rouge&quot;&gt;PATH&lt;/code&gt; for a program called &lt;code class=&quot;highlighter-rouge&quot;&gt;python&lt;/code&gt; and execute the first one found… and that usually works fine &lt;em&gt;on one’s own machine&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Unfortunately, this advice is plagued with problems and assuming it will work is wishful thinking. Let me elaborate. I’ll use Python below for illustration purposes but &lt;strong&gt;the following applies equally to any other interpreted language.&lt;/strong&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;problems&quot;&gt;Problems&lt;/h2&gt;
+
+&lt;p&gt;&lt;em&gt;i)&lt;/em&gt; The first problem is that &lt;strong&gt;using &lt;code class=&quot;highlighter-rouge&quot;&gt;#! /usr/bin/env&lt;/code&gt; lets you find &lt;em&gt;an&lt;/em&gt; interpreter but not necessarily the &lt;em&gt;correct&lt;/em&gt; interpreter&lt;/strong&gt;. In our example above, we told the system to look for an interpreter called &lt;code class=&quot;highlighter-rouge&quot;&gt;python&lt;/code&gt;… but we did not say &lt;em&gt;anything&lt;/em&gt; about the compatible versions. Did you want Python 2.x or 3.x? Or maybe “exactly 2.7”? Or “at least 3.2”? You can’t tell right? So the the computer can’t tell either; regardless, the script &lt;em&gt;will&lt;/em&gt; probably run with whichever version happens to be called &lt;code class=&quot;highlighter-rouge&quot;&gt;python&lt;/code&gt;–which could be &lt;em&gt;any&lt;/em&gt; thanks to the &lt;a href=&quot;https://wiki.debian.org/DebianAlternatives&quot;&gt;alternatives system&lt;/a&gt;. The danger is that, if the version is mismatched, the script will fail and the failure can manifest itself at a much later stage (e.g. a syntax error in an infrequent code path) under obscure circumstances.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;ii)&lt;/em&gt; The second problem, assuming you ignore the version problem above because your script is compatible with all possible versions (hah), is that &lt;strong&gt;you may pick up an interpreter that does not have all prerequisite dependencies installed&lt;/strong&gt;. Say your script decides to import a bunch of third-party modules: where are those modules located? Typically, the modules exist in a centralized repository that is specific to the interpreter installation (e.g. a &lt;code class=&quot;highlighter-rouge&quot;&gt;.../lib/python2.7/site-packages/&lt;/code&gt; directory that lives alongside the interpreter binary). So maybe your program found a Python 2.7 under &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/bin/&lt;/code&gt; but in reality you needed it to find the one in &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/bin/&lt;/code&gt; because that’s where all your Python modules are. If that happens, you’ll receive an obscure error that doesn’t properly describe the exact cause of the problem you got.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;iii)&lt;/em&gt; The third problem, assuming your script is portable to all versions (hah again) and that you don’t need any modules (really?), is that &lt;strong&gt;you are assuming that the interpreter is available via a specific name&lt;/strong&gt;. Unfortunately, the name of the interpreter can vary. For example: pkgsrc installs all &lt;code class=&quot;highlighter-rouge&quot;&gt;python&lt;/code&gt; binaries with explicitly-versioned names (e.g. &lt;code class=&quot;highlighter-rouge&quot;&gt;python2.7&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;python3.0&lt;/code&gt;) to avoid ambiguity, and no &lt;code class=&quot;highlighter-rouge&quot;&gt;python&lt;/code&gt; symlink is created by default… which means your script won’t run at all even when Python is seemingly installed.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;iv)&lt;/em&gt; The fourth problem is that &lt;strong&gt;you cannot pass flags to the interpreter&lt;/strong&gt;. The shebang line is intended to contain the name of the interpreter plus a single argument to it. Using &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/bin/env&lt;/code&gt; as the interpreter name consumes the first slot and the name of the interpreter consumes the second, so there is no room to pass additional flags to the program. What happens with the rest of the arguments is platform-dependent: they may be all passed as a single string to &lt;code class=&quot;highlighter-rouge&quot;&gt;env&lt;/code&gt; or they may be tokenized as individual arguments. This is not a huge deal though: one argument for flags is too restricted anyway and you can usually set up the interpreter later from within the script.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;v)&lt;/em&gt; The fifth and worst problem is that &lt;strong&gt;your script is at the mercy of the user’s &lt;em&gt;environment&lt;/em&gt; configuration&lt;/strong&gt;. If the user has a “misconfigured” &lt;code class=&quot;highlighter-rouge&quot;&gt;PATH&lt;/code&gt;, your script will mysteriously fail at run time in ways that you cannot expect and in ways that may be very difficult to troubleshoot later on. I quote “misconfigured” because the problem here is very subtle. For example: I do have a shell configuration that I carry across many different machines and various operating systems; such configuration has complex logic to determine a sane &lt;code class=&quot;highlighter-rouge&quot;&gt;PATH&lt;/code&gt; regardless of the system I’m in… but this, in turn, means that the &lt;code class=&quot;highlighter-rouge&quot;&gt;PATH&lt;/code&gt; can end up containing more than one version of the same program. This is fine for interactive shell use, but it’s not OK for any program to assume that my &lt;code class=&quot;highlighter-rouge&quot;&gt;PATH&lt;/code&gt; will match their expectations.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;vi)&lt;/em&gt; The sixth and last problem is that &lt;strong&gt;a script prefixed with &lt;code class=&quot;highlighter-rouge&quot;&gt;#! /usr/bin/env&lt;/code&gt; is not suitable to being installed&lt;/strong&gt;. This is justified by all the other points illustrated above: once a program is installed on the system, it must behave deterministically no matter how it is invoked. More importantly, when you install a program, you do so under a set of assumptions gathered by a &lt;code class=&quot;highlighter-rouge&quot;&gt;configure&lt;/code&gt;-like script or prespecified by a package manager. To ensure things work, the installed script must see the exact same environment that was specified at installation time. In particular, the script must point at the correct interpreter version and at the interpreter that has access to all package dependencies.&lt;/p&gt;
+
+&lt;h2 id=&quot;when-is-it-ok&quot;&gt;When is it OK?&lt;/h2&gt;
+
+&lt;p&gt;All this considered, you may still use &lt;code class=&quot;highlighter-rouge&quot;&gt;#! /usr/bin/env&lt;/code&gt; for the &lt;strong&gt;convenience of your own throwaway scripts&lt;/strong&gt; (those that don’t leave your machine).&lt;/p&gt;
+
+&lt;p&gt;You may also use this shebang &lt;strong&gt;for documentation purposes and as a placeholder for a better default&lt;/strong&gt;: for example, you could patch up the scripts during &lt;code class=&quot;highlighter-rouge&quot;&gt;make install&lt;/code&gt; to point to the right interpreter, which is pretty much what pkgsrc (and likely any other packaging system) does automatically. &lt;strong&gt;Just don’t assume that the magic &lt;code class=&quot;highlighter-rouge&quot;&gt;#! /usr/bin/env foo&lt;/code&gt; is sufficient or even correct&lt;/strong&gt; for the final installed program.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;Bonus chatter:&lt;/em&gt; Did you know that the &lt;a href=&quot;https://en.wikipedia.org/wiki/Shebang_(Unix)#History&quot;&gt;traditional shebang prefix is &lt;code class=&quot;highlighter-rouge&quot;&gt;#! &lt;/code&gt;&lt;/a&gt; (note the trailing space)? This 3-byte character sequence was the one that the original Unix kernel searched for to determine if an external interpreter was necessary, not just &lt;code class=&quot;highlighter-rouge&quot;&gt;#!&lt;/code&gt;.&lt;/p&gt;
+</description>
+        
+        <pubDate>Wed, 14 Sep 2016 11:07:46 +0000</pubDate>
+        <link>http://julio.meroh.net/2016/09/env-considered-harmful.html</link>
+        <guid isPermaLink="true">http://julio.meroh.net/2016/09/env-considered-harmful.html</guid>
+        
+        
+        <category>portability</category>
+        
+        <category>programming</category>
+        
+        <category>scripts</category>
+        
+        <category>unix</category>
+        
+      </item>
     
       <item>
         <title>Welcome to my homepage, version 3.0</title>
@@ -1636,163 +1715,6 @@ you might find it useful!  If you do, please &lt;a href=&quot;/about&quot;&gt;le
         <link>http://julio.meroh.net/2015/12/introducing-markdown2social.html</link>
         <guid isPermaLink="true">http://julio.meroh.net/2015/12/introducing-markdown2social.html</guid>
         
-        
-        <category>software</category>
-        
-      </item>
-    
-      <item>
-        <title>Compilers in the (BSD) base system</title>
-        
-          <description>
-            A commonly held axiom in the BSD community is that the C compiler belongs in the base system. “This is how things have been since the beginning of time and they define the way BSD systems are”, the proposition goes.
-
-But why is that? What makes “having a compiler in base” a BSD system? Why is the compiler a necessary part of the base system? Hold on, is it? Could we take it out?
-
-In this post, which is an extension to a reply I wrote in the “Retiring in- tree GDB” mailing list thread on freebsd- arch, I would like to examine possible answers to those questions.
-
-Why is the compiler in the base system?
-
-Traditionally, BSD systems always required a compiler to be present because building from source was the only way to keep the OS up-to-date, to tune the features of the kernel, and to install third-party software from ports or pkgsrc.
-
-There didn’t exist any decent binary-only upgrade mechanisms for the base OS, the kernel was not modular nor did not have sufficient sysctl(8) tweaks, and the tools and repositories to install binary packages were very rudimentary and inflexible.
-
-The case for FreeBSD
-
-Things have significantly changed over the last few years, especially for FreeBSD Tier 1 platforms: it’s now possible to run a fully-functional, up-to-date system, appropriately tuned for the machine at hand, with all kinds of third- party packages installed, without ever needing to compile anything.
-
-
-  Having a compiler available at all times is not a necessity any longer. One
-can get by with binaries just fine, which is a more convenient scenario.
-
-
-These days, FreeBSD would not need to ship a compiler by default any longer.  (Whether that should be done is a different story though.)
-
-In fact, as a long-time NetBSD user, I was a bit surprised when I came to FreeBSD because I found that the compiler tools were not optional. In NetBSD, the compiler tools have always been part of a comp.tgz set separate from base.tgz. Both are built from the source tree in unison, but when installing a new machine, you can easily choose not to have comp.tgz unpacked. I have run lean servers without compiler tools for a long time (by building my packages elsewhere using pkg_comp), and it was just fine.
-
-Let’s keep the compiler in base
-
-Regardless of the above, I do agree that the compiler should stay in the base system for a variety of reasons.
-
-Without going into much detail, those reasons include: having a system that can build itself out-of-the-box in a consistent manner, having a system that can be trivially cross-compiled, and having a trustworthy compiler maintained by the same people that maintain the rest of the operating system.
-
-Given the above, as a developer of the system, I do not want to have to care about the tricky integration points of a compiler with the complex source tree of an OS. These are details best left to a small team of compiler experts, who can and will do the right thing for the OS as a whole. You only need to witness NetBSD’s super-simple cross-compilation features offered by build.sh to truly appreciate what I mean.
-
-On that topic, I suggest watching the following presentation, which argues for a monolithic source tree in which the toolchain is managed by a small team of passionate experts:
-
-
-  
-    
-  
-  
-    Lessons in Sustainability, by Titus Winters. A key point of this talk is the justification for having a single "compiler team" within your infrastructure so that all the experts on the topic can work together and handle the tricky bits for you.
-  
-
-
-What should probably be done is make the installation of the compiler tools optional: when installing FreeBSD from a binary distribution, the user should have the choice to not install any of the compiler tools. I wonder what the implications of that would be though, because FreeBSD has shipped with built- in compiler tools for years and there might be subtle hidden dependencies on them.
-
-Building from source considered harmful
-
-To conclude, I’ll go on a bit of a tangent: making it a standard practice for the user to compile anything at all is, for the majority of the cases, a horrible experience.
-
-That said, there are a bunch of legitimate cases for building from source.  Namely:
-
-
-  to apply code changes (duh),
-  to tune compiler optimization settings,
-  to disable features for smaller binaries,
-  to disable features that have a measurable impact on performance—for whose run-time kill-switch is not sufficient to kill those implications, and
-  to target a new platform.
-
-
-If the cases above do not apply, then compiling from source should not be necessary: alternatives exist, and they can be implemented. If building from source is necessary, either you have done a poor job as a developer—e.g. by not allowing sufficient run-time configuration—or you do not have sufficient resources to run the project—e.g. by being unable to provide binary packages for common platforms.
-
-A pet peeve of mine are software packages whose functionality depends on the libraries chosen at build-time by means of configure switches. These kind of software packages are really problematic when the time to offer binary packages comes: “what options should you enable?” or “how will the user be able to choose a leaner installation?”. There are mechanisms to allow the modification of dependencies at run time (think of dynamically-loadable plugins), but they often are much more complex to implement than just configure switches.
-
-The next time you tell a user of your software to “go and build from source”, think if you could do something else to avoid that same situation in the future.
-
-            &lt;a href=&quot;http://julio.meroh.net/2015/10/compilers-in-the-bsd-base-system.html&quot;&gt;[Continue reading]&lt;/a&gt;
-          </description>
-        
-          <description>&lt;p&gt;A commonly held axiom in the BSD community is that the C compiler belongs in the base system. “This is how things have been since the beginning of time and they define the way BSD systems are”, the proposition goes.&lt;/p&gt;
-
-&lt;p&gt;But why is that? What makes “having a compiler in base” a BSD system? Why is the compiler a necessary part of the base system? Hold on, is it? Could we take it out?&lt;/p&gt;
-
-&lt;p&gt;In this post, which is an extension to a reply I wrote in the &lt;a href=&quot;https://lists.freebsd.org/pipermail/freebsd-arch/2015-October/017394.html&quot;&gt;“Retiring in- tree GDB” mailing list thread on freebsd- arch&lt;/a&gt;, I would like to examine possible answers to those questions.&lt;/p&gt;
-
-&lt;h1 id=&quot;why-is-the-compiler-in-the-base-system&quot;&gt;Why is the compiler in the base system?&lt;/h1&gt;
-
-&lt;p&gt;Traditionally, BSD systems always required a compiler to be present because building from source was the only way to &lt;strong&gt;keep the OS up-to-date&lt;/strong&gt;, to &lt;strong&gt;tune the features of the kernel&lt;/strong&gt;, and to &lt;strong&gt;install third-party software&lt;/strong&gt; from ports or pkgsrc.&lt;/p&gt;
-
-&lt;p&gt;There didn’t exist any decent binary-only upgrade mechanisms for the base OS, the kernel was not modular nor did not have sufficient &lt;code class=&quot;highlighter-rouge&quot;&gt;sysctl(8)&lt;/code&gt; tweaks, and the tools and repositories to install binary packages were very rudimentary and inflexible.&lt;/p&gt;
-
-&lt;h1 id=&quot;the-case-for-freebsd&quot;&gt;The case for FreeBSD&lt;/h1&gt;
-
-&lt;p&gt;Things have significantly changed over the last few years, especially for &lt;a href=&quot;https://www.freebsd.org/doc/en/articles/committers-guide/archs.html&quot;&gt;FreeBSD Tier 1 platforms&lt;/a&gt;: it’s now possible to run a fully-functional, up-to-date system, appropriately tuned for the machine at hand, with all kinds of third- party packages installed, without ever needing to compile anything.&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;Having a compiler available at all times is not a necessity any longer. One
-can get by with binaries just fine, which is a more convenient scenario.&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;These days, FreeBSD would not &lt;em&gt;need&lt;/em&gt; to ship a compiler by default any longer.  (Whether that &lt;em&gt;should&lt;/em&gt; be done is a different story though.)&lt;/p&gt;
-
-&lt;p&gt;In fact, as a long-time NetBSD user, I was a bit surprised when I came to FreeBSD because I found that the compiler tools were not optional. In NetBSD, the compiler tools have always been part of a comp.tgz set separate from base.tgz. Both are built from the source tree in unison, but when installing a new machine, you can easily choose not to have comp.tgz unpacked. I have run lean servers without compiler tools for a long time (by &lt;a href=&quot;https://wiki.netbsd.org/tutorials/pkgsrc/pkg_comp_pkg_chk/&quot;&gt;building my packages elsewhere using pkg_comp&lt;/a&gt;), and it was just fine.&lt;/p&gt;
-
-&lt;h1 id=&quot;lets-keep-the-compiler-in-base&quot;&gt;Let’s keep the compiler in base&lt;/h1&gt;
-
-&lt;p&gt;Regardless of the above, I do agree that the compiler should stay in the base system for a variety of reasons.&lt;/p&gt;
-
-&lt;p&gt;Without going into much detail, those reasons include: having a system that can build itself out-of-the-box in a consistent manner, having a system that can be trivially cross-compiled, and having a trustworthy compiler maintained by the same people that maintain the rest of the operating system.&lt;/p&gt;
-
-&lt;p&gt;Given the above, as a developer of the system, I do not want to have to care about the tricky integration points of a compiler with the complex source tree of an OS. These are details best left to a small team of compiler experts, who can and will do the right thing for the OS as a whole. You only need to witness NetBSD’s super-simple cross-compilation features offered by build.sh to truly appreciate what I mean.&lt;/p&gt;
-
-&lt;p&gt;On that topic, I suggest watching the following presentation, which argues for a monolithic source tree in which the toolchain is managed by a small team of passionate experts:&lt;/p&gt;
-
-&lt;div class=&quot;frame&quot;&gt;
-  &lt;div class=&quot;content&quot;&gt;
-    &lt;iframe width=&quot;640&quot; height=&quot;360&quot; src=&quot;https://www.youtube.com/embed/zW-i9eVGU_k&quot; frameborder=&quot;0&quot; allowfullscreen=&quot;&quot;&gt;&lt;/iframe&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;footer&quot;&gt;
-    &lt;p&gt;Lessons in Sustainability, by Titus Winters. A key point of this talk is the justification for having a single &quot;compiler team&quot; within your infrastructure so that all the experts on the topic can work together and handle the tricky bits for you.&lt;/p&gt;
-  &lt;/div&gt;
-&lt;/div&gt;
-
-&lt;p&gt;What should probably be done is make the installation of the compiler tools optional: when installing FreeBSD from a binary distribution, the user should have the choice to not install any of the compiler tools. I wonder what the implications of that would be though, because FreeBSD has shipped with built- in compiler tools for years and there might be subtle hidden dependencies on them.&lt;/p&gt;
-
-&lt;h1 id=&quot;building-from-source-considered-harmful&quot;&gt;Building from source considered harmful&lt;/h1&gt;
-
-&lt;p&gt;To conclude, I’ll go on a bit of a tangent: making it a &lt;em&gt;standard practice&lt;/em&gt; for the user to compile anything at all is, for the majority of the cases, a horrible experience.&lt;/p&gt;
-
-&lt;p&gt;That said, there are a bunch of legitimate cases for building from source.  Namely:&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;to apply code changes (duh),&lt;/li&gt;
-  &lt;li&gt;to tune compiler optimization settings,&lt;/li&gt;
-  &lt;li&gt;to disable features for smaller binaries,&lt;/li&gt;
-  &lt;li&gt;to disable features that have a measurable impact on performance—for whose run-time kill-switch is not sufficient to kill those implications, and&lt;/li&gt;
-  &lt;li&gt;to target a new platform.&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;If the cases above do &lt;em&gt;not&lt;/em&gt; apply, then compiling from source should not be &lt;em&gt;necessary&lt;/em&gt;: alternatives exist, and they can be implemented. If building from source is necessary, either &lt;strong&gt;you have done a poor job as a developer&lt;/strong&gt;—e.g. by not allowing sufficient run-time configuration—or &lt;strong&gt;you do not have sufficient resources to run the project&lt;/strong&gt;—e.g. by being unable to provide binary packages for common platforms.&lt;/p&gt;
-
-&lt;p&gt;A pet peeve of mine are software packages whose functionality depends on the libraries chosen at build-time by means of configure switches. These kind of software packages are really problematic when the time to offer binary packages comes: “what options should you enable?” or “how will the user be able to choose a leaner installation?”. There are mechanisms to allow the modification of dependencies at run time (think of dynamically-loadable plugins), but they often are &lt;em&gt;much&lt;/em&gt; more complex to implement than just configure switches.&lt;/p&gt;
-
-&lt;p&gt;The next time you tell a user of your software to “go and build from source”, think if you could do something else to avoid that same situation in the future.&lt;/p&gt;
-</description>
-        
-        <pubDate>Fri, 23 Oct 2015 16:00:00 +0000</pubDate>
-        <link>http://julio.meroh.net/2015/10/compilers-in-the-bsd-base-system.html</link>
-        <guid isPermaLink="true">http://julio.meroh.net/2015/10/compilers-in-the-bsd-base-system.html</guid>
-        
-        
-        <category>bsd</category>
-        
-        <category>compilers</category>
-        
-        <category>essay</category>
-        
-        <category>featured</category>
         
         <category>software</category>
         

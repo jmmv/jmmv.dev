@@ -720,6 +720,34 @@
   
     <li>
       <h2>
+        <a class="post-link" href="/2010/12/dependency-injection-simple-class.html">Dependency injection: simple class constructors</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+December
+
+26th,
+  
+2010
+at
+10:41 UTC
+        &middot;
+        <a href="/2010/12/dependency-injection-simple-class.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2010/12/dependency-injection-simple-class.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Following my previous post on dependency injection (DI for short), I wanted to show you today another example of code in which DI helps in making the code clearer and easier to validate. In this case, the person to blame for the original piece of code being criticized is me.The atffile module in ATF provides a class to represent the contents of Atffiles. An Atffile is, basically, a file containing a list of test programs to run and a list of properties associated to these test programs. Let's consider the original implementation of this module:class atffile {    strings_vector _test_programs;    strings_vector _properties;public:    atffile(const path& file)    {        std::ifstream input(file.c_str());        _test_programs = ... parse list from input ...;        _properties = ... parse list from input ...;    }    ... getters and other read-only methods ...};According to the object-oriented programming (OOP) principles we are taught over and over again, this seems like a reasonable design. An atffile object is entirely self-contained: if the constructor finishes successfully, we know that the new object matches exactly the representation of an Atffile on disk. The other methods in the class provide read-only access to the internal attributes, which ensures that the in-memory representation remains consistent.However, this design couples the initialization of an object with external dependencies, and that is bad for two main reasons: first, because it makes testing (very) difficult; and, second, because it makes an apparently simple action (constructing an object) a potentially expensive task (reading from an external resource).To illustrate the first point, let's consider a helper free-function that deals with an atffile object:std::stringget_property(const atffile& file, const std::string& name,             const std::string& defvalue){    const strings_vector& props = file.properties();    const strings_vector::const_iterator iter =        props.find(name);    if (iter == props.end())        return defvalue;    else        return *iter;}Now, how do we write unit-tests for this function? Note that, to execute this function, we need to pass in an atffile object. And to instantiate an atffile, we need to be able to read a Atffile from disk because the only constructor for the atffile class has this dependency on an external subsystem. So, summarizing, to test this innocent function, we need to create a file on disk with valid contents, we need to instantiate an atffile object pointing to this file, and only then we can pass it to the get_property function. At this point, our unit test smells like an integration test, and it actually is for no real reason. This will cause our test suite to be more fragile (the test for this auxiliary function depends on the parsing of a file) and slow.How can we improve the situation? Easy: decoupling the dependencies on external systems from the object initialization. Take a look at this rewritten atffile class:class atffile {    strings_vector _test_programs;    strings_vector _properties;public:    atffile(const strings_vector& test_programs_,            const strings_vector& properties_) :        _test_programs(test_programs_),        _properties(properties_)    {        assert(!_test_programs.empty());    }    static atffile    parse(const path& file)    {        std::ifstream input(file.c_str());        strings_vector test_programs_ =            ... parse list from input ...;        strings_vector properties_ =            ... parse list from input ...;        return atffile(test_programs_, properties_);    }    ... getters and other read-only methods ...};Note that this new design does not necessarily violate OOP principles: yes, we can now construct an object with fake values in it by passing them to the constructor, but that does not mean that such values can be inconsistent once the object is created. In this particular example, I have added an assertion in the constructor to reenforce a check performed by parse (that an atffile must list at least one test program).With this new design in mind, it is now trivial to test the get_property function shown above: constructing an auxiliary atffile object is easy, because we can inject values into the object to later pass it to get_property: no need to create a temporary file that has to be valid and later parsed by the atffile code. Our test now follows the true sense of a unit test, which is much faster, less fragile and "to-the-point". We can later write integration tests if we so desire. Additionally, we can also write tests for atffile member functions, and we can very easily reproduce corner cases for them by, for example, injecting bad data. The only place where we need to create temporary Atffiles is when we need to test the parse class method.So, to conclude: make your class constructors as simple as possible and, in particular, do not make your class constructors depend on external systems. If you find yourself opening resources or constructing other objects from within your constructor, you are doing it wrong (with very few exceptions).I have been using the above principle for the last ~2 years and the results are neat: I am much, much more confident on my code because I write lots of more accurate test cases and I can focalize dependencies on external resources on a small subset of functions. (Yes, Kyua uses this design pattern intensively!)
+
+        <a href="/2010/12/dependency-injection-simple-class.html">[Continue reading]</a>
+      </p>
+      
+    </li>
+  
+    <li>
+      <h2>
         <a class="post-link" href="/2010/12/dependency-injection-and-testing.html">Dependency injection and testing: an example</a>
       </h2>
       <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
@@ -886,34 +914,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2010/07/atf-010-released.html">ATF 0.10 released</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-July
-
-2nd,
-  
-2010
-at
-15:18 UTC
-        &middot;
-        <a href="/2010/07/atf-010-released.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2010/07/atf-010-released.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Ladies and gentlemen: I have just released ATF 0.10!  This release with such a magic number includes lots of new exciting features and provides a much simplified source tree.Dive into the 0.10 release page for details!I'm now working in getting this release into the NetBSD tree to remove some of the custom patches that have been superseded by the official release. Will be there soon.And all this while I am a meetBSD in Kraków :-)
-
-        <a href="/2010/07/atf-010-released.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -986,10 +986,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (7)
+    <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
      
     <ul id="archive-year-2016" class="collapse">
      
+      <li><a href="/2016/09">September 2016</a> (1)</li>
       <li><a href="/2016/05">May 2016</a> (1)</li>
       <li><a href="/2016/04">April 2016</a> (1)</li>
       <li><a href="/2016/03">March 2016</a> (2)</li>
