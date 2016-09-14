@@ -636,11 +636,22 @@ at
 
 <p><em>vi)</em> The sixth and last problem is that <strong>a script prefixed with <code class="highlighter-rouge">#! /usr/bin/env</code> is not suitable to being installed</strong>. This is justified by all the other points illustrated above: once a program is installed on the system, it must behave deterministically no matter how it is invoked. More importantly, when you install a program, you do so under a set of assumptions gathered by a <code class="highlighter-rouge">configure</code>-like script or prespecified by a package manager. To ensure things work, the installed script must see the exact same environment that was specified at installation time. In particular, the script must point at the correct interpreter version and at the interpreter that has access to all package dependencies.</p>
 
-<h2 id="when-is-it-ok">When is it OK?</h2>
+<h2 id="so-what-to-do">So what to do?</h2>
 
-<p>All this considered, you may still use <code class="highlighter-rouge">#! /usr/bin/env</code> for the <strong>convenience of your own throwaway scripts</strong> (those that don’t leave your machine).</p>
+<p>All this considered, you may still use <code class="highlighter-rouge">#! /usr/bin/env</code> for the <strong>convenience of your own throwaway scripts</strong> (those that don’t leave your machine) and also <strong>for documentation purposes and as a placeholder for a better default</strong>.</p>
 
-<p>You may also use this shebang <strong>for documentation purposes and as a placeholder for a better default</strong>: for example, you could patch up the scripts during <code class="highlighter-rouge">make install</code> to point to the right interpreter, which is pretty much what pkgsrc (and likely any other packaging system) does automatically. <strong>Just don’t assume that the magic <code class="highlighter-rouge">#! /usr/bin/env foo</code> is sufficient or even correct</strong> for the final installed program.</p>
+<p>For anything else, here are some possible alternatives to using this harmful shebang:</p>
+
+<ul>
+  <li>
+    <p>Patch up the scripts during the “build” of your software to point to the specific chosen interpreter based on a setting the user provided at <code class="highlighter-rouge">configure</code> time or one that you detected automatically. Yes, this means you need <code class="highlighter-rouge">make</code> or similar for a simple script, but these are the realities of the environment they’ll run under…</p>
+  </li>
+  <li>
+    <p>Rely on the packaging system do the patching, which is pretty much what pkgsrc does automatically (and I suppose pretty much any other packaging system out there).</p>
+  </li>
+</ul>
+
+<p><strong>Just don’t assume that the magic <code class="highlighter-rouge">#! /usr/bin/env foo</code> is sufficient or even correct</strong> for the final installed program.</p>
 
 <p><em>Bonus chatter:</em> Did you know that the <a href="https://en.wikipedia.org/wiki/Shebang_(Unix)#History">traditional shebang prefix is <code class="highlighter-rouge">#! </code></a> (note the trailing space)? This 3-byte character sequence was the one that the original Unix kernel searched for to determine if an external interpreter was necessary, not just <code class="highlighter-rouge">#!</code>.</p>
 
