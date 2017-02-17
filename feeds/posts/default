@@ -2,13 +2,162 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Julio Merino</title>
-    <description>This is Julio Merino&#39;s homepage.  This site is primarily my personal blog and, secondarily, a gateway to my presence in the web.
+    <description>This is Julio Merino's homepage.  This site is primarily my personal blog and, secondarily, a gateway to my presence in the web.
 </description>
     <link>http://julio.meroh.net/</link>
     <atom:link href="http://julio.meroh.net/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Wed, 14 Sep 2016 16:24:05 +0000</pubDate>
-    <lastBuildDate>Wed, 14 Sep 2016 16:24:05 +0000</lastBuildDate>
-    <generator>Jekyll v3.1.2</generator>
+    <pubDate>Fri, 17 Feb 2017 21:43:36 +0000</pubDate>
+    <lastBuildDate>Fri, 17 Feb 2017 21:43:36 +0000</lastBuildDate>
+    <generator>Jekyll v3.3.0</generator>
+    
+      <item>
+        <title>Introducing pkg_comp 2.0 (and sandboxctl 1.0)</title>
+        
+          <description>
+            After many (many) years in the making, pkg_comp 2.0 and its companion sandboxctl 1.0 are finally here!
+
+Read below for more details on this launch.  I will publish detailed step-by-step tutorials on setting up periodic package rebuilds in separate posts.
+
+What are these tools?
+
+pkg_comp is an automation tool to build pkgsrc binary packages inside a chroot-based sandbox.  The main goal is to fully automate the process and to produce clean and reproducible packages.  A secondary goal is to support building binary packages for a different system than the one doing the builds: e.g. building packages for NetBSD/i386 6.0 from a NetBSD/amd64 7.0 host.
+
+The highlights of pkg_comp 2.0, compared to the 1.x series, are: multi-platform support, including NetBSD, FreeBSD, Linux, and macOS; use of pbulk for efficient builds; management of the pkgsrc tree itself via CVS or Git; and a more robust and modern codebase.
+
+sandboxctl is an automation tool to create and manage chroot-based sandboxes on a variety of operating systems.  sandboxctl is the backing tool behind pk_comp.  sandboxctl hides the details of creating a functional chroot sandbox on all supported operating systems; in some cases, like building a NetBSD sandbox using release sets, things are easy; but in others, like on macOS, they are horrifyingly difficult and brittle.
+
+Storytelling time
+
+pkg_comp’s history is a long one.  pkg_comp 1.0 first appeared in pkgsrc on September 6th, 2002 as the pkgtools/pkg_comp package in pkgsrc.  As of this writing, the 1.x series are at version 1.38 and have received contributions from a bunch of pkgsrc developers and external users; even more, the tool was featured in the BSD Hacks book back in 2004.
+
+This is a long time for a shell script to survive in its rudimentary original form: pkg_comp 1.x is now a teenager at its 14 years of age and is possibly one of my longest-living pieces of software still in use.
+
+Motivation for the 2.x rewrite
+
+For many of these years, I have been wanting to rewrite pkg_comp to support other operating systems.  This all started when I first got a Mac in 2005, at which time pkgsrc already supported Darwin but there was no easy mechanism to manage package updates.  What would happen—and still happens to this day!—is that, once in a while, I’d realize that my packages were out of date (read: insecure) so I’d wipe the whole pkgsrc installation and start from scratch.  Very inconvenient; I had to automate that properly.
+
+Thus the main motivation behind the rewrite was primarily to support macOS because this was, and still is, my primary development platform.  The secondary motivation came after writing sysbuild in 2012, which trivially configured daily builds of the NetBSD base system from cron; I wanted the exact same thing for my packages.
+
+One, two… no, three rewrites
+
+The first rewrite attempt was sometime in 2006, soon after I learned Haskell in school.  Why Haskell?  Just because that was the new hotness in my mind and it seemed like a robust language to drive a pretty tricky automation process.  That rewrite did not go very far, and that’s possibly for the better: relying on Haskell would have decreased the portability of the tool, made it hard to install it, and guaranteed to alienate contributors.
+
+The second rewrite attempt started sometime in 2010, about a year after I joined Google as an SRE.  This was after I became quite familiar with Python at work, wanting to use the language to rewrite this tool.  That experiment didn’t go very far though, but I can’t remember why… probably because I was busy enough at work and creating Kyua.
+
+The third and final rewrite attempt started in 2013 while I had a summer intern and I had a little existential crisis.  The year before I had written sysbuild and shtk, so I figured recreating pkg_comp using the foundations laid out by these tools would be easy.  And it was… to some extent.
+
+Getting the barebones of a functional tool took only a few weeks, but that code was far from being stable, portable, and publishable.  Life and work happened, so this fell through the cracks… until late last year, when I decided it was time to close this chapter so I could move on to some other project ideas.  To create the focus and free time required to complete this project, I had to shift my schedule to start the day at 5am instead of 7am—and, many weeks later, the code is finally here and I’m still keeping up with this schedule.
+
+Granted: this third rewrite is not a fancy one, but it wasn’t meant to be.  pkg_comp 2.0 is still written in shell, just as 1.x was, but this is a good thing because bootstrapping on all supported platforms is easy.  I have to confess that I also considered Go recently after playing with it last year but I quickly let go of that thought: at some point I had to ship the 2.0 release, and 10 years since the inception of this rewrite was about time.
+
+The launch of 2.0
+
+On February 12th, 2017, the authoritative sources of pkg_comp 1.x were moved from pkgtools/pkg_comp to pkgtools/pkg_comp1 to make room for the import of 2.0.  Yes, the 1.x series only existed in pkgsrc and the 2.x series exist as a standalone project on GitHub.
+
+And here we are.  Today, February 17th, 2017, pkg_comp 2.0 saw the light!
+
+Why sandboxctl as a separate tool?
+
+sandboxctl is the supporting tool behind pkg_comp, taking care of all the logic involved in creating chroot-based sandboxes on a variety of operating systems.  Some are easy, like building a NetBSD sandbox using release sets, and others are horrifyingly difficult like macOS.
+
+In pkg_comp 1.x, this logic used to be bundled right into the pkg_comp code, which made it pretty much impossible to generalize for portability.  With pkg_comp 2.x, I decided to split this out into a separate tool to keep responsibilities isolated.  Yes, the integration between the two tools is a bit tricky, but allows for better testability and understandability.  Lastly, having sandboxctl as a standalone tool, instead of just a separate code module, gives you the option of using it for your own sandboxing needs.
+
+I know, I know; the world has moved onto containerization and virtual machines, leaving chroot-based sandboxes as a very rudimentary thing… but that’s all we’ve got in NetBSD, and pkg_comp targets primarily NetBSD.  Note, though, that because pkg_comp is separate from sandboxctl, there is nothing preventing adding different sandboxing backends to pkg_comp.
+
+Installation
+
+Installation is still a bit convoluted unless you are on one of the tier 1 NetBSD platforms or you already have pkgsrc up and running.  For macOS in particular, I plan on creating and shipping a installer image that includes all of pkg_comp dependencies—but I did not want to block the first launch on this.
+
+For now though, you need to download and install the latest source releases of shtk, sandboxctl, and pkg_comp—in this order; pass the --with-atf=no flag to the configure scripts to cut down the required dependencies.  On macOS, you will also need OSXFUSE and the bindfs file system.
+
+If you are already using pkgsrc, you can install the pkgtools/pkg_comp package to get the basic tool and its dependencies in place, or you can install the wrapper pkgtools/pkg_comp-cron package to create a pre-configured environment with a daily cron job to run your builds.  See the package’s MESSAGE (with pkg_info -E pkg_comp-cron) for more details.
+
+Documentation
+
+Both pkg_comp and sandboxctl are fully documented in manual pages.  See pkg_comp(8), sandboxctl(8), pkg_comp.conf(5) and sandbox.conf(5) for plenty of additional details.
+
+As mentioned at the beginning of the post, I plan on publishing one or more tutorials explaining how to bootstrap your pkgsrc installation using pkg_comp on, at least, NetBSD and macOS.  Stay tuned.
+
+And, if you need support or find anything wrong, please let me know by filing bugs in the corresponding GitHub projects: jmmv/pkg_comp and jmmv/sandboxctl.
+
+            &lt;a href=&quot;http://julio.meroh.net/2017/02/introducing-pkg_comp-2.0.html&quot;&gt;[Continue reading]&lt;/a&gt;
+          </description>
+        
+          <description>&lt;p&gt;After many (many) years in the making, &lt;strong&gt;&lt;a href=&quot;https://github.com/jmmv/pkg_comp/&quot;&gt;pkg_comp&lt;/a&gt; 2.0 and its companion &lt;a href=&quot;https://github.com/jmmv/sandboxctl/&quot;&gt;sandboxctl&lt;/a&gt; 1.0 are finally here!&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;Read below for more details on this launch.  I will publish detailed step-by-step tutorials on setting up periodic package rebuilds in separate posts.&lt;/p&gt;
+
+&lt;h1 id=&quot;what-are-these-tools&quot;&gt;What are these tools?&lt;/h1&gt;
+
+&lt;p&gt;&lt;strong&gt;pkg_comp is an automation tool to build &lt;a href=&quot;http://pkgsrc.org/&quot;&gt;pkgsrc&lt;/a&gt; binary packages inside a chroot-based sandbox.&lt;/strong&gt;  The main goal is to fully automate the process and to produce clean and reproducible packages.  A secondary goal is to support building binary packages for a different system than the one doing the builds: e.g. building packages for NetBSD/i386 6.0 from a NetBSD/amd64 7.0 host.&lt;/p&gt;
+
+&lt;p&gt;The &lt;strong&gt;highlights of pkg_comp 2.0&lt;/strong&gt;, compared to the 1.x series, are: &lt;strong&gt;multi-platform support&lt;/strong&gt;, including NetBSD, FreeBSD, Linux, and macOS; &lt;strong&gt;use of &lt;a href=&quot;https://www.netbsd.org/docs/pkgsrc/bulk.html&quot;&gt;pbulk&lt;/a&gt;&lt;/strong&gt; for efficient builds; &lt;strong&gt;management of the pkgsrc tree&lt;/strong&gt; itself via CVS or Git; and a more &lt;strong&gt;robust and modern codebase&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;sandboxctl is an automation tool to create and manage chroot-based sandboxes on a variety of operating systems&lt;/strong&gt;.  sandboxctl is the backing tool behind pk_comp.  sandboxctl hides the details of creating a functional chroot sandbox on all supported operating systems; in some cases, like building a NetBSD sandbox using release sets, things are easy; but in others, like on macOS, they are horrifyingly difficult and brittle.&lt;/p&gt;
+
+&lt;h1 id=&quot;storytelling-time&quot;&gt;Storytelling time&lt;/h1&gt;
+
+&lt;p&gt;pkg_comp’s history is a long one.  pkg_comp 1.0 first appeared in pkgsrc on September 6th, 2002 as the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp&lt;/code&gt; package in pkgsrc.  As of this writing, the 1.x series are at version 1.38 and have received contributions from a bunch of pkgsrc developers and external users; even more, the tool was featured in the &lt;a href=&quot;http://shop.oreilly.com/product/9780596006792.do&quot;&gt;BSD Hacks book&lt;/a&gt; back in 2004.&lt;/p&gt;
+
+&lt;p&gt;This is a &lt;em&gt;long&lt;/em&gt; time for a shell script to survive in its rudimentary original form: pkg_comp 1.x is now a teenager at its 14 years of age and is possibly one of my longest-living pieces of software still in use.&lt;/p&gt;
+
+&lt;h2 id=&quot;motivation-for-the-2x-rewrite&quot;&gt;Motivation for the 2.x rewrite&lt;/h2&gt;
+
+&lt;p&gt;For many of these years, I have been wanting to rewrite pkg_comp to support other operating systems.  This all started when I first got a Mac in 2005, at which time pkgsrc already supported Darwin but there was no easy mechanism to manage package updates.  What would happen—and still happens to this day!—is that, once in a while, I’d realize that my packages were out of date (read: insecure) so I’d wipe the whole pkgsrc installation and start from scratch.  Very inconvenient; I had to automate that properly.&lt;/p&gt;
+
+&lt;p&gt;Thus the main motivation behind the rewrite was primarily to support macOS because this was, and still is, my primary development platform.  The secondary motivation came after writing sysbuild in 2012, which trivially configured daily builds of the NetBSD base system from cron; I wanted the exact same thing for my packages.&lt;/p&gt;
+
+&lt;h2 id=&quot;one-two-no-three-rewrites&quot;&gt;One, two… no, three rewrites&lt;/h2&gt;
+
+&lt;p&gt;The first rewrite attempt was sometime in 2006, soon after I learned Haskell in school.  Why Haskell?  Just because that was the new hotness in my mind and it seemed like a robust language to drive a pretty tricky automation process.  That rewrite did not go very far, and that’s possibly for the better: relying on Haskell would have decreased the portability of the tool, made it hard to install it, and guaranteed to alienate contributors.&lt;/p&gt;
+
+&lt;p&gt;The second rewrite attempt started sometime in 2010, about a year after I joined Google as an SRE.  This was after I became quite familiar with Python at work, wanting to use the language to rewrite this tool.  That experiment didn’t go very far though, but I can’t remember why… probably because I was busy enough at work and creating Kyua.&lt;/p&gt;
+
+&lt;p&gt;The third and final rewrite attempt started in 2013 while I had a summer intern and I had a little existential crisis.  The year before I had written &lt;a href=&quot;/2012/07/introducing-sysbuild-for-netbsd.html&quot;&gt;sysbuild&lt;/a&gt; and &lt;a href=&quot;/2012/08/introducing-shtk.html&quot;&gt;shtk&lt;/a&gt;, so I figured recreating pkg_comp using the foundations laid out by these tools would be easy.  And it was… to some extent.&lt;/p&gt;
+
+&lt;p&gt;Getting the barebones of a functional tool took only a few weeks, but that code was far from being stable, portable, and publishable.  Life and work happened, so this fell through the cracks… until late last year, when I decided it was time to close this chapter so I could move on to some other project ideas.  To create the focus and free time required to complete this project, I had to shift my schedule to start the day at 5am instead of 7am—and, many weeks later, the code is finally here and I’m still keeping up with this schedule.&lt;/p&gt;
+
+&lt;p&gt;Granted: this third rewrite is not a fancy one, but it wasn’t meant to be.  pkg_comp 2.0 is still written in shell, just as 1.x was, but this is a good thing because bootstrapping on all supported platforms is easy.  I have to confess that I also considered Go recently &lt;a href=&quot;/2016/03/golang-review.html&quot;&gt;after playing with it last year&lt;/a&gt; but I quickly let go of that thought: at some point I had to ship the 2.0 release, and 10 years since the inception of this rewrite was about time.&lt;/p&gt;
+
+&lt;h2 id=&quot;the-launch-of-20&quot;&gt;The launch of 2.0&lt;/h2&gt;
+
+&lt;p&gt;On February 12th, 2017, the authoritative sources of pkg_comp 1.x were moved from &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp&lt;/code&gt; to &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp1&lt;/code&gt; to make room for the import of 2.0.  Yes, the 1.x series only existed in pkgsrc and the 2.x series exist as a &lt;a href=&quot;https://github.com/jmmv/pkg_comp&quot;&gt;standalone project on GitHub&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;And here we are.  Today, February 17th, 2017, pkg_comp 2.0 saw the light!&lt;/p&gt;
+
+&lt;h1 id=&quot;why-sandboxctl-as-a-separate-tool&quot;&gt;Why sandboxctl as a separate tool?&lt;/h1&gt;
+
+&lt;p&gt;sandboxctl is the supporting tool behind pkg_comp, taking care of all the logic involved in creating chroot-based sandboxes on a variety of operating systems.  Some are easy, like building a NetBSD sandbox using release sets, and others are horrifyingly difficult like macOS.&lt;/p&gt;
+
+&lt;p&gt;In pkg_comp 1.x, this logic used to be bundled right into the pkg_comp code, which made it pretty much impossible to generalize for portability.  With pkg_comp 2.x, I decided to split this out into a separate tool to keep responsibilities isolated.  Yes, the integration between the two tools is a bit tricky, but allows for better testability and understandability.  Lastly, having sandboxctl as a standalone tool, instead of just a separate code module, gives you the option of using it for your own sandboxing needs.&lt;/p&gt;
+
+&lt;p&gt;I know, I know; the world has moved onto containerization and virtual machines, leaving chroot-based sandboxes as a very rudimentary thing… but that’s all we’ve got in NetBSD, and pkg_comp targets primarily NetBSD.  Note, though, that because pkg_comp is separate from sandboxctl, there is nothing preventing adding different sandboxing backends to pkg_comp.&lt;/p&gt;
+
+&lt;h1 id=&quot;installation&quot;&gt;Installation&lt;/h1&gt;
+
+&lt;p&gt;Installation is still a bit convoluted unless you are on one of the tier 1 NetBSD platforms or you already have pkgsrc up and running.  For macOS in particular, I plan on creating and shipping a installer image that includes all of pkg_comp dependencies—but I did not want to block the first launch on this.&lt;/p&gt;
+
+&lt;p&gt;For now though, you need to download and install the latest source releases of &lt;a href=&quot;https://github.com/jmmv/shtk/&quot;&gt;shtk&lt;/a&gt;, &lt;a href=&quot;https://github.com/jmmv/sandboxctl/&quot;&gt;sandboxctl&lt;/a&gt;, and &lt;a href=&quot;https://github.com/jmmv/pkg_comp/&quot;&gt;pkg_comp&lt;/a&gt;—in this order; pass the &lt;code class=&quot;highlighter-rouge&quot;&gt;--with-atf=no&lt;/code&gt; flag to the &lt;code class=&quot;highlighter-rouge&quot;&gt;configure&lt;/code&gt; scripts to cut down the required dependencies.  On macOS, you will also need &lt;a href=&quot;https://osxfuse.github.io/&quot;&gt;OSXFUSE&lt;/a&gt; and the &lt;a href=&quot;http://bindfs.org&quot;&gt;bindfs&lt;/a&gt; file system.&lt;/p&gt;
+
+&lt;p&gt;If you are already using pkgsrc, you can install the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp&lt;/code&gt; package to get the basic tool and its dependencies in place, or you can install the wrapper &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp-cron&lt;/code&gt; package to create a pre-configured environment with a daily cron job to run your builds.  See the package’s &lt;code class=&quot;highlighter-rouge&quot;&gt;MESSAGE&lt;/code&gt; (with &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_info -E pkg_comp-cron&lt;/code&gt;) for more details.&lt;/p&gt;
+
+&lt;h1 id=&quot;documentation&quot;&gt;Documentation&lt;/h1&gt;
+
+&lt;p&gt;Both pkg_comp and sandboxctl are fully documented in manual pages.  See &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp(8)&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;sandboxctl(8)&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp.conf(5)&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;sandbox.conf(5)&lt;/code&gt; for plenty of additional details.&lt;/p&gt;
+
+&lt;p&gt;As mentioned at the beginning of the post, I plan on publishing one or more tutorials explaining how to bootstrap your pkgsrc installation using pkg_comp on, at least, NetBSD and macOS.  Stay tuned.&lt;/p&gt;
+
+&lt;p&gt;And, if you need support or find anything wrong, please let me know by filing bugs in the corresponding GitHub projects: &lt;a href=&quot;https://github.com/jmmv/pkg_comp/issues&quot;&gt;jmmv/pkg_comp&lt;/a&gt; and &lt;a href=&quot;https://github.com/jmmv/sandboxctl/issues&quot;&gt;jmmv/sandboxctl&lt;/a&gt;.&lt;/p&gt;
+</description>
+        
+        <pubDate>Fri, 17 Feb 2017 21:37:06 +0000</pubDate>
+        <link>http://julio.meroh.net/2017/02/introducing-pkg_comp-2.0.html</link>
+        <guid isPermaLink="true">http://julio.meroh.net/2017/02/introducing-pkg_comp-2.0.html</guid>
+        
+        
+        <category>software</category>
+        
+      </item>
     
       <item>
         <title>#! /usr/bin/env considered harmful</title>
@@ -301,7 +450,7 @@ If you let me… I’ll conclude by saying that Atom is to Emacs what VSCode is 
 
 &lt;p&gt;With the right command-line alias, all you have to do is type &lt;code class=&quot;highlighter-rouge&quot;&gt;code .&lt;/code&gt; at the top-level directory of your project to launch a new instance of VSCode ready to work on your project—and the editor remembers where you left off last time. In case you are curious, an alias for OS X would be:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;alias code=&quot;open -a &#39;Visual Studio Code&#39;&quot;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;alias code=&quot;open -a 'Visual Studio Code'&quot;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;/div&gt;
 
@@ -336,7 +485,7 @@ If you let me… I’ll conclude by saying that Atom is to Emacs what VSCode is 
       </item>
     
       <item>
-        <title>A look at Go from a newbie&#39;s perspective</title>
+        <title>A look at Go from a newbie's perspective</title>
         
           <description>
             I confess I am late to the game: the Go programming language came out in 2009 and I had not had the chance to go all in for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I’m truly pleased.
@@ -1663,79 +1812,6 @@ make them better.  &lt;strong&gt;Please file bugs&lt;/strong&gt; if you do so, a
         <pubDate>Thu, 17 Dec 2015 22:30:00 +0000</pubDate>
         <link>http://julio.meroh.net/2015/12/introducing-nudgytimer.html</link>
         <guid isPermaLink="true">http://julio.meroh.net/2015/12/introducing-nudgytimer.html</guid>
-        
-        
-        <category>software</category>
-        
-      </item>
-    
-      <item>
-        <title>Introducing Markdown2Social</title>
-        
-          <description>
-            During the course of this year, I have experimented with writing internal
-long-form “opinion” posts at Google.  In doing so, I have also experimented
-with posting such content in Google+ instead of in a blog, and the results
-have been quite satisfying: content posted in this way received much more
-engagement than a post hosting just a link to an equivalent external
-document.
-
-Unfortunately, Google+’s formatting features are extremely limited, and
-composing such long posts within its editor is painful.  For this reason,
-I wrote a tool called md2gplus which would take a Markdown-formatted
-document with limited markup and convert it to a Google+ post.  This tool
-has been helpful in making it easier for me to write such articles and
-also has improved the visual quality of the results.
-
-Today, I am open-sourcing the md2gplus tool under the Markdown2Social
-project and you can find it both in GitHub and in PyPI:
-
-
-  https://github.com/jmmv/markdown2social/
-
-
-
-  https://pypi.python.org/pypi/markdown2social/
-
-
-This new tool is very rudimentary and of very limited usage, but I hope
-you might find it useful!  If you do, please let me know.
-
-            &lt;a href=&quot;http://julio.meroh.net/2015/12/introducing-markdown2social.html&quot;&gt;[Continue reading]&lt;/a&gt;
-          </description>
-        
-          <description>&lt;p&gt;During the course of this year, I have experimented with writing internal
-long-form “opinion” posts at Google.  In doing so, I have also experimented
-with posting such content in Google+ instead of in a blog, and the results
-have been quite satisfying: content posted in this way received much more
-engagement than a post hosting just a link to an equivalent external
-document.&lt;/p&gt;
-
-&lt;p&gt;Unfortunately, Google+’s formatting features are extremely limited, and
-composing such long posts within its editor is painful.  For this reason,
-I wrote a tool called &lt;code class=&quot;highlighter-rouge&quot;&gt;md2gplus&lt;/code&gt; which would take a Markdown-formatted
-document with limited markup and convert it to a Google+ post.  This tool
-has been helpful in making it easier for me to write such articles and
-also has improved the visual quality of the results.&lt;/p&gt;
-
-&lt;p&gt;Today, I am open-sourcing the &lt;code class=&quot;highlighter-rouge&quot;&gt;md2gplus&lt;/code&gt; tool under the &lt;strong&gt;Markdown2Social
-project&lt;/strong&gt; and you can find it both in GitHub and in PyPI:&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://github.com/jmmv/markdown2social/&quot;&gt;https://github.com/jmmv/markdown2social/&lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://pypi.python.org/pypi/markdown2social/&quot;&gt;https://pypi.python.org/pypi/markdown2social/&lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;This new tool is very rudimentary and of very limited usage, but I hope
-you might find it useful!  If you do, please &lt;a href=&quot;/about&quot;&gt;let me know&lt;/a&gt;.&lt;/p&gt;
-</description>
-        
-        <pubDate>Thu, 10 Dec 2015 15:00:00 +0000</pubDate>
-        <link>http://julio.meroh.net/2015/12/introducing-markdown2social.html</link>
-        <guid isPermaLink="true">http://julio.meroh.net/2015/12/introducing-markdown2social.html</guid>
         
         
         <category>software</category>
