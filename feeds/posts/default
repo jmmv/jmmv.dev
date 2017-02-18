@@ -2,13 +2,356 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Julio Merino</title>
-    <description>This is Julio Merino's homepage.  This site is primarily my personal blog and, secondarily, a gateway to my presence in the web.
+    <description>This is Julio Merino&#39;s homepage.  This site is primarily my personal blog and, secondarily, a gateway to my presence in the web.
 </description>
     <link>http://julio.meroh.net/</link>
     <atom:link href="http://julio.meroh.net/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Fri, 17 Feb 2017 21:43:36 +0000</pubDate>
-    <lastBuildDate>Fri, 17 Feb 2017 21:43:36 +0000</lastBuildDate>
-    <generator>Jekyll v3.3.0</generator>
+    <pubDate>Sat, 18 Feb 2017 17:11:31 +0000</pubDate>
+    <lastBuildDate>Sat, 18 Feb 2017 17:11:31 +0000</lastBuildDate>
+    <generator>Jekyll v3.1.2</generator>
+    
+      <item>
+        <title>Keeping NetBSD up-to-date with pkg_comp 2.0</title>
+        
+          <description>
+            This is a tutorial to guide you through the shiny new pkg_comp 2.0 on NetBSD.
+
+Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your NetBSD system up-to-date and secure.
+
+
+
+This tutorial is specifically targeted at NetBSD but should work on other platforms with some small changes.  Expect, at the very least, a macOS-specific tutorial as soon as I create a pkg_comp standalone installer for that platform.
+
+Getting started
+
+First install the sysutils/sysbuild-user package and trigger a full build of NetBSD so that you get usable release sets for pkg_comp.  See sysbuild(1) and pkg_info -E sysbuild-user for details on how to do so.  Alternatively, download release sets from the FTP site and later tell pkg_comp where they are.
+
+Then install the pkgtools/pkg_comp-cron package.  The rest of this tutorial assumes you have done so.
+
+Adjusting the configuration
+
+To use pkg_comp for periodic builds, you’ll need to do some minimal edits to the default configuration files.  The files can be found directly under /var/pkg_comp/, which is pkg_comp-cron’s “home”:
+
+
+  
+    /var/pkg_comp/pkg_comp.conf: This is pkg_comp’s own configuration file and the defaults installed by pkg_comp-cron should be good to go.
+
+    The contents here are divided in three major sections: declaration on how to download pkgsrc, definition of the file system layout on the host machine, and definition of the file system layout for the built packages.
+
+    You may want to customize the target system paths, such as LOCALBASE or SYSCONFDIR, but you should not have to customize the host system paths.
+  
+  
+    /var/pkg_comp/sandbox.conf: This is the configuration file for sandboxctl.  The default settings installed by pkg_comp-cron should suffice if you used the sysutils/sysbuild-user package as recommended; otherwise tweak the NETBSD_NATIVE_RELEASEDIR and NETBSD_SETS_RELEASEDIR variables to point to where the downloaded release sets are.
+  
+  
+    /var/pkg_comp/extra.mk.conf: This is pkgsrc’s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you’d like to set.  You should not configure the layout of the installed files (e.g. LOCALBASE) because that’s handled internally by pkg_comp as specified in pkg_comp.conf.
+  
+  
+    /var/pkg_comp/list.txt: This determines the set of packages you want to build in your periodic cron job.  The builds will fail unless you list at least one package.
+
+    WARNING: Make sure to include pkg_comp-cron and pkgin in this list so that your binary kit includes these essential package management tools.  Otherwise you’ll have to deal with some minor annoyances after rebootstrapping your system.
+  
+
+
+Lastly, review root’s crontab to ensure the job specification for pkg_comp is sane.  On slow machines, or if you are building many packages, you will probably want to decrease the build frequency from @daily to @weekly.
+
+Sample configuration
+
+Here is what the configuration looks like on my NetBSD development machine as dumped by the config subcommand.  Use this output to get an idea of what to expect.  I’ll be using the values shown here in the rest of the tutorial:
+
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf config
+AUTO_PACKAGES = autoconf automake bash colordiff dash emacs-nox11 git-base git-docs gmake gnuls lua52 mozilla-rootcerts pdksh pkg_comp-cron pkg_developer pkgin sqlite3 sudo sysbuild sysbuild-user sysupgrade tmux vim zsh
+CVS_ROOT = :ext:anoncvs@anoncvs.NetBSD.org:/cvsroot
+CVS_TAG is undefined
+DISTDIR = /var/pkg_comp/distfiles
+EXTRA_MKCONF = /var/pkg_comp/extra.mk.conf
+FETCH_VCS = cvs
+GIT_BRANCH = trunk
+GIT_URL = https://github.com/jsonn/pkgsrc.git
+LOCALBASE = /usr/pkg
+NJOBS = 2
+PACKAGES = /var/pkg_comp/packages
+PBULK_PACKAGES = /var/pkg_comp/pbulk-packages
+PKG_DBDIR = /usr/pkg/libdata/pkgdb
+PKGSRCDIR = /var/pkg_comp/pkgsrc
+SANDBOX_CONFFILE = /var/pkg_comp/sandbox.conf
+SYSCONFDIR = /etc
+UPDATE_SOURCES = true
+VARBASE = /var
+
+NETBSD_NATIVE_RELEASEDIR = /home/sysbuild/release/amd64
+NETBSD_RELEASE_RELEASEDIR = /home/sysbuild/release/amd64
+NETBSD_RELEASE_SETS is undefined
+SANDBOX_ROOT = /var/pkg_comp/sandbox
+SANDBOX_TYPE = netbsd-release
+
+
+
+Building your own packages by hand
+
+Now that you are fully installed and configured, you’ll build some stuff by hand to ensure the setup works before the cron job comes in.
+
+The simplest usage form, which involves full automation, is something like this:
+
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf auto
+
+
+
+This trivially-looking command will:
+
+
+  checkout or update your copy of pkgsrc;
+  create the sandbox;
+  bootstrap pkgsrc and pbulk;
+  use pbulk to build the given packages; and
+  destroy the sandbox.
+
+
+After a successful invocation, you’ll be left with a collection of packages in the directory you set in PACKAGES, which in the default pkg_comp-cron installation is /var/pkg_comp/packages/.
+
+If you’d like to restrict the set of packages to build during a manually-triggered build, provide those as arguments to auto.  This will override the contents of AUTO_PACKAGES (which was derived from your list.txt file).
+
+But what if you wanted to invoke all stages separately, bypassing auto?  The command above would be equivalent to:
+
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf fetch
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf sandbox-create
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf bootstrap
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf build &lt;package names here&gt;
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf sandbox-destroy
+
+
+
+Go ahead and play with these.  You can also use the sandbox-shell command to interactively enter the sandbox.  See pkg_comp(8) for more details.
+
+Lastly note that the root user will receive email messages if the periodic pkg_comp cron job fails, but only if it fails.  That said, you can find the full logs for all builds, successful or not, under /var/pkg_comp/log/.
+
+Installing the resulting packages
+
+Now that you have built your first set of packages, you will want to install them.  On NetBSD, the default pkg_comp-cron configuration produces a set of packages for /usr/pkg so you have to wipe your existing packages first to avoid build mismatches.
+
+WARNING: Yes, you really have to wipe your packages.  pkg_comp currently does not recognize the package tools that ship with the NetBSD base system (i.e. it bootstraps pkgsrc unconditionally, including bmake), which means that the newly-built packages won’t be compatible with the ones you already have.  Avoid any trouble by starting afresh.
+
+To clean your system, do something like this:
+
+# ... ensure your login shell lives in /bin! ...
+# pkg_delete -r -R "*"
+# mv /usr/pkg/etc /root/etc.old  # Backup any modified files.
+# rm -rf /usr/pkg /var/db/pkg*
+
+
+
+Now, rebootstrap pkgsrc and reinstall any packages you previously had:
+
+# cd /
+# tar xzvpf /var/pkg_comp/packages/bootstrap.tgz
+# echo "pkg_admin=/usr/pkg/sbin/pkg_admin" &gt;&gt;/etc/pkgpath.conf
+# echo "pkg_info=/usr/pkg/sbin/pkg_info" &gt;&gt;/etc/pkgpath.conf
+# export PATH=/usr/pkg/bin:/usr/pkg/sbin:${PATH}
+# export PKG_PATH=file:///var/pkg_comp/packages/All
+# pkg_add pkgin pkg_comp-cron &lt;other package names&gt;
+
+
+
+Finally, reconfigure any packages where you had have previously made custom edits.  Use the backup in /root/etc.old to properly update the corresponding files in /etc.  I doubt you made a ton of edits so this should be easy.
+
+IMPORTANT: Note that the last command in this example includes pkgin and pkg_comp-cron.  You should install these first to ensure you can continue with the next steps in this tutorial.
+
+Keeping your system up-to-date
+
+If you paid attention when you installed the pkg_comp-cron package, you should have noticed that this configured a cron job to run pkg_comp daily.  This means that your packages repository under /var/pkg_comp/packages/ will always be up-to-date so you can use that to quickly upgrade your system with minimal downtime.
+
+Assuming you are going to use pkgtools/pkgin (and why not?), configure your local repository:
+
+# echo 'file:///var/pkg_comp/packages/All' &gt;&gt;/etc/pkgin/repositories.conf
+
+
+
+And, from now on, all it takes to upgrade your system is:
+
+# pkgin update
+# pkgin upgrade
+
+
+
+Enjoy!
+
+            &lt;a href=&quot;http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-netbsd.html&quot;&gt;[Continue reading]&lt;/a&gt;
+          </description>
+        
+          <description>&lt;p&gt;This is a tutorial to guide you through the &lt;a href=&quot;/2017/02/introducing-pkg_comp-2.0.html&quot;&gt;shiny new pkg_comp 2.0&lt;/a&gt; on NetBSD.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Goals:&lt;/strong&gt; to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your NetBSD system up-to-date and secure.&lt;/p&gt;
+
+&lt;!--end-of-excerpt--&gt;
+
+&lt;p&gt;This tutorial is specifically targeted at NetBSD but should work on other platforms with some small changes.  Expect, at the very least, a macOS-specific tutorial as soon as I create a pkg_comp standalone installer for that platform.&lt;/p&gt;
+
+&lt;h1 id=&quot;getting-started&quot;&gt;Getting started&lt;/h1&gt;
+
+&lt;p&gt;First install the &lt;code class=&quot;highlighter-rouge&quot;&gt;sysutils/sysbuild-user&lt;/code&gt; package and trigger a full build of NetBSD so that you get usable release sets for pkg_comp.  See &lt;code class=&quot;highlighter-rouge&quot;&gt;sysbuild(1)&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_info -E sysbuild-user&lt;/code&gt; for details on how to do so.  Alternatively, &lt;a href=&quot;https://ftp.netbsd.org/pub/NetBSD/&quot;&gt;download release sets from the FTP site&lt;/a&gt; and later tell pkg_comp where they are.&lt;/p&gt;
+
+&lt;p&gt;Then install the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp-cron&lt;/code&gt; package.  The rest of this tutorial assumes you have done so.&lt;/p&gt;
+
+&lt;h1 id=&quot;adjusting-the-configuration&quot;&gt;Adjusting the configuration&lt;/h1&gt;
+
+&lt;p&gt;To use pkg_comp for periodic builds, you’ll need to do some minimal edits to the default configuration files.  The files can be found directly under &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/&lt;/code&gt;, which is &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt;’s “home”:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/pkg_comp.conf&lt;/code&gt;: This is pkg_comp’s own configuration file and the defaults installed by &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt; should be good to go.&lt;/p&gt;
+
+    &lt;p&gt;The contents here are divided in three major sections: declaration on how to download pkgsrc, definition of the file system layout on the host machine, and definition of the file system layout for the built packages.&lt;/p&gt;
+
+    &lt;p&gt;You may want to customize the target system paths, such as &lt;code class=&quot;highlighter-rouge&quot;&gt;LOCALBASE&lt;/code&gt; or &lt;code class=&quot;highlighter-rouge&quot;&gt;SYSCONFDIR&lt;/code&gt;, but you should not have to customize the host system paths.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/sandbox.conf&lt;/code&gt;: This is the configuration file for sandboxctl.  The default settings installed by &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt; &lt;em&gt;should&lt;/em&gt; suffice if you used the &lt;code class=&quot;highlighter-rouge&quot;&gt;sysutils/sysbuild-user&lt;/code&gt; package as recommended; otherwise tweak the &lt;code class=&quot;highlighter-rouge&quot;&gt;NETBSD_NATIVE_RELEASEDIR&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;NETBSD_SETS_RELEASEDIR&lt;/code&gt; variables to point to where the downloaded release sets are.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/extra.mk.conf&lt;/code&gt;: This is pkgsrc’s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you’d like to set.  You should &lt;em&gt;not&lt;/em&gt; configure the layout of the installed files (e.g. &lt;code class=&quot;highlighter-rouge&quot;&gt;LOCALBASE&lt;/code&gt;) because that’s handled internally by pkg_comp as specified in &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp.conf&lt;/code&gt;.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/list.txt&lt;/code&gt;: This determines the set of packages you want to build in your periodic cron job.  The builds will fail unless you list at least one package.&lt;/p&gt;
+
+    &lt;p&gt;WARNING: Make sure to include &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgin&lt;/code&gt; in this list so that your binary kit includes these essential package management tools.  Otherwise you’ll have to deal with some minor annoyances after rebootstrapping your system.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Lastly, review root’s &lt;code class=&quot;highlighter-rouge&quot;&gt;crontab&lt;/code&gt; to ensure the job specification for pkg_comp is sane.  On slow machines, or if you are building many packages, you will probably want to decrease the build frequency from &lt;code class=&quot;highlighter-rouge&quot;&gt;@daily&lt;/code&gt; to &lt;code class=&quot;highlighter-rouge&quot;&gt;@weekly&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h1 id=&quot;sample-configuration&quot;&gt;Sample configuration&lt;/h1&gt;
+
+&lt;p&gt;Here is what the configuration looks like on my NetBSD development machine as dumped by the &lt;code class=&quot;highlighter-rouge&quot;&gt;config&lt;/code&gt; subcommand.  Use this output to get an idea of what to expect.  I’ll be using the values shown here in the rest of the tutorial:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# pkg_comp -c /var/pkg_comp/pkg_comp.conf config
+AUTO_PACKAGES = autoconf automake bash colordiff dash emacs-nox11 git-base git-docs gmake gnuls lua52 mozilla-rootcerts pdksh pkg_comp-cron pkg_developer pkgin sqlite3 sudo sysbuild sysbuild-user sysupgrade tmux vim zsh
+CVS_ROOT = :ext:anoncvs@anoncvs.NetBSD.org:/cvsroot
+CVS_TAG is undefined
+DISTDIR = /var/pkg_comp/distfiles
+EXTRA_MKCONF = /var/pkg_comp/extra.mk.conf
+FETCH_VCS = cvs
+GIT_BRANCH = trunk
+GIT_URL = https://github.com/jsonn/pkgsrc.git
+LOCALBASE = /usr/pkg
+NJOBS = 2
+PACKAGES = /var/pkg_comp/packages
+PBULK_PACKAGES = /var/pkg_comp/pbulk-packages
+PKG_DBDIR = /usr/pkg/libdata/pkgdb
+PKGSRCDIR = /var/pkg_comp/pkgsrc
+SANDBOX_CONFFILE = /var/pkg_comp/sandbox.conf
+SYSCONFDIR = /etc
+UPDATE_SOURCES = true
+VARBASE = /var
+
+NETBSD_NATIVE_RELEASEDIR = /home/sysbuild/release/amd64
+NETBSD_RELEASE_RELEASEDIR = /home/sysbuild/release/amd64
+NETBSD_RELEASE_SETS is undefined
+SANDBOX_ROOT = /var/pkg_comp/sandbox
+SANDBOX_TYPE = netbsd-release
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h1 id=&quot;building-your-own-packages-by-hand&quot;&gt;Building your own packages by hand&lt;/h1&gt;
+
+&lt;p&gt;Now that you are fully installed and configured, you’ll build some stuff by hand to ensure the setup works before the cron job comes in.&lt;/p&gt;
+
+&lt;p&gt;The simplest usage form, which involves full automation, is something like this:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# pkg_comp -c /var/pkg_comp/pkg_comp.conf auto
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;This trivially-looking command will:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;checkout or update your copy of pkgsrc;&lt;/li&gt;
+  &lt;li&gt;create the sandbox;&lt;/li&gt;
+  &lt;li&gt;bootstrap pkgsrc and pbulk;&lt;/li&gt;
+  &lt;li&gt;use pbulk to build the given packages; and&lt;/li&gt;
+  &lt;li&gt;destroy the sandbox.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;After a successful invocation, you’ll be left with a collection of packages in the directory you set in &lt;code class=&quot;highlighter-rouge&quot;&gt;PACKAGES&lt;/code&gt;, which in the default &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt; installation is &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/packages/&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;If you’d like to restrict the set of packages to build during a manually-triggered build, provide those as arguments to &lt;code class=&quot;highlighter-rouge&quot;&gt;auto&lt;/code&gt;.  This will override the contents of &lt;code class=&quot;highlighter-rouge&quot;&gt;AUTO_PACKAGES&lt;/code&gt; (which was derived from your &lt;code class=&quot;highlighter-rouge&quot;&gt;list.txt&lt;/code&gt; file).&lt;/p&gt;
+
+&lt;p&gt;But what if you wanted to invoke all stages separately, bypassing &lt;code class=&quot;highlighter-rouge&quot;&gt;auto&lt;/code&gt;?  The command above would be equivalent to:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# pkg_comp -c /var/pkg_comp/pkg_comp.conf fetch
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf sandbox-create
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf bootstrap
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf build &amp;lt;package names here&amp;gt;
+# pkg_comp -c /var/pkg_comp/pkg_comp.conf sandbox-destroy
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Go ahead and play with these.  You can also use the &lt;code class=&quot;highlighter-rouge&quot;&gt;sandbox-shell&lt;/code&gt; command to interactively enter the sandbox.  See &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp(8)&lt;/code&gt; for more details.&lt;/p&gt;
+
+&lt;p&gt;Lastly note that the root user will receive email messages if the periodic pkg_comp cron job fails, but only if it fails.  That said, you can find the full logs for all builds, successful or not, under &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/log/&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h1 id=&quot;installing-the-resulting-packages&quot;&gt;Installing the resulting packages&lt;/h1&gt;
+
+&lt;p&gt;Now that you have built your first set of packages, you will want to install them.  On NetBSD, the default &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt; configuration produces a set of packages for &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/pkg&lt;/code&gt; so you have to wipe your existing packages first to avoid build mismatches.&lt;/p&gt;
+
+&lt;p&gt;WARNING: Yes, you really have to wipe your packages.  pkg_comp currently does not recognize the package tools that ship with the NetBSD base system (i.e. it bootstraps pkgsrc unconditionally, including &lt;code class=&quot;highlighter-rouge&quot;&gt;bmake&lt;/code&gt;), which means that the newly-built packages won’t be compatible with the ones you already have.  Avoid any trouble by starting afresh.&lt;/p&gt;
+
+&lt;p&gt;To clean your system, do something like this:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# ... ensure your login shell lives in /bin! ...
+# pkg_delete -r -R &quot;*&quot;
+# mv /usr/pkg/etc /root/etc.old  # Backup any modified files.
+# rm -rf /usr/pkg /var/db/pkg*
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Now, rebootstrap pkgsrc and reinstall any packages you previously had:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# cd /
+# tar xzvpf /var/pkg_comp/packages/bootstrap.tgz
+# echo &quot;pkg_admin=/usr/pkg/sbin/pkg_admin&quot; &amp;gt;&amp;gt;/etc/pkgpath.conf
+# echo &quot;pkg_info=/usr/pkg/sbin/pkg_info&quot; &amp;gt;&amp;gt;/etc/pkgpath.conf
+# export PATH=/usr/pkg/bin:/usr/pkg/sbin:${PATH}
+# export PKG_PATH=file:///var/pkg_comp/packages/All
+# pkg_add pkgin pkg_comp-cron &amp;lt;other package names&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Finally, reconfigure any packages where you had have previously made custom edits.  Use the backup in &lt;code class=&quot;highlighter-rouge&quot;&gt;/root/etc.old&lt;/code&gt; to properly update the corresponding files in &lt;code class=&quot;highlighter-rouge&quot;&gt;/etc&lt;/code&gt;.  I doubt you made a ton of edits so this should be easy.&lt;/p&gt;
+
+&lt;p&gt;IMPORTANT: Note that the last command in this example includes &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgin&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt;.  You should install these first to ensure you can continue with the next steps in this tutorial.&lt;/p&gt;
+
+&lt;h1 id=&quot;keeping-your-system-up-to-date&quot;&gt;Keeping your system up-to-date&lt;/h1&gt;
+
+&lt;p&gt;If you paid attention when you installed the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt; package, you should have noticed that this configured a cron job to run pkg_comp daily.  This means that your packages repository under &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/packages/&lt;/code&gt; will always be up-to-date so you can use that to quickly upgrade your system with minimal downtime.&lt;/p&gt;
+
+&lt;p&gt;Assuming you are going to use &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkgin&lt;/code&gt; (and why not?), configure your local repository:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# echo &#39;file:///var/pkg_comp/packages/All&#39; &amp;gt;&amp;gt;/etc/pkgin/repositories.conf
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;And, from now on, all it takes to upgrade your system is:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# pkgin update
+# pkgin upgrade
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Enjoy!&lt;/p&gt;
+</description>
+        
+        <pubDate>Sat, 18 Feb 2017 16:51:55 +0000</pubDate>
+        <link>http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-netbsd.html</link>
+        <guid isPermaLink="true">http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-netbsd.html</guid>
+        
+        
+        <category>netbsd</category>
+        
+        <category>software</category>
+        
+        <category>tutorial</category>
+        
+      </item>
     
       <item>
         <title>Introducing pkg_comp 2.0 (and sandboxctl 1.0)</title>
@@ -450,7 +793,7 @@ If you let me… I’ll conclude by saying that Atom is to Emacs what VSCode is 
 
 &lt;p&gt;With the right command-line alias, all you have to do is type &lt;code class=&quot;highlighter-rouge&quot;&gt;code .&lt;/code&gt; at the top-level directory of your project to launch a new instance of VSCode ready to work on your project—and the editor remembers where you left off last time. In case you are curious, an alias for OS X would be:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;alias code=&quot;open -a 'Visual Studio Code'&quot;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;alias code=&quot;open -a &#39;Visual Studio Code&#39;&quot;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;/div&gt;
 
@@ -485,7 +828,7 @@ If you let me… I’ll conclude by saying that Atom is to Emacs what VSCode is 
       </item>
     
       <item>
-        <title>A look at Go from a newbie's perspective</title>
+        <title>A look at Go from a newbie&#39;s perspective</title>
         
           <description>
             I confess I am late to the game: the Go programming language came out in 2009 and I had not had the chance to go all in for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I’m truly pleased.
@@ -1702,119 +2045,6 @@ have never done the latter yet.&lt;/p&gt;
         <category>google</category>
         
         <category>work</category>
-        
-      </item>
-    
-      <item>
-        <title>Introducing Nudgy Timer</title>
-        
-          <description>
-            
-
-For the last two years, I had been meaning to write an Android app just for
-the sake of it.  I had attempted to do so in short chunks of “free time”,
-but that never played out well: I had to force myself to sit down for a few
-hours straight to fight Android Studio and overcome the initial
-difficulties in coding for an unknown platform.  That’s why, during the
-last Thanksgiving week, I took three days off of work to focus on writing
-my first Android app.  The goal was to get a basic app that could later be
-built on iteratively as open source.  The specifics of the app did not
-matter much for this exercise, but I had a simple idea in mind.
-
-
-
-And those three days played out really well.  After three intense days, I
-had a functional application running on my phone, ready to be demoed on
-Thanksgiving day!  Granted, the code was garbage and the app had some
-serious fundamental bugs, but I had gotten a prototype that I could show
-around.  In particular, I got the background timer working, various
-activities and their workflow, some basic unit tests for auxiliary support
-classes, and data persistency via SQLite.
-
-Since then, I have been working hard on reworking the core logic of the app
-to be robust, cleaning up the code, and adding some tests, all in
-preparation for publishing the code so that I can continue work on GitHub
-instead of in an internal “unclean” repository.
-
-And, today, I am finally open-sourcing the Nudgy Timer project:
-
-
-  https://github.com/jmmv/nudgytimer/
-
-
-The app is now barely functional but I think its foundations are “good
-enough” to keep building on it step by step.  The UI is suboptimal though,
-so while the app might work, it will not deliver a pleasant experience.
-
-For the time being, you can only find this app in GitHub in source form:
-there are still a bunch of important to-do items to be addressed before it
-can go live into the Google Play Store and be easily available.  (One of
-which is for me to run the app on my real phone for a few days to see how
-it behaves.)  Bear with me for a bit longer before you try it out.
-
-Lastly: this is my very first Android app and the first Java code I
-write since 2008.  I would like to invite you to take a look at the
-sources and be brutaly honest about what things are not good and how to
-make them better.  Please file bugs if you do so, and thank you!
-
-            &lt;a href=&quot;http://julio.meroh.net/2015/12/introducing-nudgytimer.html&quot;&gt;[Continue reading]&lt;/a&gt;
-          </description>
-        
-          <description>&lt;p&gt;&lt;img src=&quot;/images/2015-12-17-nudgytimer.png&quot; alt=&quot;Nudgy Timer screenshot&quot; class=&quot;float-right with-border&quot; width=&quot;300px&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;For the last two years, I had been meaning to write an Android app just for
-the sake of it.  I had attempted to do so in short chunks of “free time”,
-but that never played out well: I had to force myself to sit down for a few
-hours straight to fight Android Studio and overcome the initial
-difficulties in coding for an unknown platform.  That’s why, during the
-last Thanksgiving week, I took three days off of work to focus on writing
-my first Android app.  The goal was to get a basic app that could later be
-built on iteratively as open source.  The specifics of the app did not
-matter much for this exercise, but I had a simple idea in mind.&lt;/p&gt;
-
-&lt;!--end-of-excerpt--&gt;
-
-&lt;p&gt;And those three days played out really well.  After three intense days, I
-had a functional application running on my phone, ready to be demoed on
-Thanksgiving day!  Granted, the code was garbage and the app had some
-serious fundamental bugs, but I had gotten a prototype that I could show
-around.  In particular, I got the background timer working, various
-activities and their workflow, some basic unit tests for auxiliary support
-classes, and data persistency via SQLite.&lt;/p&gt;
-
-&lt;p&gt;Since then, I have been working hard on reworking the core logic of the app
-to be robust, cleaning up the code, and adding some tests, all in
-preparation for publishing the code so that I can continue work on GitHub
-instead of in an internal “unclean” repository.&lt;/p&gt;
-
-&lt;p&gt;And, today, I am finally open-sourcing the &lt;strong&gt;Nudgy Timer project&lt;/strong&gt;:&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://github.com/jmmv/nudgytimer/&quot;&gt;https://github.com/jmmv/nudgytimer/&lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;The app is now barely functional but I think its foundations are “good
-enough” to keep building on it step by step.  The UI is suboptimal though,
-so while the app might work, it will not deliver a pleasant experience.&lt;/p&gt;
-
-&lt;p&gt;For the time being, you can only find this app in GitHub in source form:
-there are still a bunch of important to-do items to be addressed before it
-can go live into the Google Play Store and be easily available.  (One of
-which is for me to run the app on my real phone for a few days to see how
-it behaves.)  Bear with me for a bit longer before you try it out.&lt;/p&gt;
-
-&lt;p&gt;Lastly: &lt;strong&gt;this is my very first Android app&lt;/strong&gt; and the first Java code I
-write since 2008.  &lt;strong&gt;I would like to invite you to take a look at the
-sources and be brutaly honest&lt;/strong&gt; about what things are not good and how to
-make them better.  &lt;strong&gt;Please file bugs&lt;/strong&gt; if you do so, and thank you!&lt;/p&gt;
-</description>
-        
-        <pubDate>Thu, 17 Dec 2015 22:30:00 +0000</pubDate>
-        <link>http://julio.meroh.net/2015/12/introducing-nudgytimer.html</link>
-        <guid isPermaLink="true">http://julio.meroh.net/2015/12/introducing-nudgytimer.html</guid>
-        
-        
-        <category>software</category>
         
       </item>
     
