@@ -2,13 +2,356 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Julio Merino</title>
-    <description>This is Julio Merino&#39;s homepage.  This site is primarily my personal blog and, secondarily, a gateway to my presence in the web.
+    <description>This is Julio Merino's homepage.  This site is primarily my personal blog and, secondarily, a gateway to my presence in the web.
 </description>
     <link>http://julio.meroh.net/</link>
     <atom:link href="http://julio.meroh.net/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Sat, 18 Feb 2017 17:11:31 +0000</pubDate>
-    <lastBuildDate>Sat, 18 Feb 2017 17:11:31 +0000</lastBuildDate>
-    <generator>Jekyll v3.1.2</generator>
+    <pubDate>Thu, 23 Feb 2017 22:40:02 +0000</pubDate>
+    <lastBuildDate>Thu, 23 Feb 2017 22:40:02 +0000</lastBuildDate>
+    <generator>Jekyll v3.3.0</generator>
+    
+      <item>
+        <title>Easy pkgsrc on macOS with pkg_comp 2.0</title>
+        
+          <description>
+            This is a tutorial to guide you through the shiny new pkg_comp 2.0 on macOS using the macOS-specific self-installer.
+
+Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your macOS system up-to-date and secure.
+
+
+
+This tutorial is specifically targeted at macOS and relies on the macOS-specific self-installer package.  For a more generic tutorial that uses the pkg_comp-cron package in pkgsrc, see Keeping NetBSD up-to-date with pkg_comp 2.0.
+
+Getting started
+
+First download and install the standalone macOS installer package.  To find the right file, navigate to the releases page on GitHub, pick the most recent release, and download the file with a name of the form pkg_comp-&lt;version&gt;-macos.pkg.
+
+Then double-click on the file you downloaded and follow the installation instructions.  You will be asked for your administrator password because the installer has to place files under /usr/local/; note that pkg_comp requires root privileges anyway to run (because it uses chroot(8) internally), so you will have to grant permission at some point or another.
+
+The installer modifies the default PATH (by creating /etc/paths.d/pkg_comp) to include pkg_comp’s own installation directory and pkgsrc’s installation prefix.  Restart your shell sessions to make this change effective, or update your own shell startup scripts accordingly if you don’t use the standard ones.
+
+Lastly, make sure to have Xcode installed in the standard /Applications/Xcode.app location and that all components required to build command-line apps are available.  Tip: try running cc from the command line and seeing if it prints its usage message.
+
+Adjusting the configuration
+
+The macOS flavor of pkg_comp is configured with an installation prefix of /usr/local/, which means that the executable is located in /usr/local/sbin/pkg_comp and the configuration files are in /usr/local/etc/pkg_comp/.  This is intentional to keep the pkg_comp installation separate from your pkgsrc installation so that it can run no matter what state your pkgsrc installation is in.
+
+The configuration files are as follows:
+
+
+  
+    /usr/local/etc/pkg_comp/default.conf: This is pkg_comp’s own configuration file and the defaults configured by the installer should be good to go for macOS.
+
+    In particular, packages are configured to go into /opt/pkg/ instead of the traditional /usr/pkg/.  This is a necessity because the latter is not writable starting with OS X El Capitan thanks to System Integrity Protection (SIP).
+  
+  
+    /usr/local/etc/pkg_comp/sandbox.conf: This is the configuration file for sandboxctl, which is the support tool that pkg_comp uses to manage the compilation sandbox.  The default settings configured by the installer should be good.
+  
+  
+    /usr/local/etc/pkg_comp/extra.mk.conf: This is pkgsrc’s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you’d like to set.  You should not configure the layout of the installed files (e.g. LOCALBASE) because that’s handled internally by pkg_comp as specified in default.conf.
+  
+  
+    /usr/local/etc/pkg_comp/list.txt: This determines the set of packages you want to build automatically (either via the auto command or your periodic cron job).  The automated builds will fail unless you list at least one package.
+
+    Make sure to list pkgin here to install a better binary package management tool.  You’ll find this very handy to keep your installation up-to-date.
+  
+
+
+Note that these configuration files use the /var/pkg_comp/ directory as the dumping ground for: the pkgsrc tree, the downloaded distribution files, and the built binary packages.  We will see references to this location later on.
+
+The cron job
+
+The installer configures a cron job that runs as root to invoke pkg_comp daily.  The goal of this cron job is to keep your local packages repository up-to-date so that you can do binary upgrades at any time.  You can edit the cron job configuration interactively by running sudo crontab -e.
+
+This cron job won’t have an effect until you have populated the list.txt file as described above, so it’s safe to let it enabled until you have configured pkg_comp.
+
+If you want to disable the periodic builds, just remove the pkg_comp entry from the crontab.
+
+On slow machines, or if you are building a lot of packages, you may want to consider decreasing the build frequency from @daily to @weekly.
+
+Sample configuration
+
+Here is what the configuration looks like on my Mac Mini as dumped by the config subcommand.  Use this output to get an idea of what to expect.  I’ll be using the values shown here in the rest of the tutorial:
+
+$ pkg_comp config
+AUTO_PACKAGES = autoconf automake bash colordiff dash emacs24-nox11 emacs25-nox11 fuse-bindfs fuse-sshfs fuse-unionfs gdb git-base git-docs glib2 gmake gnuls libtool-base lua52 mercurial mozilla-rootcerts mysql56-server pdksh pkg_developer pkgconf pkgin ruby-jekyll ruby-jekyll-archives ruby-jekyll-paginate scmcvs smartmontools sqlite3 tmux vim
+CVS_ROOT = :ext:anoncvs@anoncvs.NetBSD.org:/cvsroot
+CVS_TAG is undefined
+DISTDIR = /var/pkg_comp/distfiles
+EXTRA_MKCONF = /usr/local/etc/pkg_comp/extra.mk.conf
+FETCH_VCS = git
+GIT_BRANCH = trunk
+GIT_URL = https://github.com/jsonn/pkgsrc.git
+LOCALBASE = /opt/pkg
+NJOBS = 4
+PACKAGES = /var/pkg_comp/packages
+PBULK_PACKAGES = /var/pkg_comp/pbulk-packages
+PKG_DBDIR = /opt/pkg/libdata/pkgdb
+PKGSRCDIR = /var/pkg_comp/pkgsrc
+SANDBOX_CONFFILE = /usr/local/etc/pkg_comp/sandbox.conf
+SYSCONFDIR = /opt/pkg/etc
+UPDATE_SOURCES = true
+VARBASE = /opt/pkg/var
+
+DARWIN_NATIVE_WITH_XCODE = true
+SANDBOX_ROOT = /var/pkg_comp/sandbox
+SANDBOX_TYPE = darwin-native
+
+
+
+Building your own packages by hand
+
+Now that you are fully installed and configured, you’ll build some stuff by hand to ensure the setup works before the cron job comes in.
+
+The simplest usage form, which involves full automation and assumes you have listed at least one package in list.txt, is something like this:
+
+$ sudo pkg_comp auto
+
+
+
+This trivially-looking command will:
+
+
+  clone or update your copy of pkgsrc;
+  create the sandbox;
+  bootstrap pkgsrc and pbulk;
+  use pbulk to build the given packages; and
+  destroy the sandbox.
+
+
+After a successful invocation, you’ll be left with a collection of packages in the /var/pkg_comp/packages/ directory.
+
+If you’d like to restrict the set of packages to build during a manually-triggered build, provide those as arguments to auto.  This will override the contents of AUTO_PACKAGES (which was derived from your list.txt file).
+
+But what if you wanted to invoke all stages separately, bypassing auto?  The command above would be equivalent to:
+
+$ sudo pkg_comp fetch
+$ sudo pkg_comp sandbox-create
+$ sudo pkg_comp bootstrap
+$ sudo pkg_comp build &lt;package names here&gt;
+$ sudo pkg_comp sandbox-destroy
+
+
+
+Go ahead and play with these.  You can also use the sandbox-shell command to interactively enter the sandbox.  See pkg_comp(8) for more details.
+
+Lastly note that the root user will receive email messages if the periodic pkg_comp cron job fails, but only if it fails.  That said, you can find the full logs for all builds, successful or not, under /var/pkg_comp/log/.
+
+Installing the resulting packages
+
+Now that you have built your first set of packages, you will want to install them.  This is easy on macOS because you did not use pkgsrc itself to install pkg_comp.
+
+First, unpack the pkgsrc installation.  You only have to do this once:
+
+$ cd /
+$ sudo tar xzvpf /var/pkg_comp/packages/bootstrap.tgz
+
+
+
+That’s it.  You can now install any packages you like:
+
+$ PKG_PATH=file:///var/pkg_comp/packages/All sudo pkg_add pkgin &lt;other package names&gt;
+
+
+
+The command above assume you have restarted your shell to pick up the correct path to the pkgsrc installation.  If the call to pkg_add fails because of a missing binary, try restarting your shell or explicitly running the binary as /opt/pkg/sbin/pkg_add.
+
+Keeping your system up-to-date
+
+Thanks to the cron job that builds your packages, your local repository under /var/pkg_comp/packages/ will always be up-to-date; you can use that to quickly upgrade your system with minimal downtime.
+
+Assuming you are going to use pkgtools/pkgin as recommended above (and why not?), configure your local repository:
+
+$ sudo /bin/sh -c "echo file:///var/pkg_comp/packages/All &gt;&gt;/opt/pkg/etc/pkgin/repositories.conf"
+
+
+
+And, from now on, all it takes to upgrade your system is:
+
+$ sudo pkgin update
+$ sudo pkgin upgrade
+
+
+
+Enjoy!
+
+            &lt;a href=&quot;http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-macos.html&quot;&gt;[Continue reading]&lt;/a&gt;
+          </description>
+        
+          <description>&lt;p&gt;This is a tutorial to guide you through the &lt;a href=&quot;/2017/02/introducing-pkg_comp-2.0.html&quot;&gt;shiny new pkg_comp 2.0&lt;/a&gt; on macOS &lt;a href=&quot;https://github.com/jmmv/pkg_comp/blob/master/INSTALL.md#using-the-macos-installer&quot;&gt;using the macOS-specific self-installer&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Goals:&lt;/strong&gt; to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your macOS system up-to-date and secure.&lt;/p&gt;
+
+&lt;!--end-of-excerpt--&gt;
+
+&lt;p&gt;This tutorial is specifically targeted at macOS and relies on the macOS-specific self-installer package.  For a more generic tutorial that uses the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-cron&lt;/code&gt; package in pkgsrc, see &lt;a href=&quot;/2017/02/pkg_comp-2.0-tutorial-netbsd.html&quot;&gt;Keeping NetBSD up-to-date with pkg_comp 2.0&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h1 id=&quot;getting-started&quot;&gt;Getting started&lt;/h1&gt;
+
+&lt;p&gt;First download and install the standalone macOS installer package.  To find the right file, navigate to the &lt;a href=&quot;https://github.com/jmmv/pkg_comp/releases&quot;&gt;releases page on GitHub&lt;/a&gt;, pick the most recent release, and download the file with a name of the form &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp-&amp;lt;version&amp;gt;-macos.pkg&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Then double-click on the file you downloaded and follow the installation instructions.  You will be asked for your administrator password because the installer has to place files under &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/&lt;/code&gt;; note that pkg_comp requires root privileges anyway to run (because it uses &lt;code class=&quot;highlighter-rouge&quot;&gt;chroot(8)&lt;/code&gt; internally), so you will have to grant permission at some point or another.&lt;/p&gt;
+
+&lt;p&gt;The installer modifies the default &lt;code class=&quot;highlighter-rouge&quot;&gt;PATH&lt;/code&gt; (by creating &lt;code class=&quot;highlighter-rouge&quot;&gt;/etc/paths.d/pkg_comp&lt;/code&gt;) to include pkg_comp’s own installation directory and pkgsrc’s installation prefix.  Restart your shell sessions to make this change effective, or update your own shell startup scripts accordingly if you don’t use the standard ones.&lt;/p&gt;
+
+&lt;p&gt;Lastly, make sure to have Xcode installed in the standard &lt;code class=&quot;highlighter-rouge&quot;&gt;/Applications/Xcode.app&lt;/code&gt; location and that all components required to build command-line apps are available.  Tip: try running &lt;code class=&quot;highlighter-rouge&quot;&gt;cc&lt;/code&gt; from the command line and seeing if it prints its usage message.&lt;/p&gt;
+
+&lt;h1 id=&quot;adjusting-the-configuration&quot;&gt;Adjusting the configuration&lt;/h1&gt;
+
+&lt;p&gt;The macOS flavor of pkg_comp is configured with an installation prefix of &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/&lt;/code&gt;, which means that the executable is located in &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/sbin/pkg_comp&lt;/code&gt; and the configuration files are in &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/etc/pkg_comp/&lt;/code&gt;.  This is intentional to keep the pkg_comp installation separate from your pkgsrc installation so that it can run no matter what state your pkgsrc installation is in.&lt;/p&gt;
+
+&lt;p&gt;The configuration files are as follows:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/etc/pkg_comp/default.conf&lt;/code&gt;: This is pkg_comp’s own configuration file and the defaults configured by the installer should be good to go for macOS.&lt;/p&gt;
+
+    &lt;p&gt;In particular, packages are configured to go into &lt;code class=&quot;highlighter-rouge&quot;&gt;/opt/pkg/&lt;/code&gt; instead of the traditional &lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/pkg/&lt;/code&gt;.  This is a necessity because the latter is not writable starting with OS X El Capitan thanks to System Integrity Protection (SIP).&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/etc/pkg_comp/sandbox.conf&lt;/code&gt;: This is the configuration file for sandboxctl, which is the support tool that pkg_comp uses to manage the compilation sandbox.  The default settings configured by the installer should be good.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/etc/pkg_comp/extra.mk.conf&lt;/code&gt;: This is pkgsrc’s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you’d like to set.  You should &lt;em&gt;not&lt;/em&gt; configure the layout of the installed files (e.g. &lt;code class=&quot;highlighter-rouge&quot;&gt;LOCALBASE&lt;/code&gt;) because that’s handled internally by pkg_comp as specified in &lt;code class=&quot;highlighter-rouge&quot;&gt;default.conf&lt;/code&gt;.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/usr/local/etc/pkg_comp/list.txt&lt;/code&gt;: This determines the set of packages you want to build automatically (either via the &lt;code class=&quot;highlighter-rouge&quot;&gt;auto&lt;/code&gt; command or your periodic cron job).  The automated builds will fail unless you list at least one package.&lt;/p&gt;
+
+    &lt;p&gt;Make sure to list &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgin&lt;/code&gt; here to install a better binary package management tool.  You’ll find this very handy to keep your installation up-to-date.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Note that these configuration files use the &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/&lt;/code&gt; directory as the dumping ground for: the pkgsrc tree, the downloaded distribution files, and the built binary packages.  We will see references to this location later on.&lt;/p&gt;
+
+&lt;h2 id=&quot;the-cron-job&quot;&gt;The cron job&lt;/h2&gt;
+
+&lt;p&gt;The installer configures a cron job that runs as root to invoke pkg_comp daily.  The goal of this cron job is to keep your local packages repository up-to-date so that you can do binary upgrades at any time.  You can edit the cron job configuration interactively by running &lt;code class=&quot;highlighter-rouge&quot;&gt;sudo crontab -e&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;This cron job won’t have an effect until you have populated the &lt;code class=&quot;highlighter-rouge&quot;&gt;list.txt&lt;/code&gt; file as described above, so it’s safe to let it enabled until you have configured pkg_comp.&lt;/p&gt;
+
+&lt;p&gt;If you want to disable the periodic builds, just remove the pkg_comp entry from the crontab.&lt;/p&gt;
+
+&lt;p&gt;On slow machines, or if you are building a lot of packages, you may want to consider decreasing the build frequency from &lt;code class=&quot;highlighter-rouge&quot;&gt;@daily&lt;/code&gt; to &lt;code class=&quot;highlighter-rouge&quot;&gt;@weekly&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h2 id=&quot;sample-configuration&quot;&gt;Sample configuration&lt;/h2&gt;
+
+&lt;p&gt;Here is what the configuration looks like on my Mac Mini as dumped by the &lt;code class=&quot;highlighter-rouge&quot;&gt;config&lt;/code&gt; subcommand.  Use this output to get an idea of what to expect.  I’ll be using the values shown here in the rest of the tutorial:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ pkg_comp config
+AUTO_PACKAGES = autoconf automake bash colordiff dash emacs24-nox11 emacs25-nox11 fuse-bindfs fuse-sshfs fuse-unionfs gdb git-base git-docs glib2 gmake gnuls libtool-base lua52 mercurial mozilla-rootcerts mysql56-server pdksh pkg_developer pkgconf pkgin ruby-jekyll ruby-jekyll-archives ruby-jekyll-paginate scmcvs smartmontools sqlite3 tmux vim
+CVS_ROOT = :ext:anoncvs@anoncvs.NetBSD.org:/cvsroot
+CVS_TAG is undefined
+DISTDIR = /var/pkg_comp/distfiles
+EXTRA_MKCONF = /usr/local/etc/pkg_comp/extra.mk.conf
+FETCH_VCS = git
+GIT_BRANCH = trunk
+GIT_URL = https://github.com/jsonn/pkgsrc.git
+LOCALBASE = /opt/pkg
+NJOBS = 4
+PACKAGES = /var/pkg_comp/packages
+PBULK_PACKAGES = /var/pkg_comp/pbulk-packages
+PKG_DBDIR = /opt/pkg/libdata/pkgdb
+PKGSRCDIR = /var/pkg_comp/pkgsrc
+SANDBOX_CONFFILE = /usr/local/etc/pkg_comp/sandbox.conf
+SYSCONFDIR = /opt/pkg/etc
+UPDATE_SOURCES = true
+VARBASE = /opt/pkg/var
+
+DARWIN_NATIVE_WITH_XCODE = true
+SANDBOX_ROOT = /var/pkg_comp/sandbox
+SANDBOX_TYPE = darwin-native
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h1 id=&quot;building-your-own-packages-by-hand&quot;&gt;Building your own packages by hand&lt;/h1&gt;
+
+&lt;p&gt;Now that you are fully installed and configured, you’ll build some stuff by hand to ensure the setup works before the cron job comes in.&lt;/p&gt;
+
+&lt;p&gt;The simplest usage form, which involves full automation and assumes you have listed at least one package in &lt;code class=&quot;highlighter-rouge&quot;&gt;list.txt&lt;/code&gt;, is something like this:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ sudo pkg_comp auto
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;This trivially-looking command will:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;clone or update your copy of pkgsrc;&lt;/li&gt;
+  &lt;li&gt;create the sandbox;&lt;/li&gt;
+  &lt;li&gt;bootstrap pkgsrc and pbulk;&lt;/li&gt;
+  &lt;li&gt;use pbulk to build the given packages; and&lt;/li&gt;
+  &lt;li&gt;destroy the sandbox.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;After a successful invocation, you’ll be left with a collection of packages in the &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/packages/&lt;/code&gt; directory.&lt;/p&gt;
+
+&lt;p&gt;If you’d like to restrict the set of packages to build during a manually-triggered build, provide those as arguments to &lt;code class=&quot;highlighter-rouge&quot;&gt;auto&lt;/code&gt;.  This will override the contents of &lt;code class=&quot;highlighter-rouge&quot;&gt;AUTO_PACKAGES&lt;/code&gt; (which was derived from your &lt;code class=&quot;highlighter-rouge&quot;&gt;list.txt&lt;/code&gt; file).&lt;/p&gt;
+
+&lt;p&gt;But what if you wanted to invoke all stages separately, bypassing &lt;code class=&quot;highlighter-rouge&quot;&gt;auto&lt;/code&gt;?  The command above would be equivalent to:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ sudo pkg_comp fetch
+$ sudo pkg_comp sandbox-create
+$ sudo pkg_comp bootstrap
+$ sudo pkg_comp build &amp;lt;package names here&amp;gt;
+$ sudo pkg_comp sandbox-destroy
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Go ahead and play with these.  You can also use the &lt;code class=&quot;highlighter-rouge&quot;&gt;sandbox-shell&lt;/code&gt; command to interactively enter the sandbox.  See &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_comp(8)&lt;/code&gt; for more details.&lt;/p&gt;
+
+&lt;p&gt;Lastly note that the root user will receive email messages if the periodic pkg_comp cron job fails, but only if it fails.  That said, you can find the full logs for all builds, successful or not, under &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/log/&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h1 id=&quot;installing-the-resulting-packages&quot;&gt;Installing the resulting packages&lt;/h1&gt;
+
+&lt;p&gt;Now that you have built your first set of packages, you will want to install them.  This is easy on macOS because you did &lt;em&gt;not&lt;/em&gt; use pkgsrc itself to install pkg_comp.&lt;/p&gt;
+
+&lt;p&gt;First, unpack the pkgsrc installation.  &lt;strong&gt;You only have to do this once:&lt;/strong&gt;&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ cd /
+$ sudo tar xzvpf /var/pkg_comp/packages/bootstrap.tgz
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;That’s it.  You can now install any packages you like:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ PKG_PATH=file:///var/pkg_comp/packages/All sudo pkg_add pkgin &amp;lt;other package names&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;The command above assume you have restarted your shell to pick up the correct path to the pkgsrc installation.  If the call to &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_add&lt;/code&gt; fails because of a missing binary, try restarting your shell or explicitly running the binary as &lt;code class=&quot;highlighter-rouge&quot;&gt;/opt/pkg/sbin/pkg_add&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h1 id=&quot;keeping-your-system-up-to-date&quot;&gt;Keeping your system up-to-date&lt;/h1&gt;
+
+&lt;p&gt;Thanks to the cron job that builds your packages, your local repository under &lt;code class=&quot;highlighter-rouge&quot;&gt;/var/pkg_comp/packages/&lt;/code&gt; will always be up-to-date; you can use that to quickly upgrade your system with minimal downtime.&lt;/p&gt;
+
+&lt;p&gt;Assuming you are going to use &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkgin&lt;/code&gt; as recommended above (and why not?), configure your local repository:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ sudo /bin/sh -c &quot;echo file:///var/pkg_comp/packages/All &amp;gt;&amp;gt;/opt/pkg/etc/pkgin/repositories.conf&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;And, from now on, all it takes to upgrade your system is:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ sudo pkgin update
+$ sudo pkgin upgrade
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Enjoy!&lt;/p&gt;
+</description>
+        
+        <pubDate>Thu, 23 Feb 2017 22:36:54 +0000</pubDate>
+        <link>http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-macos.html</link>
+        <guid isPermaLink="true">http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-macos.html</guid>
+        
+        
+        <category>macos</category>
+        
+        <category>software</category>
+        
+        <category>tutorial</category>
+        
+      </item>
     
       <item>
         <title>Keeping NetBSD up-to-date with pkg_comp 2.0</title>
@@ -24,7 +367,7 @@ This tutorial is specifically targeted at NetBSD but should work on other platfo
 
 Getting started
 
-First install the sysutils/sysbuild-user package and trigger a full build of NetBSD so that you get usable release sets for pkg_comp.  See sysbuild(1) and pkg_info -E sysbuild-user for details on how to do so.  Alternatively, download release sets from the FTP site and later tell pkg_comp where they are.
+First install the sysutils/sysbuild-user package and trigger a full build of NetBSD so that you get usable release sets for pkg_comp.  See sysbuild(1) and pkg_info sysbuild-user for details on how to do so.  Alternatively, download release sets from the FTP site and later tell pkg_comp where they are.
 
 Then install the pkgtools/pkg_comp-cron package.  The rest of this tutorial assumes you have done so.
 
@@ -188,7 +531,7 @@ Enjoy!
 
 &lt;h1 id=&quot;getting-started&quot;&gt;Getting started&lt;/h1&gt;
 
-&lt;p&gt;First install the &lt;code class=&quot;highlighter-rouge&quot;&gt;sysutils/sysbuild-user&lt;/code&gt; package and trigger a full build of NetBSD so that you get usable release sets for pkg_comp.  See &lt;code class=&quot;highlighter-rouge&quot;&gt;sysbuild(1)&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_info -E sysbuild-user&lt;/code&gt; for details on how to do so.  Alternatively, &lt;a href=&quot;https://ftp.netbsd.org/pub/NetBSD/&quot;&gt;download release sets from the FTP site&lt;/a&gt; and later tell pkg_comp where they are.&lt;/p&gt;
+&lt;p&gt;First install the &lt;code class=&quot;highlighter-rouge&quot;&gt;sysutils/sysbuild-user&lt;/code&gt; package and trigger a full build of NetBSD so that you get usable release sets for pkg_comp.  See &lt;code class=&quot;highlighter-rouge&quot;&gt;sysbuild(1)&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_info sysbuild-user&lt;/code&gt; for details on how to do so.  Alternatively, &lt;a href=&quot;https://ftp.netbsd.org/pub/NetBSD/&quot;&gt;download release sets from the FTP site&lt;/a&gt; and later tell pkg_comp where they are.&lt;/p&gt;
 
 &lt;p&gt;Then install the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp-cron&lt;/code&gt; package.  The rest of this tutorial assumes you have done so.&lt;/p&gt;
 
@@ -326,7 +669,7 @@ SANDBOX_TYPE = netbsd-release
 
 &lt;p&gt;Assuming you are going to use &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkgin&lt;/code&gt; (and why not?), configure your local repository:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# echo &#39;file:///var/pkg_comp/packages/All&#39; &amp;gt;&amp;gt;/etc/pkgin/repositories.conf
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;# echo 'file:///var/pkg_comp/packages/All' &amp;gt;&amp;gt;/etc/pkgin/repositories.conf
 &lt;/code&gt;&lt;/pre&gt;
 &lt;/div&gt;
 
@@ -413,7 +756,7 @@ Installation is still a bit convoluted unless you are on one of the tier 1 NetBS
 
 For now though, you need to download and install the latest source releases of shtk, sandboxctl, and pkg_comp—in this order; pass the --with-atf=no flag to the configure scripts to cut down the required dependencies.  On macOS, you will also need OSXFUSE and the bindfs file system.
 
-If you are already using pkgsrc, you can install the pkgtools/pkg_comp package to get the basic tool and its dependencies in place, or you can install the wrapper pkgtools/pkg_comp-cron package to create a pre-configured environment with a daily cron job to run your builds.  See the package’s MESSAGE (with pkg_info -E pkg_comp-cron) for more details.
+If you are already using pkgsrc, you can install the pkgtools/pkg_comp package to get the basic tool and its dependencies in place, or you can install the wrapper pkgtools/pkg_comp-cron package to create a pre-configured environment with a daily cron job to run your builds.  See the package’s MESSAGE (with pkg_info pkg_comp-cron) for more details.
 
 Documentation
 
@@ -482,7 +825,7 @@ And, if you need support or find anything wrong, please let me know by filing bu
 
 &lt;p&gt;For now though, you need to download and install the latest source releases of &lt;a href=&quot;https://github.com/jmmv/shtk/&quot;&gt;shtk&lt;/a&gt;, &lt;a href=&quot;https://github.com/jmmv/sandboxctl/&quot;&gt;sandboxctl&lt;/a&gt;, and &lt;a href=&quot;https://github.com/jmmv/pkg_comp/&quot;&gt;pkg_comp&lt;/a&gt;—in this order; pass the &lt;code class=&quot;highlighter-rouge&quot;&gt;--with-atf=no&lt;/code&gt; flag to the &lt;code class=&quot;highlighter-rouge&quot;&gt;configure&lt;/code&gt; scripts to cut down the required dependencies.  On macOS, you will also need &lt;a href=&quot;https://osxfuse.github.io/&quot;&gt;OSXFUSE&lt;/a&gt; and the &lt;a href=&quot;http://bindfs.org&quot;&gt;bindfs&lt;/a&gt; file system.&lt;/p&gt;
 
-&lt;p&gt;If you are already using pkgsrc, you can install the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp&lt;/code&gt; package to get the basic tool and its dependencies in place, or you can install the wrapper &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp-cron&lt;/code&gt; package to create a pre-configured environment with a daily cron job to run your builds.  See the package’s &lt;code class=&quot;highlighter-rouge&quot;&gt;MESSAGE&lt;/code&gt; (with &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_info -E pkg_comp-cron&lt;/code&gt;) for more details.&lt;/p&gt;
+&lt;p&gt;If you are already using pkgsrc, you can install the &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp&lt;/code&gt; package to get the basic tool and its dependencies in place, or you can install the wrapper &lt;code class=&quot;highlighter-rouge&quot;&gt;pkgtools/pkg_comp-cron&lt;/code&gt; package to create a pre-configured environment with a daily cron job to run your builds.  See the package’s &lt;code class=&quot;highlighter-rouge&quot;&gt;MESSAGE&lt;/code&gt; (with &lt;code class=&quot;highlighter-rouge&quot;&gt;pkg_info pkg_comp-cron&lt;/code&gt;) for more details.&lt;/p&gt;
 
 &lt;h1 id=&quot;documentation&quot;&gt;Documentation&lt;/h1&gt;
 
@@ -793,7 +1136,7 @@ If you let me… I’ll conclude by saying that Atom is to Emacs what VSCode is 
 
 &lt;p&gt;With the right command-line alias, all you have to do is type &lt;code class=&quot;highlighter-rouge&quot;&gt;code .&lt;/code&gt; at the top-level directory of your project to launch a new instance of VSCode ready to work on your project—and the editor remembers where you left off last time. In case you are curious, an alias for OS X would be:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;alias code=&quot;open -a &#39;Visual Studio Code&#39;&quot;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;alias code=&quot;open -a 'Visual Studio Code'&quot;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;/div&gt;
 
@@ -828,7 +1171,7 @@ If you let me… I’ll conclude by saying that Atom is to Emacs what VSCode is 
       </item>
     
       <item>
-        <title>A look at Go from a newbie&#39;s perspective</title>
+        <title>A look at Go from a newbie's perspective</title>
         
           <description>
             I confess I am late to the game: the Go programming language came out in 2009 and I had not had the chance to go all in for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I’m truly pleased.
@@ -1892,159 +2235,6 @@ site via the comment box below?&lt;/p&gt;
         <category>blog</category>
         
         <category>writing</category>
-        
-      </item>
-    
-      <item>
-        <title>Joining the Blaze team</title>
-        
-          <description>
-            It has been over 6 years since I joined
-Google and
-throughout this time I have been in the Storage SRE family: first with GFS,
-then with Colossus, and last with Persistent Disk.  Even though this counts as
-3 different teams, the reality is that I have been doing mostly the same type
-of work all around.
-
-I had pondered the idea of switching to a pure Software Engineer (SWE) role for
-all these years and never taken any action.  Until now.  Things change, and the
-time has come for me to make a move and pursue that thought in an effort to
-grow in a different direction.  And why now, you ask?  Well, simply because I
-have found a role in the NYC office for a project that I am personally
-passionate about.
-
-
-
-The new team
-
-So, without further ado, today is my first day in the Blaze development
-team.  The specific details of what I’ll be doing is something I cannot share
-here, if only because they are still blurry to me!
-
-What I can say, though, is that Blaze was released as open source in March of
-2015 under the Bazel project.  Around that time, I wrote an
-article titled On Bazel and Open
-Source which
-introduced Bazel and then went on to describe some of the shortcomings that
-would prevent wide adoption in the open source world if those issues went
-infixed
-
-That article was seen as unnecessarily negative by some. So, as I like to think
-about it: the time has come for me to put my efforts where my mouth and
-interests are.  I don’t know if I’ll have the time to address the issues I
-described in that article about Bazel, but I surely hope to have a chance to
-contribute to the open source project.
-
-Writing Java
-
-As you may know, Blaze/Bazel are Java.  Some of my peers have made fun of this
-fact, but you know what?  Modern Java is quite nice and enjoyable to write with
-a proper IDE, so I’m looking forward to that.
-
-I have recently come to this conclusion while working on the Nudgy Timer
-Android app I announced a month
-ago.  I had not coded in Java for 7 years and I started doing so again for this
-app, resulting in a pretty nice experience.  (Not because Android Studio, which
-I’d rant about… but because of Java itself and IntelliJ’s coding aids.)
-
-Looking back
-
-I don’t leave my previous SRE position without realizing that I have learned a
-damn lot over these 6 years in this role.  You know, when I joined Google I
-wondered why I ended up in SRE because my expertise “didn’t line up well” (ha,
-ha, now I know it did in fact).  I have also had friends routinely ask if I got
-a lot of training at Google, to which my answer always was “no, not really”.
-But the truth is that the training has happened and now I know much more about
-running a production system than I ever thought I would.
-
-And because of this, I want this same stealthy process to improve my software
-development skills.  It’s true that I have been working as a software engineer
-in a multitude of distributed open source project like NetBSD, but being an
-enthusiast is one thing and developing professionally for a project whose
-developers sit in the same cube as oneself is a very different one—and I
-have never done the latter yet.
-
-Exciting times lie ahead.
-
-            &lt;a href=&quot;http://julio.meroh.net/2016/01/joining-blaze-team.html&quot;&gt;[Continue reading]&lt;/a&gt;
-          </description>
-        
-          <description>&lt;p&gt;It has been &lt;a href=&quot;https://medium.com/@jmmv/six-years-at-google-8b06563fab08&quot;&gt;over 6 years since I joined
-Google&lt;/a&gt; and
-throughout this time I have been in the Storage SRE family: first with GFS,
-then with Colossus, and last with Persistent Disk.  Even though this counts as
-3 different teams, the reality is that I have been doing mostly the same type
-of work all around.&lt;/p&gt;
-
-&lt;p&gt;I had pondered the idea of switching to a pure Software Engineer (SWE) role for
-all these years and never taken any action.  Until now.  Things change, and the
-time has come for me to make a move and pursue that thought in an effort to
-grow in a different direction.  And why now, you ask?  Well, simply because I
-have found a role in the NYC office for a project that I am personally
-passionate about.&lt;/p&gt;
-
-&lt;!--end-of-excerpt--&gt;
-
-&lt;h1 id=&quot;the-new-team&quot;&gt;The new team&lt;/h1&gt;
-
-&lt;p&gt;So, without further ado, &lt;strong&gt;today is my first day in the Blaze development
-team&lt;/strong&gt;.  The specific details of what I’ll be doing is something I cannot share
-here, if only because they are still blurry to me!&lt;/p&gt;
-
-&lt;p&gt;What I can say, though, is that Blaze was released as open source in March of
-2015 under the &lt;a href=&quot;http://bazel.io/&quot;&gt;Bazel&lt;/a&gt; project.  Around that time, I wrote an
-article titled &lt;a href=&quot;/2015/04/on-bazel-and-open-source.html&quot;&gt;On Bazel and Open
-Source&lt;/a&gt; which
-introduced Bazel and then went on to describe some of the shortcomings that
-would prevent wide adoption in the open source world if those issues went
-infixed&lt;/p&gt;
-
-&lt;p&gt;That article was seen as unnecessarily negative by some. So, as I like to think
-about it: the time has come for me to put my efforts where my mouth and
-interests are.  I don’t know if I’ll have the time to address the issues I
-described in that article about Bazel, but I surely hope to have a chance to
-contribute to the open source project.&lt;/p&gt;
-
-&lt;h1 id=&quot;writing-java&quot;&gt;Writing Java&lt;/h1&gt;
-
-&lt;p&gt;As you may know, Blaze/Bazel are Java.  Some of my peers have made fun of this
-fact, but you know what?  Modern Java is quite nice and enjoyable to write with
-a proper IDE, so I’m looking forward to that.&lt;/p&gt;
-
-&lt;p&gt;I have recently come to this conclusion while working on the &lt;a href=&quot;/2015/12/introducing-nudgytimer.html&quot;&gt;Nudgy Timer
-Android app&lt;/a&gt; I announced a month
-ago.  I had not coded in Java for 7 years and I started doing so again for this
-app, resulting in a pretty nice experience.  (Not because Android Studio, which
-I’d rant about… but because of Java itself and IntelliJ’s coding aids.)&lt;/p&gt;
-
-&lt;h1 id=&quot;looking-back&quot;&gt;Looking back&lt;/h1&gt;
-
-&lt;p&gt;I don’t leave my previous SRE position without realizing that I have learned a
-damn lot over these 6 years in this role.  You know, when I joined Google I
-wondered why I ended up in SRE because my expertise “didn’t line up well” (ha,
-ha, now I know it did in fact).  I have also had friends routinely ask if I got
-a lot of training at Google, to which my answer always was “no, not really”.
-But the truth is that the training has happened and now I know much more about
-running a production system than I ever thought I would.&lt;/p&gt;
-
-&lt;p&gt;And because of this, I want this same stealthy process to improve my software
-development skills.  It’s true that I have been working as a software engineer
-in a multitude of distributed open source project like NetBSD, but being an
-enthusiast is one thing and developing professionally for a project whose
-developers sit in the same cube as oneself is a very different one—and I
-have never done the latter yet.&lt;/p&gt;
-
-&lt;p&gt;Exciting times lie ahead.&lt;/p&gt;
-</description>
-        
-        <pubDate>Tue, 19 Jan 2016 13:30:00 +0000</pubDate>
-        <link>http://julio.meroh.net/2016/01/joining-blaze-team.html</link>
-        <guid isPermaLink="true">http://julio.meroh.net/2016/01/joining-blaze-team.html</guid>
-        
-        
-        <category>google</category>
-        
-        <category>work</category>
         
       </item>
     

@@ -10,13 +10,12 @@
       content must come *after* these tags -->
 
 <meta name="description"
-      content="This is Julio Merino's homepage.  This site is primarily my personal blog and, secondarily, a gateway to my presence in the web.
-">
+      content="This is a tutorial to guide you through the shiny new pkg_comp 2.0 on macOS using the macOS-specific self-installer.Goals: to use pkg_comp 2.0 to build a bin...">
 <meta name="author" content="Julio Merino">
 
-<meta content="http://julio.meroh.net/blog/2015/09/20/your-english-is-pretty-good-they-said" property="og:url">
+<meta content="http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-macos.html" property="og:url">
 
-<link rel="canonical" href="http://julio.meroh.net/blog/2015/09/20/your-english-is-pretty-good-they-said">
+<link rel="canonical" href="http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-macos.html">
 <link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
 
 <link rel="stylesheet" href="/css/main.css">
@@ -27,9 +26,8 @@
   <script src="/js/respond-1.4.2.min.js"></script>
 <![endif]-->
 
-    <title>Page moved - Julio Merino</title>
-    <meta http-equiv="refresh"
-          content="10;url=/2015/09/your-english-is-pretty-good-they-said.html">
+    <title>Easy pkgsrc on macOS with pkg_comp 2.0 - Julio Merino</title>
+    <meta content="Easy pkgsrc on macOS with pkg_comp 2.0 - Julio Merino" property="og:title">
   </head>
 
   <body>
@@ -1134,17 +1132,245 @@
 
     <div class="page-header">
       <div class="container">
-        <h1>Oops! The page has moved!</h1>
+        <h1>Easy pkgsrc on macOS with pkg_comp 2.0</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+February
+
+23rd,
+  
+2017
+at
+22:36 UTC
+        
+        </p>
+
+        
       </div>
     </div>
 
     <div class="container">
       <article>
-        <p>I'm sorry, but the page you are looking for has moved to
-        <a href="http://julio.meroh.net/2015/09/your-english-is-pretty-good-they-said.html">http://julio.meroh.net/2015/09/your-english-is-pretty-good-they-said.html</a>.
-        You will be taken there in a few seconds... or you can click the link
-        to go there right now.</p>
+        <p>This is a tutorial to guide you through the <a href="/2017/02/introducing-pkg_comp-2.0.html">shiny new pkg_comp 2.0</a> on macOS <a href="https://github.com/jmmv/pkg_comp/blob/master/INSTALL.md#using-the-macos-installer">using the macOS-specific self-installer</a>.</p>
+
+<p><strong>Goals:</strong> to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your macOS system up-to-date and secure.</p>
+
+<!--end-of-excerpt-->
+
+<p>This tutorial is specifically targeted at macOS and relies on the macOS-specific self-installer package.  For a more generic tutorial that uses the <code class="highlighter-rouge">pkg_comp-cron</code> package in pkgsrc, see <a href="/2017/02/pkg_comp-2.0-tutorial-netbsd.html">Keeping NetBSD up-to-date with pkg_comp 2.0</a>.</p>
+
+<h1 id="getting-started">Getting started</h1>
+
+<p>First download and install the standalone macOS installer package.  To find the right file, navigate to the <a href="https://github.com/jmmv/pkg_comp/releases">releases page on GitHub</a>, pick the most recent release, and download the file with a name of the form <code class="highlighter-rouge">pkg_comp-&lt;version&gt;-macos.pkg</code>.</p>
+
+<p>Then double-click on the file you downloaded and follow the installation instructions.  You will be asked for your administrator password because the installer has to place files under <code class="highlighter-rouge">/usr/local/</code>; note that pkg_comp requires root privileges anyway to run (because it uses <code class="highlighter-rouge">chroot(8)</code> internally), so you will have to grant permission at some point or another.</p>
+
+<p>The installer modifies the default <code class="highlighter-rouge">PATH</code> (by creating <code class="highlighter-rouge">/etc/paths.d/pkg_comp</code>) to include pkg_comp’s own installation directory and pkgsrc’s installation prefix.  Restart your shell sessions to make this change effective, or update your own shell startup scripts accordingly if you don’t use the standard ones.</p>
+
+<p>Lastly, make sure to have Xcode installed in the standard <code class="highlighter-rouge">/Applications/Xcode.app</code> location and that all components required to build command-line apps are available.  Tip: try running <code class="highlighter-rouge">cc</code> from the command line and seeing if it prints its usage message.</p>
+
+<h1 id="adjusting-the-configuration">Adjusting the configuration</h1>
+
+<p>The macOS flavor of pkg_comp is configured with an installation prefix of <code class="highlighter-rouge">/usr/local/</code>, which means that the executable is located in <code class="highlighter-rouge">/usr/local/sbin/pkg_comp</code> and the configuration files are in <code class="highlighter-rouge">/usr/local/etc/pkg_comp/</code>.  This is intentional to keep the pkg_comp installation separate from your pkgsrc installation so that it can run no matter what state your pkgsrc installation is in.</p>
+
+<p>The configuration files are as follows:</p>
+
+<ul>
+  <li>
+    <p><code class="highlighter-rouge">/usr/local/etc/pkg_comp/default.conf</code>: This is pkg_comp’s own configuration file and the defaults configured by the installer should be good to go for macOS.</p>
+
+    <p>In particular, packages are configured to go into <code class="highlighter-rouge">/opt/pkg/</code> instead of the traditional <code class="highlighter-rouge">/usr/pkg/</code>.  This is a necessity because the latter is not writable starting with OS X El Capitan thanks to System Integrity Protection (SIP).</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">/usr/local/etc/pkg_comp/sandbox.conf</code>: This is the configuration file for sandboxctl, which is the support tool that pkg_comp uses to manage the compilation sandbox.  The default settings configured by the installer should be good.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">/usr/local/etc/pkg_comp/extra.mk.conf</code>: This is pkgsrc’s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you’d like to set.  You should <em>not</em> configure the layout of the installed files (e.g. <code class="highlighter-rouge">LOCALBASE</code>) because that’s handled internally by pkg_comp as specified in <code class="highlighter-rouge">default.conf</code>.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">/usr/local/etc/pkg_comp/list.txt</code>: This determines the set of packages you want to build automatically (either via the <code class="highlighter-rouge">auto</code> command or your periodic cron job).  The automated builds will fail unless you list at least one package.</p>
+
+    <p>Make sure to list <code class="highlighter-rouge">pkgin</code> here to install a better binary package management tool.  You’ll find this very handy to keep your installation up-to-date.</p>
+  </li>
+</ul>
+
+<p>Note that these configuration files use the <code class="highlighter-rouge">/var/pkg_comp/</code> directory as the dumping ground for: the pkgsrc tree, the downloaded distribution files, and the built binary packages.  We will see references to this location later on.</p>
+
+<h2 id="the-cron-job">The cron job</h2>
+
+<p>The installer configures a cron job that runs as root to invoke pkg_comp daily.  The goal of this cron job is to keep your local packages repository up-to-date so that you can do binary upgrades at any time.  You can edit the cron job configuration interactively by running <code class="highlighter-rouge">sudo crontab -e</code>.</p>
+
+<p>This cron job won’t have an effect until you have populated the <code class="highlighter-rouge">list.txt</code> file as described above, so it’s safe to let it enabled until you have configured pkg_comp.</p>
+
+<p>If you want to disable the periodic builds, just remove the pkg_comp entry from the crontab.</p>
+
+<p>On slow machines, or if you are building a lot of packages, you may want to consider decreasing the build frequency from <code class="highlighter-rouge">@daily</code> to <code class="highlighter-rouge">@weekly</code>.</p>
+
+<h2 id="sample-configuration">Sample configuration</h2>
+
+<p>Here is what the configuration looks like on my Mac Mini as dumped by the <code class="highlighter-rouge">config</code> subcommand.  Use this output to get an idea of what to expect.  I’ll be using the values shown here in the rest of the tutorial:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ pkg_comp config
+AUTO_PACKAGES = autoconf automake bash colordiff dash emacs24-nox11 emacs25-nox11 fuse-bindfs fuse-sshfs fuse-unionfs gdb git-base git-docs glib2 gmake gnuls libtool-base lua52 mercurial mozilla-rootcerts mysql56-server pdksh pkg_developer pkgconf pkgin ruby-jekyll ruby-jekyll-archives ruby-jekyll-paginate scmcvs smartmontools sqlite3 tmux vim
+CVS_ROOT = :ext:anoncvs@anoncvs.NetBSD.org:/cvsroot
+CVS_TAG is undefined
+DISTDIR = /var/pkg_comp/distfiles
+EXTRA_MKCONF = /usr/local/etc/pkg_comp/extra.mk.conf
+FETCH_VCS = git
+GIT_BRANCH = trunk
+GIT_URL = https://github.com/jsonn/pkgsrc.git
+LOCALBASE = /opt/pkg
+NJOBS = 4
+PACKAGES = /var/pkg_comp/packages
+PBULK_PACKAGES = /var/pkg_comp/pbulk-packages
+PKG_DBDIR = /opt/pkg/libdata/pkgdb
+PKGSRCDIR = /var/pkg_comp/pkgsrc
+SANDBOX_CONFFILE = /usr/local/etc/pkg_comp/sandbox.conf
+SYSCONFDIR = /opt/pkg/etc
+UPDATE_SOURCES = true
+VARBASE = /opt/pkg/var
+
+DARWIN_NATIVE_WITH_XCODE = true
+SANDBOX_ROOT = /var/pkg_comp/sandbox
+SANDBOX_TYPE = darwin-native
+</code></pre>
+</div>
+
+<h1 id="building-your-own-packages-by-hand">Building your own packages by hand</h1>
+
+<p>Now that you are fully installed and configured, you’ll build some stuff by hand to ensure the setup works before the cron job comes in.</p>
+
+<p>The simplest usage form, which involves full automation and assumes you have listed at least one package in <code class="highlighter-rouge">list.txt</code>, is something like this:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ sudo pkg_comp auto
+</code></pre>
+</div>
+
+<p>This trivially-looking command will:</p>
+
+<ol>
+  <li>clone or update your copy of pkgsrc;</li>
+  <li>create the sandbox;</li>
+  <li>bootstrap pkgsrc and pbulk;</li>
+  <li>use pbulk to build the given packages; and</li>
+  <li>destroy the sandbox.</li>
+</ol>
+
+<p>After a successful invocation, you’ll be left with a collection of packages in the <code class="highlighter-rouge">/var/pkg_comp/packages/</code> directory.</p>
+
+<p>If you’d like to restrict the set of packages to build during a manually-triggered build, provide those as arguments to <code class="highlighter-rouge">auto</code>.  This will override the contents of <code class="highlighter-rouge">AUTO_PACKAGES</code> (which was derived from your <code class="highlighter-rouge">list.txt</code> file).</p>
+
+<p>But what if you wanted to invoke all stages separately, bypassing <code class="highlighter-rouge">auto</code>?  The command above would be equivalent to:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ sudo pkg_comp fetch
+$ sudo pkg_comp sandbox-create
+$ sudo pkg_comp bootstrap
+$ sudo pkg_comp build &lt;package names here&gt;
+$ sudo pkg_comp sandbox-destroy
+</code></pre>
+</div>
+
+<p>Go ahead and play with these.  You can also use the <code class="highlighter-rouge">sandbox-shell</code> command to interactively enter the sandbox.  See <code class="highlighter-rouge">pkg_comp(8)</code> for more details.</p>
+
+<p>Lastly note that the root user will receive email messages if the periodic pkg_comp cron job fails, but only if it fails.  That said, you can find the full logs for all builds, successful or not, under <code class="highlighter-rouge">/var/pkg_comp/log/</code>.</p>
+
+<h1 id="installing-the-resulting-packages">Installing the resulting packages</h1>
+
+<p>Now that you have built your first set of packages, you will want to install them.  This is easy on macOS because you did <em>not</em> use pkgsrc itself to install pkg_comp.</p>
+
+<p>First, unpack the pkgsrc installation.  <strong>You only have to do this once:</strong></p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ cd /
+$ sudo tar xzvpf /var/pkg_comp/packages/bootstrap.tgz
+</code></pre>
+</div>
+
+<p>That’s it.  You can now install any packages you like:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ PKG_PATH=file:///var/pkg_comp/packages/All sudo pkg_add pkgin &lt;other package names&gt;
+</code></pre>
+</div>
+
+<p>The command above assume you have restarted your shell to pick up the correct path to the pkgsrc installation.  If the call to <code class="highlighter-rouge">pkg_add</code> fails because of a missing binary, try restarting your shell or explicitly running the binary as <code class="highlighter-rouge">/opt/pkg/sbin/pkg_add</code>.</p>
+
+<h1 id="keeping-your-system-up-to-date">Keeping your system up-to-date</h1>
+
+<p>Thanks to the cron job that builds your packages, your local repository under <code class="highlighter-rouge">/var/pkg_comp/packages/</code> will always be up-to-date; you can use that to quickly upgrade your system with minimal downtime.</p>
+
+<p>Assuming you are going to use <code class="highlighter-rouge">pkgtools/pkgin</code> as recommended above (and why not?), configure your local repository:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ sudo /bin/sh -c "echo file:///var/pkg_comp/packages/All &gt;&gt;/opt/pkg/etc/pkgin/repositories.conf"
+</code></pre>
+</div>
+
+<p>And, from now on, all it takes to upgrade your system is:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ sudo pkgin update
+$ sudo pkgin upgrade
+</code></pre>
+</div>
+
+<p>Enjoy!</p>
+
       </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2017/02/pkg_comp-2.0-tutorial-macos.html";
+            this.page.identifier = "/2017/02/pkg_comp-2.0-tutorial-macos";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+      
     </div>
 
     <div class="container">
