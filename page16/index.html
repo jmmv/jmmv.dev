@@ -1111,6 +1111,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1253,6 +1257,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2012/08/testing-netbsds-sharemk.html">Testing NetBSD's share/mk</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+August
+
+27th,
+  
+2012
+at
+02:18 UTC
+        &middot;
+        <a href="/2012/08/testing-netbsds-sharemk.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2012/08/testing-netbsds-sharemk.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        For a long time, a pet peeve of mine has been the lack of tests for the build infrastructure files of NetBSD: i.e. those bsd.*.mk files that live under /usr/share/mk/ and on which the whole source tree depends.One could argue that writing tests for these files is not strictly necessary because the successful build of NetBSD is the real final test of whether the files work or not. That's partly true, but unfortunately is not the whole story:Other projects depend on these build files and thus rely on their behavior. This can either be by just relying on NetBSD having these files installed, or by using the separate mk-files package (available e.g. in Fedora). The functionality of the build infrastructure should not regress, or it would break these third-party projects. (Think about these files as having a public API outside of NetBSD.)Even if the build of NetBSD is the real test of the functionality of the build infrastructure, the build infrastructure supports dozens of options and tweaks to change its behavior. One would need to rebuild NetBSD tens, if not hundreds of times, each with a different combination of build options, to ensure the files work.Lastly, when a new functionality is added to the build infrastructure, it is because some component of the source tree needs such functionality. It may latter happen that this component disappears or stops needing such functionality. The functionality becomes unused by the source tree, and thus can regress unexpectedly (breaking third-party packages or introducing bugs, as mentioned earlier).With this in mind, it's clear that we should have some tests for the share/mk files. Unfortunately, that's easier said than done:&nbsp;the files in share/mk are extremely complex and expose hundreds, if not thousands, of different behaviors each with its own subtleties. Adding tests for these is hard. The fact that this code that was never designed to be unit-tested doesn't help either.Regardless, I have just&nbsp;submitted some "placeholder" tests&nbsp;to the tree. The major point of these new test programs is&nbsp;to lower the barrier of entry to writing tests for share/mk and, therefore, maybe get other people to write some tests. To predicate with the example, I have populated these skeleton test programs with a couple of test cases each, although as you will see they are very trivial tests.And, to conclude, why have I done this now? Well: I'm working on integrating Kyua into the source tree and, to make this happen, I need to do a couple of changes to the build infrastructure files. The changes are tricky, so I want to write tests to have some assurance that my modifications work and that, specially, they do not regress over time. Having the placeholder test programs in place makes this much easier, and the real functionality changes easier to review.
+
+        <a href="/2012/08/testing-netbsds-sharemk.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1422,34 +1454,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2012/05/type-safe-dynamic-tree-data-type.html">Type-safe, dynamic tree data type</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-May
-
-29th,
-  
-2012
-at
-23:06 UTC
-        &middot;
-        <a href="/2012/05/type-safe-dynamic-tree-data-type.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2012/05/type-safe-dynamic-tree-data-type.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        The core component of the new configuration library in Kyua is the utils::config::tree class: a type-safe, dynamic tree data type.  This class provides a mapping of string keys to arbitrary types: all the nodes of the tree have a textual name, and they can either be inner nodes (no value attached to them), or leaf nodes (an arbitrary type attached as a value to them). The keys represent traversals through such tree, and do this by separating the node names with dots (things of the form root.inner1.innerN.leaf).The tree class is the in-memory representation of a configuration file, and is the data structure passed around methods and algorithms to tune their behavior. It replaces the previous config static structure.The following highlights describe the tree class:Keys are (and thus the tree layout is) pre-registered. One side-effect of moving away from a static C++ structure as the representation of the configuration to a dynamic structure such as a tree is that the compiler cannot longer validate the name of the configuration settings when they are queried.  In the past, doing something like config.architecture would only compile if architecture was a valid structure defined... but now, code like config["architecture"] cannot be validated during the build.In order to overcome this limitation, trees must have their keys pre-defined.  Pre-defining the keys declares their type within the tree. &nbsp;Accesses to unknown keys results in an error right away, and accesses to pre-defined keys must always happen with their pre-recorded types.Note that pre-defined nodes can, or cannot, hold a value. The concept of "being set" is different than "being defined".Some nodes can be dynamic. Sometimes we do not know what particular keys are valid within a context. For example, the test_suites subtree of the configuration can contain arbitrary test suite names and properties within it, and there is no way for Kyua (at the moment) to know what keys are valid or not.As a result, the tree class allows defining a particular node as "dynamic", at which point accesses to any undefined keys below that node result in the creation of the node.Type safety. Every node has a type attached to it. The base configuration library provides common types such as bool_node, int_node and string_node, but the consumer can define its own node types to hold any other kind of data type.  (It'd be possible, for example, to define a map_node to hold a full map as a tree leaf.)The "tricky" (and cool) part of type safety in this context is to avoid exposing type casts to the caller: the caller always knows what type corresponds to every key (because, remember, the caller had to predefine them!), so it knows what type to expect from every node. The tree class achieves this by using template methods, which just query the generic internal nodes and cast them out (after validation) to the requested type.Plain string representations. The end user has to be able to provide overrides to configuration properties through the command line... and the command line is untyped: everything is a string.  The tree library, therefore, needs a mechanism to internalize strings (after validation) and convert them to the particular node types.  Similarly, it is interesting to have a way to export the contents of a tree to strings so that they can be shown to the user.With that said, let's see a couple of examples.  First, a simple one. Let's create a tree with a couple of fictitious nodes (one a string, one an integer), set some values and then query such values:config::tree tree;// Predefine the valid keys.tree.define&lt; config::string_node &gt;("kyua.architecture");tree.define&lt; config::int_node &gt;("kyua.timeout");// Populate the tree with some sample values.tree.set&lt; config::string_node &gt;("kyua.architecture", "powerpc");tree.set&lt; config::int_node &gt;("kyua.timeout", 300);// Query the sample values.const std::string architecture =    tree.lookup&lt; config::string_node &gt;("kyua.architecture");const int timeout =    tree.lookup&lt; config::int_node &gt;("kyua.timeout");Yep, that's it.  Note how the code just knows about keys and their types, but does not have to mess around with type casts nor tree nodes. And, if there is any typo in the property names or if there is a type mismatch between the property and its requested node type, the code will fail early. This, coupled with extensive unit tests, ensures that configuration keys are always queried consistently.Note that we'd also have set the keys above as follows:tree.set_string("kyua.architecture", "powerpc");tree.set_string("kyua.timeout", "300");... which would result in the validation of "300" as a proper integer, conversion of it to a native integer, and storing the resulting number as the integer node it corresponds to.  This is useful, again, when reading configuration overrides from the command line as types are not known in that context yet we want to store their values in the same data structure as the values read from the configuration file.Let's now see another very simple example showcasing dynamic nodes (which is a real-life example from the current Kyua configuration file):config::tree tree;// Predefine a subtree as dynamic.tree.define_dynamic("test_suites");// Populate the subtree with fictitious values.tree.set&lt; config::string_node &gt;("test_suites.NetBSD.ffs", "ext2fs");tree.set&lt; config::int_node &gt;("test_suites.NetBSD.iterations", 5);// And the querying would happen exactly as above with lookup().Indeed, it'd be very cool if this tree type followed more standard STL conventions (iterators, for example).  But I didn't really think about this when I started writing this class and, to be honest, I don't need this functionality.Now, if you paid close attention to the above, you can start smelling the relation of this structure to the syntax of configuration files. I'll tell you how this ties together with Lua in a later post. (Which may also explain why I chose this particular representation.)
-
-        <a href="/2012/05/type-safe-dynamic-tree-data-type.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1522,10 +1526,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (3)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
     </ul>

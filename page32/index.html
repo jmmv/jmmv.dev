@@ -1111,6 +1111,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1253,6 +1257,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2010/01/installing-netbsdmacppc-on-mac-mini-g4.html">Installing NetBSD/macppc on a Mac Mini G4</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+11th,
+  
+2010
+at
+23:22 UTC
+        &middot;
+        <a href="/2010/01/installing-netbsdmacppc-on-mac-mini-g4.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2010/01/installing-netbsdmacppc-on-mac-mini-g4.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Yesterday, I spent a while installing NetBSD/macppc 5.0.1 on a Mac Mini G4.  The process wasn't easy, as it involved the following steps. I'm omitting many details, as they are "common knowledge" to Mac users (or otherwise can be easily found on the net):After booting the installer from the CD image, drop into the shell.Use pdisk to create an Apple_HFS partition for the boot loader and two Apple_UNIX_SVR2 partitions, one for the root file system and another for swap.Run sysinst and install the system. When asked to repartition the disk, just say Use existing partition sizes.Once the system is installed, drop again into the shell before rebooting.Mount your hard disk into /mnt and chroot into it.Fetch a copy of pkgsrc.Install the sysutils/hfsutils package.Use hformat to create a new HFS file system in the Apple_HFS partition we created.Mount the installation CD.Copy, using hcopy, the ofwboot.xcf file from the CD to the boot partition.Reboot.Drop into the OpenFirmware setup (Command+Option+P+R).Set boot-device to hd:,ofwboot.xcf.Set boot-file to netbsd.And here is the tricky thing to get the machine to auto-boot: Set boot-command to ." hello" cr " screen" output boot, not mac-boot.I found the last command somewhere on the Internet (dunno where now), but, supposedly, a regular mac-boot should have worked. In fact, it works if you call this command from the prompt, but not during automatic boot. (It turns out to be a problem with the version of OpenFirmware I have.)Just writing down the steps in case I need them later on. Installing Debian stable was much, much easier, but the installer for testing crashes every day with a different error, so I gave up.(Oh, by the way, I did the same installation into an old PowerMac G3 and that was really painful. The machine refused to boot from any of the CDs I tried and the prebuilt kernels hang during initialization due to a bogus driver. In the end: netbooting and using custom kernels.)
+
+        <a href="/2010/01/installing-netbsdmacppc-on-mac-mini-g4.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1422,34 +1454,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2009/07/mess-of-atfs-code.html">The mess of ATF's code</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-July
-
-14th,
-  
-2009
-at
-00:37 UTC
-        &middot;
-        <a href="/2009/07/mess-of-atfs-code.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2009/07/mess-of-atfs-code.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Yes. ATF's code is a "bit" messy, to put it bluntly. I'm quite happy with some of the newest bits but there are some huge parts in it that stink. The main reason for this is that the "ugly" parts were the ones that were written first, and they were basically a prototype; we didn't know all the requirements for the code at that point... and we still don't know them, but we know we can do much better. Even though I'm writing in plural... I'm afraid we = I at the moment :-PSo, is it time for the big-rewrite-from-scratch? NO! Joel Spolsky wrote about why this is a bad idea and I have to agree with him. Yeah, I'm basically the only developer of the code so everything is in my head, and I'd do a rewrite with a fresh mind, but... I'd lose tons of work and, specially, I'd lose tons of code that deals with tricky corner-cases that are hard to remember.Sure, I want to clean things up but they'll happen incrementally. And preferably concurrently with feature additions. These two things could definitely happen at the same time if only I had infinite spare time...Anyway, the major point of this post is to describe what I don't like about the current code base and how I'd like to see it changing:A completely revamped C++ API for test cases. The current one sucks. It is not consistent with the C API. It lacks important functionality. It uses exceptions for test-case status reporting (yuck!). And it's ugly.Clear separation of "internal/helper" APIs from the test APIs. You'll agree that the "fs" module, which provides path abstraction and other file system management routines, is something that cannot be part of ATF's API. ATF is about testing. Period. Either that fs module should be in a separate library or should be completely hidden from the public. Otherwise, it'll suffer from abuse and, what scares me, will have to become part of ATF's API. And likewise, most &mdash; really &mdash; most of the modules in the current code are internal.Less dependencies from the C++ API to the C API. Most of the current C++ modules are wrappers of their corresponding C counterparts. This is nice for code reuse but makes the code extremely fragile. In C++, things like RAII can provide really robust code with minimum effort, but intermixing such C++ code with C makes things ugly really quickly. I'd like to find a way to keep the two libraries separate from each other (and thus keep the C++ binding "pure"), but at the same time I don't want to duplicate code... an interesting problem.Split the tarball into smaller pieces. People writing test cases for C applications don't want to pull in a huge package that depends on C++ and whatnot. And ATF is huge. It takes forever to compile. And this is a serious issue for broad adoption. Note: whether the tools are written in C++ or not is a separate issue, because these are not a dependency for anything!The shell binding is slow. Really slow compared to the other ones. Optimizations would be nice, but those do not address the root of the problem: it's costly to query information from shell-based tests at run time. I.e. it takes a long time to get the full list of test cases available in a test suite because you have to run every single test program with the -l flag. Keeping a separate file with test-case metadata alongside the binary could resolve this and allow more flexibility at run time.And some other things.Those are the major things I'd like to see addressed soon, but they involve tons of work. Of course, I'd like to be able to work on some features expected by other developers: easier debugging, DOCUMENTATION!...So, helpers welcome :-)
-
-        <a href="/2009/07/mess-of-atfs-code.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1522,10 +1526,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (3)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
     </ul>

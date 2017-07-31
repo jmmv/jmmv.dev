@@ -1111,6 +1111,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1253,6 +1257,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2007/04/fixing-exif-date-information.html">Fixing EXIF date information</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+April
+
+7th,
+  
+2007
+at
+16:21 UTC
+        &middot;
+        <a href="/2007/04/fixing-exif-date-information.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2007/04/fixing-exif-date-information.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Back in February, some friends and I spent a week visiting Punta Cana.  We made a lot of photos there but, when we came back, we realized that most of us (not all!) forgot to adjust our camera's date to the foreign timezone, which was 5 hours behind of ours.I imported all our photos in iPhoto but the difference in their timestamps made all images appear unsorted in the main view; this was very annoying.  So I wondered if the EXIF information embedded in them could be easily fixed.  It turns out it is possible, but the tools to do so — or at least the one I used — leave a lot to be desired: it was not exactly trivial to resolve the problem.In order to modify the EXIF information, I installed the free libexif library alongside a very simple frontend to it named exif, distributed from the same page.  To painlessly get this in Mac OS X, just use the graphics/exif package in pkgsrc.Then I had to see which fields I wanted to modify in each photo.  This can be accomplished with the exif --tag &lt;photo-name.jpg&gt; command, which shows all tags currently attached to the photo and their corresponding values.  Skimming through the resulting list, it is easy to spot which fields correspond to date information.  I specifically picked up 0x0132, 0x9003 and 0x9004, but some of them may not exist in your images.With this information at hand, I wrote a little script that looped over all affected photos and, for each tag, adjusted it to the new value.  It goes as follows:#!/bin/shwhile [ $# -gt 0 ]; do    file=$1; shift    for tag in 0x0132 0x9003 0x9004; do        date=$(exif --tag=${tag} $file | grep Value |                cut -d ' ' -f 4-)        date=$(perl adjust.pl "${date}")        exif --tag=${tag} --ifd=0 --set-value="${date}" ${file}        mv ${file}.modified.jpeg ${file}    donedoneThe magic to subtract five hours to each date is hidden in the adjust.pl script, which looks like this:($date, $time) = split / /, $ARGV[0];($year, $month, $day) = split /:/, $date;($hour, $min, $sec) = split /:/, $time;$amount = 5;if ($hour >= $amount) {    $hour -= $amount;} else {    $hour = $hour - $amount + 24;    if ($day == 1) {        $day = 31;        $month -= 1;    } else {        $day -= 1;    }}printf "%04d:%02d:%02d %02d:%02d:%02dn",        $year, $month, $day, $hour, $min, $sec;I know the code is really crappy but it did the job just fine!
+
+        <a href="/2007/04/fixing-exif-date-information.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1422,34 +1454,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2007/03/building-libspe2-on-ps3.html">Building the libspe2 on the PS3</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-March
-
-14th,
-  
-2007
-at
-15:33 UTC
-        &middot;
-        <a href="/2007/03/building-libspe2-on-ps3.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2007/03/building-libspe2-on-ps3.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        The Linux kernel, when built for a Cell-based platform, provides the spufs pseudo-file system that allows userland applications to interact with the Synergistic Processing Engines (SPEs).  However, this interface is too low-level to be useful for application-level programs and hence another level of abstraction is provided over it through the libspe library.There are two versions of the libspe:1.x: Distributed as part of the Cell SDK 2.0, is the most widely used nowadays by applications designed to run on the Cell architecture.2.x: A rewrite of the library that provides a better and cleaner interface — e.g. less black boxes —, but which is currently distributed for evaluation and testing purposes. Further development will happen on this version, so I needed to have it available.The YellowDog Linux 5.0 (YDL5) distribution for the PlayStation 3 only provides an SRPM package for the 1.x version, but there is no support for 2.x.  Fortunately, installing the libspe2 is trivial if you use the appropriate binary packages provided by BSC, but things get interesting if you try to build it from sources.  As I need to inspect its code and do some changes in it, I have to be able to rebuild its code, so I had to go with the latter option.Let's see how to build and install libspe2 from sources on a PS3 running YDL5.The first step is to download the most up-to-date SRPM package for the libspe2, which at the time of this writing was libspe2-2.0.1-1.src.rpm.  Once downloaded, install it on the system:# rpm -i libspe2-2.0.1-1.src.rpmThe above command leaves the original source tarball, any necessary patches and the spec file all properly laid out inside the /usr/src/yellowdog hierarchy.Now, before we can build the libspe2 package, we need to fulfill two requisites.  The first is the installation of quilt (for which no binary package exists in the YDL5 repositories), a required tool in libspe2's build process.  The second is the updating of bash to a newer version, as the one distributed in YDL5 has a quoting bug that prevents quilt from being built properly.The easiest way to solve these problems is to look for the corresponding SRPM packages for quilt and an updated bash.  As YDL5 is based on Fedora Core, a safe bet is to fetch the necessary files from the Fedora Core 6 (FC6) repositories; these were: quilt-0.46-1.fc6.src.rpm and bash-3.1-16.1.src.rpm.   After that, proceed with their installation as shown above for libspe2 (using rpm -i).With all the sources in place, it is time to build and install them in the right order.  Luckily the FC6 SRPMs we need work fine in YDL5, but this might not be true for other packages.  Here is what to do:# cd /usr/src/yellowdog/SRPMS# rpmbuild -ba --target=ppc bash.spec# rpm -U ../RPMS/ppc/bash-3.1-16.1.ppc.rpm# rpmbuild -ba --target=ppc quilt.spec# rpm -i ../RPMS/ppc/quilt-0.46-1.ppc.rpm# rpmbuild -ba libspe2.spec# rpm -i ../RPMS/ppc64/libspe2-2.0.1-1.ppc64.rpm# rpm -i ../RPMS/ppc64/libspe2-devel-2.0.1-1.ppc64.rpmAnd that's it!  libspe2 is now installed and ready to be used.  Of course, with the build requisites in place, you compile libspe2 in your home directory for testing purposes by using the tar.gz package instead of the SRPM.At last, complete the installation by adding the elfspe2-2.0.1-1.ppc.rpm package to the mix.
-
-        <a href="/2007/03/building-libspe2-on-ps3.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1522,10 +1526,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (3)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
     </ul>

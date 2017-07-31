@@ -1111,6 +1111,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1253,6 +1257,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2009/01/silencing-output-of-pythons.html">Silencing the output of Python's subprocess.Popen</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+5th,
+  
+2009
+at
+12:02 UTC
+        &middot;
+        <a href="/2009/01/silencing-output-of-pythons.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2009/01/silencing-output-of-pythons.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        I'm learning Python these days while writing an script to automate the testing of ATF under multiple virtual machines.  I had this code in a shell script, but it is so ugly and clumsy that I don't even dare to add it to the repository.  Hopefully, the new version in Python will be more robust and versatile enough to be published.One of the things I've been impressed by is the subprocess module and, in special, its Popen class.  By using this class, it is trivial to spawn subprocesses and perform some IPC with them.  Unfortunately, Popen does not provide any way to silence the output of the children.  As I see it, it'd be nice if you'd pass an IGNORE flag as the stdout/stderr behavior, much like you can currently set those to PIPE or set stderr to STDOUT.The following trivial module implements this idea.  It extends Popen so that the callers can pass the IGNORE value to the stdout/stderr arguments.  (Yes, it is trivial but it is also one of the first Python code I write so... it may contain obviously non-Pythonic, ugly things.)  The idea is that this exposes the same interface so that it can be used as a drop-in replacement.  OK, OK, it lacks some methods and the constructor does not match the original signature, but this is enough for my current use cases!import subprocessIGNORE = -3STDOUT = subprocess.STDOUTassert IGNORE != STDOUT, "IGNORE constant is invalid"class Popen(subprocess.Popen):    """Extension of subprocess.Popen with built-in support       for silencing the output channels of a child process"""    __null = None    def __init__(self, args, stdout = None, stderr = None):        subprocess.Popen.__init__(self, args = args,            stdout = self._channel(stdout),            stderr = self._channel(stderr))    def __del__(self):        self._close_null()    def wait(self):        r = subprocess.Popen.wait(self)        self._close_null()        return r    def _null_instance(self):        if self.__null == None:            self.__null = open("/dev/null", "w")        return self.__null    def _close_null(self):        if self.__null != None:            self.__null.close()            self.__null = None        assert self.__null == None,             "Inconsistent internal state"    def _channel(self, behavior):        if behavior == IGNORE:            return self._null_instance()        else:            return behaviorBy the way, somebody else suggested this same thing a while ago.  Don't know why it hasn't been implemented in the mainstream subprocess module.
+
+        <a href="/2009/01/silencing-output-of-pythons.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1422,34 +1454,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2008/11/vacationssf-1st-day.html">Vacations@SF: 1st day</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-November
-
-24th,
-  
-2008
-at
-05:05 UTC
-        &middot;
-        <a href="/2008/11/vacationssf-1st-day.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2008/11/vacationssf-1st-day.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        That's it!  I'm in SF after my first "vacations" day. The trip, door to door, has taken around 12 hours; I got up at 4.45am in NYC, took the flight at 8.30am in JFK, arrived to SFO at 12.00pm and got to the hotel at around 2.00pm (all of these local times in their respective places; three-hour difference between eastern and western coasts).  No cabs, which is what enlarged the total time a noticeable amount.The city seems pretty nice so far.  More laid back than Manhattan... but still overpriced.  And I miss some things from NYC such as the 24/7 availability of virtually everything (note, it is Sunday today!).  Even though, I have been only able to explore the surroundings of the hotel today &mdash; that is, Union Square and a bit of SoMA &mdash; so this opinion may change in the following days.  Dunno what I'll do in these other days yet, though.I've taken lots of pictures (103) but most of them are worthless due to poor lighting :(  Anyway, I guess I'll eventually share some of them.Now, almost time to go to sleep.  Jet lag is kicking in.  I don't want to think how bad this will be when I go back to Spain!
-
-        <a href="/2008/11/vacationssf-1st-day.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1522,10 +1526,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (3)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
     </ul>

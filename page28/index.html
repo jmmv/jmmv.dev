@@ -1111,6 +1111,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1253,6 +1257,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2011/01/error-handling-in-lua.html">Error handling in Lua</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+7th,
+  
+2011
+at
+13:01 UTC
+        &middot;
+        <a href="/2011/01/error-handling-in-lua.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2011/01/error-handling-in-lua.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Some of the methods of the Lua C API can raise errors. To get an initial idea on what these are, take a look at the Functions and Types section and pay attention to the third field of a function description (the one denoted by 'x' in the introduction).Dealing with the errors raised by these functions is tricky, not to say a nightmare. Also, the ridiculously-short documentation on this topic does not help. This post is dedicated to explain how these errors may be handled along with the advantages and disadvantages of each case.The Lua C API provides two modes of execution: protected and unprotected. When in protected mode, all errors caused by Lua are caught and reported to the caller in a controlled manner. When in unprotected mode, the errors just abort the execution of the calling process by default. So, one would think: just run the code in protected mode, right? Yeah, well... entering protected mode is nontrivial and it has its own particularities that make interaction with C++ problematic.Let's analyze error reporting by considering a simple example: the lua_gettable function.  The following Lua code would error out when executed:my_array = nilreturn my_array["test"]... which is obvious because indexing a non-table object is a mistake.  Now let's consider how this code would look like in C (modulo the my_array assignment):lua_getglobal(state, "my_array");lua_pushstring(state, "test");lua_gettable(state, -2);Simple, huh? Sure, but as it turns out, any of the API calls (not just lua_gettable) in this code can raise errors (I'll call them unsafe functions). What this means is that, unless you run the code with a lua_pcall wrapper, your program will simply exit in the face of a Lua error. Uh, your scripting language can "crash" your host program out of your control? Not nice.What would be nice is if each of the Lua C API unsafe functions reported an error (as a return value or whatever) and allowed the caller to decide what to do. Ideally, no state would change in the face of an error. Unfortunately, that is not the case but it is exactly what I would like to do. I am writing a C++ wrapper for Lua in the context of Kyua and fine granularity in error reporting means that automatic cleanup of resources managed by RAII is trivial.Let's analyze the options that we have to control errors caused within the Lua C API. I will explain in a later post the one I have chosen for the wrapper in Kyua (it has to be later because I'm not settled yet!).Install a panic handlerWhenever Lua code runs in an unprotected environment, one can use lua_atpanic to install a handler for errors.  The function provided by the user is executed when the error occurs and, if the panic function returns, the program exits.  To prevent exiting prematurely, one could opt for two mechanisms:Make the panic handler raise a C++ exception.  Sounds nice, right?  Well, it does not work.  The Lua library is generally built as a C binary which means that our panic handler will be called from within a C environment.  As a result, we cannot throw an exception from our C++ handler and expect things to work: the exception won't propagate correctly from a C++ context to a C context and then back to C++.  Most likely, the program will abort as soon as we leave the C++ world and enter C to unwind the stack.Use setjmp before the call to the unsafe Lua function and recover with longjmp from within the panic handler.  It turns out that this does work but with one important caveat: the stack is completely cleared before the call to the panic handler.  As a result, this prevents the requirement of "leave the stack unmodified on failure" as is desired of any function (report errors early before changing state).Run every single call in a protected environmentThis is doable but complex and not completely right: to do this, we need to write a C wrapper function for every unsafe API function and run it with lua_pcall. The overhead of this approach is significant: something as simple as a call to lua_gettable turns into several stack manipulation operations, a call to lua_pcall and then further stack modifications to adjust the results.Additionally, in order to prepare the call to lua_pcall, one has to use the multiple lua_push* functions to prepare the stack for the call. And, guess what, most of these functions that push values onto the stack can themselves fail. So... in order to prepare the environment for a safe call, we are already executing unsafe calls. (Granted, the errors in these case are only due to memory exhaustion... but still, the solution is not fully robust.)Lastly, note that we cannot use lua_cpcall because it does discard all return values of the executed function. Which means that we can't really wrap single Lua operations. (We could wrap a whole algorithm though.)Run the whole algorithm in a protected environmentThis defeats the whole purpose of the per-function wrapping.  We would need to provide a separate C/C++ function that runs all unsafe code and then call it by means of lua_pcall (or lua_cpcall) so that errors are captured and reported in a controlled manner.  This seems very efficient... albeit not transparent and will surely cause issues.Why is this problematic? Errors that happen inside the protected environment are managed by means of a longjmp. If the code wrapped by lua_pcall is a C++ function, it can instantiate objects. These objects have destructors. A longjmp outside of the function means that no destructors will run... so objects will leak memory, file descriptors, and anything you can imagine. Doom's day.Yes, I know Lua can be rebuilt to report internal errors by means of exceptions which would make this particular problem a non-issue... but this rules out any pre-packaged Lua binaries (the default is to use longjmp and henceforth what packaged binaries use). I do not want to embed Lua into my source tree.  I want to use Lua binary packages shipped with pretty much any OS (hey, including NetBSD!), which means that my code needs to be able to cope with Lua binaries that use setjmp/longjmp internally.Closing remarksI hope the above description makes any sense because I had to omit many, many details in order to make the post reasonably short. It could also be that there are other alternatives I have not considered, in which case I'd love to know them. Trying to find a solution to the above problem has already sucked several days of my free time, which translates in Kyua not seeing any further development until a solution is found!
+
+        <a href="/2011/01/error-handling-in-lua.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1422,34 +1454,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2010/12/sticky-bit-trivia.html">Sticky bit trivia</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-December
-
-21st,
-  
-2010
-at
-08:50 UTC
-        &middot;
-        <a href="/2010/12/sticky-bit-trivia.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2010/12/sticky-bit-trivia.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Did you ever wonder where the "sticky" part of the "sticky bit" name comes from? I actually didn't, but I just came across the Sticky bit page on Wikipedia through a tweet from @AaronToponce and discovered why.If you have used any "recent" (the quotes are important) Unix-like system, you probably know what the sticky bit is used for: to restrict the deletion of files in a directory to, basically, the owner of such files. The sticky bit is used on /tmp (among other directories) so that anyone can create temporary files in it but only those that created the temporary files can delete them.But that's not all that is to know.The original purpose of the sticky bit was to mark frequently-used executable files so that the operating system kept their text segment on swap space. This speeded up subsequent executions of such programs because the system would not need to access the file system to load the binary: it could just use the image already kept in the swap space. This behavior became obsolete with the advent of memory-mapped executables.Now it's clear why the sticky bit has the name it has, isn't it?  But still, that's not all that is to know.SunOS 4 introduced a new behavior for the sticky bit on regular, non-executable files: reads and writes to such files would bypass the buffer cache, thus basically telling the system to perform raw I/O on those files. This was particularly useful on swap files when NFS was involved.With the above, I have just tried to summarize you the information that is in NetBSD's chmod(2) and sticky(7) manual pages; they contain much more detailed information. (And yep, that's right: contrary to what the Wikipedia article says, NetBSD does not support this behavior any more.) Hope you found this insightful if you did not know this little piece of history!
-
-        <a href="/2010/12/sticky-bit-trivia.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1522,10 +1526,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (3)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
     </ul>

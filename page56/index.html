@@ -1111,6 +1111,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1253,6 +1257,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2007/03/building-libspe2-on-ps3.html">Building the libspe2 on the PS3</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+March
+
+14th,
+  
+2007
+at
+15:33 UTC
+        &middot;
+        <a href="/2007/03/building-libspe2-on-ps3.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2007/03/building-libspe2-on-ps3.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        The Linux kernel, when built for a Cell-based platform, provides the spufs pseudo-file system that allows userland applications to interact with the Synergistic Processing Engines (SPEs).  However, this interface is too low-level to be useful for application-level programs and hence another level of abstraction is provided over it through the libspe library.There are two versions of the libspe:1.x: Distributed as part of the Cell SDK 2.0, is the most widely used nowadays by applications designed to run on the Cell architecture.2.x: A rewrite of the library that provides a better and cleaner interface — e.g. less black boxes —, but which is currently distributed for evaluation and testing purposes. Further development will happen on this version, so I needed to have it available.The YellowDog Linux 5.0 (YDL5) distribution for the PlayStation 3 only provides an SRPM package for the 1.x version, but there is no support for 2.x.  Fortunately, installing the libspe2 is trivial if you use the appropriate binary packages provided by BSC, but things get interesting if you try to build it from sources.  As I need to inspect its code and do some changes in it, I have to be able to rebuild its code, so I had to go with the latter option.Let's see how to build and install libspe2 from sources on a PS3 running YDL5.The first step is to download the most up-to-date SRPM package for the libspe2, which at the time of this writing was libspe2-2.0.1-1.src.rpm.  Once downloaded, install it on the system:# rpm -i libspe2-2.0.1-1.src.rpmThe above command leaves the original source tarball, any necessary patches and the spec file all properly laid out inside the /usr/src/yellowdog hierarchy.Now, before we can build the libspe2 package, we need to fulfill two requisites.  The first is the installation of quilt (for which no binary package exists in the YDL5 repositories), a required tool in libspe2's build process.  The second is the updating of bash to a newer version, as the one distributed in YDL5 has a quoting bug that prevents quilt from being built properly.The easiest way to solve these problems is to look for the corresponding SRPM packages for quilt and an updated bash.  As YDL5 is based on Fedora Core, a safe bet is to fetch the necessary files from the Fedora Core 6 (FC6) repositories; these were: quilt-0.46-1.fc6.src.rpm and bash-3.1-16.1.src.rpm.   After that, proceed with their installation as shown above for libspe2 (using rpm -i).With all the sources in place, it is time to build and install them in the right order.  Luckily the FC6 SRPMs we need work fine in YDL5, but this might not be true for other packages.  Here is what to do:# cd /usr/src/yellowdog/SRPMS# rpmbuild -ba --target=ppc bash.spec# rpm -U ../RPMS/ppc/bash-3.1-16.1.ppc.rpm# rpmbuild -ba --target=ppc quilt.spec# rpm -i ../RPMS/ppc/quilt-0.46-1.ppc.rpm# rpmbuild -ba libspe2.spec# rpm -i ../RPMS/ppc64/libspe2-2.0.1-1.ppc64.rpm# rpm -i ../RPMS/ppc64/libspe2-devel-2.0.1-1.ppc64.rpmAnd that's it!  libspe2 is now installed and ready to be used.  Of course, with the build requisites in place, you compile libspe2 in your home directory for testing purposes by using the tar.gz package instead of the SRPM.At last, complete the installation by adding the elfspe2-2.0.1-1.ppc.rpm package to the mix.
+
+        <a href="/2007/03/building-libspe2-on-ps3.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1422,34 +1454,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2007/01/install-mac-os-x-over-multiple-volumes.html">Install Mac OS X over multiple volumes</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-January
-
-15th,
-  
-2007
-at
-17:00 UTC
-        &middot;
-        <a href="/2007/01/install-mac-os-x-over-multiple-volumes.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2007/01/install-mac-os-x-over-multiple-volumes.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        As you may already know, Mac OS X is a Unix-like system based on BSD and Mach.  Among other things, this means that there is a single virtual file system on which you can attach new volumes by means of mount points and the mount(8) utility.  One could consider partitioning a disk to place specific system areas in different partitions to prevent the degradation of each file system, but the installer does not let you do this (I suspect the one for Mac OS X Server might have this feature, but this is just a guess). Being Unix, this doesn't mean it isn't possible!As a demonstration, I explain here how to install Mac OS X so that the system files are placed in one partition and the users' home directories are in another one.  This setup keeps mostly-static system data self contained in a specific area of the disk and allows you to do a clean system reinstall without losing your data nor settings.First of all boot the installation from the first DVD and execute the Disk Utility from the Utilities menu.  There you can partition your disk as you want, so create a partition for the system and one for the users; let's call them System and Users respectively, being on the disk0s2 and disk0s3 devices.  Both should be HFS+, but you can choose whether you want journaling and/or case sensitivity independently.  Exit the tool and go back to the installer.Now do a regular install on the System volume, ignoring the existence of Users.  To make things simple, go through the whole installation, including the welcome wizard.  Once you are in the default desktop, get ready for the tricky stuff.Reboot your machine and enter single user mode by pressing and holding Command+s just after the initial chime sound.  At the command line, follow the instructions to remount the root volume as read/write.  If I recall correctly, it tells you to do:# fsck -fy /# mount -u rw /Mount the Users volume in a temporary location, copy the current contents of /Users into it and remove the original files.  For example:# mkdir /Users2# mount -t hfs /dev/disk0s3 /Users2# rsync -avE /Users/ /Users2... ensure that /Users2 matches /Users ...# rm -rf /Users/.[a-zA-Z_]* /Users/*# umount /Users2# rmdir /Users2I used rsync(1) instead of cp(1) because it preserves the files' resource forks, if present (provided you give it the -E option).Once the data migration is done, you can proceed to tell the system to mount the Users volume in the appropriate place on the next boot.  Create the /etc/fstab file and add the following line to it:/dev/disk0s3 /Users hfs rwEnsure it works by mounting it by hand:# mount /UsersIf no problems arise, you're done!  Reboot and enjoy your new system.The only problem with the above strategy is that your root volume must be big enough to hold the whole installation before you can reorganize the partitions.  I haven't tried it but maybe, just maybe, you could do some manual mounts from within the Terminal available in the installer. That way you'd set up the desired mount layout before any files are copied, delivering the appropriate results. Note that if this worked, you'd still need to do the fstab trick in this case, but you'd have to do it on the very first reboot, even before the install is complete!
-
-        <a href="/2007/01/install-mac-os-x-over-multiple-volumes.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1522,10 +1526,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (3)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
     </ul>
