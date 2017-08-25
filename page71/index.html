@@ -1115,6 +1115,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1260,6 +1264,34 @@
   
     <li>
       <h2>
+        <a class="post-link" href="/2006/01/some-pictures-of-my-rig.html">Some pictures of my rig</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+17th,
+  
+2006
+at
+10:41 
+        &middot;
+        <a href="/2006/01/some-pictures-of-my-rig.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2006/01/some-pictures-of-my-rig.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        I've just decided to learn how to publish images in Blogger.  And in fact, it's damn easy, but for some reason I thought it was not &mdash; that is, I believed I had to register myself in some other service and was lazy to do it...Here come some pictures of my rig:The picture above shows my desktop.  You can see the iBook G4 working in clamshell mode (well, sort of).  It's connected to the Apple keyboard, to the mini mouse (I ought to replace it), to the BenQ FP202W flat pannel and to the stereo system.  If you can notice the free USB wire next to the laptop... that's my manual switch for the keyboard and mouse! ;-)  On the right side below the table is my PC, the Athlon XP 2600+ machine.  Oh, and there is the Palm m515, this month's DDJ issue and a 802.11 book I got recently.This other picture shows the machine I used during tmpfs development to do all the necessary tests.  It's a Pentium 2 233Mhz with 128Mb of RAM and is connected to the PC with a serial line (plus to the Ethernet, of course).  (I've been playing with qemu recently and I might get rid of it.)  Below the speaker (on the floor) is my old Viewsonic monitor that I'm trying to sell.At last, this other picture shows the Apple Macintosh Performa 630 I found a year and a half ago (no, the monitor is not currently connected).  It's waiting for a reinstall of NetBSD/mac68k. Ah, and there is also a VHS video on the left side of the table which is connected to the PC.Next time I shall publish pictures of the SoC and Monotone T-shirts ;-)
+
+        <a href="/2006/01/some-pictures-of-my-rig.html">[Continue reading]</a>
+      </p>
+      
+    </li>
+  
+    <li>
+      <h2>
         <a class="post-link" href="/2006/01/routing-protocols.html">Routing protocols</a>
       </h2>
       <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
@@ -1270,7 +1302,7 @@ January
   
 2006
 at
-19:46 UTC
+14:46 
         &middot;
         <a href="/2006/01/routing-protocols.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1298,7 +1330,7 @@ January
   
 2006
 at
-11:21 UTC
+06:21 
         &middot;
         <a href="/2006/01/taking-backups-of-your-data.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1326,7 +1358,7 @@ January
   
 2006
 at
-15:19 UTC
+10:19 
         &middot;
         <a href="/2006/01/apple-unleashes-intel-based-systems.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1354,7 +1386,7 @@ January
   
 2006
 at
-20:37 UTC
+15:37 
         &middot;
         <a href="/2006/01/applications-vs-windows.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1382,7 +1414,7 @@ January
   
 2006
 at
-20:09 UTC
+15:09 
         &middot;
         <a href="/2006/01/updating-pkgsrc-gnome-packages.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1410,7 +1442,7 @@ January
   
 2006
 at
-17:54 UTC
+12:54 
         &middot;
         <a href="/2006/01/file-previews-in-nautilus.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1422,34 +1454,6 @@ at
         Yesterday's evening, I was organizing some of my pictures when I noticed that Nautilus wasn't generating previews for any of them.  This annoyed me so much that I decided to track down the issue, which I've done today.The first thing I did was to attach a gdb session to the currently running Nautilus process, adding some breakpoints to the functions that seemed to generate preview images; I located them using grep(1) and some obvious keywords.  This wasn't very helpful, but at least I could see that the thumbnail generation routine checks whether the file is local or not (because Nautilus lets you set different preferences for them).With this in mind, I resorted to the traditional and not-so-elegant printf debugging technique (which, with pkgsrc in the middle, is quite annoying).  Effectively, a call to gnome_vfs_uri_is_local was always returning false, no matter which file it was passed.  It was clear that the problem was in gnome-vfs itself.So I switched to the gnome-vfs code, located that function and saw that it was very short: basically, all it does is delegate its task to another function that depends on the method associated to the file &mdash; you can think of the method as the protocol that manages it.  As I was accessing local files, the method in use was the file method (implemented in modules/file-method.c), so the affected function was, how not, its do_is_local.As it is a bit complex (due to caching issues for efficiency), I added some more printfs to it to isolate a bit more the problem, which drove me to the filesystem_type function implemented in modules/fstype.c.  And man, when looking at this function I quickly understood why it was the focus of the problem.  It is so clumsy &mdash; portability-wise &mdash; that it is very easy for it to break under untested circumstances: it is composed of a set of mutually exclusive ifdefs (one for each possible situation) to determine the file system name in which a file lives.And you guessed right: NetBSD 3.x didn't match any of them, so it resorted to a default entry (returning an unknown file system type) that is always treated as remote by the file method code.The solution has been to workaround the detection of one of these special cases in the configure script to properly detect statvfs(2) under NetBSD.  This is just a hack that adds to the uglyness of the original code, but fixing this issue properly will require a lot of work and the willingness of the gnome-vfs maintainers to accept the changes.I will ask for a pull-up to the pkgsrc-2005Q4 branch when I've been able to confirm that this does not break on other NetBSD versions.  Now have fun watching your images again! ;-)
 
         <a href="/2006/01/file-previews-in-nautilus.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
-    <li>
-      <h2>
-        <a class="post-link" href="/2006/01/got-benq-fp202w-flat-panel.html">Got a BenQ FP202W flat panel</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-January
-
-1st,
-  
-2006
-at
-12:05 UTC
-        &middot;
-        <a href="/2006/01/got-benq-fp202w-flat-panel.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2006/01/got-benq-fp202w-flat-panel.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        As a present for my saint (I don't know if this is the proper expression in English) &mdash; which I celebrate today due to my second name (Manuel) &mdash; I got a BenQ FP202W flat panel.  It's a 20" wide screen, providing a 16:10 aspect ration at its native resolution of 1680x1050 pixels.  This contrasts heavily with my now-old Viewsonic E70f, a 17" CRT doing only 1024x768@85Hz.And man, this new monitor is truly amazing.  Maximizing windows is a thing of the past!  (Except for the media player, of course ;)  Being able to have two documents open side by side is great: for example, you can keep your editor in one side while reading a reference manual in the other side without having to constantly switch between windows; and even then, there is still room for other things.  Moreover, playing Half-Life 2 in widescreen mode is... great :)I've also tried to plug it to the iBook G4; it works fine for most things but feels a bit sluggish when some effects come into the game (aka, Exposé or Dashboard).  Looks like its video card is not powerful enough to handle it flawlessy (something I can understand).  I ought to try its clamshell mode, though, as disabling its builtin screen may make it faster; but first I need to get a USB keyboard...Concluding: while the old CRT monitor was still in perfect working condition, the switch has been great.  I don't know why I hesitated to do it ;)  If you have the money to buy such a display, I certainly recommend it.Happy new year 2006!
-
-        <a href="/2006/01/got-benq-fp202w-flat-panel.html">[Continue reading]</a>
       </p>
       
     </li>
@@ -1470,7 +1474,7 @@ at
 
         <!-- Disabled to not show a page count, which is meaningless.
         <span class="current">Page 71 of
-        101</span>
+        102</span>
         -->
 
         
@@ -1526,10 +1530,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
@@ -1571,8 +1576,7 @@ at
     <ul id="archive-year-2014" class="collapse">
      
       <li><a href="/2014/11">November 2014</a> (2)</li>
-      <li><a href="/2014/06">June 2014</a> (1)</li>
-      <li><a href="/2014/05">May 2014</a> (2)</li>
+      <li><a href="/2014/05">May 2014</a> (3)</li>
       <li><a href="/2014/03">March 2014</a> (1)</li>
       <li><a href="/2014/02">February 2014</a> (3)</li>
       <li><a href="/2014/01">January 2014</a> (3)</li>

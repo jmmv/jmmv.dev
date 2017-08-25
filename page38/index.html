@@ -1115,6 +1115,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1260,17 +1264,45 @@
   
     <li>
       <h2>
+        <a class="post-link" href="/2008/10/boostprocess-and-sigchld.html">Boost.Process and SIGCHLD</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+October
+
+18th,
+  
+2008
+at
+21:46 
+        &middot;
+        <a href="/2008/10/boostprocess-and-sigchld.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2008/10/boostprocess-and-sigchld.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        For some unknown reason, I'm regaining interest in Boost.Process lately.  I guess many of the people who have written me in the past asking for the status of the library will be happy to hear this, but I can't promise I will stick to coding it for long.  I have to say that I have received compliments from quite a few people...  thanks if you are reading and sorry if I did not reply you at all.Anyway.  So I downloaded my code and ran the unit tests under Mac OS X to make sure that everything still worked before attempting to do any further coding.  Oops, lots of failures!  All tests spawning a child process broke due to an EINTR received by waitpid(2).  That doesn't look good; it certainly didn't happen before.After these failures, I tried the same thing under Linux to make sure that the failures were not caused by some compatibility issue with Mac OS X.  Oops, failures again! Worrisome.  The curious thing is that the tests do work in Win32 &mdash; but that can be somewhat expected because all the internal code that does the real work is platform-specific.Curiously, though, running the examples (not the tests, but the sample little programs distributed as part of the library documentation) did not raise any errors. Hence, I tried to run gdb on the actual tests to see if the debugger could shed any light on the failures.  No way.  Debugging the unit tests this way is not easy because Boost.Test does a lot of bookkeeping itself &mdash; yeah, newer versions of the library have cool features for debugging, but they don't work on OS X.  Hmm, so what if I run gdb on the examples? Oh! The problem magically appears again.It has taken me a long while to figure out the problem. Along the process, I have gone through thoughts of memory corruption issues and race conditions. In the end, the response was much simpler: it all turns out to SIGCHLD (as the error code returned by waitpid(2) well said).SIGCHLD is received by a process whenever any of its children change status (e.g. terminates execution). The default behavior of the signal handler for SIGCHLD is to discard the signal. Therefore, when this signal is received, no system calls are aborted because it is effectively discarded. However, it turns out that newer versions of Boost.Test install signal handlers for a lot of signals (all?) to allow the test monitor to capture unmanaged signals and report them as errors. Similarly, gdb also installs a signal handler for SIGCHLD. As a result, Boost.Process does not work when run under gdb or Boost.Test because the blocking system calls in the library do not deal with EINTR, but it actually works for non-test programs run out of the debugger.The first solution I tried was to simply retry the waitpid(2) whenever an EINTR error was received. This fixes the problem when running the tests under gdb. Unfortunately, the test cases are signaled as failed anyway because the test monitor still receives SIGCHLD and considers it a failure.The second solution I have implemented consists on resetting the SIGCHLD handler to its default behavior when Boost.Process spawns a new child and restoring the old SIGCHLD handler when the last child managed by Boost.Process is awaited for.  Eventually, the library could do something useful with the signal, but discarding it seems to be good enough for now.This second solution is the one that is going to stay, probably, unless you have any other suggestion. I still feel it is a bit fragile, but can't think of anything better. For example: what if the user of Boost.Process had already programmed a handler for SIGCHLD? I just think that such a case shouldn't be considered because, after all, if you are using Boost.Process to manage children processes, you shouldn't have to deal with SIGCHLD on your own as long as the library provides a correct abstraction for it.
+
+        <a href="/2008/10/boostprocess-and-sigchld.html">[Continue reading]</a>
+      </p>
+      
+    </li>
+  
+    <li>
+      <h2>
         <a class="post-link" href="/2008/10/livenyc-2-months-and-half.html">Live@NYC: 2 months and a half</a>
       </h2>
       <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
 
 October
 
-15th,
+14th,
   
 2008
 at
-00:50 UTC
+20:50 
         &middot;
         <a href="/2008/10/livenyc-2-months-and-half.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1294,11 +1326,11 @@ at
 
 September
 
-14th,
+13th,
   
 2008
 at
-00:43 UTC
+20:43 
         &middot;
         <a href="/2008/09/livenyc-almost-2-months.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1326,7 +1358,7 @@ August
   
 2008
 at
-16:12 UTC
+12:12 
         &middot;
         <a href="/2008/08/livenyc-month-1.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1354,7 +1386,7 @@ August
   
 2008
 at
-04:00 UTC
+00:00 
         &middot;
         <a href="/2008/08/livenyc-days-21-22-and-23.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1378,11 +1410,11 @@ at
 
 August
 
-8th,
+7th,
   
 2008
 at
-02:28 UTC
+22:28 
         &middot;
         <a href="/2008/08/livenyc-day-20.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1410,7 +1442,7 @@ August
   
 2008
 at
-14:42 UTC
+10:42 
         &middot;
         <a href="/2008/08/livenyc-day-17-18-and-19.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1422,34 +1454,6 @@ at
         I should have posted this yesterday at most... but anyway, here it comes so that I do not forget about recent happenings. What I mean is that day 19th was yesterday (August 6th), not today!Day 17: Some more learning work at Google. The interesting thing of that day was that a friend from Barcelona arrived to the city at 10pm approximately, so we went to have a beer to a place in the lower East River. Very touristic but pretty nice. Also, he was riding a hired car, so I was able to see the city from another "perspective".Day 18: Again, some more learning. At midday, I registered for the Nike Human Race, a 10Km race that will take place on August 31st in 25 cities around the world. The nice thing is that for the low registration fee, I got a pair of shiny new sneakers and the Nike+ Sportsband. Now I have Nike shoes, the iPod+Nike kit at home (a present from another race)... so I am now only missing a real iPod! At night I went out with a Spanish colleague from work and two other Spanish guys, friends of him, that are also visiting the city.Day 19: Tried the new sneakers and the Sportsband. Both are pretty amazing! Comfortable shoes and the measures taken by the sensors seem to be quite accurate. Plus you can get a nice history of your runs on the website. At work, I finally did some coding. And, in the evening, we had a Google Boat Cruise for interns (photos available) followed by beers at a couple of bars.Bah, I should get back to posting once per day to avoid such telegraphic descriptions...
 
         <a href="/2008/08/livenyc-day-17-18-and-19.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
-    <li>
-      <h2>
-        <a class="post-link" href="/2008/08/livenyc-day-16.html">Live@NYC: Day 16</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-August
-
-4th,
-  
-2008
-at
-02:03 UTC
-        &middot;
-        <a href="/2008/08/livenyc-day-16.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2008/08/livenyc-day-16.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Wow... two weeks have passed already. Time flies :-(Today I got up late after yesterday's hang out and then went to have lunch with my new roommate and his brother. After lunch, my roommate had to got back to work, and his brother and I walked downtown to take a look at the World Trade Center. After seeing that, we walked by the southern coast and saw the Statue of Liberty in the distance. I guess I'll have to take the ferry one day and see it from a closer distance, but better wait until there are not too many tourists and for colder weather. At last, we returned to visit Google going all along Broadway, while visiting some shops.I'm really exhausted. Google Earth says that we walked for almost 11Km non-stop! Check out the photos!Edit (22:50): Just finished watching Season 1 of The Big Bang Theory. Hilarious! I'm eager to see more episodes, but that'll have to wait until Season 2 is aired.
-
-        <a href="/2008/08/livenyc-day-16.html">[Continue reading]</a>
       </p>
       
     </li>
@@ -1470,7 +1474,7 @@ at
 
         <!-- Disabled to not show a page count, which is meaningless.
         <span class="current">Page 38 of
-        101</span>
+        102</span>
         -->
 
         
@@ -1526,10 +1530,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
@@ -1571,8 +1576,7 @@ at
     <ul id="archive-year-2014" class="collapse">
      
       <li><a href="/2014/11">November 2014</a> (2)</li>
-      <li><a href="/2014/06">June 2014</a> (1)</li>
-      <li><a href="/2014/05">May 2014</a> (2)</li>
+      <li><a href="/2014/05">May 2014</a> (3)</li>
       <li><a href="/2014/03">March 2014</a> (1)</li>
       <li><a href="/2014/02">February 2014</a> (3)</li>
       <li><a href="/2014/01">January 2014</a> (3)</li>

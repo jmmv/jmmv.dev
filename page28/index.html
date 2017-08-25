@@ -1115,6 +1115,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1260,6 +1264,34 @@
   
     <li>
       <h2>
+        <a class="post-link" href="/2011/01/c-interface-to-lua.html">C++ interface to Lua for Kyua</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+8th,
+  
+2011
+at
+08:17 
+        &middot;
+        <a href="/2011/01/c-interface-to-lua.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2011/01/c-interface-to-lua.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Finally! After two weeks of holidays work, I have finally been able to submit Kyua's r39: a generic library that implements a C++ interface to Lua. The code is hosted in the utils/lua/ subdirectory.From the revision description:The utils::lua library provides thin C++ wrappers around the Lua C API to ease the interaction between C++ and Lua.  These wrappers make intensive use of RAII to prevent resource leakage, expose C++-friendly data types, report errors by means of exceptions and ensure that the Lua stack is always left untouched in the face of errors.  The library also provides a place (the operations module) to add miscellaneous utility functions built on top of the wrappers.In other words: this code aims to decouple all details of the interaction with the Lua C API from the main code of Kyua so that the high level algorithms do not have to worry about Lua C API idiosyncrasies.Further changes to Kyua to implement the new configuration system will follow soon as all the basic code to talk to Lua has been ironed out. Also expect some extra posts regarding the design decisions that went on this helper code and, in particular, about error reporting as mentioned in the previous post.(Yep, Lua and Kyua sound similar. But that was never intended; promise!)
+
+        <a href="/2011/01/c-interface-to-lua.html">[Continue reading]</a>
+      </p>
+      
+    </li>
+  
+    <li>
+      <h2>
         <a class="post-link" href="/2011/01/error-handling-in-lua.html">Error handling in Lua</a>
       </h2>
       <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
@@ -1270,7 +1302,7 @@ January
   
 2011
 at
-13:01 UTC
+08:01 
         &middot;
         <a href="/2011/01/error-handling-in-lua.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1298,7 +1330,7 @@ January
   
 2011
 at
-08:22 UTC
+03:22 
         &middot;
         <a href="/2011/01/understanding-setjmplongjmp.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1326,7 +1358,7 @@ January
   
 2011
 at
-19:37 UTC
+14:37 
         &middot;
         <a href="/2011/01/happy-new-year.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1354,7 +1386,7 @@ December
   
 2010
 at
-09:06 UTC
+04:06 
         &middot;
         <a href="/2010/12/using-raii-to-clean-up-temporary-values.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1382,7 +1414,7 @@ December
   
 2010
 at
-10:41 UTC
+05:41 
         &middot;
         <a href="/2010/12/dependency-injection-simple-class.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1410,7 +1442,7 @@ December
   
 2010
 at
-16:11 UTC
+11:11 
         &middot;
         <a href="/2010/12/dependency-injection-and-testing.html#disqus_thread">
           <span class="disqus-comment-count"
@@ -1422,34 +1454,6 @@ at
         A coworker just sent me some Python code for review and, among such code, there was the addition of a function similar to:def PathWithCurrentDate(prefix, now=None):    """Extend a path with a year/month/day subdirectory layout.    Args:        prefix: string, The path to extend with the date subcomponents.        now: datetime.date, The date to use for the path; if None, use            the current date.    Returns:        string, The new computed path with the date appended.    """    path = os.path.join(prefix, '%Y', '%m', '%d')    if now:        return now.strftime(path)    else:        return datetime.datetime.now().strftime(path)The purpose of this function, as the docstring says, is to simplify the construction of a path that lays out files on disk depending on a given date.This function works just fine... but it has a serious design problem (in my opinion) that you only see when you try to write unit tests for such function (guess what, the code to review did not include any unit tests for this). If I ask you to write tests for PathWithCurrentDate, how would you do that? You would need to consider these cases (at the very very least):Passing now=None correctly fetches the current date. To write such a test, we must stub out the call to datetime.datetime.now() so that our test is deterministic. This is easy to do with helper libraries but does not count as trivial to me.Could datetime.datetime.now() raise an exception? If so, test that the exception is correctly propagated to match the function contract.Passing an actual date to now works. We know this is a different code path that does not call datetime.datetime.now(), but still we must stub it out to ensure that the test is not going through that past in case the current date actually matches the date hardcoded in the test as an argument to now.My point is: why is such a trivial function so complex to validate? Why such a trivial function needs to depend on external state? Things become more obvious if we take a look at a caller of this function:def BackupTree(source, destination):    path = PathWithCurrentDate(destination)    CreateArchive(source, os.path.join(path, 'archive.tar.gz'))Now, question again: how do we test this? Our tests would look like:def testOk(self):    # Why do we even have to do this?    ... create stub for datetime.datetime.now() to return a fake date ...   CreateArchive('/foo', '/backups/prefix')   ... validate that the archive was generated in the fake date directory ...Having to stub out the call to datetime.datetime.now() before calling CreateArchive is a really, really weird thing at first glance. To be able to write this test, you must have deep insight of how the auxiliary functions called within the function work to know what dependencies on external state they have. Lots of black magic involved.All this said, the above may not seem like a big issue because, well, a call to datetime.datetime.now() is cheap. But imagine that the call being performed deep inside the dependency tree was more expensive and dealt with some external state that is hard to mock out.The trick to make this simpler and clearer is to apply a form of Dependency injection (or, rather, "value injection"). We want the PathWithCurrentDate function to be a simple data manipulation routine that has no dependencies on external state (i.e. make it purely functional). The easiest way to do so is to remove the now=None code path and pass the date in right from the most external caller (aka, the main() program).  For example (skipping docstrings for brevity):def PathWithCurrentDate(prefix, now):    path = os.path.join(prefix, '%Y', '%m', '%d')    return now.strftime(path)def BackupTree(source, destination, backup_date):    path = PathWithCurrentDate(destination, backup_date)    CreateArchive(source, os.path.join(path, 'archive.tar.gz'))With this approach, the dependency on datetime.datetime.now() (aka, a dependency on global state) completely vanishes from the code. The code paths to validate are less, and they are much simpler to test. There is no need to stub out a function call seemingly unused by BackupTree.Another advantage of this approach can be seen if we were to have multiple functions accessing the same path. In this case, we would need to ensure that all calls receive the exact same date... what if the program kept running past 12AM and the "now" value changed? It is trivial to reason about this feature if the code does not have hidden queries to "now" (aka global state) within the code... but it becomes tricky to ensure our code is right if we can't easily audit where the "now" value is queried from!The "drawback", as some will think, is that the caller of any of these functions must do more work on its own to provide the correct arguments to the called functions.  "And if I always want the backup to be created on the current directory, why can't the backup function decide on itself?", they may argue.  But, to me, the former is definitely not a drawback and the latter... is troublesome as explained in this post.Another "drawback", as some others would say, is that testing is not a goal. Indeed it is not: testing is only a means to "correct" code, but it is also true that having testable code often improves (internal) APIs and overall design.To conclude: the above is an over-simplistic case study and my explanations will surely not convince anyone to stop doing black evil "clever" magic from within functions (and, worse, from within constructors).  You will only realize that the above makes any sense when you start unit-testing your code. Start today! :-)
 
         <a href="/2010/12/dependency-injection-and-testing.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
-    <li>
-      <h2>
-        <a class="post-link" href="/2010/12/kyua-design-of-configuration-system.html">Kyua: Design of the configuration system</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-December
-
-22nd,
-  
-2010
-at
-14:48 UTC
-        &middot;
-        <a href="/2010/12/kyua-design-of-configuration-system.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2010/12/kyua-design-of-configuration-system.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Over a week ago, I mostly finished the implementation of the runtime engine for test cases of Kyua and, along the way, realized that it is imperative to write a configuration system right now before the configuration code becomes messier than it already is.To that end, I spent the last week working on a design document for the configuration system. Summarizing, the document describes what the requirements for the configuration files of Kyua are, what the possible alternatives to implement them are, and advocates the use of Lua &mdash; a tiny embedded programming language &mdash; to bring these configuration files to life.It is your chance to get involved in the early stages of the development of Kyua! :-) Take a look at the email to kyua-discuss asking for comments and feel free to join the mailing list ;-)
-
-        <a href="/2010/12/kyua-design-of-configuration-system.html">[Continue reading]</a>
       </p>
       
     </li>
@@ -1470,7 +1474,7 @@ at
 
         <!-- Disabled to not show a page count, which is meaningless.
         <span class="current">Page 28 of
-        101</span>
+        102</span>
         -->
 
         
@@ -1526,10 +1530,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (4)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
       <li><a href="/2017">All year</a></li>
@@ -1571,8 +1576,7 @@ at
     <ul id="archive-year-2014" class="collapse">
      
       <li><a href="/2014/11">November 2014</a> (2)</li>
-      <li><a href="/2014/06">June 2014</a> (1)</li>
-      <li><a href="/2014/05">May 2014</a> (2)</li>
+      <li><a href="/2014/05">May 2014</a> (3)</li>
       <li><a href="/2014/03">March 2014</a> (1)</li>
       <li><a href="/2014/02">February 2014</a> (3)</li>
       <li><a href="/2014/01">January 2014</a> (3)</li>
