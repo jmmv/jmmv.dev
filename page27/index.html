@@ -1119,6 +1119,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1261,6 +1265,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2011/04/kyua-weekly-status-report_17.html">Kyua: Weekly status report</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+April
+
+17th,
+  
+2011
+at
+15:29 
+        &middot;
+        <a href="/2011/04/kyua-weekly-status-report_17.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2011/04/kyua-weekly-status-report_17.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        This week started easy:Added integration tests for the about and help subcommands. These were pretty easy to do.Added integration tests for the list subcommand. I initially added these tests as expected failures to reason about the appearance and behavior of this command from the point of view of the user before actually working on the code... and I am still writing such code to make these tests pass!This is where things got a bit awry. Polishing the behavior of the list command so that its interface is consistent among all flag and argument combinations is tricky and non-trivial. I ended up having to change code deep down in the source tree to implement missing features and to change existing bits and pieces:Implemented support to print all test case properties, not only the user-specific ones. The properties recognized by the runtime engine are stored as individual arguments of a structure, so these required some externalization code.Implemented "test case filtering". This allows users to select what tests to run on the command line at the test case granularity. For example, foo/bar selects all tests in a subdirectory if bar is a directory, or all the tests in the bar test program if it is a binary. But what is new (read: not found in ATF) is that you can even do foo/bar:test-1 where test-1 is the name of a test case within the foo/bar test program. I've been silently wishing for this feature to be available in ATF because it shortens the build/test/edit cycle, but it was not easy to add.Changed the internal representation of test suites to ensure all test program names are relative to the root of the test suite. The root of the test suite is considered to be the directory in which the top-level Kyuafile lives (/usr/tests/ in NetBSD). The whole point of doing this is to provide some consistency to the filters when the user decides to execute tests that are not in the current directory. For example, the following are now equivalent:$ cd /usr/tests &amp;&amp; kyua list fs/tmpfs$ kyua list -k /usr/tests/Kyuafile fs/tmpfsThe plans for the upcoming week are to finish with the clean up of the list command (which involves adding proper error reporting, refactoring of the command module and addition of unit tests) and start cleaning up the test command.Also, remember that BSDCan 2011 is now around the corner and that I will be talking about ATF, Kyua and NetBSD in it! &nbsp;My plan was to have a kyua-cli-0.1 release by the time of the conference, although this will be tricky to achieve...
+
+        <a href="/2011/04/kyua-weekly-status-report_17.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1430,34 +1462,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2011/01/error-handling-in-lua-kyua-approach.html">Error handling in Lua: the Kyua approach</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-January
-
-14th,
-  
-2011
-at
-03:04 
-        &middot;
-        <a href="/2011/01/error-handling-in-lua-kyua-approach.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2011/01/error-handling-in-lua-kyua-approach.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        About a week ago, I detailed the different approaches I encountered to deal with errors raised by the Lua C API. Later, I announced the new C++ interface for Lua implemented within Kyua. And today, I would like to talk about the specific mechanism I implemented in this library to deal with the Lua errors.The first thing to keep in mind is that the whole purpose of Lua in the context of Kyua is to parse configuration files. This is an infrequent operation, so high performance does not matter: it is more valuable to me to be able to write robust algorithms fast than to have them run at optimal speed. The other key point to consider is that I want Kyua to be able to use prebuilt Lua libraries, which are built as C binaries.The approach I took is to wrap every single unsafe Lua C API call in a "thin" (FSVO thin depending on the case) wrapper that gets called by lua_pcall. Anything that runs inside the wrapper is safe to Lua errors, as they are caught and safely reported to the caller.Lets examine how this works by taking a look at an example: the wrapping of lua_getglobal. We have the following code (copy pasted from the utils/lua/wrap.cpp file but hand-edited for publishing here):static intprotected_getglobal(lua_State* state){    lua_getglobal(state, lua_tostring(state, -1));    return 1;}voidlua::state::get_global(const std::string& name){    lua_pushcfunction(_pimpl->lua_state, protected_getglobal);    lua_pushstring(_pimpl->lua_state, name.c_str());    if (lua_pcall(_pimpl->lua_state, 1, 1, 0) != 0)        throw lua::api_error::from_stack(_pimpl->lua_state,            "lua_getglobal");}The state::get_global method is my public wrapper for the lua_getglobal Lua C API call. This wrapper first prepares the Lua stack by pushing the address of the C function to call and its parameters and then issues a lua_pcall call that executes the C function in a Lua protected environment.In this case, the argument preparation for protected_getglobal is trivial because the lua_getglobal call does not require access to any preexisting values on the Lua stack. Things get much trickier when that happens as in the case of the lua_getglobal wrapper. I'll leave understanding how to do this as an exercise to the reader (but you can cheat by looking at line 154).Anyway. The above looks all very nice and safe and the tests for the state::get_global function, even the ones that intentionally cause a failure, all work fine. So we are good, right? Nope! Unfortunately, the code above is not fully safe to Lua errors.In order to prepare the lua_pcall execution, the code must push values on the stack. As it turns out, both lua_pushcfunction and lua_pushstring can fail if they run out of memory (OOM). Such failure would of course be captured inside a protected environment... but we have a little chicken'n'egg problem here. That said, OOM failures are rare so I'm going to leverage this fact and not worry about it.  (Note to self: install a lua_atpanic handler to complain loudly if that ever happens.)Addendum: Bundling Lua within my program and building it as a C++ binary with exception reporting enabled in luaconf.h would magically solve all my issues. I know. But I don't fancy the idea of bundling the library into my source tree for a variety of reasons.
-
-        <a href="/2011/01/error-handling-in-lua-kyua-approach.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1530,10 +1534,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/10">October 2017</a> (1)</li>
       <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>

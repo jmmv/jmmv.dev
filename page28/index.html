@@ -1119,6 +1119,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1261,6 +1265,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2011/01/error-handling-in-lua-kyua-approach.html">Error handling in Lua: the Kyua approach</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+14th,
+  
+2011
+at
+03:04 
+        &middot;
+        <a href="/2011/01/error-handling-in-lua-kyua-approach.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2011/01/error-handling-in-lua-kyua-approach.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        About a week ago, I detailed the different approaches I encountered to deal with errors raised by the Lua C API. Later, I announced the new C++ interface for Lua implemented within Kyua. And today, I would like to talk about the specific mechanism I implemented in this library to deal with the Lua errors.The first thing to keep in mind is that the whole purpose of Lua in the context of Kyua is to parse configuration files. This is an infrequent operation, so high performance does not matter: it is more valuable to me to be able to write robust algorithms fast than to have them run at optimal speed. The other key point to consider is that I want Kyua to be able to use prebuilt Lua libraries, which are built as C binaries.The approach I took is to wrap every single unsafe Lua C API call in a "thin" (FSVO thin depending on the case) wrapper that gets called by lua_pcall. Anything that runs inside the wrapper is safe to Lua errors, as they are caught and safely reported to the caller.Lets examine how this works by taking a look at an example: the wrapping of lua_getglobal. We have the following code (copy pasted from the utils/lua/wrap.cpp file but hand-edited for publishing here):static intprotected_getglobal(lua_State* state){    lua_getglobal(state, lua_tostring(state, -1));    return 1;}voidlua::state::get_global(const std::string& name){    lua_pushcfunction(_pimpl->lua_state, protected_getglobal);    lua_pushstring(_pimpl->lua_state, name.c_str());    if (lua_pcall(_pimpl->lua_state, 1, 1, 0) != 0)        throw lua::api_error::from_stack(_pimpl->lua_state,            "lua_getglobal");}The state::get_global method is my public wrapper for the lua_getglobal Lua C API call. This wrapper first prepares the Lua stack by pushing the address of the C function to call and its parameters and then issues a lua_pcall call that executes the C function in a Lua protected environment.In this case, the argument preparation for protected_getglobal is trivial because the lua_getglobal call does not require access to any preexisting values on the Lua stack. Things get much trickier when that happens as in the case of the lua_getglobal wrapper. I'll leave understanding how to do this as an exercise to the reader (but you can cheat by looking at line 154).Anyway. The above looks all very nice and safe and the tests for the state::get_global function, even the ones that intentionally cause a failure, all work fine. So we are good, right? Nope! Unfortunately, the code above is not fully safe to Lua errors.In order to prepare the lua_pcall execution, the code must push values on the stack. As it turns out, both lua_pushcfunction and lua_pushstring can fail if they run out of memory (OOM). Such failure would of course be captured inside a protected environment... but we have a little chicken'n'egg problem here. That said, OOM failures are rare so I'm going to leverage this fact and not worry about it.  (Note to self: install a lua_atpanic handler to complain loudly if that ever happens.)Addendum: Bundling Lua within my program and building it as a C++ binary with exception reporting enabled in luaconf.h would magically solve all my issues. I know. But I don't fancy the idea of bundling the library into my source tree for a variety of reasons.
+
+        <a href="/2011/01/error-handling-in-lua-kyua-approach.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1430,34 +1462,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2010/12/dependency-injection-and-testing.html">Dependency injection and testing: an example</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-December
-
-23rd,
-  
-2010
-at
-11:11 
-        &middot;
-        <a href="/2010/12/dependency-injection-and-testing.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2010/12/dependency-injection-and-testing.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        A coworker just sent me some Python code for review and, among such code, there was the addition of a function similar to:def PathWithCurrentDate(prefix, now=None):    """Extend a path with a year/month/day subdirectory layout.    Args:        prefix: string, The path to extend with the date subcomponents.        now: datetime.date, The date to use for the path; if None, use            the current date.    Returns:        string, The new computed path with the date appended.    """    path = os.path.join(prefix, '%Y', '%m', '%d')    if now:        return now.strftime(path)    else:        return datetime.datetime.now().strftime(path)The purpose of this function, as the docstring says, is to simplify the construction of a path that lays out files on disk depending on a given date.This function works just fine... but it has a serious design problem (in my opinion) that you only see when you try to write unit tests for such function (guess what, the code to review did not include any unit tests for this). If I ask you to write tests for PathWithCurrentDate, how would you do that? You would need to consider these cases (at the very very least):Passing now=None correctly fetches the current date. To write such a test, we must stub out the call to datetime.datetime.now() so that our test is deterministic. This is easy to do with helper libraries but does not count as trivial to me.Could datetime.datetime.now() raise an exception? If so, test that the exception is correctly propagated to match the function contract.Passing an actual date to now works. We know this is a different code path that does not call datetime.datetime.now(), but still we must stub it out to ensure that the test is not going through that past in case the current date actually matches the date hardcoded in the test as an argument to now.My point is: why is such a trivial function so complex to validate? Why such a trivial function needs to depend on external state? Things become more obvious if we take a look at a caller of this function:def BackupTree(source, destination):    path = PathWithCurrentDate(destination)    CreateArchive(source, os.path.join(path, 'archive.tar.gz'))Now, question again: how do we test this? Our tests would look like:def testOk(self):    # Why do we even have to do this?    ... create stub for datetime.datetime.now() to return a fake date ...   CreateArchive('/foo', '/backups/prefix')   ... validate that the archive was generated in the fake date directory ...Having to stub out the call to datetime.datetime.now() before calling CreateArchive is a really, really weird thing at first glance. To be able to write this test, you must have deep insight of how the auxiliary functions called within the function work to know what dependencies on external state they have. Lots of black magic involved.All this said, the above may not seem like a big issue because, well, a call to datetime.datetime.now() is cheap. But imagine that the call being performed deep inside the dependency tree was more expensive and dealt with some external state that is hard to mock out.The trick to make this simpler and clearer is to apply a form of Dependency injection (or, rather, "value injection"). We want the PathWithCurrentDate function to be a simple data manipulation routine that has no dependencies on external state (i.e. make it purely functional). The easiest way to do so is to remove the now=None code path and pass the date in right from the most external caller (aka, the main() program).  For example (skipping docstrings for brevity):def PathWithCurrentDate(prefix, now):    path = os.path.join(prefix, '%Y', '%m', '%d')    return now.strftime(path)def BackupTree(source, destination, backup_date):    path = PathWithCurrentDate(destination, backup_date)    CreateArchive(source, os.path.join(path, 'archive.tar.gz'))With this approach, the dependency on datetime.datetime.now() (aka, a dependency on global state) completely vanishes from the code. The code paths to validate are less, and they are much simpler to test. There is no need to stub out a function call seemingly unused by BackupTree.Another advantage of this approach can be seen if we were to have multiple functions accessing the same path. In this case, we would need to ensure that all calls receive the exact same date... what if the program kept running past 12AM and the "now" value changed? It is trivial to reason about this feature if the code does not have hidden queries to "now" (aka global state) within the code... but it becomes tricky to ensure our code is right if we can't easily audit where the "now" value is queried from!The "drawback", as some will think, is that the caller of any of these functions must do more work on its own to provide the correct arguments to the called functions.  "And if I always want the backup to be created on the current directory, why can't the backup function decide on itself?", they may argue.  But, to me, the former is definitely not a drawback and the latter... is troublesome as explained in this post.Another "drawback", as some others would say, is that testing is not a goal. Indeed it is not: testing is only a means to "correct" code, but it is also true that having testable code often improves (internal) APIs and overall design.To conclude: the above is an over-simplistic case study and my explanations will surely not convince anyone to stop doing black evil "clever" magic from within functions (and, worse, from within constructors).  You will only realize that the above makes any sense when you start unit-testing your code. Start today! :-)
-
-        <a href="/2010/12/dependency-injection-and-testing.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1530,10 +1534,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/10">October 2017</a> (1)</li>
       <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>

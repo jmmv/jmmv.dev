@@ -1119,6 +1119,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1261,6 +1265,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2007/03/building-updated-kernel-for-ps3.html">Building an updated kernel for the PS3</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+March
+
+16th,
+  
+2007
+at
+04:25 
+        &middot;
+        <a href="/2007/03/building-updated-kernel-for-ps3.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2007/03/building-updated-kernel-for-ps3.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        The mainstream Linux sources have some support for the PlayStation 3, but it is marked as incomplete.  Trying to boot such a kernel results in a stalled machine, as the kernel configuration option says:CONFIG_PPC_PS3: This option enables support for the Sony PS3 game console and other platforms using the PS3 hypervisor.  Support for this platform is not yet complete, so enabling this will not result in a bootable kernel on a PS3 system.To make things easier, I'd simply have used the Linux sources provided by YellowDog Linux 5 (YDL5), which correspond to a modified 2.6.16 kernel.  However, as I have to do some kernel development on this platform, I objected to using such old sources: when developing for an open source project, it is much better to use the development branch of the code — if available — because custom changes will remain synchronized with mainstream changes.  This means that, if those changes are accepted by the maintainers, it will be a lot easier to later merge them with the upstream code.So, after a bit of fiddling, I found the public kernel branch used to develop for the PS3. It is named ps3-linux, is maintained by Geoff Levand and can be found in the kernel's git repository under the project linux/kernel/git/geoff/ps3-linux.git.Fetching the code was "interesting".  I was (and still am) a novice to git, but fortunately my prior experiences with CVS, Subversion and specially Monotone helped to understand what was going on.Let's now see how to fetch the code, cross-build a custom kernel and install it on the PS3 using YDL5.To checkout the latest code, which at this moment corresponds to a patched Linux 2.6.21-rc3 sources, do this:$ git clone git://git.kernel.org/pub/scm/linux/kernel/git/geoff/ps3-linux.git ps3-linuxThis will clone the ps3-linux project from the main repository and leave it in a directory with the same name.  You can keep it up to date by running git pull within the directory, but I'm not going to talk about git any more today.As I cross-compile the PS3 kernel from a FC6 Intel-based machine with the Cell SDK 2.0, I need to tell it which is the target platform and which is the cross-compiler before being able to build or even configure a kernel.  I manually add these lines to the top-level Makefile, but setting them in the environment should work too:ARCH=powerpcCROSS_COMPILE=ppu-Now you can create a sample configuration file by executing the following command inside the tree:$ make ps3_defconfigThen proceed to modify the default configuration to your likings.  To ease development, I want my kernels to be as small and easy to install as possible; this reduces the test-build-install-reboot cycle to the minimum (well, not exactly; see below).  Therefore I disable all stuff I do not need, which includes modules support.  Why?  Keeping all the code in a single image will make later installation a lot easier.Once the kernel is configured, it is time to build it.  But before doing so you need to install a helper utility used by the PS3 build code: the Device Tree Compiler (or dtc).  Fetch its sources from the git repository that appears in that page, run make to build it and manually install the dtc binary into /usr/local/bin.With the above done, just run make and wait until your kernel is built.  Then copy the resulting vmlinux file to your PS3; I put mine in /boot/vmlinux-jmerino to keep its name version-agnostic and specific to my user account.  Note that I do not have to mess with modules as I disabled them; otherwise I'd have to copy them all to the machine — or alternatively set up a NFS root for simplicity as described in Geoff Levand's HOWTO.To boot the kernel, you should know that the PS3 uses the kboot boot loader, a minimal Linux system that chainloads another Linux system by means of the kexec functionality.  It is very powerful, but the documentation is scarce.  Your best bet is to mimic the entries already present in the file.  With this in mind, I added the following line to /etc/kboot.conf:jmerino='/dev/sda1:/vmlinux-jmerino root=/dev/sda2 init=/sbin/init 4'I'd much rather fetch the kernel from a TFTP server, but I have not got this to work yet.  Anyway, note that the above line does not specify an initrd image, although all the other entries in the file do.  I did this on purpose: the less magic in the boot, the better.  However, bypassing the initrd results in a failed boot with:Warning: Unable to open an initial console.This is because the /dev directory on the root partition is unpopulated, as YDL5 uses udev.  Hence the need for an initrd image.  Getting a workaround for this is trivial though: just create the minimum necessary devices on the disk — "below udev" &mdash;, as shown below.# mount --bind / /mnt# MAKEDEV -d /mnt/dev console zero null# umount /mntAnd that's it!  Your new, fresh and custom kernel is ready to be executed.  Reboot the PS3, wait for the kboot prompt and type your configuration name (jmerino in my case).  If all goes fine, the kernel should boot and then start userland initialization.Thanks go to the guys at the cbe-oss-dev mailing list for helping me in building the kernel and solving the missing console problem.Update (23:01): Added a link to a NFS-root tutorial.
+
+        <a href="/2007/03/building-updated-kernel-for-ps3.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1430,34 +1462,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2007/01/mac-os-x-aliases-and-symbolic-links.html">Mac OS X aliases and symbolic links</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-January
-
-20th,
-  
-2007
-at
-13:48 
-        &middot;
-        <a href="/2007/01/mac-os-x-aliases-and-symbolic-links.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2007/01/mac-os-x-aliases-and-symbolic-links.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Even though aliases and symbolic links may seem to be the same thing in Mac OS X, this is not completely true.  One could think they are effectively the same because, with the switch to a Unix base in version 10.0, symbolic links became a "normal thing" in the system.  However, for better or worse, differences still remain; let's see them.Symbolic links can only be created from the command line by using the ln(1) utility.  Once created, the Finder will represent them as aliases (with a little arrow in their icon's lower-left corner) and treat them as such.  A symbolic link is stored on disk as a non-empty file which contains the full or relative path to the file it points to; then, the link's inode is marked as special by activating its symbolic link flag.  (This is how things work in UFS; I suspect HFS+ is similar, but cannot confirm it.)Aliases, on the other hand, are created from the Finder (and possibly with SetFile(1), but I don't know how) and are stored as regular, empty files if inspected from the command line.  However, they have the a extended attribute set on them, which marks them as special files, and the necessary information is stored (I think) in their resource fork.The interesting thing about aliases is that they are more versatile than symbolic links.  For example: an alias can point to a file that is stored inside a disk image.  When accessing such an alias, the system will automatically mount the corresponding disk image if not already mounted and then redirect you to the file.  This may be interesting to transparently access files saved into an encrypted disk image: you store the files into the image, create aliases to them on your desktop and, when opened by any alias-aware application, the system will ask you for the image's password, mount it and provide you the file.  But, unfortunately, aliases do not work from the command line, so this benefit is not as impressive as it could be (at least for me).
-
-        <a href="/2007/01/mac-os-x-aliases-and-symbolic-links.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1530,10 +1534,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/10">October 2017</a> (1)</li>
       <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>

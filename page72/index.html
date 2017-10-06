@@ -1119,6 +1119,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1261,6 +1265,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2006/01/file-previews-in-nautilus.html">File previews in Nautilus</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+1st,
+  
+2006
+at
+12:54 
+        &middot;
+        <a href="/2006/01/file-previews-in-nautilus.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2006/01/file-previews-in-nautilus.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Yesterday's evening, I was organizing some of my pictures when I noticed that Nautilus wasn't generating previews for any of them.  This annoyed me so much that I decided to track down the issue, which I've done today.The first thing I did was to attach a gdb session to the currently running Nautilus process, adding some breakpoints to the functions that seemed to generate preview images; I located them using grep(1) and some obvious keywords.  This wasn't very helpful, but at least I could see that the thumbnail generation routine checks whether the file is local or not (because Nautilus lets you set different preferences for them).With this in mind, I resorted to the traditional and not-so-elegant printf debugging technique (which, with pkgsrc in the middle, is quite annoying).  Effectively, a call to gnome_vfs_uri_is_local was always returning false, no matter which file it was passed.  It was clear that the problem was in gnome-vfs itself.So I switched to the gnome-vfs code, located that function and saw that it was very short: basically, all it does is delegate its task to another function that depends on the method associated to the file &mdash; you can think of the method as the protocol that manages it.  As I was accessing local files, the method in use was the file method (implemented in modules/file-method.c), so the affected function was, how not, its do_is_local.As it is a bit complex (due to caching issues for efficiency), I added some more printfs to it to isolate a bit more the problem, which drove me to the filesystem_type function implemented in modules/fstype.c.  And man, when looking at this function I quickly understood why it was the focus of the problem.  It is so clumsy &mdash; portability-wise &mdash; that it is very easy for it to break under untested circumstances: it is composed of a set of mutually exclusive ifdefs (one for each possible situation) to determine the file system name in which a file lives.And you guessed right: NetBSD 3.x didn't match any of them, so it resorted to a default entry (returning an unknown file system type) that is always treated as remote by the file method code.The solution has been to workaround the detection of one of these special cases in the configure script to properly detect statvfs(2) under NetBSD.  This is just a hack that adds to the uglyness of the original code, but fixing this issue properly will require a lot of work and the willingness of the gnome-vfs maintainers to accept the changes.I will ask for a pull-up to the pkgsrc-2005Q4 branch when I've been able to confirm that this does not break on other NetBSD versions.  Now have fun watching your images again! ;-)
+
+        <a href="/2006/01/file-previews-in-nautilus.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1430,34 +1462,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2005/12/comments-after-month-with-ibook.html">Comments after a month with the iBook</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-December
-
-16th,
-  
-2005
-at
-14:58 
-        &middot;
-        <a href="/2005/12/comments-after-month-with-ibook.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2005/12/comments-after-month-with-ibook.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        It has already passed a full month since I bought the iBook 12".  And man, this is one of the best buys I've ever made.  Just after I got it, the preinstalled Mac OS X greeted me and let me set up the machine.  After that, I spent some time installing the applications I needed such as XCode, Vim.app (yes, I really like Vim's graphical version), the Subversion and Monotone clients, Adium X, Firefox (because Safari fails to open my faculty's website), NeoOffice/J, The Gimp, Colloquy and a bunch of other less-important things.  (I haven't had time yet to play with some of the integrated applications.)Since then, I have been doing real work exclusively.  The machine has been rock solid and I haven't had any single problem with the hardware nor the software.  Not to mention that the system and the applications have taken care to update themselves whenever needed, so I haven't had to administer the box.  I now understand when people say they want to use computers rather than fight with them...Anyway, the first idea of this post was to summarize the things I like most about the system itself, so let's continue with that.  First of all, I'm in love with Expos&eacute;.  Before I had the Mac, Mac-users often told me how great this feature was, but I was really skeptical and didn't believe them.  My mind has changed completely: this feature is truly amazing.  Visually selecting the window you want rather than having to look for a name in a task bar or window list is a lot easier.  Not to mention that the way it behaves is a lot better than some free clones (which I had tried and didn't really convince me).Secondly, there is the Dashboard.  I find this feature useful because I have tools like a dictionary, the weather report, iTunes control and several other things quickly available after a mouse gesture.  Indeed, GNOME provides much of these features in the task bar, but they end up bothering me because they remove a lot of useful space from it.  Having these applications in a "secondary screen" is nice &mdash; of course, you can achieve something like this with an auxiliary virtual desktop.Then, there is the concept of active application vs. active window.  I also was quite reluctant to have the menu bar at the top of the screen; in fact, I'd already tried this behavior in KDE but didn't convince me (possibly because its applications are not designed to work in such way).  I've now come to like it: the menu bar is quickly accessible, as it is placed along a screen boundary, and when the application is active, all its windows come to the front layer.  Furthermore, the menu layout is well standarized across applications, so the most common options are available in a known place even if you've not used the program before.There is also Spotlight, which quickly searches your hard drive for files matching a given search criterion.  It is nice, but there is already Google Desktop for Windows boxes or Beagle for Unix ones, so I don't see it as revealing as the other features described here.Not to mention its BSD core.  While the system is designed for desktop usage, having a Unix system underneath is excellent for development tasks.  Add pkgsrc to the mix and you can get any Unix software you want painlessly :-)At last, although I'm also a bit reluctant about visual effects, the ones in Mac OS X are well done and do not get in the way.  They even help you in your daily work by, e.g., showing your active window at a "upper" level (using a drop shadow), letting you put some windows in transparent mode so that you can work on two documents at once and other similar things.Conclusion: I don't regret at all having bought the iBook and I really like its OS, Mac OS X (pity its UI is not free).  Of course, I won't leave NetBSD nor pkgsrc development, as I already have a quite long to-do list for them (on which I'll work when I finish this university semester) and I believe in them! ;-)
-
-        <a href="/2005/12/comments-after-month-with-ibook.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1530,10 +1534,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/10">October 2017</a> (1)</li>
       <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>

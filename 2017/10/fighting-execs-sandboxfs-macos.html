@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    
+
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The above 3 meta tags *must* come first in the head; any other head
+      content must come *after* these tags -->
+
+<meta name="description"
+      content="A few weeks ago, we announced sandboxfs: a FUSE file system to expose an arbitrary view of the host’s file system.  We intend to use this file system in Baze...">
+<meta name="author" content="Julio Merino">
+
+<meta content="http://julio.meroh.net/2017/10/fighting-execs-sandboxfs-macos.html" property="og:url">
+
+<link rel="canonical" href="http://julio.meroh.net/2017/10/fighting-execs-sandboxfs-macos.html">
+<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+
+<link rel="stylesheet" href="/css/main.css">
+
+<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+  <script src="/js/html5shiv-3.7.2.min.js"></script>
+  <script src="/js/respond-1.4.2.min.js"></script>
+<![endif]-->
+
+    <title>Fighting execs via sandboxfs on macOS - Julio Merino</title>
+    <meta content="Fighting execs via sandboxfs on macOS - Julio Merino" property="og:title">
+  </head>
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-default navbar-fixed-top">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed"
+              data-toggle="collapse" data-target="#navbar"
+              aria-expanded="false" aria-controls="navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">Julio Merino</a>
+    </div>
+
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/about/"
+                >About</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/essays/"
+                >Essays</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/software/"
+                >Software</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+              
+                <li><a class="page-link"
+                href="/work/"
+                >Work</a></li>
+              
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+          
+            
+          
+        
+      </ul>
+
+      <form class="navbar-form navbar-right" method="get" role="search"
+            action="http://www.google.com/search">
+          <div class="form-group">
+            <input type="text" name="query" class="form-control"
+                   placeholder="Search">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+          </div>
+          <button type="submit" value="Search" class="btn btn-default">
+            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+          </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Fighting execs via sandboxfs on macOS</h1>
+
+        <p><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+October
+
+6th,
+  
+2017
+at
+16:27 
+        
+        </p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        <p>A few weeks ago, <a href="/2017/08/introducing-sandboxfs.html">we announced sandboxfs</a>: a FUSE file system to expose an arbitrary view of the host’s file system.  We intend to use this file system in <a href="http://bazel.build/">Bazel</a> to provide a faster and more correct sandboxing technique for build actions.</p>
+
+<p>Since then, I’ve been actively working on stabilizing sandboxfs per se and its integration with Bazel.  The first milestone, which we haven’t reached yet, is to get Bazel to self-build on macOS with sandboxfs.  The second milestone, which obviously depends on builds being stable, is performance evaluation and optimization.  The goal is to measure the behavior of this technique against previous sandboxing strategies on the Mac.  Depending on the numbers, we’ll decide whether it makes sense to continue investing in the sandboxfs idea or not.</p>
+
+<p>Work on the first milestone has been far from easy.  Getting sandboxfs to a sufficiently stable state that is able to support Bazel’s self-build has been very tricky.  The original implementation was written on Linux and, even though FUSE should be the same across systems, there are subtle (unexpected) differences that cause strange behaviors.</p>
+
+<p>The last issue in this saga was “fun” to troubleshoot and fix.  As I was telling the story to a coworker, I realized how ridiculous this all was… so I decided to write it down for you.  As you will see, the fix was pretty much a one-liner—but understanding what was happening took hours and writing tests for the fix took days.</p>
+
+<!--end-of-excerpt-->
+
+<h1 id="problem-statement">Problem statement</h1>
+
+<p>Bazel uses sandboxfs to expose a directory tree that contains the tools required for a build action, the sources for the action, and a writable directory for the outputs.  For a Java action, the tree needs to contain the JDK mapped into the view.</p>
+
+<p>These actions were failing and in not very obvious ways.  (Bazel hides the failure message from the subprocess and I haven’t spent much time in figuring out why.)  To reproduce, I set up my own minimal sandboxfs instance mimicking what Bazel was requesting for the action and ran Java from it:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ mkdir /tmp/bin
+$ cp /usr/bin/java /tmp/bin
+$ sandboxfs static --read_only_mapping=/:/tmp/bin /tmp/mnt &amp;
+$ /tmp/mnt/java
+Killed: 9
+</code></pre>
+</div>
+
+<p>Oh wow.  Such error.  Much descriptive.</p>
+
+<h1 id="lets-troubleshoot">Let’s troubleshoot</h1>
+
+<p><strong>Q. Bazel only maps individual files in the sandbox (e.g. the Java binary).  Did Bazel forget to map additional files required to start up the Java process?</strong></p>
+
+<p>A. It was possible that Java (or dyld or whatever else the process needs to start up) needed to access many more files than the ones that were mapped by Bazel for some reason, so I set up a looser sandboxfs instance to expose my full file system:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ sandboxfs static --read_only_mapping=/:/ /tmp/mnt &amp;
+$ /tmp/mnt/usr/bin/java
+Killed: 9
+</code></pre>
+</div>
+
+<p>And no, that was not the problem.  Not surprising given that the other sandboxing technique implemented in Bazel is known to work just fine.</p>
+
+<p><strong>Q. What system calls is the process issuing that need to be served by FUSE?  Maybe the execution was trying to access a file in a way that was not properly implemented within sandboxfs.</strong></p>
+
+<p>A. To look into this, I would have used <code class="highlighter-rouge">ktrace</code>… but to my surprise, this old trusty tool is gone from macOS Sierra and replaced with something completely different in macOS High Sierra.</p>
+
+<p>There are alternatives though.</p>
+
+<p><code class="highlighter-rouge">fs_usage</code>, which is not as simple nor as comprehensive as <code class="highlighter-rouge">ktrace</code>, could do the job.  But no, nothing. <code class="highlighter-rouge">fs_usage</code> caught zero accesses from the attempt to run Java from the sandbox.  Maybe the fancier <em>Instruments</em> could help, which I have little experience with… but no, nothing either.</p>
+
+<p>What?  How is that possible?  Am I misusing the tools?  I’d expect at least some system call by dyld trying to load shared libraries…  Given confusion, I resorted to reading more documentation and playing around with known-good cases.  But no luck.</p>
+
+<p><strong>Q. Maybe the process is truly killed before it has even had a chance to do anything.  What does the kernel think?</strong></p>
+
+<p>A. Let’s see:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ sudo dmesg
+[...]
+AMFI: code signature validation failed.
+/private/tmp/mnt/java: Possible race detected. Rejecting.
+mac_vnode_check_signature: /private/tmp/mnt/java: code signature validation failed fatally: When validating /private/tmp/mnt/java:
+  The code contains a Team ID, but validating its signature failed.
+Please check your system log.proc 49122: load code signature error 4 for file "java"
+</code></pre>
+</div>
+
+<p>There you go.  Something about signatures and a “possible race condition”.  Yikes: troubleshooting either can be painful.  Which is it gonna be?</p>
+
+<p><strong>Q. Let’s start with the signatures, as that’s potentially easier to figure out than catching a race.  Where are the signatures stored?</strong></p>
+
+<p>A. My first thought was “extended attributes” given how macOS has traditionally enjoyed storing file information in resource forks.  sandboxfs does not yet implement extended attributes so, if macOS stored anything regarding signatures in them, validation wouldn’t work:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ ls -Ll /usr/bin/java
+-rwxr-xr-x  1 root  wheel  58336 Sep 21 00:34 /usr/bin/java
+</code></pre>
+</div>
+
+<p>No, no extended attributes for the binary under test (note there is no <code class="highlighter-rouge">@</code> sign after the permissions). Nothing.</p>
+
+<p>That said, as the failure was so mysterious, I instrumented sandboxfs to print requests for extended attributes in case those were being requested for some other file, and there indeed was one read for <code class="highlighter-rouge">com.apple.quarantine</code> on the binary.  Could be related given the name, but doubtful because the attribute was not on the binary.</p>
+
+<p><strong>Q. What about the read path?  If reads misbehave, that could cause signature validation to fail.</strong></p>
+
+<p>A. I reviewed the code in detail without finding anything obviously wrong, but that’s not sufficient to prove there is no problem.  File systems are complex beasts and it’s hard to know if you are handling an operation correctly unless you know of all possible corner cases (and I don’t know them all).</p>
+
+<p>Fortunately, there are many more FUSE file systems out there with which to play. I built <a href="http://bindfs.org/">bindfs</a> and tried mapping the exact same files as with sandboxfs… and voila, things worked just fine: Java started up as expected.</p>
+
+<p>OK, good.  That means that FUSE works fine even after the update to High Sierra and that I have a baseline with which to compare behavior.  I modified the bindfs code to print a trace of all file opens and reads, did the same in sandboxfs, and compared the two traces.  Identical (same operations, same arguments, etc.), up to the crash point.</p>
+
+<p><strong>Q. Maybe the operations we implement are correct, but are we implementing all operations that are necessary?</strong></p>
+
+<p>A. At first, I just tried to map a different binary into the sandboxfs, like <code class="highlighter-rouge">/bin/ls</code> and run that.  This worked fine, so it seems executions do work through the file system (which in turn means paging ought to be working correctly).</p>
+
+<p>But let’s look in more detail.  bindfs implements FUSE hooks that sandboxfs does not yet (like the extended attributes ones that we already discarded), so maybe those silent rejections from sandboxfs are what cause the problem.  A cursory review of all possibilities didn’t show anything obvious other than <code class="highlighter-rouge">statvfs</code> not being there.</p>
+
+<p>Running sandboxfs with <code class="highlighter-rouge">--debug</code> showed that <code class="highlighter-rouge">statvfs</code> was being called multiple times, so maybe the verification process wanted to know something about the file system size?  I tried adding a fake implementation of statvfs to sandboxfs but no luck either.</p>
+
+<p><strong>Q. Then we have to go back to the difficult case.  Is it a race condition?</strong></p>
+
+<p>A. Assuming there is a race condition, <em>where</em> is it?  Sure, sandboxfs is heavily threaded, but is the race there?  How could the kernel even know if that was the case?  (It can’t—much less with goroutines as they don’t have a 1:1 mapping with a kernel primitive.)</p>
+
+<p><em>[Shudder]</em> Are the Go FUSE bindings handling kernel requests as a whole incorrectly and the incorrect order trips the kernel’s race condition detection?  Note that bindfs is written in C so it uses a completely different FUSE stack, so there could indeed be something fishy in the Go one.</p>
+
+<p>Nah, crazy talk.  No desire to go down this route just yet, so let’s think about other possibilities.</p>
+
+<p><strong>Q. We have been assuming that those entries in dmesg come from the kernel, but do they?</strong></p>
+
+<p>A. Google turned out nothing useful: searching for parts of the error messages found some forum posts with users reporting similar issues… but as you may expect for obscure problems, all answers were non-sensical or <a href="https://xkcd.com/979/">missing</a>.</p>
+
+<p>Google also turned out some results for the open-source Darwin sources when I searched for the <code class="highlighter-rouge">mac_vnode_check_signature</code> message, but searching the other parts of the message in the returned file wasn’t successful.</p>
+
+<p>Given the difficulty in running textual queries on the web UI for the sources, I downloaded the Darwin sources and ran <code class="highlighter-rouge">grep -ri</code> on them for various parts of the error message.  Nothing.  What? It’s indeed not the kernel coming up with the denial for the verification: the message must be coming from a kernel extension… or a userspace component?</p>
+
+<p>Let’s take out the big guns:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ find /System -type f -print0 | xargs -0 -P 12 -n 1 sh -c 'if strings "$0" | grep "Possible race detected"; then echo "$0"; fi'
+%s: Possible race detected. Rejecting.
+/System/Library/Extensions/AppleMobileFileIntegrity.kext/Contents/MacOS/AppleMobileFileIntegrity
+</code></pre>
+</div>
+
+<p>(Did I just grep my whole system for an error string?  Yes I did.  Not the first time I use this technique to find culprits, and not the last one either I suspect.  It’s pretty effective.)</p>
+
+<p>Look, one match!</p>
+
+<p><strong>Q. AppleMobileFileIntegrity.  That sounds suspicious.  What is that thing?</strong></p>
+
+<p>A. Google turned out several results, most pointing at forum threads about rooting iPhones or bypassing security protections—something I was not interested in.</p>
+
+<p>This led me to discover the <code class="highlighter-rouge">amfid</code> daemon, which as you may expect is not documented (its manual page is a joke), and invoking it for help didn’t produce anything useful.</p>
+
+<p><strong>Q. <em>[Mind wanders]</em> Let me interrupt you for a second.  I just had an idea!  Are the FUSE-level mount options different between sandboxfs and bindfs?</strong></p>
+
+<p>A. The <code class="highlighter-rouge">fusermount</code> binary, which is a helper tool that actually configures the file system’s mount point, accepts a bunch of options to configure how the mount point is set up.  These could be different between sandboxfs and bindfs causing the behavior discrepancy.</p>
+
+<p>Some code inspection yielded that the answer is yes: the options differ.  One of them caught my eye: <code class="highlighter-rouge">-o allow_other</code>.  So I patched this into sandboxfs, which was a matter of adding a the single extra parameter <code class="highlighter-rouge">fuse.AllowRoot()</code> to the mount call… and…</p>
+
+<p>Ta-da!  Java now started.</p>
+
+<p><strong>Q. Waaaaaaat? 3 hours into this for this stupid problem?!?!</strong></p>
+
+<p>A. Yep.  Stupid problem, but finding the solution is always regarding.  So far, we have gained a lot of context on what’s going on and we know what needs to change for the problem to go away.</p>
+
+<p>And then it dawned on me.  The <code class="highlighter-rouge">amfid</code> daemon!  What is it running as?!</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ ps aux | grep amfi[d]
+root             75739   0.0  0.1  2495744  12824   ??  Ss    2:22PM   0:00.04 /usr/libexec/amfid
+</code></pre>
+</div>
+
+<p>That explains it.</p>
+
+<p>Let’s rationalize the problem:</p>
+
+<ol>
+  <li>You try to exec Java from within the sandboxfs.</li>
+  <li>The kernel gets the execution request and maps the executable into memory.</li>
+  <li>The kernel issues a few reads on the file and determines somehow that it needs to validate the signature.</li>
+  <li>The kernel calls out to the <code class="highlighter-rouge">amfid</code> daemon, running in as root.</li>
+  <li>The <code class="highlighter-rouge">amfid</code> daemon tries to read the executable and fails because the file system in which it lives was not mounted to allow root to read from it.</li>
+  <li>The <code class="highlighter-rouge">amfid</code> daemon tells the kernel that there was a race condition: the executable that the kernel told it to inspect is now gone.</li>
+  <li>The kernel cannot verify the signature so it terminates the process.</li>
+</ol>
+
+<p>Simple, huh?  Well, that’s my current working theory.  Since I fixed the problem, I haven’t been able to reproduce it any longer.  Is the kernel caching signature verifications anywhere?  Maybe, but I couldn’t figure that out.  Did the recent update of OSXFUSE fix something within it?  Did the Xcode update do so?  Too many moving pieces.</p>
+
+<h1 id="the-fix">The fix</h1>
+
+<p>The one-line fix mentioned above became a multi-line fix because of the desire to expose the permissions tunable to the user.</p>
+
+<p>I ended up adding a new <code class="highlighter-rouge">--allow</code> flag to sandboxfs that can take one of: <code class="highlighter-rouge">self</code> to indicate default access; <code class="highlighter-rouge">other</code> to indicate that any user can access the file system; and <code class="highlighter-rouge">root</code> to indicate that only the user that mounted the file system and root can access it.  But still: this was doable in like 20, 30 minutes tops.</p>
+
+<p>Now, testing the new feature was harder and it took several hours over several days to get the tests right.  This is a horror story for another day.</p>
+
+      </article>
+
+      <div class="post-links">
+        <p>
+          
+
+          
+
+          <a href="/feed.xml">Subscribe
+          via RSS</a>
+          &middot;
+          <a href="/blog/">Go to posts index</a>
+        </p>
+
+        <form class="form-inline"
+            action="https://feedburner.google.com/fb/a/mailverify"
+            method="post"
+            target="popupwindow"
+            onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+          <div class="form-group form-group-sm">
+            <input type="text" style="width: 400px" name="email"
+                    placeholder="Enter your email to subscribe to new posts"
+                    class="form-control input-sm"/>
+          </div>
+          <button type="submit" value="Subscribe"
+                  class="btn btn-default btn-sm">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          &nbsp;&nbsp;&nbsp;Delivered by
+          <input type="hidden" value="jmmv" name="uri"/>
+          <input type="hidden" name="loc" value="en_US"/>
+          <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
+        </form>
+      </div>
+
+      
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http://julio.meroh.net/2017/10/fighting-execs-sandboxfs-macos.html";
+            this.page.identifier = "/2017/10/fighting-execs-sandboxfs-macos";
+          };
+          (function() { // DON'T EDIT BELOW THIS LINE
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+      
+    </div>
+
+    <div class="container">
+  <footer>
+    <p class="pull-right"><a href="#">Back to top</a></p>
+    <p>Copyright 2016 Julio Merino</p>
+  </footer>
+</div>
+
+<script src="/js/jquery-1.11.2.min.js">
+</script>
+<script
+  src="/css/bootstrap.min.js">
+</script>
+
+<script src="/js/auto-toc-1.0.0.dist.js">
+</script>
+
+<script>
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

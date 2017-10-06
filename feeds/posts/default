@@ -6,9 +6,370 @@
 </description>
     <link>http://julio.meroh.net/</link>
     <atom:link href="http://julio.meroh.net/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Fri, 25 Aug 2017 20:33:08 +0000</pubDate>
-    <lastBuildDate>Fri, 25 Aug 2017 20:33:08 +0000</lastBuildDate>
-    <generator>Jekyll v3.5.0</generator>
+    <pubDate>Fri, 06 Oct 2017 20:29:32 +0000</pubDate>
+    <lastBuildDate>Fri, 06 Oct 2017 20:29:32 +0000</lastBuildDate>
+    <generator>Jekyll v3.5.2</generator>
+    
+      <item>
+        <title>Fighting execs via sandboxfs on macOS</title>
+        
+          <description>
+            A few weeks ago, we announced sandboxfs: a FUSE file system to expose an arbitrary view of the host’s file system.  We intend to use this file system in Bazel to provide a faster and more correct sandboxing technique for build actions.
+
+Since then, I’ve been actively working on stabilizing sandboxfs per se and its integration with Bazel.  The first milestone, which we haven’t reached yet, is to get Bazel to self-build on macOS with sandboxfs.  The second milestone, which obviously depends on builds being stable, is performance evaluation and optimization.  The goal is to measure the behavior of this technique against previous sandboxing strategies on the Mac.  Depending on the numbers, we’ll decide whether it makes sense to continue investing in the sandboxfs idea or not.
+
+Work on the first milestone has been far from easy.  Getting sandboxfs to a sufficiently stable state that is able to support Bazel’s self-build has been very tricky.  The original implementation was written on Linux and, even though FUSE should be the same across systems, there are subtle (unexpected) differences that cause strange behaviors.
+
+The last issue in this saga was “fun” to troubleshoot and fix.  As I was telling the story to a coworker, I realized how ridiculous this all was… so I decided to write it down for you.  As you will see, the fix was pretty much a one-liner—but understanding what was happening took hours and writing tests for the fix took days.
+
+
+
+Problem statement
+
+Bazel uses sandboxfs to expose a directory tree that contains the tools required for a build action, the sources for the action, and a writable directory for the outputs.  For a Java action, the tree needs to contain the JDK mapped into the view.
+
+These actions were failing and in not very obvious ways.  (Bazel hides the failure message from the subprocess and I haven’t spent much time in figuring out why.)  To reproduce, I set up my own minimal sandboxfs instance mimicking what Bazel was requesting for the action and ran Java from it:
+
+$ mkdir /tmp/bin
+$ cp /usr/bin/java /tmp/bin
+$ sandboxfs static --read_only_mapping=/:/tmp/bin /tmp/mnt &amp;
+$ /tmp/mnt/java
+Killed: 9
+
+
+
+Oh wow.  Such error.  Much descriptive.
+
+Let’s troubleshoot
+
+Q. Bazel only maps individual files in the sandbox (e.g. the Java binary).  Did Bazel forget to map additional files required to start up the Java process?
+
+A. It was possible that Java (or dyld or whatever else the process needs to start up) needed to access many more files than the ones that were mapped by Bazel for some reason, so I set up a looser sandboxfs instance to expose my full file system:
+
+$ sandboxfs static --read_only_mapping=/:/ /tmp/mnt &amp;
+$ /tmp/mnt/usr/bin/java
+Killed: 9
+
+
+
+And no, that was not the problem.  Not surprising given that the other sandboxing technique implemented in Bazel is known to work just fine.
+
+Q. What system calls is the process issuing that need to be served by FUSE?  Maybe the execution was trying to access a file in a way that was not properly implemented within sandboxfs.
+
+A. To look into this, I would have used ktrace… but to my surprise, this old trusty tool is gone from macOS Sierra and replaced with something completely different in macOS High Sierra.
+
+There are alternatives though.
+
+fs_usage, which is not as simple nor as comprehensive as ktrace, could do the job.  But no, nothing. fs_usage caught zero accesses from the attempt to run Java from the sandbox.  Maybe the fancier Instruments could help, which I have little experience with… but no, nothing either.
+
+What?  How is that possible?  Am I misusing the tools?  I’d expect at least some system call by dyld trying to load shared libraries…  Given confusion, I resorted to reading more documentation and playing around with known-good cases.  But no luck.
+
+Q. Maybe the process is truly killed before it has even had a chance to do anything.  What does the kernel think?
+
+A. Let’s see:
+
+$ sudo dmesg
+[...]
+AMFI: code signature validation failed.
+/private/tmp/mnt/java: Possible race detected. Rejecting.
+mac_vnode_check_signature: /private/tmp/mnt/java: code signature validation failed fatally: When validating /private/tmp/mnt/java:
+  The code contains a Team ID, but validating its signature failed.
+Please check your system log.proc 49122: load code signature error 4 for file "java"
+
+
+
+There you go.  Something about signatures and a “possible race condition”.  Yikes: troubleshooting either can be painful.  Which is it gonna be?
+
+Q. Let’s start with the signatures, as that’s potentially easier to figure out than catching a race.  Where are the signatures stored?
+
+A. My first thought was “extended attributes” given how macOS has traditionally enjoyed storing file information in resource forks.  sandboxfs does not yet implement extended attributes so, if macOS stored anything regarding signatures in them, validation wouldn’t work:
+
+$ ls -Ll /usr/bin/java
+-rwxr-xr-x  1 root  wheel  58336 Sep 21 00:34 /usr/bin/java
+
+
+
+No, no extended attributes for the binary under test (note there is no @ sign after the permissions). Nothing.
+
+That said, as the failure was so mysterious, I instrumented sandboxfs to print requests for extended attributes in case those were being requested for some other file, and there indeed was one read for com.apple.quarantine on the binary.  Could be related given the name, but doubtful because the attribute was not on the binary.
+
+Q. What about the read path?  If reads misbehave, that could cause signature validation to fail.
+
+A. I reviewed the code in detail without finding anything obviously wrong, but that’s not sufficient to prove there is no problem.  File systems are complex beasts and it’s hard to know if you are handling an operation correctly unless you know of all possible corner cases (and I don’t know them all).
+
+Fortunately, there are many more FUSE file systems out there with which to play. I built bindfs and tried mapping the exact same files as with sandboxfs… and voila, things worked just fine: Java started up as expected.
+
+OK, good.  That means that FUSE works fine even after the update to High Sierra and that I have a baseline with which to compare behavior.  I modified the bindfs code to print a trace of all file opens and reads, did the same in sandboxfs, and compared the two traces.  Identical (same operations, same arguments, etc.), up to the crash point.
+
+Q. Maybe the operations we implement are correct, but are we implementing all operations that are necessary?
+
+A. At first, I just tried to map a different binary into the sandboxfs, like /bin/ls and run that.  This worked fine, so it seems executions do work through the file system (which in turn means paging ought to be working correctly).
+
+But let’s look in more detail.  bindfs implements FUSE hooks that sandboxfs does not yet (like the extended attributes ones that we already discarded), so maybe those silent rejections from sandboxfs are what cause the problem.  A cursory review of all possibilities didn’t show anything obvious other than statvfs not being there.
+
+Running sandboxfs with --debug showed that statvfs was being called multiple times, so maybe the verification process wanted to know something about the file system size?  I tried adding a fake implementation of statvfs to sandboxfs but no luck either.
+
+Q. Then we have to go back to the difficult case.  Is it a race condition?
+
+A. Assuming there is a race condition, where is it?  Sure, sandboxfs is heavily threaded, but is the race there?  How could the kernel even know if that was the case?  (It can’t—much less with goroutines as they don’t have a 1:1 mapping with a kernel primitive.)
+
+[Shudder] Are the Go FUSE bindings handling kernel requests as a whole incorrectly and the incorrect order trips the kernel’s race condition detection?  Note that bindfs is written in C so it uses a completely different FUSE stack, so there could indeed be something fishy in the Go one.
+
+Nah, crazy talk.  No desire to go down this route just yet, so let’s think about other possibilities.
+
+Q. We have been assuming that those entries in dmesg come from the kernel, but do they?
+
+A. Google turned out nothing useful: searching for parts of the error messages found some forum posts with users reporting similar issues… but as you may expect for obscure problems, all answers were non-sensical or missing.
+
+Google also turned out some results for the open-source Darwin sources when I searched for the mac_vnode_check_signature message, but searching the other parts of the message in the returned file wasn’t successful.
+
+Given the difficulty in running textual queries on the web UI for the sources, I downloaded the Darwin sources and ran grep -ri on them for various parts of the error message.  Nothing.  What? It’s indeed not the kernel coming up with the denial for the verification: the message must be coming from a kernel extension… or a userspace component?
+
+Let’s take out the big guns:
+
+$ find /System -type f -print0 | xargs -0 -P 12 -n 1 sh -c 'if strings "$0" | grep "Possible race detected"; then echo "$0"; fi'
+%s: Possible race detected. Rejecting.
+/System/Library/Extensions/AppleMobileFileIntegrity.kext/Contents/MacOS/AppleMobileFileIntegrity
+
+
+
+(Did I just grep my whole system for an error string?  Yes I did.  Not the first time I use this technique to find culprits, and not the last one either I suspect.  It’s pretty effective.)
+
+Look, one match!
+
+Q. AppleMobileFileIntegrity.  That sounds suspicious.  What is that thing?
+
+A. Google turned out several results, most pointing at forum threads about rooting iPhones or bypassing security protections—something I was not interested in.
+
+This led me to discover the amfid daemon, which as you may expect is not documented (its manual page is a joke), and invoking it for help didn’t produce anything useful.
+
+Q. [Mind wanders] Let me interrupt you for a second.  I just had an idea!  Are the FUSE-level mount options different between sandboxfs and bindfs?
+
+A. The fusermount binary, which is a helper tool that actually configures the file system’s mount point, accepts a bunch of options to configure how the mount point is set up.  These could be different between sandboxfs and bindfs causing the behavior discrepancy.
+
+Some code inspection yielded that the answer is yes: the options differ.  One of them caught my eye: -o allow_other.  So I patched this into sandboxfs, which was a matter of adding a the single extra parameter fuse.AllowRoot() to the mount call… and…
+
+Ta-da!  Java now started.
+
+Q. Waaaaaaat? 3 hours into this for this stupid problem?!?!
+
+A. Yep.  Stupid problem, but finding the solution is always regarding.  So far, we have gained a lot of context on what’s going on and we know what needs to change for the problem to go away.
+
+And then it dawned on me.  The amfid daemon!  What is it running as?!
+
+$ ps aux | grep amfi[d]
+root             75739   0.0  0.1  2495744  12824   ??  Ss    2:22PM   0:00.04 /usr/libexec/amfid
+
+
+
+That explains it.
+
+Let’s rationalize the problem:
+
+
+  You try to exec Java from within the sandboxfs.
+  The kernel gets the execution request and maps the executable into memory.
+  The kernel issues a few reads on the file and determines somehow that it needs to validate the signature.
+  The kernel calls out to the amfid daemon, running in as root.
+  The amfid daemon tries to read the executable and fails because the file system in which it lives was not mounted to allow root to read from it.
+  The amfid daemon tells the kernel that there was a race condition: the executable that the kernel told it to inspect is now gone.
+  The kernel cannot verify the signature so it terminates the process.
+
+
+Simple, huh?  Well, that’s my current working theory.  Since I fixed the problem, I haven’t been able to reproduce it any longer.  Is the kernel caching signature verifications anywhere?  Maybe, but I couldn’t figure that out.  Did the recent update of OSXFUSE fix something within it?  Did the Xcode update do so?  Too many moving pieces.
+
+The fix
+
+The one-line fix mentioned above became a multi-line fix because of the desire to expose the permissions tunable to the user.
+
+I ended up adding a new --allow flag to sandboxfs that can take one of: self to indicate default access; other to indicate that any user can access the file system; and root to indicate that only the user that mounted the file system and root can access it.  But still: this was doable in like 20, 30 minutes tops.
+
+Now, testing the new feature was harder and it took several hours over several days to get the tests right.  This is a horror story for another day.
+
+            &lt;a href=&quot;http://julio.meroh.net/2017/10/fighting-execs-sandboxfs-macos.html&quot;&gt;[Continue reading]&lt;/a&gt;
+          </description>
+        
+          <description>&lt;p&gt;A few weeks ago, &lt;a href=&quot;/2017/08/introducing-sandboxfs.html&quot;&gt;we announced sandboxfs&lt;/a&gt;: a FUSE file system to expose an arbitrary view of the host’s file system.  We intend to use this file system in &lt;a href=&quot;http://bazel.build/&quot;&gt;Bazel&lt;/a&gt; to provide a faster and more correct sandboxing technique for build actions.&lt;/p&gt;
+
+&lt;p&gt;Since then, I’ve been actively working on stabilizing sandboxfs per se and its integration with Bazel.  The first milestone, which we haven’t reached yet, is to get Bazel to self-build on macOS with sandboxfs.  The second milestone, which obviously depends on builds being stable, is performance evaluation and optimization.  The goal is to measure the behavior of this technique against previous sandboxing strategies on the Mac.  Depending on the numbers, we’ll decide whether it makes sense to continue investing in the sandboxfs idea or not.&lt;/p&gt;
+
+&lt;p&gt;Work on the first milestone has been far from easy.  Getting sandboxfs to a sufficiently stable state that is able to support Bazel’s self-build has been very tricky.  The original implementation was written on Linux and, even though FUSE should be the same across systems, there are subtle (unexpected) differences that cause strange behaviors.&lt;/p&gt;
+
+&lt;p&gt;The last issue in this saga was “fun” to troubleshoot and fix.  As I was telling the story to a coworker, I realized how ridiculous this all was… so I decided to write it down for you.  As you will see, the fix was pretty much a one-liner—but understanding what was happening took hours and writing tests for the fix took days.&lt;/p&gt;
+
+&lt;!--end-of-excerpt--&gt;
+
+&lt;h1 id=&quot;problem-statement&quot;&gt;Problem statement&lt;/h1&gt;
+
+&lt;p&gt;Bazel uses sandboxfs to expose a directory tree that contains the tools required for a build action, the sources for the action, and a writable directory for the outputs.  For a Java action, the tree needs to contain the JDK mapped into the view.&lt;/p&gt;
+
+&lt;p&gt;These actions were failing and in not very obvious ways.  (Bazel hides the failure message from the subprocess and I haven’t spent much time in figuring out why.)  To reproduce, I set up my own minimal sandboxfs instance mimicking what Bazel was requesting for the action and ran Java from it:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ mkdir /tmp/bin
+$ cp /usr/bin/java /tmp/bin
+$ sandboxfs static --read_only_mapping=/:/tmp/bin /tmp/mnt &amp;amp;
+$ /tmp/mnt/java
+Killed: 9
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;Oh wow.  Such error.  Much descriptive.&lt;/p&gt;
+
+&lt;h1 id=&quot;lets-troubleshoot&quot;&gt;Let’s troubleshoot&lt;/h1&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. Bazel only maps individual files in the sandbox (e.g. the Java binary).  Did Bazel forget to map additional files required to start up the Java process?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. It was possible that Java (or dyld or whatever else the process needs to start up) needed to access many more files than the ones that were mapped by Bazel for some reason, so I set up a looser sandboxfs instance to expose my full file system:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ sandboxfs static --read_only_mapping=/:/ /tmp/mnt &amp;amp;
+$ /tmp/mnt/usr/bin/java
+Killed: 9
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;And no, that was not the problem.  Not surprising given that the other sandboxing technique implemented in Bazel is known to work just fine.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. What system calls is the process issuing that need to be served by FUSE?  Maybe the execution was trying to access a file in a way that was not properly implemented within sandboxfs.&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. To look into this, I would have used &lt;code class=&quot;highlighter-rouge&quot;&gt;ktrace&lt;/code&gt;… but to my surprise, this old trusty tool is gone from macOS Sierra and replaced with something completely different in macOS High Sierra.&lt;/p&gt;
+
+&lt;p&gt;There are alternatives though.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;fs_usage&lt;/code&gt;, which is not as simple nor as comprehensive as &lt;code class=&quot;highlighter-rouge&quot;&gt;ktrace&lt;/code&gt;, could do the job.  But no, nothing. &lt;code class=&quot;highlighter-rouge&quot;&gt;fs_usage&lt;/code&gt; caught zero accesses from the attempt to run Java from the sandbox.  Maybe the fancier &lt;em&gt;Instruments&lt;/em&gt; could help, which I have little experience with… but no, nothing either.&lt;/p&gt;
+
+&lt;p&gt;What?  How is that possible?  Am I misusing the tools?  I’d expect at least some system call by dyld trying to load shared libraries…  Given confusion, I resorted to reading more documentation and playing around with known-good cases.  But no luck.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. Maybe the process is truly killed before it has even had a chance to do anything.  What does the kernel think?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. Let’s see:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ sudo dmesg
+[...]
+AMFI: code signature validation failed.
+/private/tmp/mnt/java: Possible race detected. Rejecting.
+mac_vnode_check_signature: /private/tmp/mnt/java: code signature validation failed fatally: When validating /private/tmp/mnt/java:
+  The code contains a Team ID, but validating its signature failed.
+Please check your system log.proc 49122: load code signature error 4 for file &quot;java&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;There you go.  Something about signatures and a “possible race condition”.  Yikes: troubleshooting either can be painful.  Which is it gonna be?&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. Let’s start with the signatures, as that’s potentially easier to figure out than catching a race.  Where are the signatures stored?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. My first thought was “extended attributes” given how macOS has traditionally enjoyed storing file information in resource forks.  sandboxfs does not yet implement extended attributes so, if macOS stored anything regarding signatures in them, validation wouldn’t work:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ ls -Ll /usr/bin/java
+-rwxr-xr-x  1 root  wheel  58336 Sep 21 00:34 /usr/bin/java
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;No, no extended attributes for the binary under test (note there is no &lt;code class=&quot;highlighter-rouge&quot;&gt;@&lt;/code&gt; sign after the permissions). Nothing.&lt;/p&gt;
+
+&lt;p&gt;That said, as the failure was so mysterious, I instrumented sandboxfs to print requests for extended attributes in case those were being requested for some other file, and there indeed was one read for &lt;code class=&quot;highlighter-rouge&quot;&gt;com.apple.quarantine&lt;/code&gt; on the binary.  Could be related given the name, but doubtful because the attribute was not on the binary.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. What about the read path?  If reads misbehave, that could cause signature validation to fail.&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. I reviewed the code in detail without finding anything obviously wrong, but that’s not sufficient to prove there is no problem.  File systems are complex beasts and it’s hard to know if you are handling an operation correctly unless you know of all possible corner cases (and I don’t know them all).&lt;/p&gt;
+
+&lt;p&gt;Fortunately, there are many more FUSE file systems out there with which to play. I built &lt;a href=&quot;http://bindfs.org/&quot;&gt;bindfs&lt;/a&gt; and tried mapping the exact same files as with sandboxfs… and voila, things worked just fine: Java started up as expected.&lt;/p&gt;
+
+&lt;p&gt;OK, good.  That means that FUSE works fine even after the update to High Sierra and that I have a baseline with which to compare behavior.  I modified the bindfs code to print a trace of all file opens and reads, did the same in sandboxfs, and compared the two traces.  Identical (same operations, same arguments, etc.), up to the crash point.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. Maybe the operations we implement are correct, but are we implementing all operations that are necessary?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. At first, I just tried to map a different binary into the sandboxfs, like &lt;code class=&quot;highlighter-rouge&quot;&gt;/bin/ls&lt;/code&gt; and run that.  This worked fine, so it seems executions do work through the file system (which in turn means paging ought to be working correctly).&lt;/p&gt;
+
+&lt;p&gt;But let’s look in more detail.  bindfs implements FUSE hooks that sandboxfs does not yet (like the extended attributes ones that we already discarded), so maybe those silent rejections from sandboxfs are what cause the problem.  A cursory review of all possibilities didn’t show anything obvious other than &lt;code class=&quot;highlighter-rouge&quot;&gt;statvfs&lt;/code&gt; not being there.&lt;/p&gt;
+
+&lt;p&gt;Running sandboxfs with &lt;code class=&quot;highlighter-rouge&quot;&gt;--debug&lt;/code&gt; showed that &lt;code class=&quot;highlighter-rouge&quot;&gt;statvfs&lt;/code&gt; was being called multiple times, so maybe the verification process wanted to know something about the file system size?  I tried adding a fake implementation of statvfs to sandboxfs but no luck either.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. Then we have to go back to the difficult case.  Is it a race condition?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. Assuming there is a race condition, &lt;em&gt;where&lt;/em&gt; is it?  Sure, sandboxfs is heavily threaded, but is the race there?  How could the kernel even know if that was the case?  (It can’t—much less with goroutines as they don’t have a 1:1 mapping with a kernel primitive.)&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;[Shudder]&lt;/em&gt; Are the Go FUSE bindings handling kernel requests as a whole incorrectly and the incorrect order trips the kernel’s race condition detection?  Note that bindfs is written in C so it uses a completely different FUSE stack, so there could indeed be something fishy in the Go one.&lt;/p&gt;
+
+&lt;p&gt;Nah, crazy talk.  No desire to go down this route just yet, so let’s think about other possibilities.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. We have been assuming that those entries in dmesg come from the kernel, but do they?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. Google turned out nothing useful: searching for parts of the error messages found some forum posts with users reporting similar issues… but as you may expect for obscure problems, all answers were non-sensical or &lt;a href=&quot;https://xkcd.com/979/&quot;&gt;missing&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Google also turned out some results for the open-source Darwin sources when I searched for the &lt;code class=&quot;highlighter-rouge&quot;&gt;mac_vnode_check_signature&lt;/code&gt; message, but searching the other parts of the message in the returned file wasn’t successful.&lt;/p&gt;
+
+&lt;p&gt;Given the difficulty in running textual queries on the web UI for the sources, I downloaded the Darwin sources and ran &lt;code class=&quot;highlighter-rouge&quot;&gt;grep -ri&lt;/code&gt; on them for various parts of the error message.  Nothing.  What? It’s indeed not the kernel coming up with the denial for the verification: the message must be coming from a kernel extension… or a userspace component?&lt;/p&gt;
+
+&lt;p&gt;Let’s take out the big guns:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ find /System -type f -print0 | xargs -0 -P 12 -n 1 sh -c 'if strings &quot;$0&quot; | grep &quot;Possible race detected&quot;; then echo &quot;$0&quot;; fi'
+%s: Possible race detected. Rejecting.
+/System/Library/Extensions/AppleMobileFileIntegrity.kext/Contents/MacOS/AppleMobileFileIntegrity
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;(Did I just grep my whole system for an error string?  Yes I did.  Not the first time I use this technique to find culprits, and not the last one either I suspect.  It’s pretty effective.)&lt;/p&gt;
+
+&lt;p&gt;Look, one match!&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. AppleMobileFileIntegrity.  That sounds suspicious.  What is that thing?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. Google turned out several results, most pointing at forum threads about rooting iPhones or bypassing security protections—something I was not interested in.&lt;/p&gt;
+
+&lt;p&gt;This led me to discover the &lt;code class=&quot;highlighter-rouge&quot;&gt;amfid&lt;/code&gt; daemon, which as you may expect is not documented (its manual page is a joke), and invoking it for help didn’t produce anything useful.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. &lt;em&gt;[Mind wanders]&lt;/em&gt; Let me interrupt you for a second.  I just had an idea!  Are the FUSE-level mount options different between sandboxfs and bindfs?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. The &lt;code class=&quot;highlighter-rouge&quot;&gt;fusermount&lt;/code&gt; binary, which is a helper tool that actually configures the file system’s mount point, accepts a bunch of options to configure how the mount point is set up.  These could be different between sandboxfs and bindfs causing the behavior discrepancy.&lt;/p&gt;
+
+&lt;p&gt;Some code inspection yielded that the answer is yes: the options differ.  One of them caught my eye: &lt;code class=&quot;highlighter-rouge&quot;&gt;-o allow_other&lt;/code&gt;.  So I patched this into sandboxfs, which was a matter of adding a the single extra parameter &lt;code class=&quot;highlighter-rouge&quot;&gt;fuse.AllowRoot()&lt;/code&gt; to the mount call… and…&lt;/p&gt;
+
+&lt;p&gt;Ta-da!  Java now started.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Q. Waaaaaaat? 3 hours into this for this stupid problem?!?!&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;A. Yep.  Stupid problem, but finding the solution is always regarding.  So far, we have gained a lot of context on what’s going on and we know what needs to change for the problem to go away.&lt;/p&gt;
+
+&lt;p&gt;And then it dawned on me.  The &lt;code class=&quot;highlighter-rouge&quot;&gt;amfid&lt;/code&gt; daemon!  What is it running as?!&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;$ ps aux | grep amfi[d]
+root             75739   0.0  0.1  2495744  12824   ??  Ss    2:22PM   0:00.04 /usr/libexec/amfid
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;That explains it.&lt;/p&gt;
+
+&lt;p&gt;Let’s rationalize the problem:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;You try to exec Java from within the sandboxfs.&lt;/li&gt;
+  &lt;li&gt;The kernel gets the execution request and maps the executable into memory.&lt;/li&gt;
+  &lt;li&gt;The kernel issues a few reads on the file and determines somehow that it needs to validate the signature.&lt;/li&gt;
+  &lt;li&gt;The kernel calls out to the &lt;code class=&quot;highlighter-rouge&quot;&gt;amfid&lt;/code&gt; daemon, running in as root.&lt;/li&gt;
+  &lt;li&gt;The &lt;code class=&quot;highlighter-rouge&quot;&gt;amfid&lt;/code&gt; daemon tries to read the executable and fails because the file system in which it lives was not mounted to allow root to read from it.&lt;/li&gt;
+  &lt;li&gt;The &lt;code class=&quot;highlighter-rouge&quot;&gt;amfid&lt;/code&gt; daemon tells the kernel that there was a race condition: the executable that the kernel told it to inspect is now gone.&lt;/li&gt;
+  &lt;li&gt;The kernel cannot verify the signature so it terminates the process.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;Simple, huh?  Well, that’s my current working theory.  Since I fixed the problem, I haven’t been able to reproduce it any longer.  Is the kernel caching signature verifications anywhere?  Maybe, but I couldn’t figure that out.  Did the recent update of OSXFUSE fix something within it?  Did the Xcode update do so?  Too many moving pieces.&lt;/p&gt;
+
+&lt;h1 id=&quot;the-fix&quot;&gt;The fix&lt;/h1&gt;
+
+&lt;p&gt;The one-line fix mentioned above became a multi-line fix because of the desire to expose the permissions tunable to the user.&lt;/p&gt;
+
+&lt;p&gt;I ended up adding a new &lt;code class=&quot;highlighter-rouge&quot;&gt;--allow&lt;/code&gt; flag to sandboxfs that can take one of: &lt;code class=&quot;highlighter-rouge&quot;&gt;self&lt;/code&gt; to indicate default access; &lt;code class=&quot;highlighter-rouge&quot;&gt;other&lt;/code&gt; to indicate that any user can access the file system; and &lt;code class=&quot;highlighter-rouge&quot;&gt;root&lt;/code&gt; to indicate that only the user that mounted the file system and root can access it.  But still: this was doable in like 20, 30 minutes tops.&lt;/p&gt;
+
+&lt;p&gt;Now, testing the new feature was harder and it took several hours over several days to get the tests right.  This is a horror story for another day.&lt;/p&gt;
+</description>
+        
+        <pubDate>Fri, 06 Oct 2017 20:27:34 +0000</pubDate>
+        <link>http://julio.meroh.net/2017/10/fighting-execs-sandboxfs-macos.html</link>
+        <guid isPermaLink="true">http://julio.meroh.net/2017/10/fighting-execs-sandboxfs-macos.html</guid>
+        
+        
+        <category>software</category>
+        
+      </item>
     
       <item>
         <title>Introducing sandboxfs</title>
@@ -1527,127 +1888,6 @@ Do you Go already?
         <pubDate>Tue, 22 Mar 2016 21:00:00 +0000</pubDate>
         <link>http://julio.meroh.net/2016/03/golang-review.html</link>
         <guid isPermaLink="true">http://julio.meroh.net/2016/03/golang-review.html</guid>
-        
-        
-        <category>software</category>
-        
-      </item>
-    
-      <item>
-        <title>Those pesky Makefiles</title>
-        
-          <description>
-            As a software developer, you have probably disregarded the build system of your project—those pesky Makefiles—as unimportant. You have probably “chosen” to use the de-facto build tool make(1). And you have probably hacked your way around until things “seemingly worked”.
-
-But hang on a second. Those build files are way more important than you may think and deserve a wee bit more attention.
-
-
-
-What if… you lost them?
-
-Let’s start with an exercise, one that I heard many years ago when parts of the Windows 2000 source code were leaked. What if you received massive amounts of source code without the build files? Could you be able use that code again? “Of course” you could, but it would take an extraordinary effort to make the pieces work again as originally intended. It would be even harder to recover the intended state if the original build system allowed any kind of customization—think building for different production or test environments—or had, say, cross-building functionality. And you could even be introducing new run-time bugs by getting the build wrong!
-
-The reason this came to mind is because I spent all of last month fighting build rules to make Bazel build itself on a newly-supported environment. A month of fiddling with build rules and small portability fixes; a month without writing any substantial code.
-
-Well, in reality I “only” spent a whole week ploughing hacks to make this happen… but then I spent the other three weeks cleaning up the hacks so that I could check them in. It was one thing to prove that the end goal was attainable, and it was a very different one to actually reach that goal in a reasonable manner. Extending build rules that work under multiple scenarios and that target different platforms is hard, especially while keeping existing functionality stable.
-
-Another reason this came to mind is that, recently, I have been toying with writing a Go Appengine app. Running the trivial “Hello World” sample is easy: type some code in .go files, run goapp serve, and boom: the app (re)compiles in the background and is served on the web. Good? No.
-
-Unfortunately, as soon as you start writing “the real stuff”, you end up requiring features not provided by the simplistic and basic toolchain. You may need to fetch dependencies depending on the developer’s needs; you may need to build auxiliary tools to set up the production environment; you may need to run those tools with specific flags for your project and for the developer machine; you may need to interact with the VCS system to install hooks and get those working; etc. All these require some form of plumbing, which I chose to do via make(1) and a hand-tuned configure script—purely out of routine, not because these are great tools—and they have grown more than originally expected.
-
-Writing build files is… hard
-
-Build systems are complex beasts and the average developer should not have to—or, in fact, does not want to—care about them. Regardless, most developers have to end up writing build rules for the software they write (who else would?) and they do so without understanding the fundamentals of the tools nor the implications of their code.
-
-Take, for example, configure.ac scripts. GNU Autoconf has excellent documentation—and reading through it is a humbling exercise, especially if you are ever so tempted to write your own “simplified” configuration tool. (Spoiler: don’t.)
-
-Anyway: the vast majority of (open source) projects end up requiring a configure.ac script… but the developers, understandably, won’t go through the hassle of learning all the details of Autoconf because writing a configuration script is not their goal: it’s just boilerplate. The end result is that the developers copy/paste other people’s scripts and/or snippets from shabby sources. Repeat this copy/paste process over a handful of projects and you end up with a Frankenstein-like configuration script that can barely stand on its own. Yet, it seems to work on the developer’s machine, and therefore gets shipped to the world… only to cause pain down the road.
-
-The same applies to any script used to maintain the project. Think of the auxiliary scripts that invoke continuous tests under Travis, the scripts to sanitize your source tree, the scripts to package your software, or even your installation script. Because these are not part of the project’s “core functionality”, they are often thought as unimportant and are just hacked away. Just keep in mind that those scripts will fail due to their poor quality, and it’s no fun at all when they do so at, say, release time.
-
-Stick to conventions
-
-So how do you minimize the danger of hurting yourself? Do not reinvent the wheel. Stick to existing tools and conventions.
-
-If you think your project is special enough to warrant a hand-tuned build system, think again. Writing your own build system is a recipe for disaster: first, because you are throwing away the collective wisdom of the people that wrote the existing tools; and, second, because you immediately make your package unbuildable out-of-the-box by any existing packaging system.
-
-Let’s see some examples on the lots of conventions that exist: support for environment variables (CC, CFLAGS, CPPFLAGS, et. al.) and how they are later passed to the compiler, the linker, and the preprocessor; specific build targets that should exist (all, install, check, and the myriad required by the widespread GNU Coding Standards); the tools that you should end up invoking (e.g. install instead of plain cp to put your files in the destination location); the hierarchy of the installed files and the ability to tune the layout depending on the platform; support for build directories separate from the source tree; support for cross-compilation; support for dynamic detection of compiler and system features; and a long etc.
-
-Note that the examples above only scratch the surface: I focused exclusively on what your standard software package for a Unix system would need, and nothing else. Take an interpreted language instead of C or C++ and, suddenly, the conventions are all different.
-
-The problem here is that users of your package expect all these things to “just work” based on established conventions. If you change those conventions intentionally or just out of knowledge, your package will not behave as the user expects. And if that’s the case, can you guess what the user will think? Your software is broken.
-
-Which conventions?
-
-OK, so we need to follow conventions. Which ones? As always, it depends. It depends on the project you are writing, it depends on your target environment, and it depends on who your users will be.
-
-There are dozens of build systems and each has gained a specific niche so you need to stick to your niche’s preferred set of tools. To name a few: if you are writing a low-level system package, or your package uses C/C++, use the GNU Autotools; if you are writing a Python package, stick to distutils or setuptools and PyPI; if you are writing a KDE component, use CMake; if you are writing an Android app, choose Android Studio and Gradle; if you want to go fancier and the Java requirement is not a concern, consider Bazel (really, it’s cool!).
-
-You may or may not like the conventions of the tools used in the area you are working on, but you are better off by following the conventions than going against them: you’ll waste fewer time and your users will be happier. E.g. personally, I do not like how the standard way of using the Autotools is by shipping massive generated scripts, or the “strange” behavior of Python’s setup.py scripts… but I just use these in my software because they are what people—and, more importantly, packagers—expect.
-
-This doesn’t mean the tools we have today are good; in fact, many aren’t. But if you spend a few minutes to learn about the shortcomings of your tools and how to make better use of them, the results will be palatable. Give the same care you give code to the build files of your project.
-
-To conclude, follow onto the excellent-but-extremely-long article titled So you want to write a package manager. It does not talk about build systems per se, but it sheds light on the many complexities of managing a source tree and its dependencies, and how those should be hidden away from the developers.
-
-            &lt;a href=&quot;http://julio.meroh.net/2016/03/those-pesky-makefiles.html&quot;&gt;[Continue reading]&lt;/a&gt;
-          </description>
-        
-          <description>&lt;p&gt;As a software developer, you have probably disregarded the build system of your project—those pesky &lt;code class=&quot;highlighter-rouge&quot;&gt;Makefile&lt;/code&gt;s—as unimportant. You have probably “chosen” to use the de-facto build tool &lt;code class=&quot;highlighter-rouge&quot;&gt;make(1)&lt;/code&gt;. And you have probably hacked your way around until things “seemingly worked”.&lt;/p&gt;
-
-&lt;p&gt;But hang on a second. Those build files are way more important than you may think and deserve a wee bit more attention.&lt;/p&gt;
-
-&lt;!--end-of-excerpt--&gt;
-
-&lt;h1 id=&quot;what-if-you-lost-them&quot;&gt;What if… you lost them?&lt;/h1&gt;
-
-&lt;p&gt;Let’s start with an exercise, one that I heard many years ago when &lt;a href=&quot;http://news.microsoft.com/2004/02/12/statement-from-microsoft-regarding-illegal-posting-of-windows-2000-source-code/&quot;&gt;parts of the Windows 2000 source code were leaked&lt;/a&gt;. &lt;strong&gt;What if you received massive amounts of source code without the build files?&lt;/strong&gt; Could you be able use that code again? “Of course” you &lt;em&gt;could&lt;/em&gt;, but it would take an extraordinary effort to make the pieces work again as originally intended. It would be even harder to recover the intended state if the original build system allowed any kind of customization—think building for different production or test environments—or had, say, cross-building functionality. And you could even be introducing new run-time bugs by getting the build wrong!&lt;/p&gt;
-
-&lt;p&gt;The reason this came to mind is because I spent all of last month fighting build rules to make &lt;a href=&quot;http://bazel.io/&quot;&gt;Bazel&lt;/a&gt; build itself on a newly-supported environment. A month of fiddling with build rules and small portability fixes; a month without writing any substantial code.&lt;/p&gt;
-
-&lt;p&gt;Well, in reality I “only” spent a whole week ploughing hacks to make this happen… but then I spent the other three weeks cleaning up the hacks so that I could check them in. It was one thing to prove that the end goal was attainable, and it was a very different one to actually reach that goal in a reasonable manner. Extending build rules that work under multiple scenarios and that target different platforms is hard, especially while keeping existing functionality stable.&lt;/p&gt;
-
-&lt;p&gt;Another reason this came to mind is that, recently, I have been toying with writing a Go Appengine app. Running the trivial “Hello World” sample is easy: type some code in &lt;code class=&quot;highlighter-rouge&quot;&gt;.go&lt;/code&gt; files, run &lt;code class=&quot;highlighter-rouge&quot;&gt;goapp serve&lt;/code&gt;, and boom: the app (re)compiles in the background and is served on the web. Good? No.&lt;/p&gt;
-
-&lt;p&gt;Unfortunately, as soon as you start writing “the real stuff”, you end up requiring features not provided by the simplistic and basic toolchain. You may need to fetch dependencies depending on the developer’s needs; you may need to build auxiliary tools to set up the production environment; you may need to run those tools with specific flags for your project and for the developer machine; you may need to interact with the VCS system to install hooks and get those working; etc. All these require some form of plumbing, which I chose to do via &lt;code class=&quot;highlighter-rouge&quot;&gt;make(1)&lt;/code&gt; and a hand-tuned &lt;code class=&quot;highlighter-rouge&quot;&gt;configure&lt;/code&gt; script—purely out of routine, not because these are great tools—and they have grown more than originally expected.&lt;/p&gt;
-
-&lt;h1 id=&quot;writing-build-files-is-hard&quot;&gt;Writing build files is… hard&lt;/h1&gt;
-
-&lt;p&gt;Build systems are complex beasts and the average developer should not have to—or, in fact, does not want to—care about them. Regardless, most developers &lt;em&gt;have to&lt;/em&gt; end up writing build rules for the software they write (who else would?) and they do so without understanding the fundamentals of the tools nor the implications of their code.&lt;/p&gt;
-
-&lt;p&gt;Take, for example, &lt;code class=&quot;highlighter-rouge&quot;&gt;configure.ac&lt;/code&gt; scripts. GNU Autoconf has &lt;a href=&quot;http://www.gnu.org/software/autoconf/manual/index.html&quot;&gt;excellent documentation&lt;/a&gt;—and reading through it is a humbling exercise, &lt;em&gt;especially&lt;/em&gt; if you are ever so tempted to write your own “simplified” configuration tool. (Spoiler: &lt;em&gt;don’t&lt;/em&gt;.)&lt;/p&gt;
-
-&lt;p&gt;Anyway: the vast majority of (open source) projects end up requiring a &lt;code class=&quot;highlighter-rouge&quot;&gt;configure.ac&lt;/code&gt; script… but the developers, understandably, won’t go through the hassle of learning all the details of Autoconf because writing a configuration script is not their goal: it’s just boilerplate. The end result is that the developers copy/paste other people’s scripts and/or snippets from shabby sources. Repeat this copy/paste process over a handful of projects and you end up with a Frankenstein-like configuration script that can barely stand on its own. Yet, it &lt;em&gt;seems&lt;/em&gt; to work on the developer’s machine, and therefore gets shipped to the world… only to cause pain down the road.&lt;/p&gt;
-
-&lt;p&gt;The same applies to any script used to maintain the project. Think of the auxiliary scripts that invoke continuous tests under Travis, the scripts to sanitize your source tree, the scripts to package your software, or even your installation script. Because these are not part of the project’s “core functionality”, they are often thought as unimportant and are just hacked away. Just keep in mind that those scripts &lt;em&gt;will&lt;/em&gt; fail due to their poor quality, and it’s no fun at all when they do so at, say, release time.&lt;/p&gt;
-
-&lt;h1 id=&quot;stick-to-conventions&quot;&gt;Stick to conventions&lt;/h1&gt;
-
-&lt;p&gt;So how do you minimize the danger of hurting yourself? &lt;em&gt;Do not reinvent the wheel.&lt;/em&gt; &lt;strong&gt;Stick to existing tools and conventions.&lt;/strong&gt;&lt;/p&gt;
-
-&lt;p&gt;If you think your project is special enough to warrant a hand-tuned build system, think again. Writing your own build system is a recipe for disaster: first, because you are throwing away &lt;em&gt;the collective&lt;/em&gt; wisdom of the people that wrote the existing tools; and, second, because you immediately make your package unbuildable out-of-the-box by any existing packaging system.&lt;/p&gt;
-
-&lt;p&gt;Let’s see some examples on the lots of conventions that exist: support for environment variables (&lt;code class=&quot;highlighter-rouge&quot;&gt;CC&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;CFLAGS&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;CPPFLAGS&lt;/code&gt;, et. al.) and how they are later passed to the compiler, the linker, and the preprocessor; specific build targets that should exist (&lt;code class=&quot;highlighter-rouge&quot;&gt;all&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;install&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;check&lt;/code&gt;, and the myriad required by the widespread &lt;a href=&quot;https://www.gnu.org/prep/standards/standards.html#Makefile-Conventions&quot;&gt;GNU Coding Standards&lt;/a&gt;); the tools that you should end up invoking (e.g. &lt;code class=&quot;highlighter-rouge&quot;&gt;install&lt;/code&gt; instead of plain &lt;code class=&quot;highlighter-rouge&quot;&gt;cp&lt;/code&gt; to put your files in the destination location); the hierarchy of the installed files and the ability to tune the layout depending on the platform; support for build directories separate from the source tree; support for cross-compilation; support for dynamic detection of compiler and system features; and a long etc.&lt;/p&gt;
-
-&lt;p&gt;Note that the examples above only scratch the surface: I focused exclusively on what your standard software package for a Unix system would need, and nothing else. Take an interpreted language instead of C or C++ and, suddenly, the conventions are all different.&lt;/p&gt;
-
-&lt;p&gt;The problem here is that users of your package &lt;em&gt;expect&lt;/em&gt; all these things to “just work” based on established conventions. If you change those conventions intentionally or just out of knowledge, your package will not behave as the user expects. And if that’s the case, can you guess what the user will think? &lt;em&gt;Your software is broken.&lt;/em&gt;&lt;/p&gt;
-
-&lt;h1 id=&quot;which-conventions&quot;&gt;Which conventions?&lt;/h1&gt;
-
-&lt;p&gt;OK, so we need to follow conventions. Which ones? As always, it depends. It depends on the project you are writing, it depends on your target environment, and it depends on who your users will be.&lt;/p&gt;
-
-&lt;p&gt;There are dozens of build systems and each has gained a specific niche so you need to stick to your niche’s preferred set of tools. To name a few: if you are writing a low-level system package, or your package uses C/C++, use the GNU Autotools; if you are writing a Python package, stick to &lt;code class=&quot;highlighter-rouge&quot;&gt;distutils&lt;/code&gt; or &lt;code class=&quot;highlighter-rouge&quot;&gt;setuptools&lt;/code&gt; and PyPI; if you are writing a KDE component, use CMake; if you are writing an Android app, choose Android Studio and Gradle; if you want to go fancier and the Java requirement is not a concern, consider Bazel (really, it’s cool!).&lt;/p&gt;
-
-&lt;p&gt;You may or may not like the conventions of the tools used in the area you are working on, but you are better off by following the conventions than going against them: you’ll waste fewer time and your users will be happier. E.g. personally, I do not like how the standard way of using the Autotools is by shipping massive generated scripts, or the “strange” behavior of Python’s &lt;code class=&quot;highlighter-rouge&quot;&gt;setup.py&lt;/code&gt; scripts… but I just use these in my software because they are what people—and, more importantly, packagers—expect.&lt;/p&gt;
-
-&lt;p&gt;This doesn’t mean the tools we have today are good; in fact, many aren’t. But if you spend a few minutes to learn about the shortcomings of your tools and how to make better use of them, the results will be palatable. Give the same care you give code to the build files of &lt;em&gt;your&lt;/em&gt; project.&lt;/p&gt;
-
-&lt;p&gt;To conclude, follow onto the excellent-but-extremely-long article titled &lt;a href=&quot;https://medium.com/@sdboyer/so-you-want-to-write-a-package-manager-4ae9c17d9527&quot;&gt;So you want to write a package manager&lt;/a&gt;. It does not talk about build systems per se, but it sheds light on the many complexities of managing a source tree and its dependencies, and how those should be hidden away from the developers.&lt;/p&gt;
-</description>
-        
-        <pubDate>Wed, 02 Mar 2016 14:45:00 +0000</pubDate>
-        <link>http://julio.meroh.net/2016/03/those-pesky-makefiles.html</link>
-        <guid isPermaLink="true">http://julio.meroh.net/2016/03/those-pesky-makefiles.html</guid>
         
         
         <category>software</category>

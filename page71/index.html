@@ -1119,6 +1119,10 @@
             
           
         
+          
+            
+          
+        
       </ul>
 
       <form class="navbar-form navbar-right" method="get" role="search"
@@ -1261,6 +1265,34 @@
       
 
 <ul class="post-list">
+  
+    <li>
+      <h2>
+        <a class="post-link" href="/2006/01/google-talk-talks-to-other-servers.html">Google Talk talks to other servers</a>
+      </h2>
+      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
+
+January
+
+17th,
+  
+2006
+at
+13:04 
+        &middot;
+        <a href="/2006/01/google-talk-talks-to-other-servers.html#disqus_thread">
+          <span class="disqus-comment-count"
+                data-disqus-url="http://julio.meroh.net/2006/01/google-talk-talks-to-other-servers.html">Comments</span>
+        </a>
+      </span>
+      
+      <p>
+        Yes, it is true!  (Although I haven't seen any anouncement yet; thanks to a friend for telling me.) Google's messaging service, Google Talk, can now communicate with other Jabber servers such as the popular jabber.org. It has always been a Jabber-based system, but its server didn't allow communications with third-party servers before.I think I'll migrate my account if this one proves to be stable; will be trying it for some days before to make sure :-)
+
+        <a href="/2006/01/google-talk-talks-to-other-servers.html">[Continue reading]</a>
+      </p>
+      
+    </li>
   
     <li>
       <h2>
@@ -1430,34 +1462,6 @@ at
       
     </li>
   
-    <li>
-      <h2>
-        <a class="post-link" href="/2006/01/file-previews-in-nautilus.html">File previews in Nautilus</a>
-      </h2>
-      <span class="post-meta"><!-- From http://alanwsmith.com/jekyll-liquid-date-formatting-examples -->
-
-January
-
-1st,
-  
-2006
-at
-12:54 
-        &middot;
-        <a href="/2006/01/file-previews-in-nautilus.html#disqus_thread">
-          <span class="disqus-comment-count"
-                data-disqus-url="http://julio.meroh.net/2006/01/file-previews-in-nautilus.html">Comments</span>
-        </a>
-      </span>
-      
-      <p>
-        Yesterday's evening, I was organizing some of my pictures when I noticed that Nautilus wasn't generating previews for any of them.  This annoyed me so much that I decided to track down the issue, which I've done today.The first thing I did was to attach a gdb session to the currently running Nautilus process, adding some breakpoints to the functions that seemed to generate preview images; I located them using grep(1) and some obvious keywords.  This wasn't very helpful, but at least I could see that the thumbnail generation routine checks whether the file is local or not (because Nautilus lets you set different preferences for them).With this in mind, I resorted to the traditional and not-so-elegant printf debugging technique (which, with pkgsrc in the middle, is quite annoying).  Effectively, a call to gnome_vfs_uri_is_local was always returning false, no matter which file it was passed.  It was clear that the problem was in gnome-vfs itself.So I switched to the gnome-vfs code, located that function and saw that it was very short: basically, all it does is delegate its task to another function that depends on the method associated to the file &mdash; you can think of the method as the protocol that manages it.  As I was accessing local files, the method in use was the file method (implemented in modules/file-method.c), so the affected function was, how not, its do_is_local.As it is a bit complex (due to caching issues for efficiency), I added some more printfs to it to isolate a bit more the problem, which drove me to the filesystem_type function implemented in modules/fstype.c.  And man, when looking at this function I quickly understood why it was the focus of the problem.  It is so clumsy &mdash; portability-wise &mdash; that it is very easy for it to break under untested circumstances: it is composed of a set of mutually exclusive ifdefs (one for each possible situation) to determine the file system name in which a file lives.And you guessed right: NetBSD 3.x didn't match any of them, so it resorted to a default entry (returning an unknown file system type) that is always treated as remote by the file method code.The solution has been to workaround the detection of one of these special cases in the configure script to properly detect statvfs(2) under NetBSD.  This is just a hack that adds to the uglyness of the original code, but fixing this issue properly will require a lot of work and the willingness of the gnome-vfs maintainers to accept the changes.I will ask for a pull-up to the pkgsrc-2005Q4 branch when I've been able to confirm that this does not break on other NetBSD versions.  Now have fun watching your images again! ;-)
-
-        <a href="/2006/01/file-previews-in-nautilus.html">[Continue reading]</a>
-      </p>
-      
-    </li>
-  
 </ul>
 
 
@@ -1530,10 +1534,11 @@ at
 
   <ul>
   <li>
-    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (5)
+    <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
      
     <ul id="archive-year-2017" class="collapse">
      
+      <li><a href="/2017/10">October 2017</a> (1)</li>
       <li><a href="/2017/08">August 2017</a> (1)</li>
       <li><a href="/2017/07">July 2017</a> (1)</li>
       <li><a href="/2017/02">February 2017</a> (3)</li>
