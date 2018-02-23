@@ -1,34 +1,38 @@
 <!DOCTYPE html>
 <html>
   <head>
-    
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
 
-<meta charset="utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- The above 3 meta tags *must* come first in the head; any other head
-      content must come *after* these tags -->
+  <title>Analysis of SSHFS performance for large builds - Julio Merino</title>
+  <meta content="Analysis of SSHFS performance for large builds - Julio Merino" property="og:title">
 
-<meta name="description"
-      content="Last week, I spent some time looking at the feasibility of using SSHFS on OS X to access Google’s centralized source tree for the purpose of issuing local bu...">
-<meta name="author" content="Julio Merino">
+  
+  <meta name="description" content="Last week, I spent some time looking at the feasibility of using SSHFS on OS X to access Google&amp;rsquo;s centralized source tree for the purpose of issuing local builds. My goals were two-fold: first, to avoid having to &amp;ldquo;clone&amp;rdquo; the large source code of the apps I wanted to build; and, second, to avoid having to port the source file system (a FUSE module) to the Mac.
+What I found highlights that SSHFS is not the right choice for locally building a remote source tree. That said, the overall study process was interesting, fun, and I am now tempted to make SSHFS viable for this use case. Read on for the details.
 
-<meta content="http://julio.meroh.net/2016/02/sshfs-performance-analysis-for-builds.html" property="og:url">
+">
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.36.1" />
 
-<link rel="canonical" href="http://julio.meroh.net/2016/02/sshfs-performance-analysis-for-builds.html">
-<link rel="alternate" type="application/rss+xml" title="Julio Merino" href="http://julio.meroh.net/feed.xml" />
+  <meta content="http://julio.meroh.net/2016/02/sshfs-performance-analysis-for-builds.html" property="og:url">
 
-<link rel="stylesheet" href="/css/main.css">
+  <link rel="canonical" href="http://julio.meroh.net/2016/02/sshfs-performance-analysis-for-builds.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="Julio Merino" href="/feed.xml" />
 
-<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
-<!--[if lt IE 9]>
-  <script src="/js/html5shiv-3.7.2.min.js"></script>
-  <script src="/js/respond-1.4.2.min.js"></script>
-<![endif]-->
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/chroma.css">
 
-    <title>Analysis of SSHFS performance for large builds - Julio Merino</title>
-    <meta content="Analysis of SSHFS performance for large builds - Julio Merino" property="og:title">
-  </head>
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+</head>
+
 
   <body>
     <header class="site-header">
@@ -51,43 +55,19 @@
       <ul class="nav navbar-nav">
         
           
-            
-              
-                <li><a class="page-link"
-                href="/about/"
-                >About</a></li>
-              
-            
+            <li><a class="page-link" href="/about.html" >About</a></li>
           
         
           
-            
-              
-                <li><a class="page-link"
-                href="/essays/"
-                >Essays</a></li>
-              
-            
+            <li><a class="page-link" href="/essays.html" >Essays</a></li>
           
         
           
-            
-              
-                <li><a class="page-link"
-                href="/software/"
-                >Software</a></li>
-              
-            
+            <li><a class="page-link" href="/software.html" >Software</a></li>
           
         
           
-            
-              
-                <li><a class="page-link"
-                href="/work/"
-                >Work</a></li>
-              
-            
+            <li><a class="page-link" href="/work.html" >Work</a></li>
           
         
       </ul>
@@ -97,7 +77,7 @@
           <div class="form-group">
             <input type="text" name="query" class="form-control"
                    placeholder="Search">
-            <input type="hidden" name="sitesearch" value="http://julio.meroh.net">
+            <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
           <button type="submit" value="Search" class="btn btn-default">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
@@ -114,7 +94,7 @@
       <div class="container">
         <h1>Analysis of SSHFS performance for large builds</h1>
 
-        <p>Wed, 17 Feb 2016 13:30:00 +0000</p>
+        <p>February 17, 2016</p>
 
         
       </div>
@@ -122,21 +102,21 @@
 
     <div class="container">
       <article>
-        <p>Last week, I spent some time looking at the <strong>feasibility of using SSHFS on OS X to access Google’s centralized source tree for the purpose of issuing local builds</strong>. My goals were two-fold: first, to <strong>avoid having to “clone” the large source code</strong> of the apps I wanted to build; and, second, to <strong>avoid having to port</strong> the source file system (a FUSE module) to the Mac.</p>
+        <p>Last week, I spent some time looking at the <strong>feasibility of using SSHFS on OS X to access Google&rsquo;s centralized source tree for the purpose of issuing local builds</strong>. My goals were two-fold: first, to <strong>avoid having to &ldquo;clone&rdquo; the large source code</strong> of the apps I wanted to build; and, second, to <strong>avoid having to port</strong> the source file system (a FUSE module) to the Mac.</p>
 
 <p>What I found highlights that <strong>SSHFS is not the right choice for locally building a remote source tree</strong>. That said, the overall study process was interesting, fun, and I am now tempted to make SSHFS viable for this use case. Read on for the details.</p>
 
-<!--end-of-excerpt-->
+<p></p>
 
 <p><em>Obligatory disclaimer:</em> There is not much specific to Google here and any opinions are my own. In fact, I had used SSHFS in the past for similar purposes: to expose a NetBSD source tree from the host machine to a VM running on it, using the virtual network interface. Knowing these details at the time would have been very helpful in understanding the behavior of the setup.</p>
 
 <h1 id="the-source-file-system">The source file system</h1>
 
-<p>The Google source tree is exposed to developer machines by a FUSE file system that exposes the (very) large centralized repository at any desired revision; think of paths of the form <code class="highlighter-rouge">.../src/&lt;revision&gt;/</code>. Let’s call this FUSE file system the <strong>source file system</strong>, about which you can learn more in the <a href="http://google-engtools.blogspot.com/2011/06/build-in-cloud-accessing-source-code.html">Build in the cloud: Accessing source code</a> blog post and in the following presentation:</p>
+<p>The Google source tree is exposed to developer machines by a FUSE file system that exposes the (very) large centralized repository at any desired revision; think of paths of the form <code>.../src/&lt;revision&gt;/</code>. Let&rsquo;s call this FUSE file system the <strong>source file system</strong>, about which you can learn more in the <a href="http://google-engtools.blogspot.com/2011/06/build-in-cloud-accessing-source-code.html">Build in the cloud: Accessing source code</a> blog post and in the following presentation:</p>
 
 <div class="frame">
   <div class="content">
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/b52aXZ2yi08" frameborder="0" allowfullscreen=""></iframe>
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/b52aXZ2yi08" frameborder="0" allowfullscreen></iframe>
   </div>
   <div class="footer">
     <p>Tools for Continuous Integration at Google Scale.</p>
@@ -146,15 +126,11 @@
 <p>The key characteristics, for the understanding of this article, of the source file system are:</p>
 
 <ul>
-  <li>
-    <p>The file system contents under a given revision are read-only.</p>
-  </li>
-  <li>
-    <p>Because the file system is read-only, the FUSE server implements aggressive caching of file metadata and contents.</p>
-  </li>
-  <li>
-    <p>Because the file system is read-only, and due to the way the repository data is stored internally, each file holds an extended attribute that exposes its MD5 digest in constant time. This allows the build system to quickly determine if a file has changed across builds.</p>
-  </li>
+<li><p>The file system contents under a given revision are read-only.</p></li>
+
+<li><p>Because the file system is read-only, the FUSE server implements aggressive caching of file metadata and contents.</p></li>
+
+<li><p>Because the file system is read-only, and due to the way the repository data is stored internally, each file holds an extended attribute that exposes its MD5 digest in constant time. This allows the build system to quickly determine if a file has changed across builds.</p></li>
 </ul>
 
 <p>If this sounds interesting, there is a similar filesystem in spirit available in GitHub under the <a href="https://github.com/hanwen/p4fuse">hanwen/p4fuse</a> repository.</p>
@@ -166,12 +142,9 @@
 <p>In particular, I used the following configurations:</p>
 
 <ul>
-  <li>
-    <p><strong>Source file system over SSHFS</strong>: This configuration mounts the source tree directly on SSHFS. There is no local persistent caching of data; only whatever SSHFS’s cache does (more on this important topic below).</p>
-  </li>
-  <li>
-    <p><strong>Souce file system over SSHFS with a <a href="https://github.com/ibizaman/pcachefs">pCacheFS</a> layer on top</strong>: This configuration mounts the remote source tree onto a <code class="highlighter-rouge">.../src-remote/</code> directory and then layers pCacheFS on top of it to offer the actual <code class="highlighter-rouge">.../src/</code> directory. This setup offers persistent caching of the contents of all source files accessed durng the build, and those are stored in a matching <code class="highlighter-rouge">.../src-cache/</code> directory.</p>
-  </li>
+<li><p><strong>Source file system over SSHFS</strong>: This configuration mounts the source tree directly on SSHFS. There is no local persistent caching of data; only whatever SSHFS&rsquo;s cache does (more on this important topic below).</p></li>
+
+<li><p><strong>Souce file system over SSHFS with a <a href="https://github.com/ibizaman/pcachefs">pCacheFS</a> layer on top</strong>: This configuration mounts the remote source tree onto a <code>.../src-remote/</code> directory and then layers pCacheFS on top of it to offer the actual <code>.../src/</code> directory. This setup offers persistent caching of the contents of all source files accessed durng the build, and those are stored in a matching <code>.../src-cache/</code> directory.</p></li>
 </ul>
 
 <p>In the text below, the <strong>local machine</strong> is always the OS X system; the <strong>remote machine</strong> (hosting the source file system) is always a Linux machine.</p>
@@ -185,116 +158,97 @@
 <p>Colums showing <em>Not tested</em> are for measurements that were not taken because previous measurements on other configurations showed that they would be worthless: i.e. that no performance gain would be obtained. The SSHFS cold/hot references account for <em>both</em> SSHFS and the remote source file system being hot or cold in unison because they are tightly related in the common case.</p>
 
 <table>
-  <thead>
-    <tr>
-      <th style="text-align: left">Target</th>
-      <th style="text-align: right">Local</th>
-      <th style="text-align: right">SSHFS (cold)</th>
-      <th style="text-align: right">SSHFS (hot)</th>
-      <th style="text-align: right">SSHFS+pCacheFS (cold)</th>
-      <th style="text-align: right">SSHFS+pCacheFS (hot)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="text-align: left">Small app</td>
-      <td style="text-align: right">5m</td>
-      <td style="text-align: right">23m</td>
-      <td style="text-align: right">6m</td>
-      <td style="text-align: right">18m</td>
-      <td style="text-align: right">13m</td>
-    </tr>
-    <tr>
-      <td style="text-align: left">Larger app</td>
-      <td style="text-align: right">5m</td>
-      <td style="text-align: right">54m</td>
-      <td style="text-align: right">25m</td>
-      <td style="text-align: right">Not tested</td>
-      <td style="text-align: right">Not tested</td>
-    </tr>
-  </tbody>
+<thead>
+<tr>
+<th align="left">Target</th>
+<th align="right">Local</th>
+<th align="right">SSHFS (cold)</th>
+<th align="right">SSHFS (hot)</th>
+<th align="right">SSHFS+pCacheFS (cold)</th>
+<th align="right">SSHFS+pCacheFS (hot)</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td align="left">Small app</td>
+<td align="right">5m</td>
+<td align="right">23m</td>
+<td align="right">6m</td>
+<td align="right">18m</td>
+<td align="right">13m</td>
+</tr>
+
+<tr>
+<td align="left">Larger app</td>
+<td align="right">5m</td>
+<td align="right">54m</td>
+<td align="right">25m</td>
+<td align="right">Not tested</td>
+<td align="right">Not tested</td>
+</tr>
+</tbody>
 </table>
 
 <p>Yes, I only tested two builds because these were enough to yield conclusions. The <em>Demo app</em> showed some promising results when the caches were hot, but as soon as I tried a real-world app (the <em>Larger app</em>), it became clear that this setup was unfeasible.</p>
 
 <p>As you can see in the table above, the results are disheartening. For the small build, the source file system over SSHFS is a feasible choice assuming the caches are hot. For any larger build, SSHFS introduces a significant performance penalty on the build times. This negative impact does not justify the simplicity of using the SSHFS-based setup and developers should just resort to local checkouts of the parts of the tree they need.</p>
 
-<p>Knowing this, let’s move on to the more interesting part of this article, which is all the learnings I got from the file systems implementations and all the tweaks I made in an attempt to obtain higher performance.</p>
+<p>Knowing this, let&rsquo;s move on to the more interesting part of this article, which is all the learnings I got from the file systems implementations and all the tweaks I made in an attempt to obtain higher performance.</p>
 
 <h2 id="sshfs-observations">SSHFS observations</h2>
 
 <ul>
-  <li>
-    <p>Neither SSHFS, the SFTP protocol, nor the <code class="highlighter-rouge">sshd</code> daemon support extended attributes. As a consequence, the build system is unable to obtain digests for the source files in constant time. It is unclear if this has a performance impact on the build times themselves because other deficiencies of the system are likely to be the bottleneck.</p>
-  </li>
-  <li>
-    <p>The local SSHFS is threaded and will easily consume 1.5 or 2 CPUs during a build. The remote <code class="highlighter-rouge">sshd</code> server is not threaded for a single SSHFS connection and will continuously consume a full CPU, potentially being the bottleneck.</p>
-  </li>
-  <li>
-    <p>A maximum of 3.5 MB/s was observed on the network download link of the OS X workstation when SSHFS was busiest. The fact that the remote <code class="highlighter-rouge">sshd</code> server was at a peak of 100% CPU usage indicates that the bottleneck was on the server-side SSH connection, not on the SSHFS client nor on the remote FUSE file system. However, it is quite likely, from the following notes on caching, that the SSHFS client was inducing this on itself.</p>
-  </li>
-  <li>
-    <p>SSHFS implements caching but neither the <code class="highlighter-rouge">open</code> nor <code class="highlighter-rouge">read</code> operations are cached. In fact, SSHFS is only caching directory contents and file attributes. This drops the potential of the cache: remember that the remote source file system is read only.</p>
-  </li>
-  <li>
-    <p>SSHFS was modified to never evict anything from its in-memory cache in an attempt to maximize cache hits and thus approach best-case performance. There was no appreciable difference in build times.</p>
-  </li>
-  <li>
-    <p>SSHFS was modified to implement caching of file contents for reads. This did not result in any visible performance difference, pointing at the bottleneck being elsewhere as described in the next bullet.</p>
-  </li>
-  <li>
-    <p>SSHFS implements caching for <code class="highlighter-rouge">stat</code> (<code class="highlighter-rouge">getattr</code> in FUSE terminology), and might be suboptimal. Logging was added to track cache hits for <code class="highlighter-rouge">stat</code> operations and, out of various thousands of files that were <code class="highlighter-rouge">stat</code>ed during the build of the <em>Larger app</em>, there were several orders of magnitude more <code class="highlighter-rouge">getattr</code> calls that did not hit the cache. The majority of these duplicate calls were for directories, so it is likely that these operations were not issued by the build system, but instead were issued by SSHFS itself. This is, in all likelihood, the source of contention: all these cache misses incurred a round-trip to the remote <code class="highlighter-rouge">sshd</code> server and they would explain the high CPU load on the <code class="highlighter-rouge">sshd</code> server and the low throughput in the network link.</p>
-  </li>
-  <li>
-    <p>Repointing the local source tree at a different repository revision blows away any in-memory information cached by SSHFS because the SSHFS cache uses path names as keys. Remember that the revision identifier is part of the <code class="highlighter-rouge">.../src/&lt;revision&gt;/</code> path.</p>
-  </li>
+<li><p>Neither SSHFS, the SFTP protocol, nor the <code>sshd</code> daemon support extended attributes. As a consequence, the build system is unable to obtain digests for the source files in constant time. It is unclear if this has a performance impact on the build times themselves because other deficiencies of the system are likely to be the bottleneck.</p></li>
+
+<li><p>The local SSHFS is threaded and will easily consume 1.5 or 2 CPUs during a build. The remote <code>sshd</code> server is not threaded for a single SSHFS connection and will continuously consume a full CPU, potentially being the bottleneck.</p></li>
+
+<li><p>A maximum of 3.5 MB/s was observed on the network download link of the OS X workstation when SSHFS was busiest. The fact that the remote <code>sshd</code> server was at a peak of 100% CPU usage indicates that the bottleneck was on the server-side SSH connection, not on the SSHFS client nor on the remote FUSE file system. However, it is quite likely, from the following notes on caching, that the SSHFS client was inducing this on itself.</p></li>
+
+<li><p>SSHFS implements caching but neither the <code>open</code> nor <code>read</code> operations are cached. In fact, SSHFS is only caching directory contents and file attributes. This drops the potential of the cache: remember that the remote source file system is read only.</p></li>
+
+<li><p>SSHFS was modified to never evict anything from its in-memory cache in an attempt to maximize cache hits and thus approach best-case performance. There was no appreciable difference in build times.</p></li>
+
+<li><p>SSHFS was modified to implement caching of file contents for reads. This did not result in any visible performance difference, pointing at the bottleneck being elsewhere as described in the next bullet.</p></li>
+
+<li><p>SSHFS implements caching for <code>stat</code> (<code>getattr</code> in FUSE terminology), and might be suboptimal. Logging was added to track cache hits for <code>stat</code> operations and, out of various thousands of files that were <code>stat</code>ed during the build of the <em>Larger app</em>, there were several orders of magnitude more <code>getattr</code> calls that did not hit the cache. The majority of these duplicate calls were for directories, so it is likely that these operations were not issued by the build system, but instead were issued by SSHFS itself. This is, in all likelihood, the source of contention: all these cache misses incurred a round-trip to the remote <code>sshd</code> server and they would explain the high CPU load on the <code>sshd</code> server and the low throughput in the network link.</p></li>
+
+<li><p>Repointing the local source tree at a different repository revision blows away any in-memory information cached by SSHFS because the SSHFS cache uses path names as keys. Remember that the revision identifier is part of the <code>.../src/&lt;revision&gt;/</code> path.</p></li>
 </ul>
 
 <h2 id="pcachefs-observations">pCacheFS observations</h2>
 
 <ul>
-  <li>
-    <p>Builds with pCacheFS enabled are not as fast as one would expect, even when the cache is hot. The expectation would be for this scenario to yield build times that are similar to those using local source copies; however, as the numbers above show, build times were twice as large, if not more.</p>
-  </li>
-  <li>
-    <p>pCacheFS is written in Python, and this shows: the daemon can only saturate a single CPU, and it does.</p>
-  </li>
-  <li>
-    <p>Disk usage in the pCacheFS case is lower than what is required when the source tree is checked out locally. This is expected of any build: the size of the dependencies is larger than the size of the files strictly required for the build. Think about any source package that includes documentation in it, for example.</p>
-  </li>
-  <li>
-    <p>pCacheFS does not currently implement the <code class="highlighter-rouge">readlink</code> call. This call is necessary to properly support the remote source file system: the file system exposes a <code class="highlighter-rouge">.../src/head</code> symbolic link that points to the head revision. Reading this link is how one determines the revision to access via a <code class="highlighter-rouge">.../src/&lt;revision&gt;/</code> path for a consistent view of the tree. Implementing this call in pCacheFS should not be difficult, but I did not bother to do so due to the poor performance observed when using this layer.</p>
-  </li>
-  <li>
-    <p>pCacheFS is purely read-only and has no cache invalidation. This is not a problem for our use case because the remote source file system is read-only, but highlights that pCacheFS is not usable for the general case.</p>
-  </li>
-  <li>
-    <p>As SSHFS, pCacheFS does not implement extended attributes so the same problems apply.</p>
-  </li>
-  <li>
-    <p>As SSHFS, pCacheFS uses paths as keys for the cache so repointing the source tree to a different revision blows away the cache.</p>
-  </li>
+<li><p>Builds with pCacheFS enabled are not as fast as one would expect, even when the cache is hot. The expectation would be for this scenario to yield build times that are similar to those using local source copies; however, as the numbers above show, build times were twice as large, if not more.</p></li>
+
+<li><p>pCacheFS is written in Python, and this shows: the daemon can only saturate a single CPU, and it does.</p></li>
+
+<li><p>Disk usage in the pCacheFS case is lower than what is required when the source tree is checked out locally. This is expected of any build: the size of the dependencies is larger than the size of the files strictly required for the build. Think about any source package that includes documentation in it, for example.</p></li>
+
+<li><p>pCacheFS does not currently implement the <code>readlink</code> call. This call is necessary to properly support the remote source file system: the file system exposes a <code>.../src/head</code> symbolic link that points to the head revision. Reading this link is how one determines the revision to access via a <code>.../src/&lt;revision&gt;/</code> path for a consistent view of the tree. Implementing this call in pCacheFS should not be difficult, but I did not bother to do so due to the poor performance observed when using this layer.</p></li>
+
+<li><p>pCacheFS is purely read-only and has no cache invalidation. This is not a problem for our use case because the remote source file system is read-only, but highlights that pCacheFS is not usable for the general case.</p></li>
+
+<li><p>As SSHFS, pCacheFS does not implement extended attributes so the same problems apply.</p></li>
+
+<li><p>As SSHFS, pCacheFS uses paths as keys for the cache so repointing the source tree to a different revision blows away the cache.</p></li>
 </ul>
 
 <h1 id="conclusions">Conclusions</h1>
 
-<p>Neither the SSHFS client file system, the <code class="highlighter-rouge">sshd</code> server, nor the pCacheFS file system have been optimized for the workload of a large build using a source tree mounted over SSHFS. There are performance bottlenecks in various areas and there are missing features in all layers.</p>
+<p>Neither the SSHFS client file system, the <code>sshd</code> server, nor the pCacheFS file system have been optimized for the workload of a large build using a source tree mounted over SSHFS. There are performance bottlenecks in various areas and there are missing features in all layers.</p>
 
 <p>Here are some ideas on how the current situation could be improved:</p>
 
 <ul>
-  <li>
-    <p>Implement extended attributes in SSHFS and the SFTP server. This is potentially difficult because it requires changes to the OpenSSH server and <a href="https://bugzilla.mindrot.org/show_bug.cgi?id=1953">a previous attempt in 2011</a> resulted in a patch that was not accepted mainline. At the very least, it would be nice to revive this patch on recent OpenSSH sources; a simple attempt I made at rebasing it resulted in conflicts that didn’t seem trivial to resolve.</p>
-  </li>
-  <li>
-    <p>Add a <em>remote-file-system-is-immutable</em> setting to SSHFS to enable “perfect caching”. Turning this option on would cache the contents of files so that all file system operations on a file were local after fetching it. As a side-effect, the immense number of <code class="highlighter-rouge">getattr</code> operations issued to the server should become minimal and this should shift the bottleneck elsewhere. With caching of contents, the SSHFS could then expose the MD5 digests as extended attributes in constant time without needing to communicate these to the SFTP server.</p>
-  </li>
-  <li>
-    <p>Reimplement pCacheFS as a C FUSE file system with proper threading. The pCacheFS layer as a standalone concept seems to be a nicer design than the previous item. Unfortunately, the current pCacheFS implementation does not yield the necessary performance, but reimplementing it in C and making proper use of threads would. As a side-effect, one could cache file contents using their MD5 as the key so that accessing files across different repository revisions would not necessarily cause a cache miss. Similarly, pCacheFS could on its own expose the MD5 of the files via extended attributes.</p>
-  </li>
+<li><p>Implement extended attributes in SSHFS and the SFTP server. This is potentially difficult because it requires changes to the OpenSSH server and <a href="https://bugzilla.mindrot.org/show_bug.cgi?id=1953">a previous attempt in 2011</a> resulted in a patch that was not accepted mainline. At the very least, it would be nice to revive this patch on recent OpenSSH sources; a simple attempt I made at rebasing it resulted in conflicts that didn&rsquo;t seem trivial to resolve.</p></li>
+
+<li><p>Add a <em>remote-file-system-is-immutable</em> setting to SSHFS to enable &ldquo;perfect caching&rdquo;. Turning this option on would cache the contents of files so that all file system operations on a file were local after fetching it. As a side-effect, the immense number of <code>getattr</code> operations issued to the server should become minimal and this should shift the bottleneck elsewhere. With caching of contents, the SSHFS could then expose the MD5 digests as extended attributes in constant time without needing to communicate these to the SFTP server.</p></li>
+
+<li><p>Reimplement pCacheFS as a C FUSE file system with proper threading. The pCacheFS layer as a standalone concept seems to be a nicer design than the previous item. Unfortunately, the current pCacheFS implementation does not yield the necessary performance, but reimplementing it in C and making proper use of threads would. As a side-effect, one could cache file contents using their MD5 as the key so that accessing files across different repository revisions would not necessarily cause a cache miss. Similarly, pCacheFS could on its own expose the MD5 of the files via extended attributes.</p></li>
 </ul>
 
-<p>I consider my experimentation on this area done for now, but all of the items above sound interesting. In fact, after spending so many hours studying this, I cannot help but think of implementing a solution and watching it work. Maybe I’ll give them a try… if I have the time.</p>
+<p>I consider my experimentation on this area done for now, but all of the items above sound interesting. In fact, after spending so many hours studying this, I cannot help but think of implementing a solution and watching it work. Maybe I&rsquo;ll give them a try&hellip; if I have the time.</p>
 
 <p>Oh, and how easy this all was! Developing file system code using something like FUSE <em>cough</em><a href="http://rumpkernel.org/">rump</a><em>cough</em> is a joy. The last time I dealt with low level file system code was <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">back in 2005 when I wrote tmpfs for NetBSD</a>, and I did not have virtual machines nor user-space file systems available! <em>That</em> was painful.</p>
 
@@ -303,20 +257,14 @@
 <p>This work resulted in the following open source contributions <em>so far</em>:</p>
 
 <ul>
-  <li>
-    <p><a href="https://github.com/libfuse/sshfs/pull/5">Pull request libfuse/sshfs#5</a>: <strong>Merged the <a href="https://github.com/osxfuse/sshfs/">osxfuse/sshfs</a> fork into libfuse’s copy.</strong> The differences between the two were minimal so it’s good to have the master copy be portable by itself. Along the way, I also improved some of the OS X-specific code.</p>
-  </li>
-  <li>
-    <p><a href="https://github.com/libfuse/sshfs/pull/6">Pull request libfuse/sshfs#6</a>: <strong>Implemented command-line options to tune the behavior of the SSHFS cache.</strong> The code had various built-in constants to limit the cache size and configure its cleanup policies. As part of my testing, I had to make these values larger to prevent evictions from the cache, and making these customizable by the user would be good.</p>
-  </li>
-  <li>
-    <p><a href="https://github.com/ibizaman/pcachefs/pull/3">Pull request ibizaman/pcachefs#3</a>: <strong>Fixed obvious breakage of pCacheFS</strong> after implementing an entry point.</p>
-  </li>
-  <li>
-    <p><a href="http://pkgsrc.se/filesystems/fuse-pcachefs">filesystems/fuse-cachefs package</a>: <strong>Added a pCacheFS package to pkgsrc</strong>, for my own benefit in setting things up in OS X.</p>
-  </li>
-</ul>
+<li><p><a href="https://github.com/libfuse/sshfs/pull/5">Pull request libfuse/sshfs#5</a>: <strong>Merged the <a href="https://github.com/osxfuse/sshfs/">osxfuse/sshfs</a> fork into libfuse&rsquo;s copy.</strong> The differences between the two were minimal so it&rsquo;s good to have the master copy be portable by itself. Along the way, I also improved some of the OS X-specific code.</p></li>
 
+<li><p><a href="https://github.com/libfuse/sshfs/pull/6">Pull request libfuse/sshfs#6</a>: <strong>Implemented command-line options to tune the behavior of the SSHFS cache.</strong> The code had various built-in constants to limit the cache size and configure its cleanup policies. As part of my testing, I had to make these values larger to prevent evictions from the cache, and making these customizable by the user would be good.</p></li>
+
+<li><p><a href="https://github.com/ibizaman/pcachefs/pull/3">Pull request ibizaman/pcachefs#3</a>: <strong>Fixed obvious breakage of pCacheFS</strong> after implementing an entry point.</p></li>
+
+<li><p><a href="http://pkgsrc.se/filesystems/fuse-pcachefs">filesystems/fuse-cachefs package</a>: <strong>Added a pCacheFS package to pkgsrc</strong>, for my own benefit in setting things up in OS X.</p></li>
+</ul>
       </article>
 
       <div class="post-links">
@@ -325,10 +273,9 @@
 
           
 
-          <a href="/feed.xml">Subscribe
-          via RSS</a>
+          <a href="/feed.xml">Subscribe via RSS</a>
           &middot;
-          <a href="/blog/">Go to posts index</a>
+          <a href="/blog">Go to posts index</a>
         </p>
 
         <form class="form-inline"
@@ -352,14 +299,13 @@
         </form>
       </div>
 
-      
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http://julio.meroh.net/2016/02/sshfs-performance-analysis-for-builds.html";
-            this.page.identifier = "/2016/02/sshfs-performance-analysis-for-builds";
+            this.page.url = "http:\/\/julio.meroh.net\/2016\/02\/sshfs-performance-analysis-for-builds.html";
+            this.page.identifier = "2016-02-17-sshfs-performance-analysis-for-builds";
           };
-          (function() { // DON'T EDIT BELOW THIS LINE
+          (function() { 
             var d = document, s = d.createElement('script');
 
             s.src = '//jmmv.disqus.com/embed.js';
@@ -374,7 +320,6 @@
         </noscript>
       </div>
       
-      
     </div>
 
     <div class="container">
@@ -384,14 +329,8 @@
   </footer>
 </div>
 
-<script src="/js/jquery-1.11.2.min.js">
-</script>
-<script
-  src="/css/bootstrap.min.js">
-</script>
-
-<script src="/js/auto-toc-1.0.0.dist.js">
-</script>
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/css/bootstrap.min.js"></script>
 
 <script>
 $("p:contains('NOTE: ')").addClass("callout callout-info");
@@ -399,7 +338,6 @@ $("p:contains('IMPORTANT: ')").addClass("callout callout-info");
 $("p:contains('WARNING: ')").addClass("callout callout-warning");
 $("p:contains('DANGER: ')").addClass("callout callout-danger");
 </script>
-
 
 <script>
   (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
@@ -411,7 +349,6 @@ $("p:contains('DANGER: ')").addClass("callout callout-danger");
   ga('create', 'UA-63557333-1', 'auto');
   ga('send', 'pageview');
 </script>
-
 
   </body>
 </html>
