@@ -73,11 +73,11 @@ Why may unused parameters appear? You would think that unused parameters should 
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -99,11 +99,560 @@ Why may unused parameters appear? You would think that unused parameters should 
     </div>
 
     <div class="container">
-      <article>
-        <p>Today I would like to dive into the topic of <i>unused parameters</i> in C and C++: why they may happen and how to properly deal with them&mdash;because smart compilers will warn you about their presence should you enable <tt>-Wunused-parameter</tt> or <tt>-Wextra</tt>, and even error out if you are brave enough to use <tt>-Werror</tt>.</p> <h4>Why may unused parameters appear?</h4> <p>You would think that unused parameters should never exist: if the parameter is not necessary as an input, it should not be there in the first place!  That's a pretty good argument, but it does not hold when polymorphism enters the picture: if you want to have different implementations of a single API, such API will have to provide, on input, a superset of all the data required by all the possible implementations.</p> <p>The obvious case of the above is having an abstract method implemented by more than one subclass (which you can think of as a function pointer within a <tt>struct</tt> in the case of C).  In this scenario, the caller of this abstract method may be handling a generic condition but the various specific implementations may or may not use all the input data.</p> <h4>Our example</h4> <p>An example taken straight from Kyua is the <tt>compute_result</tt> method, whose purpose is <i>to determine the status of a test case after termination based on the outputs of the test program</i>, including: the program's exit code, its standard output, its standard error, and files that may be left in the transient work directory.  The signature of this abstract method looks like this:</p> <pre style="background: #ffeeee; padding: 5px;">virtual model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>work_directory</b>,<br />    const fs::path& <b>stdout_path</b>,<br />    const fs::path& <b>stderr_path</b>) const = 0;</pre> <p>Kyua implements this interface three times: one for plain test programs, one for ATF-based test programs, and one for TAP-compliant test programs.  This interface receives all test-related post-termination data as inputs so that the different implementations can examine <i>any</i> parts (possibly not all) they require to compute the result.</p> <p>In concrete terms: the plain interface only looks at the exit status; the ATF interface looks both at the exit status and at a file that is left in the work directory; and the TAP interface looks both at the exit status and the standard output of the program.</p> <p>When you face an scenario like this where you have a generic method, it is clear that your code will end up with functions that receive some parameters that they do not <i>need to</i> use.  This is alright.  However, as obvious as it may be to you, the compiler does not know that and therefore assumes a coding error, warning you along the way.  Not helpful.</p> <h4>Two simple but unsuitable alternatives</h4> <p>A first mechanism around this, which only works in C++, is to omit the parameter <i>name</i> in the function definition.  Unfortunately, doing so means you cannot reference the parameter by name any longer in your documentation and, furthermore, this solution does not work for C.</p> <p>A second mechanism is to introduce side-effect free statements in your code of the form <tt>(void)unused_argument_name;</tt>.  Doing this is extremely ugly (for starters, you have to remember to keep such statements in sync with reality) and I fear is not guaranteed to silence the compiler&mdash;because, well, the compiler will spot a spurious statement and could warn about it as well.</p> <p>Because these two solutions are suboptimal, I am not going to invest any more time on them.  Fortunately, there is a third alternative.</p> <h4>Tagging unused parameters with compiler attributes</h4> <p>The third and best mechanism around this is to explicitly tag the unused parameters with the <tt>__attribute__((unused))</tt> GCC extension as follows:</p> <pre style="background: #ffeeee; padding: 5px;">model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>work_directory __attribute__((unused))</b>,<br />    const fs::path& <b>stdout_path __attribute__((unused))</b>,<br />    const fs::path& <b>stderr_path __attribute__((unused))</b>) const;</pre> <p>But this, as shown, is not portable.  How can you make it so?</p> <h4>Making the code portable</h4> <p>If you want your code to work portably across compilers, then you have to go a bit further because the <tt>__attribute__</tt> decorators are not standard.  The most basic abstraction macro you'd think of is as follows:</p> <pre style="background: #ffeeee; padding: 5px;">#define UTILS_UNUSED __attribute__((unused))</pre> <p>... which you could parameterize as:</p> <pre style="background: #ffeeee; padding: 5px;">#define UTILS_UNUSED @ATTRIBUTE_UNUSED@</pre> <p>... so that your <tt>configure.ac</tt> script could determine what the right mechanism to mark a value as unused in your platform is and perform the replacement.  This is not trivial, so take a look at Kyua's <a href="https://github.com/jmmv/kyua/blob/master/m4/compiler-features.m4">compiler-features.m4</a> for <tt>configure.ac</tt> to get some ideas.</p> <p>Such a simple macro then lets you write:</p> <pre style="background: #ffeeee; padding: 5px;">model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>work_directory UTILS_UNUSED</b>,<br />    const fs::path& <b>stdout_path UTILS_UNUSED</b>,<br />    const fs::path& <b>stderr_path UTILS_UNUSED</b>) const;</pre> <p>... which gets us most of the way there, but not fully.</p> <h4>Going further</h4> <p>The <tt>UTILS_UNUSED</tt> macro shown above lets the compiler know that the argument may be unused and that this is acceptable.  Unfortunately, if an argument is marked as unused but it is <i>actually used</i>, the compiler will not tell you about it.  Such a thing can happen once you modify the code months down the road and forget to modify the function signature.  If this happens, it is a recipe for obscure issues, if only because you will confuse other programmers when they read the code and cannot really understand the intent behind the attribute declaration.</p> <p>My trick to fix this, which I've been using successfully for various years, is to define a macro that <i>also wraps the argument name</i>; say: <tt>UTILS_UNUSED_PARAM(stdout_path)</tt>.  This macro does two things: first, it abstracts the definition of the attribute so that <tt>configure</tt> may strip it out if the attribute is not supported by the underlying compiler; and, second and more importantly, <b>it <i>renames</i> the given argument by prefixing it with the <tt>unused_</tt> string</b>.  This renaming is where the beauty lies: the name change will forbid you from using the parameter via its given name and thus, whenever you have to start using the parameter, you will very well know to remove the macro from the function definition.  Has worked every single time since!</p> <p>Here is how the macro looks like (straight from <a href="https://github.com/jmmv/kyua/blob/master/utils/defs.hpp.in">Kyua's defs.hpp.in file</a>):</p> <pre style="background: #ffeeee; padding: 5px;">#define UTILS_UNUSED @ATTRIBUTE_UNUSED@<br />#define UTILS_UNUSED_PARAM(name) unused_ ## name UTILS_UNUSED</pre> <p>And here is how the macro would be used in our example above:</p> <pre style="background: #ffeeee; padding: 5px;">/// This is a Doxygen-style docstring.<br />///<br />/// Note how, in this comment, we must refer to our unused<br />/// parameters via their modified name.  This also spills to our<br />/// public API documentation, making it crystal-clear to the<br />/// reader that these parameters are not used.  Because we are<br />/// documenting here a specific implementation of the API and not<br />/// its abstract signature, it is reasonable to tell such details<br />/// to the user.<br />///<br />/// param <b>status</b> Status of the exit process.<br />/// param <b>unused_work_directory</b> An unused parameter!<br />/// param <b>unused_stdout_path</b> Another unused parameter!<br />/// param <b>unused_stderr_path</b> Yet another unused parameter!<br />///<br />/// return The computed test result.<br />model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>UTILS_UNUSED_PARAM(work_directory)</b>,<br />    const fs::path& <b>UTILS_UNUSED_PARAM(stdout_path)</b>,<br />    const fs::path& <b>UTILS_UNUSED_PARAM(stderr_path)</b>) const;</pre> <h4>What about Doxygen?</h4> <p>As I just mentioned Doxygen above, there is one extra trick to get our macros working during the documentation extraction phase.  Because Doxygen does not implement a full-blown C/C++ parser&mdash;although I wish it did, and nowadays this is relatively easy thanks to LLVM!&mdash;you have to tell Doxygen how to interpret the macro.  Do so with the following code to the <tt>Doxyfile</tt> control file:</p> <pre style="background: #ffeeee; padding: 5px;">PREDEFINED  = "UTILS_UNUSED="<br />PREDEFINED += "UTILS_UNUSED_PARAM(name)=unused_ ## name"</pre> <p>So, what about you?  Do you keep your code warning-free by applying similar techniques?</p>
+      <div class="row">
+        <div class="col-md-9">
+           <article><p>Today I would like to dive into the topic of <i>unused parameters</i> in C and C++: why they may happen and how to properly deal with them&mdash;because smart compilers will warn you about their presence should you enable <tt>-Wunused-parameter</tt> or <tt>-Wextra</tt>, and even error out if you are brave enough to use <tt>-Werror</tt>.</p> <h4>Why may unused parameters appear?</h4> <p>You would think that unused parameters should never exist: if the parameter is not necessary as an input, it should not be there in the first place!  That's a pretty good argument, but it does not hold when polymorphism enters the picture: if you want to have different implementations of a single API, such API will have to provide, on input, a superset of all the data required by all the possible implementations.</p> <p>The obvious case of the above is having an abstract method implemented by more than one subclass (which you can think of as a function pointer within a <tt>struct</tt> in the case of C).  In this scenario, the caller of this abstract method may be handling a generic condition but the various specific implementations may or may not use all the input data.</p> <h4>Our example</h4> <p>An example taken straight from Kyua is the <tt>compute_result</tt> method, whose purpose is <i>to determine the status of a test case after termination based on the outputs of the test program</i>, including: the program's exit code, its standard output, its standard error, and files that may be left in the transient work directory.  The signature of this abstract method looks like this:</p> <pre style="background: #ffeeee; padding: 5px;">virtual model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>work_directory</b>,<br />    const fs::path& <b>stdout_path</b>,<br />    const fs::path& <b>stderr_path</b>) const = 0;</pre> <p>Kyua implements this interface three times: one for plain test programs, one for ATF-based test programs, and one for TAP-compliant test programs.  This interface receives all test-related post-termination data as inputs so that the different implementations can examine <i>any</i> parts (possibly not all) they require to compute the result.</p> <p>In concrete terms: the plain interface only looks at the exit status; the ATF interface looks both at the exit status and at a file that is left in the work directory; and the TAP interface looks both at the exit status and the standard output of the program.</p> <p>When you face an scenario like this where you have a generic method, it is clear that your code will end up with functions that receive some parameters that they do not <i>need to</i> use.  This is alright.  However, as obvious as it may be to you, the compiler does not know that and therefore assumes a coding error, warning you along the way.  Not helpful.</p> <h4>Two simple but unsuitable alternatives</h4> <p>A first mechanism around this, which only works in C++, is to omit the parameter <i>name</i> in the function definition.  Unfortunately, doing so means you cannot reference the parameter by name any longer in your documentation and, furthermore, this solution does not work for C.</p> <p>A second mechanism is to introduce side-effect free statements in your code of the form <tt>(void)unused_argument_name;</tt>.  Doing this is extremely ugly (for starters, you have to remember to keep such statements in sync with reality) and I fear is not guaranteed to silence the compiler&mdash;because, well, the compiler will spot a spurious statement and could warn about it as well.</p> <p>Because these two solutions are suboptimal, I am not going to invest any more time on them.  Fortunately, there is a third alternative.</p> <h4>Tagging unused parameters with compiler attributes</h4> <p>The third and best mechanism around this is to explicitly tag the unused parameters with the <tt>__attribute__((unused))</tt> GCC extension as follows:</p> <pre style="background: #ffeeee; padding: 5px;">model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>work_directory __attribute__((unused))</b>,<br />    const fs::path& <b>stdout_path __attribute__((unused))</b>,<br />    const fs::path& <b>stderr_path __attribute__((unused))</b>) const;</pre> <p>But this, as shown, is not portable.  How can you make it so?</p> <h4>Making the code portable</h4> <p>If you want your code to work portably across compilers, then you have to go a bit further because the <tt>__attribute__</tt> decorators are not standard.  The most basic abstraction macro you'd think of is as follows:</p> <pre style="background: #ffeeee; padding: 5px;">#define UTILS_UNUSED __attribute__((unused))</pre> <p>... which you could parameterize as:</p> <pre style="background: #ffeeee; padding: 5px;">#define UTILS_UNUSED @ATTRIBUTE_UNUSED@</pre> <p>... so that your <tt>configure.ac</tt> script could determine what the right mechanism to mark a value as unused in your platform is and perform the replacement.  This is not trivial, so take a look at Kyua's <a href="https://github.com/jmmv/kyua/blob/master/m4/compiler-features.m4">compiler-features.m4</a> for <tt>configure.ac</tt> to get some ideas.</p> <p>Such a simple macro then lets you write:</p> <pre style="background: #ffeeee; padding: 5px;">model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>work_directory UTILS_UNUSED</b>,<br />    const fs::path& <b>stdout_path UTILS_UNUSED</b>,<br />    const fs::path& <b>stderr_path UTILS_UNUSED</b>) const;</pre> <p>... which gets us most of the way there, but not fully.</p> <h4>Going further</h4> <p>The <tt>UTILS_UNUSED</tt> macro shown above lets the compiler know that the argument may be unused and that this is acceptable.  Unfortunately, if an argument is marked as unused but it is <i>actually used</i>, the compiler will not tell you about it.  Such a thing can happen once you modify the code months down the road and forget to modify the function signature.  If this happens, it is a recipe for obscure issues, if only because you will confuse other programmers when they read the code and cannot really understand the intent behind the attribute declaration.</p> <p>My trick to fix this, which I've been using successfully for various years, is to define a macro that <i>also wraps the argument name</i>; say: <tt>UTILS_UNUSED_PARAM(stdout_path)</tt>.  This macro does two things: first, it abstracts the definition of the attribute so that <tt>configure</tt> may strip it out if the attribute is not supported by the underlying compiler; and, second and more importantly, <b>it <i>renames</i> the given argument by prefixing it with the <tt>unused_</tt> string</b>.  This renaming is where the beauty lies: the name change will forbid you from using the parameter via its given name and thus, whenever you have to start using the parameter, you will very well know to remove the macro from the function definition.  Has worked every single time since!</p> <p>Here is how the macro looks like (straight from <a href="https://github.com/jmmv/kyua/blob/master/utils/defs.hpp.in">Kyua's defs.hpp.in file</a>):</p> <pre style="background: #ffeeee; padding: 5px;">#define UTILS_UNUSED @ATTRIBUTE_UNUSED@<br />#define UTILS_UNUSED_PARAM(name) unused_ ## name UTILS_UNUSED</pre> <p>And here is how the macro would be used in our example above:</p> <pre style="background: #ffeeee; padding: 5px;">/// This is a Doxygen-style docstring.<br />///<br />/// Note how, in this comment, we must refer to our unused<br />/// parameters via their modified name.  This also spills to our<br />/// public API documentation, making it crystal-clear to the<br />/// reader that these parameters are not used.  Because we are<br />/// documenting here a specific implementation of the API and not<br />/// its abstract signature, it is reasonable to tell such details<br />/// to the user.<br />///<br />/// param <b>status</b> Status of the exit process.<br />/// param <b>unused_work_directory</b> An unused parameter!<br />/// param <b>unused_stdout_path</b> Another unused parameter!<br />/// param <b>unused_stderr_path</b> Yet another unused parameter!<br />///<br />/// return The computed test result.<br />model::test_result <b>compute_result</b>(<br />    const optional< process::status >& <b>status</b>,<br />    const fs::path& <b>UTILS_UNUSED_PARAM(work_directory)</b>,<br />    const fs::path& <b>UTILS_UNUSED_PARAM(stdout_path)</b>,<br />    const fs::path& <b>UTILS_UNUSED_PARAM(stderr_path)</b>) const;</pre> <h4>What about Doxygen?</h4> <p>As I just mentioned Doxygen above, there is one extra trick to get our macros working during the documentation extraction phase.  Because Doxygen does not implement a full-blown C/C++ parser&mdash;although I wish it did, and nowadays this is relatively easy thanks to LLVM!&mdash;you have to tell Doxygen how to interpret the macro.  Do so with the following code to the <tt>Doxyfile</tt> control file:</p> <pre style="background: #ffeeee; padding: 5px;">PREDEFINED  = "UTILS_UNUSED="<br />PREDEFINED += "UTILS_UNUSED_PARAM(name)=unused_ ## name"</pre> <p>So, what about you?  Do you keep your code warning-free by applying similar techniques?</p>
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -135,7 +684,9 @@ Why may unused parameters appear? You would think that unused parameters should 
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -165,6 +716,7 @@ Why may unused parameters appear? You would think that unused parameters should 
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">

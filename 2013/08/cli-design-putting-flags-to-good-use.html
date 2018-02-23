@@ -73,11 +73,11 @@ A command-line option or simply option (also known as a flag or switch) modifies
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -99,11 +99,560 @@ A command-line option or simply option (also known as a flag or switch) modifies
     </div>
 
     <div class="container">
-      <article>
-        <p>As the Wikipedia puts it in its <a href="http://en.wikipedia.org/wiki/Command-line_interface">Command-line interface page</a>:</p> <blockquote>A <b>command-line option</b> or simply <b>option</b> (also known as a <b>flag</b> or <b>switch</b>) modifies the operation of a command; the effect is determined by the command's program.</blockquote> <p>Yet, many developers abuse flags to do many unrelated things and therefore end up providing a non-standard and confusing user interface.  Let's take a look at some specific use cases, both bad and good.</p> <p><b>Bad: Requiring a flag</b></p> <p>As mentioned above, a synonym for flag is <i>option</i>.  As the definition of the word goes, an option is a thing that may be chosen, and therefore cannot be required.  In other words: forcing the user to provide one or more options is wrong.  For example, consider this interface definition:</p> <pre>do_backup --mode=incremental|full</pre> <p>In this case, we are asking the user to always provide a <tt>--mode</tt> flag to select the behavior of the backup utility.  Apparently, providing this information is required because the developer did not offer a sane default (maybe because it doesn't make sense to have one).  Because the user is forced to specify a backup mode, the interface could better be exposed as:  <pre>do_backup incremental|full</pre> <p>The flag did not provide any value, and this new syntax is equally usable.</p> <p>Alternatively, if <tt>--mode</tt> had had a default of <tt>incremental</tt>, the flag would have become optional and therefore the original interface with an optional flag would have been good.</p> <p><b>Bad: Using flags as named arguments</b></p> <p>As an extension to the previous use case, some interfaces choose to make use of flags as named arguments.  Named arguments are not necessarily a bad thing: they allow gathering various data in an unspecified order and make command invocations self-explanatory.  However, abusing flags to implement named arguments is the wrong thing to do unless <i>all</i> of the arguments are optional.  Consider the following interface definition:</p> <pre>add_user --user=name --group=name [--shell=path] [--uid=id]</pre> <p>Note that both <tt>--user</tt> and <tt>group</tt> are required, and as mentioned above that's not the meaning a flag is supposed to convey.  However, it's understandable that the developer chose to expose this interface, because it shows some consistency with the rest of the possible arguments (<tt>--shell</tt> and <tt>--uid</tt>).</p> <p>Better ways to implement this interface would be:</p> <pre>add_user [--shell=path] [--uid=id] user=name group=name<br />add_user user=name group=name [shell=path] [uid=id]<br />add_user [--shell=path] [--uid=id] user_name group_name</pre> <p>As you can see, both the user and the group, which are required, are now either positional arguments or named arguments not disguised as flags.  The other data can be collected either via flags or via other named arguments.</p> <p><b>Bad: Using flags to select subcommands</b></p> <p>Very frequently, CLI tools act as "dispatchers" for various different actions.  Consider, for example, Git (or CVS, or Subversion, or even <tt>ifconfig</tt>).  The <tt>git</tt> tool implements a consistent interface to launch actions such as adding a file to the index, checking in a change or pulling revisions from a remote server.  The operations these actions perform are not related other than for the fact that they are part of Git and, in fact, each of these actions is implemented as a separate binary.  That's all good.</p> <p>However, it's completely wrong to expose such different actions as flags.  If you do so, you are forcing the user to have to specify a flag that is part of the subset of actions, and that is not an <i>optional</i> thing to do.  Here goes an example of a tool that can be considered broken:</p> <pre>config [--verbose] [--override] --set key1=value1 [.. keyN=valueN]<br />config [--verbose] --unset key1 [.. keyN]</pre> <p>This is wrong.  The first problem of this interface is that the user is <i>required</i> to specify either <tt>--set</tt> or <tt>--unset</tt>, and requiring a flag is something that is not correct semantically as we have already seen above.  The second problem of this interface is that the choice of the given flag affects the syntax of the positional arguments: when <tt>--set</tt> is provided, the arguments are of the form <tt>key=value</tt> and when <tt>--unset</tt> is provided the arguments are of the form <tt>key</tt>.</p> <p>These two problems hint at an alternative interface for this utility; an interface based on subcommands.  The correct usage for this interface should be:</p> <pre>config [--verbose] set [--override] key1=value1 [.. keyN=valueN]<br />config [--verbose] unset key1 [.. keyN]</pre> <p>It is very important to notice one detail here: by converting the action selection to a subcommand, we are effectively breaking the structure of the command line in two parts: first, a block of options that apply to all subcommands, and a block of options that only apply to individual commands.  Having to think about this separation will enlighten the way you implement the various options and how they are handled in code because, for example, <tt>--override</tt> should only be accepted in the case of <tt>set</tt>.</p> <p><b>Good: Using flags to tune the behavior of the tool</b></p> <p>If you want to conditionally expose part of the functionality of a tool, using flags is the right thing to do.  Specific cases in which flags are right are: enabling debugging features, selecting whether the output should be colored or not, specifying the number of columns in the printed data, raising the verbosity level, etc.</p> <p><b>Good: Using flags to provide optional data</b></p> <p>Another case in which flags are perfectly valid are those in which you want to let the user provide additional data that is not required and that has reasonable defaults.  Specific examples of this are: path to the configuration file to use, selection of the specific debugging level, etc.</p> <p><b>That's it!</b></p> <p>Yup.  There are no more cases in which flags are valid.  You can only use flags to either fine-tune the behavior of the tool (or subcommand) and/or to tweak the value of built-in settings.  Any other uses of flags are most likely invalid and you should reconsider the design of your tool.</p>
+      <div class="row">
+        <div class="col-md-9">
+           <article><p>As the Wikipedia puts it in its <a href="http://en.wikipedia.org/wiki/Command-line_interface">Command-line interface page</a>:</p> <blockquote>A <b>command-line option</b> or simply <b>option</b> (also known as a <b>flag</b> or <b>switch</b>) modifies the operation of a command; the effect is determined by the command's program.</blockquote> <p>Yet, many developers abuse flags to do many unrelated things and therefore end up providing a non-standard and confusing user interface.  Let's take a look at some specific use cases, both bad and good.</p> <p><b>Bad: Requiring a flag</b></p> <p>As mentioned above, a synonym for flag is <i>option</i>.  As the definition of the word goes, an option is a thing that may be chosen, and therefore cannot be required.  In other words: forcing the user to provide one or more options is wrong.  For example, consider this interface definition:</p> <pre>do_backup --mode=incremental|full</pre> <p>In this case, we are asking the user to always provide a <tt>--mode</tt> flag to select the behavior of the backup utility.  Apparently, providing this information is required because the developer did not offer a sane default (maybe because it doesn't make sense to have one).  Because the user is forced to specify a backup mode, the interface could better be exposed as:  <pre>do_backup incremental|full</pre> <p>The flag did not provide any value, and this new syntax is equally usable.</p> <p>Alternatively, if <tt>--mode</tt> had had a default of <tt>incremental</tt>, the flag would have become optional and therefore the original interface with an optional flag would have been good.</p> <p><b>Bad: Using flags as named arguments</b></p> <p>As an extension to the previous use case, some interfaces choose to make use of flags as named arguments.  Named arguments are not necessarily a bad thing: they allow gathering various data in an unspecified order and make command invocations self-explanatory.  However, abusing flags to implement named arguments is the wrong thing to do unless <i>all</i> of the arguments are optional.  Consider the following interface definition:</p> <pre>add_user --user=name --group=name [--shell=path] [--uid=id]</pre> <p>Note that both <tt>--user</tt> and <tt>group</tt> are required, and as mentioned above that's not the meaning a flag is supposed to convey.  However, it's understandable that the developer chose to expose this interface, because it shows some consistency with the rest of the possible arguments (<tt>--shell</tt> and <tt>--uid</tt>).</p> <p>Better ways to implement this interface would be:</p> <pre>add_user [--shell=path] [--uid=id] user=name group=name<br />add_user user=name group=name [shell=path] [uid=id]<br />add_user [--shell=path] [--uid=id] user_name group_name</pre> <p>As you can see, both the user and the group, which are required, are now either positional arguments or named arguments not disguised as flags.  The other data can be collected either via flags or via other named arguments.</p> <p><b>Bad: Using flags to select subcommands</b></p> <p>Very frequently, CLI tools act as "dispatchers" for various different actions.  Consider, for example, Git (or CVS, or Subversion, or even <tt>ifconfig</tt>).  The <tt>git</tt> tool implements a consistent interface to launch actions such as adding a file to the index, checking in a change or pulling revisions from a remote server.  The operations these actions perform are not related other than for the fact that they are part of Git and, in fact, each of these actions is implemented as a separate binary.  That's all good.</p> <p>However, it's completely wrong to expose such different actions as flags.  If you do so, you are forcing the user to have to specify a flag that is part of the subset of actions, and that is not an <i>optional</i> thing to do.  Here goes an example of a tool that can be considered broken:</p> <pre>config [--verbose] [--override] --set key1=value1 [.. keyN=valueN]<br />config [--verbose] --unset key1 [.. keyN]</pre> <p>This is wrong.  The first problem of this interface is that the user is <i>required</i> to specify either <tt>--set</tt> or <tt>--unset</tt>, and requiring a flag is something that is not correct semantically as we have already seen above.  The second problem of this interface is that the choice of the given flag affects the syntax of the positional arguments: when <tt>--set</tt> is provided, the arguments are of the form <tt>key=value</tt> and when <tt>--unset</tt> is provided the arguments are of the form <tt>key</tt>.</p> <p>These two problems hint at an alternative interface for this utility; an interface based on subcommands.  The correct usage for this interface should be:</p> <pre>config [--verbose] set [--override] key1=value1 [.. keyN=valueN]<br />config [--verbose] unset key1 [.. keyN]</pre> <p>It is very important to notice one detail here: by converting the action selection to a subcommand, we are effectively breaking the structure of the command line in two parts: first, a block of options that apply to all subcommands, and a block of options that only apply to individual commands.  Having to think about this separation will enlighten the way you implement the various options and how they are handled in code because, for example, <tt>--override</tt> should only be accepted in the case of <tt>set</tt>.</p> <p><b>Good: Using flags to tune the behavior of the tool</b></p> <p>If you want to conditionally expose part of the functionality of a tool, using flags is the right thing to do.  Specific cases in which flags are right are: enabling debugging features, selecting whether the output should be colored or not, specifying the number of columns in the printed data, raising the verbosity level, etc.</p> <p><b>Good: Using flags to provide optional data</b></p> <p>Another case in which flags are perfectly valid are those in which you want to let the user provide additional data that is not required and that has reasonable defaults.  Specific examples of this are: path to the configuration file to use, selection of the specific debugging level, etc.</p> <p><b>That's it!</b></p> <p>Yup.  There are no more cases in which flags are valid.  You can only use flags to either fine-tune the behavior of the tool (or subcommand) and/or to tweak the value of built-in settings.  Any other uses of flags are most likely invalid and you should reconsider the design of your tool.</p>
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -135,7 +684,9 @@ A command-line option or simply option (also known as a flag or switch) modifies
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -165,6 +716,7 @@ A command-line option or simply option (also known as a flag or switch) modifies
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">

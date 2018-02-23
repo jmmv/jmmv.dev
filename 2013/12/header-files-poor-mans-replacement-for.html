@@ -75,11 +75,11 @@ In a language that supports modules, a module is a collection of related data ty
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -101,11 +101,560 @@ In a language that supports modules, a module is a collection of related data ty
     </div>
 
     <div class="container">
-      <article>
-        <p>I don't like header files and, especially, I don't like having to use them to implement modules.  When you have used a language that sports real modules —pretty much anything other than C or sh—, header files feel primitive.  Well, they actually <i>are</i> primitive.</p> <p>But what do I mean by "real modules"?</p> <p><b>Modules!</b></p> <p>In a language that supports modules, a module is a collection of related data types and code exposed via <i>a well-defined set of symbols encapsulated in a single container (name)</i>.  In other words: the effect of importing a module is simply getting a single reference to that module.</p> <p>For example, take a look at the following Python session:</p> <pre>&gt;&gt;&gt; dir()<br />['__builtins__', '__doc__', '__name__', '__package__']<br />&gt;&gt;&gt; <b>import collections</b><br />&gt;&gt;&gt; dir()<br />['__builtins__', '__doc__', '__name__', '__package__',<br /><b>'collections'</b>]<br />&gt;&gt;&gt; dir(collections)<br />['Callable', 'Container', 'Counter', 'Hashable', ...]</pre> <p>Nothing surprising.  What I'd like you to notice is the simple effect that importing a module had: all that happened was that the module was brought into the global namespace, but only the module's name was exposed.  This is <i>regardless</i> of any dependencies the module may have internally.  In order to use anything from the module, we actually have to access the module.</p> <p><b>Leaky dependencies</b></p> <p>Compare the above with the inclusion of header files.  When you include a header file, it is very likely for your namespace to be "polluted" by a bunch of things you did not ask for.  This comes from the fact that header files often need to include other header files: and because header files are not modules, anything included by the header file becomes visible in the caller site as well.</p> <p>In the case of C++, you may think that using namespaces fixes this situation... but in reality they do not.  Namespaces are only a way to prevent collisions of symbols between vendors.  They do nothing to prevent leaky inclusions in header files.</p> <p>Consider, for example, a header file called <tt>text-utils.h</tt> with the following contents:</p> <pre>#if !defined(MYPROJECT_TEXT_UTILS_H)<br />#define MYPROJECT_TEXT_UTILS_H<br /><br />#include &lt;stdio.h&gt;<br /><br />int read_line(FILE*, char**);<br /><br />#endif /* MYPROJECT_TEXT_UTILS_H */</pre> <p>This little header file has to include <tt>stdio.h</tt> because it needs <tt>FILE*</tt> as part of a prototype.  There is no way around this (other than going completely type-unsafe and using <tt>void*</tt>): <tt>FILE</tt> is a type defined in the standard library so you should not attempt to redefine it yourself (e.g. by hand-crafting a forward declaration) in your code.</p> <p>Whenever you want to use <tt>read_line</tt>, you will have to include your <tt>text-utils.h</tt> file that supposedly represents your module... but doing so will (unexpectedly) pull in <tt>stdio.h</tt>.  A nasty side-effect: now your new module has access to all sorts of unexpected symbols aside from <tt>FILE</tt>, like <tt>fopen</tt> or even <tt>printf</tt>, when it did not ask for them.</p> <p>But what's the problem here?  If you end up using all these symbols you did not ask for, and you forget to add an explicit inclusion of the corresponding header file, <i>your code will break</i> if the internal implementation of <tt>text-utils.h</tt> changes and gets rid of the inclusion of <tt>stdio.h</tt>!</p> <p>There are some ways to prevent this, but none of them are pretty.</p> <p>If you look at the standard system header files, you will be horrified to see all the tricks they have to go through just to ensure that importing a standard C header file does not leak <i>public</i> symbols from other standard headers.  The way this is done involves having to define <i>everything</i> as private in "internal" header files and then making the user-facing header files redefine those internal names as public... but there are several caveats as you will notice if you take a look.  (Also note that not all standard libraries are "clean" in this sense; latest versions of glibc are particularly good at this.)</p> <p>Another mechanism is to use the pimpl idiom in your structures and classes.  By doing this, you will (sometimes) reduce the amount of dependencies needed in the header file and you can move those dependencies to the implementation module.  As a result, you will have better-defined "modules" and faster build times.</p> <p><b>Be preemptive!</b></p> <p>Try to minimize the amount of header files you include in a header file.  Every time you see the need for an inclusion, think if there is another way to achieve your goal.  Usually, putting that inclusion in the corresponding <tt>.c</tt> file is a better choice &mdash; assuming the public API does not need that header file for anything.</p> <p>Don't wait until it's too late to discover that your code relies on indirect dependencies pulled in by some unrelated header file.  Look for these eagerly and plug the leaks.  The <a href="https://code.google.com/p/include-what-you-use/">include-what-you-use</a> tool will help you do this... although in my opinion is an aberration (see how large it is) that exists only because of the lack of proper abstractions in C and C++.</p> <p>And, to conclude: I hear that there are proposals on the table to equip C++ with a modules system but I don't know when/if they will become true.  (And I'm a little scared of the thought that they may, just because of how they may have to work for backwards-compatibility reasons!)</p>
+      <div class="row">
+        <div class="col-md-9">
+           <article><p>I don't like header files and, especially, I don't like having to use them to implement modules.  When you have used a language that sports real modules —pretty much anything other than C or sh—, header files feel primitive.  Well, they actually <i>are</i> primitive.</p> <p>But what do I mean by "real modules"?</p> <p><b>Modules!</b></p> <p>In a language that supports modules, a module is a collection of related data types and code exposed via <i>a well-defined set of symbols encapsulated in a single container (name)</i>.  In other words: the effect of importing a module is simply getting a single reference to that module.</p> <p>For example, take a look at the following Python session:</p> <pre>&gt;&gt;&gt; dir()<br />['__builtins__', '__doc__', '__name__', '__package__']<br />&gt;&gt;&gt; <b>import collections</b><br />&gt;&gt;&gt; dir()<br />['__builtins__', '__doc__', '__name__', '__package__',<br /><b>'collections'</b>]<br />&gt;&gt;&gt; dir(collections)<br />['Callable', 'Container', 'Counter', 'Hashable', ...]</pre> <p>Nothing surprising.  What I'd like you to notice is the simple effect that importing a module had: all that happened was that the module was brought into the global namespace, but only the module's name was exposed.  This is <i>regardless</i> of any dependencies the module may have internally.  In order to use anything from the module, we actually have to access the module.</p> <p><b>Leaky dependencies</b></p> <p>Compare the above with the inclusion of header files.  When you include a header file, it is very likely for your namespace to be "polluted" by a bunch of things you did not ask for.  This comes from the fact that header files often need to include other header files: and because header files are not modules, anything included by the header file becomes visible in the caller site as well.</p> <p>In the case of C++, you may think that using namespaces fixes this situation... but in reality they do not.  Namespaces are only a way to prevent collisions of symbols between vendors.  They do nothing to prevent leaky inclusions in header files.</p> <p>Consider, for example, a header file called <tt>text-utils.h</tt> with the following contents:</p> <pre>#if !defined(MYPROJECT_TEXT_UTILS_H)<br />#define MYPROJECT_TEXT_UTILS_H<br /><br />#include &lt;stdio.h&gt;<br /><br />int read_line(FILE*, char**);<br /><br />#endif /* MYPROJECT_TEXT_UTILS_H */</pre> <p>This little header file has to include <tt>stdio.h</tt> because it needs <tt>FILE*</tt> as part of a prototype.  There is no way around this (other than going completely type-unsafe and using <tt>void*</tt>): <tt>FILE</tt> is a type defined in the standard library so you should not attempt to redefine it yourself (e.g. by hand-crafting a forward declaration) in your code.</p> <p>Whenever you want to use <tt>read_line</tt>, you will have to include your <tt>text-utils.h</tt> file that supposedly represents your module... but doing so will (unexpectedly) pull in <tt>stdio.h</tt>.  A nasty side-effect: now your new module has access to all sorts of unexpected symbols aside from <tt>FILE</tt>, like <tt>fopen</tt> or even <tt>printf</tt>, when it did not ask for them.</p> <p>But what's the problem here?  If you end up using all these symbols you did not ask for, and you forget to add an explicit inclusion of the corresponding header file, <i>your code will break</i> if the internal implementation of <tt>text-utils.h</tt> changes and gets rid of the inclusion of <tt>stdio.h</tt>!</p> <p>There are some ways to prevent this, but none of them are pretty.</p> <p>If you look at the standard system header files, you will be horrified to see all the tricks they have to go through just to ensure that importing a standard C header file does not leak <i>public</i> symbols from other standard headers.  The way this is done involves having to define <i>everything</i> as private in "internal" header files and then making the user-facing header files redefine those internal names as public... but there are several caveats as you will notice if you take a look.  (Also note that not all standard libraries are "clean" in this sense; latest versions of glibc are particularly good at this.)</p> <p>Another mechanism is to use the pimpl idiom in your structures and classes.  By doing this, you will (sometimes) reduce the amount of dependencies needed in the header file and you can move those dependencies to the implementation module.  As a result, you will have better-defined "modules" and faster build times.</p> <p><b>Be preemptive!</b></p> <p>Try to minimize the amount of header files you include in a header file.  Every time you see the need for an inclusion, think if there is another way to achieve your goal.  Usually, putting that inclusion in the corresponding <tt>.c</tt> file is a better choice &mdash; assuming the public API does not need that header file for anything.</p> <p>Don't wait until it's too late to discover that your code relies on indirect dependencies pulled in by some unrelated header file.  Look for these eagerly and plug the leaks.  The <a href="https://code.google.com/p/include-what-you-use/">include-what-you-use</a> tool will help you do this... although in my opinion is an aberration (see how large it is) that exists only because of the lack of proper abstractions in C and C++.</p> <p>And, to conclude: I hear that there are proposals on the table to equip C++ with a modules system but I don't know when/if they will become true.  (And I'm a little scared of the thought that they may, just because of how they may have to work for backwards-compatibility reasons!)</p>
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -137,7 +686,9 @@ In a language that supports modules, a module is a collection of related data ty
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -167,6 +718,7 @@ In a language that supports modules, a module is a collection of related data ty
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">

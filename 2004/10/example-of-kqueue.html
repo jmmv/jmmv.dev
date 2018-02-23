@@ -73,11 +73,11 @@ Let&#39;s start by analyzing the test program to later see its full code. The pr
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -99,11 +99,560 @@ Let&#39;s start by analyzing the test program to later see its full code. The pr
     </div>
 
     <div class="container">
-      <article>
-        <p>The documentation of kqueue is quite decent but it lacks some examples.  After reading its main <a href="http://netbsd.gw.com/cgi-bin/man-cgi?kqueue++NetBSD-current">manual pages</a> (kqueue(9) and kevent(9)), I wasn't sure about how it worked, so I had to write a test program to verify its behavior.</p>  <p>Let's start by analyzing the test program to later see its full code.  The program will monitor changes to the <tt>/tmp/foo</tt> file and will print messages whenever it is deleted, modified or their attributes change. The program finishes when the file being monitoring is deleted.</p>  <p>The steps to use kqueue are the following:</p>  <ol> <li>Call <tt>kqueue(2)</tt> to create a new kernel event queue.  The descriptor it returns will be later used by <tt>kevent(2)</tt>.</li>  <li>Open the file to monitor and keep its descriptor around.  We'll need this to attach an event monitor to it.</li>  <li>Initialize a vector of <tt>struct kevent</tt> elements that describes the changes to monitor. Since we are only monitoring a single file, we need a one-element vector. This vector is filled up with calls to the <tt>EV_SET</tt> macro.  This macro takes: the descriptor of the kqueue, the descriptor of the file to monitor (<i>ident</i>), the <i>filter</i> to apply to it, several flags and optional arguments to the filter.  Note that an entry in this table is identified by its <i>ident/filter</i> pair.</li>  <li>Call the kevent(2) function. This system call takes the list of changes to monitor we constructed before and does not return until at least one event is received (or when an associated timeout is exhausted). The function returns the number of changes received and stores information about them in another vector of <tt>struct kevent</tt> elements (we'll only get notifications of one event at a time, hence we don't use a vector, but a simple variable).</li>  <li>Interpret the results. If kevent(2) returned a number greater than 0, we have to inspect the output vector and see which events were received. Each filter has its semantics about the results. For example, we are using the <tt>EVFILT_VNODE</tt> filter, which takes a list of conditions to monitor in the <tt>fflags</tt> field and modifies it to include only the conditions that triggered the filter.</li> </ol>  <p>With these concepts clear and with help of the manual pages, you should be able to interpret the following code easily:</p>  <pre>#include &lt;sys/event.h&gt;<br />#include &lt;sys/time.h&gt; <br />#include &lt;fcntl.h&gt;<br />#include &lt;stdio.h&gt;<br />#include &lt;stdlib.h&gt; <br /><br />int<br />main(void)<br />{<br />   int f, kq, nev;<br />   struct kevent change;<br />   struct kevent event;<br /><br />   kq = kqueue();<br />   if (kq == -1)<br />       perror("kqueue");<br /><br />   f = open("/tmp/foo", O_RDONLY);<br />   if (f == -1)<br />       perror("open");<br /><br />   EV_SET(&change, f, EVFILT_VNODE,<br />          EV_ADD | EV_ENABLE | EV_ONESHOT,<br />          NOTE_DELETE | NOTE_EXTEND | NOTE_WRITE | NOTE_ATTRIB,<br />          0, 0);<br /><br />   for (;;) {<br />       nev = kevent(kq, &change, 1, &amp;amp;event, 1, NULL);<br />       if (nev == -1)<br />           perror("kevent");<br />       else if (nev > 0) {<br />           if (event.fflags & NOTE_DELETE) {<br />               printf("File deletedn");<br />               break;<br />           }<br />           if (event.fflags & NOTE_EXTEND ||<br />               event.fflags &amp; NOTE_WRITE)<br />               printf("File modifiedn");<br />           if (event.fflags & NOTE_ATTRIB)<br />               printf("File attributes modifiedn");<br />       }<br />   }<br /><br />   close(kq);<br />   close(f);<br />   return EXIT_SUCCESS;<br />}</pre><p></p>  <p>Now compile and run the program in one terminal.  In another one, modify the <tt>/tmp/foo</tt> file and see how our test program shows the events! If you delete the file, the program will terminate. (Note that we are not monitoring all possible events; we'd watch for file renames, as well as other conditions if we needed to).</p><p class="mobile-post"></p>
+      <div class="row">
+        <div class="col-md-9">
+           <article><p>The documentation of kqueue is quite decent but it lacks some examples.  After reading its main <a href="http://netbsd.gw.com/cgi-bin/man-cgi?kqueue++NetBSD-current">manual pages</a> (kqueue(9) and kevent(9)), I wasn't sure about how it worked, so I had to write a test program to verify its behavior.</p>  <p>Let's start by analyzing the test program to later see its full code.  The program will monitor changes to the <tt>/tmp/foo</tt> file and will print messages whenever it is deleted, modified or their attributes change. The program finishes when the file being monitoring is deleted.</p>  <p>The steps to use kqueue are the following:</p>  <ol> <li>Call <tt>kqueue(2)</tt> to create a new kernel event queue.  The descriptor it returns will be later used by <tt>kevent(2)</tt>.</li>  <li>Open the file to monitor and keep its descriptor around.  We'll need this to attach an event monitor to it.</li>  <li>Initialize a vector of <tt>struct kevent</tt> elements that describes the changes to monitor. Since we are only monitoring a single file, we need a one-element vector. This vector is filled up with calls to the <tt>EV_SET</tt> macro.  This macro takes: the descriptor of the kqueue, the descriptor of the file to monitor (<i>ident</i>), the <i>filter</i> to apply to it, several flags and optional arguments to the filter.  Note that an entry in this table is identified by its <i>ident/filter</i> pair.</li>  <li>Call the kevent(2) function. This system call takes the list of changes to monitor we constructed before and does not return until at least one event is received (or when an associated timeout is exhausted). The function returns the number of changes received and stores information about them in another vector of <tt>struct kevent</tt> elements (we'll only get notifications of one event at a time, hence we don't use a vector, but a simple variable).</li>  <li>Interpret the results. If kevent(2) returned a number greater than 0, we have to inspect the output vector and see which events were received. Each filter has its semantics about the results. For example, we are using the <tt>EVFILT_VNODE</tt> filter, which takes a list of conditions to monitor in the <tt>fflags</tt> field and modifies it to include only the conditions that triggered the filter.</li> </ol>  <p>With these concepts clear and with help of the manual pages, you should be able to interpret the following code easily:</p>  <pre>#include &lt;sys/event.h&gt;<br />#include &lt;sys/time.h&gt; <br />#include &lt;fcntl.h&gt;<br />#include &lt;stdio.h&gt;<br />#include &lt;stdlib.h&gt; <br /><br />int<br />main(void)<br />{<br />   int f, kq, nev;<br />   struct kevent change;<br />   struct kevent event;<br /><br />   kq = kqueue();<br />   if (kq == -1)<br />       perror("kqueue");<br /><br />   f = open("/tmp/foo", O_RDONLY);<br />   if (f == -1)<br />       perror("open");<br /><br />   EV_SET(&change, f, EVFILT_VNODE,<br />          EV_ADD | EV_ENABLE | EV_ONESHOT,<br />          NOTE_DELETE | NOTE_EXTEND | NOTE_WRITE | NOTE_ATTRIB,<br />          0, 0);<br /><br />   for (;;) {<br />       nev = kevent(kq, &change, 1, &amp;amp;event, 1, NULL);<br />       if (nev == -1)<br />           perror("kevent");<br />       else if (nev > 0) {<br />           if (event.fflags & NOTE_DELETE) {<br />               printf("File deletedn");<br />               break;<br />           }<br />           if (event.fflags & NOTE_EXTEND ||<br />               event.fflags &amp; NOTE_WRITE)<br />               printf("File modifiedn");<br />           if (event.fflags & NOTE_ATTRIB)<br />               printf("File attributes modifiedn");<br />       }<br />   }<br /><br />   close(kq);<br />   close(f);<br />   return EXIT_SUCCESS;<br />}</pre><p></p>  <p>Now compile and run the program in one terminal.  In another one, modify the <tt>/tmp/foo</tt> file and see how our test program shows the events! If you delete the file, the program will terminate. (Note that we are not monitoring all possible events; we'd watch for file renames, as well as other conditions if we needed to).</p><p class="mobile-post"></p>
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -135,7 +684,9 @@ Let&#39;s start by analyzing the test program to later see its full code. The pr
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -165,6 +716,7 @@ Let&#39;s start by analyzing the test program to later see its full code. The pr
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">

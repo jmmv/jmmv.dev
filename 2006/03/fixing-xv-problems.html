@@ -72,11 +72,11 @@
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -98,11 +98,560 @@
     </div>
 
     <div class="container">
-      <article>
-        As you may already know I <a href="http://julipedia.blogspot.com/2006/01/got-benq-fp202w-flat-panel.html">bought a BenQ FP202W</a> flat panel two months ago, which made me switch from a rather small resolution (1024x768) to a much bigger one: 1680x1050 at 24bpp running on a NVIDIA GeForce 6600GT with the free nv driver.  As I did the switch I lost the ability to play videos in X11 full screen mode because the Xvideo refused to work.  As you can imagine, this was <i>extremely annoying</i>.<br /><br />For example, mplayer spit out the following:<br /><br /><tt>X11 error: BadAlloc (insufficient resources for operation)?,?% 0 0</tt><br /><br />Similarly, xawtv couldn't set up an overlay window due to the lack of the xv extension thus becoming completely unusable.<br /><br />Based on a suggestion from someone I don't remember, I decided yesterday to replace my XFree86 4.5.0 installation with X.Org 6.9 hoping that its nv driver could work better.  Guess what, it didn't.<br /><br />But after the installation, and just out of curiosity, I started looking at nv's sources to see if I could discover the problem.  I was hopeless to find a solution but I had to try.<br /><br />First of all, I grepped for <tt>BadAlloc</tt> in the nv directory, something that quickly drove me to the <tt>NVAllocateOverlayMemory</tt> function.  Based on the name, this seemed like a logic place for the failure.  I added some debugging messages, reinstalled the driver and effectively this function was being called and returned a null pointer.<br /><br />Some more printf's told me that the problem was being raised by <tt>xf86AllocateOffscreenLinear</tt>.  "Ouch... looks as if the driver cannot allocate enough video memory for such a big resolution... may be difficult to fix", I though.  Nevertheless, I continued my quest inspecting this other function and many other code in xf86fbman.c.  Along the process, I discovered a <a href="https://bugs.freedesktop.org/show_bug.cgi?id=6150">minor, unrelated bug</a> probably caused due to a pasto.  Overall, the code is quite confusing if you are X-clueless, just as I am.<br /><br />After a couple of hours or so I was looking at the <tt>localAllocateOffscreenLinear</tt> function.  I saw that the first call to <tt>AllocateLinear</tt> was returning a null pointer, which made me think that the problem was there, continuing the inspection in that direction.  That lead to nowhere.<br /><br />At last, and tired of try & error cycles, I returned to the <tt>NVAllocateOverlayMemory</tt> function.  I saw there that calls to <tt>xf86AllocateOffscreenLinear</tt> function were passing a 32 value, which seemed like a bpp.  "Hmm... if I decrease it to, say, 24, it may need less memory and it might work."  And indeed it did!  That little change enabled xv again in my machine.<br /><br />But the rationale behind the change was wrong.  It happens to be that that parameter is not a bpp; it is a <i>granularity</i>.  Therefore I assume that the less its value, the better.  Some other greps "confirmed" this, as other drivers such as radeon are using a value of 16 (or even less) for that call.<br /><br />Some time later and with xv working properly, I came back to the <tt>localAllocateOffscreenLinear</tt> function.  This made me see that it was always falling back to the second case (below the "NOPE, ALLOCATING AREA" message).  "Stupid me; I should have looked there before."  This is part of the function:<pre>if(gran && ((gran > pitch) || (pitch % gran))) {<br />   /* we can't match the specified alignment<br />      with XY allocations */<br />   xfree(link);<br />   return NULL;<br />}</pre><tt>gran</tt> is the granularity passed in by the driver and <tt>pitch</tt> seems to be the screen's horizontal resolution.  So, doing some numbers we see that <tt>pitch % gran = 1680 % 32 = 16 != 0</tt>.  Voila!  There it is, the real problem.  Well, I <i>think</i> this is the problem, but I may be wrong.<br /><br />After all, it looks like as if the problem was a simple bug rather than something related to the card's memory.  You can <a href="https://bugs.freedesktop.org/show_bug.cgi?id=6151">follow this bug</a> for more information as well as to retrieve the proposed patch.<br /><br /><b>Edit (March 6, 21:38)</b>: It turns out my patch was not really correct.  For more information just check out the bug's audit trail.
+      <div class="row">
+        <div class="col-md-9">
+           <article>As you may already know I <a href="http://julipedia.blogspot.com/2006/01/got-benq-fp202w-flat-panel.html">bought a BenQ FP202W</a> flat panel two months ago, which made me switch from a rather small resolution (1024x768) to a much bigger one: 1680x1050 at 24bpp running on a NVIDIA GeForce 6600GT with the free nv driver.  As I did the switch I lost the ability to play videos in X11 full screen mode because the Xvideo refused to work.  As you can imagine, this was <i>extremely annoying</i>.<br /><br />For example, mplayer spit out the following:<br /><br /><tt>X11 error: BadAlloc (insufficient resources for operation)?,?% 0 0</tt><br /><br />Similarly, xawtv couldn't set up an overlay window due to the lack of the xv extension thus becoming completely unusable.<br /><br />Based on a suggestion from someone I don't remember, I decided yesterday to replace my XFree86 4.5.0 installation with X.Org 6.9 hoping that its nv driver could work better.  Guess what, it didn't.<br /><br />But after the installation, and just out of curiosity, I started looking at nv's sources to see if I could discover the problem.  I was hopeless to find a solution but I had to try.<br /><br />First of all, I grepped for <tt>BadAlloc</tt> in the nv directory, something that quickly drove me to the <tt>NVAllocateOverlayMemory</tt> function.  Based on the name, this seemed like a logic place for the failure.  I added some debugging messages, reinstalled the driver and effectively this function was being called and returned a null pointer.<br /><br />Some more printf's told me that the problem was being raised by <tt>xf86AllocateOffscreenLinear</tt>.  "Ouch... looks as if the driver cannot allocate enough video memory for such a big resolution... may be difficult to fix", I though.  Nevertheless, I continued my quest inspecting this other function and many other code in xf86fbman.c.  Along the process, I discovered a <a href="https://bugs.freedesktop.org/show_bug.cgi?id=6150">minor, unrelated bug</a> probably caused due to a pasto.  Overall, the code is quite confusing if you are X-clueless, just as I am.<br /><br />After a couple of hours or so I was looking at the <tt>localAllocateOffscreenLinear</tt> function.  I saw that the first call to <tt>AllocateLinear</tt> was returning a null pointer, which made me think that the problem was there, continuing the inspection in that direction.  That lead to nowhere.<br /><br />At last, and tired of try & error cycles, I returned to the <tt>NVAllocateOverlayMemory</tt> function.  I saw there that calls to <tt>xf86AllocateOffscreenLinear</tt> function were passing a 32 value, which seemed like a bpp.  "Hmm... if I decrease it to, say, 24, it may need less memory and it might work."  And indeed it did!  That little change enabled xv again in my machine.<br /><br />But the rationale behind the change was wrong.  It happens to be that that parameter is not a bpp; it is a <i>granularity</i>.  Therefore I assume that the less its value, the better.  Some other greps "confirmed" this, as other drivers such as radeon are using a value of 16 (or even less) for that call.<br /><br />Some time later and with xv working properly, I came back to the <tt>localAllocateOffscreenLinear</tt> function.  This made me see that it was always falling back to the second case (below the "NOPE, ALLOCATING AREA" message).  "Stupid me; I should have looked there before."  This is part of the function:<pre>if(gran && ((gran > pitch) || (pitch % gran))) {<br />   /* we can't match the specified alignment<br />      with XY allocations */<br />   xfree(link);<br />   return NULL;<br />}</pre><tt>gran</tt> is the granularity passed in by the driver and <tt>pitch</tt> seems to be the screen's horizontal resolution.  So, doing some numbers we see that <tt>pitch % gran = 1680 % 32 = 16 != 0</tt>.  Voila!  There it is, the real problem.  Well, I <i>think</i> this is the problem, but I may be wrong.<br /><br />After all, it looks like as if the problem was a simple bug rather than something related to the card's memory.  You can <a href="https://bugs.freedesktop.org/show_bug.cgi?id=6151">follow this bug</a> for more information as well as to retrieve the proposed patch.<br /><br /><b>Edit (March 6, 21:38)</b>: It turns out my patch was not really correct.  For more information just check out the bug's audit trail.
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -134,7 +683,9 @@
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -164,6 +715,7 @@
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">

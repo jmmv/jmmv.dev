@@ -74,11 +74,11 @@ Because NetBSD still relies on the deprecated tools to run its test suite, they 
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -100,11 +100,560 @@ Because NetBSD still relies on the deprecated tools to run its test suite, they 
     </div>
 
     <div class="container">
-      <article>
-        <p>The time to kill the deprecated tools &mdash;<tt>atf-report</tt> and <tt>atf-run</tt> principally&mdash; from the upstream ATF distribution file has come.  Unfortunately, this is not the trivial task that it may seem.</p> <p><b>But wait, "Why?" and "Why now?"</b></p> <p>Because NetBSD still relies on the deprecated tools to run its test suite, they cannot just be killed.  Removing them from the upstream distribution, however, is actually a good change for both ATF and NetBSD.</p> <p>The main reason for removing the tools from the upstream ATF package is simplicity: with this change, ATF becomes a pure distribution of libraries to implement ATF-compliant test programs.  At the moment, building upon ATF is difficult because the code of the libraries is overly complicated: the libraries include a lot of internal modules only used by the tools and this code cannot be lightened unless the tools are gone.  Not putting this tools-only utility code outside of the base libraries was a bad design decision when the package was first created in 2007 and is a huge mess to untangle.</p> <p>However, even if the tools are removed from the upstream ATF package, we still need to accommodate for the fact that NetBSD still requires the tools.  The easiest way to do this is to just "hand the keys over" to NetBSD and transfer ownership of the tools code to them (which is a weird way to put it given that "them" includes me as well!).  The actual effect of this "removal" is that the master copy of the tools code will live in the NetBSD source tree.</p> <p><b>So, how is this going to happen?</b></p> <p>A naive course of action would be to just remove the old code from the upstream distribution file in the next release.  With this done, NetBSD would import the new release and, at the same time, keep the files for the old code without deleting them.</p> <p>Unfortunately, this approach wouldn't work very well.  The problem is, as mentioned above, that the tools have deep tentacles into the <tt>atf-c++</tt> code and <tt>atf-c++</tt>, in turn, is mostly a wrapper over <tt>atf-c</tt>.  If we did as mentioned above, changing the upstream code for <tt>atf-c++</tt> and/or <tt>atf-c</tt> at a future date would be incredibly difficult: any minor change to their internals would result in the NetBSD copy of the tools not building any more on the next import, and <i>that</i> would be a huge maintenance nightmare (for me actually, because I'll continue to be the owner of the code regardless of where it lives).</p> <p>Therefore, the process to perform the removal needs to account for this original deficiency and has to mitigate its effects.  The plan is as follows:</p> <ol> <li>Detach the ATF tools from the libraries, which is tricky but necessary.  Future changes to the internal structure of <tt>atf-c++</tt> must not affect the code of the tools as should have been the case from day one.  The way this is going to happen is by duplicating all code in <tt>atf-c++</tt> that is required by the tools into the tools themselves and then killing the dependency of the tools on the libraries.</li> <li>Publish 0.19 as the final release with the deprecated tools: this is the release that will contain the standalone version of the code for use by anyone that may need it.</li> <li>Remove all ATF tools related code from the upstream tree.</li> <li>Publish 0.20 immediately after 0.19 as the first release without the deprecated tools.  0.19 should never hit any packaging system and will exist solely as a transition point for NetBSD (or others that may need it).</li> <li>Import 0.19 into the NetBSD source tree.  This will rearrange the code currently existing in <tt>src/external/bsd/atf/</tt> to isolate the old tools (with all of their supporting code) in a single and standalone subdirectory.</li> <li>Import 0.20 into the NetBSD source tree as well, right after 0.19.  Because NetBSD does not import any of the autotools generated code, this double-import will result in minimal changes to the tree... yet it will be declaring the tools as owned by NetBSD.</li> <li>Upgrade existing ATF packages to 0.20, including those in pkgsrc, FreeBSD ports and Fedora, and simplify them significantly to remove any tools code.  This may actually involve killing <tt>atf-libs</tt> and similar packages that were added in the past to cope with the duality of the contents of the <tt>atf</tt> package.</li> <li>Simplify the tools code imported into NetBSD to drop most of, if not all, the portability-related code.  This implies removing anything that depends on the results of configure, for example, given that the indirection won't be needed any more.</li> </ol> <p><b>OK, when?</b></p> <p>Really soon.  I have all the changes ready for 0.19 and 0.20 in my local git tree (which took two long-haul flights within the U.S. last week to finish!) and I'm now working on the integration into NetBSD to ensure all works.  When this is ready, expect the new releases out and updated in your favorite packaging systems!</p> <p><b>Anything else?</b></p> <p>Doing this cleanup will free ATF to evolve more easily regrading new features and much needed interface cleanups.  Of course, updating the deprecated tools in NetBSD will still have to happen whenever/if there are any incompatible changes, but doing so in a self-contained, OS-specific tree will be much simpler and palatable.</p> <p>The ultimate goal, really, is to make the upstream <tt>atf</tt> package as lightweight and simple as possible.</p> <p>What are your thoughts on this?</p>
+      <div class="row">
+        <div class="col-md-9">
+           <article><p>The time to kill the deprecated tools &mdash;<tt>atf-report</tt> and <tt>atf-run</tt> principally&mdash; from the upstream ATF distribution file has come.  Unfortunately, this is not the trivial task that it may seem.</p> <p><b>But wait, "Why?" and "Why now?"</b></p> <p>Because NetBSD still relies on the deprecated tools to run its test suite, they cannot just be killed.  Removing them from the upstream distribution, however, is actually a good change for both ATF and NetBSD.</p> <p>The main reason for removing the tools from the upstream ATF package is simplicity: with this change, ATF becomes a pure distribution of libraries to implement ATF-compliant test programs.  At the moment, building upon ATF is difficult because the code of the libraries is overly complicated: the libraries include a lot of internal modules only used by the tools and this code cannot be lightened unless the tools are gone.  Not putting this tools-only utility code outside of the base libraries was a bad design decision when the package was first created in 2007 and is a huge mess to untangle.</p> <p>However, even if the tools are removed from the upstream ATF package, we still need to accommodate for the fact that NetBSD still requires the tools.  The easiest way to do this is to just "hand the keys over" to NetBSD and transfer ownership of the tools code to them (which is a weird way to put it given that "them" includes me as well!).  The actual effect of this "removal" is that the master copy of the tools code will live in the NetBSD source tree.</p> <p><b>So, how is this going to happen?</b></p> <p>A naive course of action would be to just remove the old code from the upstream distribution file in the next release.  With this done, NetBSD would import the new release and, at the same time, keep the files for the old code without deleting them.</p> <p>Unfortunately, this approach wouldn't work very well.  The problem is, as mentioned above, that the tools have deep tentacles into the <tt>atf-c++</tt> code and <tt>atf-c++</tt>, in turn, is mostly a wrapper over <tt>atf-c</tt>.  If we did as mentioned above, changing the upstream code for <tt>atf-c++</tt> and/or <tt>atf-c</tt> at a future date would be incredibly difficult: any minor change to their internals would result in the NetBSD copy of the tools not building any more on the next import, and <i>that</i> would be a huge maintenance nightmare (for me actually, because I'll continue to be the owner of the code regardless of where it lives).</p> <p>Therefore, the process to perform the removal needs to account for this original deficiency and has to mitigate its effects.  The plan is as follows:</p> <ol> <li>Detach the ATF tools from the libraries, which is tricky but necessary.  Future changes to the internal structure of <tt>atf-c++</tt> must not affect the code of the tools as should have been the case from day one.  The way this is going to happen is by duplicating all code in <tt>atf-c++</tt> that is required by the tools into the tools themselves and then killing the dependency of the tools on the libraries.</li> <li>Publish 0.19 as the final release with the deprecated tools: this is the release that will contain the standalone version of the code for use by anyone that may need it.</li> <li>Remove all ATF tools related code from the upstream tree.</li> <li>Publish 0.20 immediately after 0.19 as the first release without the deprecated tools.  0.19 should never hit any packaging system and will exist solely as a transition point for NetBSD (or others that may need it).</li> <li>Import 0.19 into the NetBSD source tree.  This will rearrange the code currently existing in <tt>src/external/bsd/atf/</tt> to isolate the old tools (with all of their supporting code) in a single and standalone subdirectory.</li> <li>Import 0.20 into the NetBSD source tree as well, right after 0.19.  Because NetBSD does not import any of the autotools generated code, this double-import will result in minimal changes to the tree... yet it will be declaring the tools as owned by NetBSD.</li> <li>Upgrade existing ATF packages to 0.20, including those in pkgsrc, FreeBSD ports and Fedora, and simplify them significantly to remove any tools code.  This may actually involve killing <tt>atf-libs</tt> and similar packages that were added in the past to cope with the duality of the contents of the <tt>atf</tt> package.</li> <li>Simplify the tools code imported into NetBSD to drop most of, if not all, the portability-related code.  This implies removing anything that depends on the results of configure, for example, given that the indirection won't be needed any more.</li> </ol> <p><b>OK, when?</b></p> <p>Really soon.  I have all the changes ready for 0.19 and 0.20 in my local git tree (which took two long-haul flights within the U.S. last week to finish!) and I'm now working on the integration into NetBSD to ensure all works.  When this is ready, expect the new releases out and updated in your favorite packaging systems!</p> <p><b>Anything else?</b></p> <p>Doing this cleanup will free ATF to evolve more easily regrading new features and much needed interface cleanups.  Of course, updating the deprecated tools in NetBSD will still have to happen whenever/if there are any incompatible changes, but doing so in a self-contained, OS-specific tree will be much simpler and palatable.</p> <p>The ultimate goal, really, is to make the upstream <tt>atf</tt> package as lightweight and simple as possible.</p> <p>What are your thoughts on this?</p>
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -136,7 +685,9 @@ Because NetBSD still relies on the deprecated tools to run its test suite, they 
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -166,6 +717,7 @@ Because NetBSD still relies on the deprecated tools to run its test suite, they 
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">

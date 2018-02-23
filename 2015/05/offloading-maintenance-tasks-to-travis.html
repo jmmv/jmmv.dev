@@ -73,11 +73,11 @@ As you might have noticed, Doxygen is an optional component of the build and it 
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -99,11 +99,560 @@ As you might have noticed, Doxygen is an optional component of the build and it 
     </div>
 
     <div class="container">
-      <article>
-        <p>From day one, the <a href="https://github.com/jmmv/kyua/">Kyua</a> source tree has had docstring annotations for all of its symbols.  The goal of such docstrings is to <i>document the code for the developers of Kyua</i>: these docstrings were never intended to turn into pre-generated HTML documentation because Kyua does not offer an API once installed.</p> <p>As you might have noticed, <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/m4/doxygen.m4#L30">Doxygen is an optional component of the build</a> and it used to run on each <tt>make</tt> invocation.  This changed "recently".  Nowadays, <a href="http://www.doxygen.org/">Doxygen</a> is only run asynchronously on Travis CI to report docstring inconsistencies post-submission (<a href="https://travis-ci.org/jmmv/kyua/builds/63535926">see the <tt>DO=apidocs</tt> matrix entry</a> if you are impatient).  Combined with feature branches that are only merged into master when green, this is as good as the previous approach of running Doxygen along the build.  Scratch that: this is even better because running Doxygen locally on each build took significant resources and penalized edit/build/test cycles.</p> <p>In this article, I am going to guide you through the specifics of running Doxygen as a separate build in Travis CI.  You can extrapolate this example to other "maintenance" tasks that you wish to run on each push&mdash;say, building and uploading manpages (which I still have to get to), verifying the style of your source tree, or running <a href="https://code.google.com/p/include-what-you-use/">IWYU</a>.</p> <h4>Background: docstrings</h4> <p>Since I started writing Python code at Google in 2009, I have become a fan of docstrings.</p> <p>Having to explicitly document the purpose of each function via a textual description of its arguments, its return values, and any possible exceptions serves to make the code clearer and, more importantly, <i>forces the developer to think about the real purpose of each function</i>.  More than once I've caught myself unable to concisely explain what a function does, which in turn led to a refactoring of such code.</p> <p>Because of this reason, Kyua has had docstrings everywhere since day one. (I have even annotated shell scripts with such docstrings even when these cannot be parsed by Doxygen!)  As an example, see the docstring for the randomly selected <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/engine/requirements.cpp#L242">engine::check_reqs</a> function:</p> <pre style="background: #ffeeee; padding: 5px;">/// Checks if the requirements specified by the test case are met.<br />///<br />/// param md The test metadata.<br />/// param cfg The engine configuration.<br />/// param test_suite Name of the test suite the test belongs to.<br />/// param work_directory Path to where the test case will be run.<br />///<br />/// return A string describing the reason for skipping the test,<br />/// or empty if the test should be executed.<br />std::string<br />engine::check_reqs(const model::metadata& md,<br />                   const config::tree& cfg,<br />                   const std::string& test_suite,<br />                   const fs::path& work_directory)<br />{ ... }</pre> <h4>Docstring linting</h4> <p>Keeping docstrings in sync with the code is very important&mdash;out of date documentation is harmful!&mdash;but validating documentation is never easy.  One way to perform some minimum validation is to use Doxygen: when Doxygen runs, it spits out diagnostic messages if, for example, the list of documented parameters does not match the actual parameters of a function, of if the return value is not documented for a function that returns a value.</p> <p>In the past, a post-build hook in Kyua's <tt>Makefile</tt> triggered a run of Doxygen to sanity-check the contents of these docstrings by looking for warning messages in the output and then printing those at the end of the <tt>make</tt> invocation.  The generated HTML files were discarded.</p> <p>However, running Doxygen in a moderately sized codebase such as Kyua's, which clocks at ~50K lines of code, takes a significant amount of time.  For years, this had annoyed me to the point where I came up with local shell aliases to rebuild only a subset of the source tree without triggering Doxygen&mdash;particularly because in a dual-core system, Doxygen easily clogs one of the cores for the majority of the build time.</p> <p>Recenlty, though, I figured I could delegate the execution of Doxygen to Travis CI and thus only validate that the docstrings are valid at push time.  In fact, this approach can be generalized to asynchronously run other maintenance tasks but, for illustration purposes, I am focusing only on Doxygen.</p> <h4>Is Travis enough?</h4> <p>By moving the docstrings sanity-check operation to Travis, I lost the continuous validation that happened every time I typed <tt>make</tt>. As a result, there is a higher chance for individual commits to break docstrings unintentionally.</p> <p>But that's just fine.</p> <p><a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/CONTRIBUTING.md#git-workflow">Per the Kyua Git workflow policies</a>, changes should not be committed directly into <tt>master</tt>: it is all too easy to commit something that later fails in Travis and thus requires an embarrassing follow-up check-in of the kind "Fix previous".  It is much better to do all work in a local branch (even for apparent one-commit fixes!), push the new branch to GitHub, let Travis go for a test run, see if there are any failures, use <tt>git rebase -i master</tt> along the <tt>edit</tt> or <tt>fixup</tt> actions, and make the set of commits sane from the ground up without amendments to fix obvious mistakes. (Think of <a href="http://darcs.net/">Darcs</a> if you will.)  With a green build for the branch, merging into master becomes trivial and, more importantly, <i>safe</i>.</p> <p>Therefore, requiring changes to be pushed into <tt>master</tt> only after getting a green build from Travis ensures that <tt>master</tt> never gets bogus commits with invalid docstrings.  The visible effects are the same as before, so this is good enough.</p> <p>Are you convinced yet?  Let's dive in.</p> <h4>Dealing with Doxygen false negatives</h4> <p>The first problem to deal with before integrating Doxygen into Travis are false negatives in docstrings: that is, the cases where Doxygen would complain about an incorrect docstring that is actually correct.  I had trained myself to ignore the false negatives, but a mental process has one major problem: the act of enforcing failures when docstrings are invalid can only be done if the output is deterministic and clean.  In other words: <i>we need Doxygen to return 0 if all docstrings look good and 1 if any do not.  But because of false negatives, we cannot trust the 1 return values.</i>  (I blame Doxygen's C++ parser. Parsing C++ is <i>very</i> difficult and the only reasonable way of doing so these days is by using LLVM's libraries.  Anything else is bound to make mistakes.)</p> <p>The good thing is that the false negatives are deterministic so I wrote a small AWK script (<a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/admin/check-api-docs.awk">see <tt>check-api-docs.awk</tt></a>) that receives the output of Doxygen, strips out any known false negatives, and returns success if there are no new errors and failure if any unknown errors are found.  Plugging this into the <tt>Makefile</tt> results in a <tt>check-api-docs</tt> target that can be properly used in an automated environment (see <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/Makefile.am#L143">Makefile.am</a> for the full details):</p> <pre style="background: #ffeeee; padding: 5px;">if WITH_DOXYGEN<br />check-api-docs: api-docs/api-docs.tag<br /> @$(AWK) -f $(srcdir)/admin/check-api-docs.awk <br />     api-docs/doxygen.out<br /><br />api-docs/api-docs.tag: $(builddir)/Doxyfile $(SOURCES)<br /> @mkdir -p api-docs<br /> @rm -f api-docs/doxygen.out api-docs/doxygen.out.tmp<br /> $(AM_V_GEN)$(DOXYGEN) $(builddir)/Doxyfile <br />     &gt;api-docs/doxygen.out.tmp 2&gt;&1 && <br />     mv api-docs/doxygen.out.tmp api-docs/doxygen.out<br />endif</pre> <p>With this done, we now have a <tt>check-api-docs</tt> <tt>make</tt> target that we can depend on as part of the build.  Such target fails the build only if there are <i>new</i> docstring problems. (Yes, we can manually invoke this target if we so desire.)</p> <h4>Hooking the run into Travis</h4> <p>The <a href="http://docs.travis-ci.com/user/build-configuration/">Travis configuration file</a> supports specifying a single command to fetch the required dependencies and another command to execute the build.  Builds can be configured both by predefined settings, such as the compilers to use or the operating systems to build on, and by manually specified environment variables.</p> <p>The most naive approach to running maintenance tasks would be to add their actions to the <tt>all</tt> target in the <tt>Makefile</tt> so that a simple <tt>make</tt> invocation from the build script ran the maintenance task.  This is overkill though: the maintenance job, which is not going to yield different results in every job matrix entry, will be executed for all entries and thus will stress an already overloaded worker pool.  In particular, installing Doxygen in the builder takes a significant amount of time because of Doxygen's dependency on TeX and running Doxygen sucks precious CPU resources.</p> <p>What is the alternative then?  Easy: have <i>a single entry in the matrix running the maintenance task</i>. Can you do that?  Yes.  How?  With environment variables.</p> <p>Travis allows you to add arbitrary entries to the job matrix in the <a href="http://docs.travis-ci.com/user/build-configuration/">configuration file</a> by specifying combinations of environment variables that are passed to the scripts of the build.  Using this feature, I introduced a global <tt>DO</tt> variable that tells the scripts <i>what</i> is being done: <tt>apidocs</tt> to verify the API documentation and <tt>build</tt> to execute the actual build of Kyua (see <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/admin/travis-build.sh"><tt>travis-build.sh</tt></a> and <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/admin/travis-install-deps.sh"><tt>travis-install-deps.sh</tt></a> for an example).</p> <p>With this new <tt>DO</tt> variable, we can customize the environment entries in the matrix to introduce a new run for the Doxygen invocation (see <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/.travis.yml">.travis.yml</a> for full details on this code snippet):</p> <pre style="background: #ffeeee; padding: 5px;">env:<br />    - DO=apidocs<br />    - DO=distcheck AS_ROOT=no<br />    - DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=no<br />    - DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=yes</pre> <p>But this is still suboptimal. Travis builds a <b>matrix</b> of all possible combinations given by the operating systems, compilers, and the environment entries you defined.  Running Doxygen on the source tree is independent of all these parameters: it does not matter what operating system you are running on or what compiler is used to build the source tree: Doxygen will yield the same output every single time.</p> <p>Therefore, adding <tt>DO=apidocs</tt> as an entry to the matrix makes the number of build combinations explode, which is not acceptable because it is wasteful.</p> <p>We can do better.  We can tell Travis to exclude matrix entries that are unnecessary.  To do so, we need to pick an arbitrary combination of settings to serve as the "baseline" for our maintenance tasks and then we have to disable all other matrix entries for this particular environment combination:</p> <pre style="background: #ffeeee; padding: 5px;">matrix:<br />    exclude:<br />        - compiler: gcc<br />          env: DO=apidocs<br />        - compiler: gcc<br />          env: DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=no<br />        - compiler: gcc<br />          env: DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=yes</pre> <p>Having to think of exclusions is not the most pleasant thing to do, but is easy enough if you have a small set of combinations.  (It'd be easier and nicer if one could just list all matrix entries explicitly.)</p> <p>Anyway: voila!  That gives you a new entry in your build matrix to represent the new maintenance task.  See <a href="https://travis-ci.org/jmmv/kyua/builds/63535926">a green build</a> and <a href="https://travis-ci.org/jmmv/kyua/builds/56788661">a red build</a> for a couple of examples of how things look like.</p>
+      <div class="row">
+        <div class="col-md-9">
+           <article><p>From day one, the <a href="https://github.com/jmmv/kyua/">Kyua</a> source tree has had docstring annotations for all of its symbols.  The goal of such docstrings is to <i>document the code for the developers of Kyua</i>: these docstrings were never intended to turn into pre-generated HTML documentation because Kyua does not offer an API once installed.</p> <p>As you might have noticed, <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/m4/doxygen.m4#L30">Doxygen is an optional component of the build</a> and it used to run on each <tt>make</tt> invocation.  This changed "recently".  Nowadays, <a href="http://www.doxygen.org/">Doxygen</a> is only run asynchronously on Travis CI to report docstring inconsistencies post-submission (<a href="https://travis-ci.org/jmmv/kyua/builds/63535926">see the <tt>DO=apidocs</tt> matrix entry</a> if you are impatient).  Combined with feature branches that are only merged into master when green, this is as good as the previous approach of running Doxygen along the build.  Scratch that: this is even better because running Doxygen locally on each build took significant resources and penalized edit/build/test cycles.</p> <p>In this article, I am going to guide you through the specifics of running Doxygen as a separate build in Travis CI.  You can extrapolate this example to other "maintenance" tasks that you wish to run on each push&mdash;say, building and uploading manpages (which I still have to get to), verifying the style of your source tree, or running <a href="https://code.google.com/p/include-what-you-use/">IWYU</a>.</p> <h4>Background: docstrings</h4> <p>Since I started writing Python code at Google in 2009, I have become a fan of docstrings.</p> <p>Having to explicitly document the purpose of each function via a textual description of its arguments, its return values, and any possible exceptions serves to make the code clearer and, more importantly, <i>forces the developer to think about the real purpose of each function</i>.  More than once I've caught myself unable to concisely explain what a function does, which in turn led to a refactoring of such code.</p> <p>Because of this reason, Kyua has had docstrings everywhere since day one. (I have even annotated shell scripts with such docstrings even when these cannot be parsed by Doxygen!)  As an example, see the docstring for the randomly selected <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/engine/requirements.cpp#L242">engine::check_reqs</a> function:</p> <pre style="background: #ffeeee; padding: 5px;">/// Checks if the requirements specified by the test case are met.<br />///<br />/// param md The test metadata.<br />/// param cfg The engine configuration.<br />/// param test_suite Name of the test suite the test belongs to.<br />/// param work_directory Path to where the test case will be run.<br />///<br />/// return A string describing the reason for skipping the test,<br />/// or empty if the test should be executed.<br />std::string<br />engine::check_reqs(const model::metadata& md,<br />                   const config::tree& cfg,<br />                   const std::string& test_suite,<br />                   const fs::path& work_directory)<br />{ ... }</pre> <h4>Docstring linting</h4> <p>Keeping docstrings in sync with the code is very important&mdash;out of date documentation is harmful!&mdash;but validating documentation is never easy.  One way to perform some minimum validation is to use Doxygen: when Doxygen runs, it spits out diagnostic messages if, for example, the list of documented parameters does not match the actual parameters of a function, of if the return value is not documented for a function that returns a value.</p> <p>In the past, a post-build hook in Kyua's <tt>Makefile</tt> triggered a run of Doxygen to sanity-check the contents of these docstrings by looking for warning messages in the output and then printing those at the end of the <tt>make</tt> invocation.  The generated HTML files were discarded.</p> <p>However, running Doxygen in a moderately sized codebase such as Kyua's, which clocks at ~50K lines of code, takes a significant amount of time.  For years, this had annoyed me to the point where I came up with local shell aliases to rebuild only a subset of the source tree without triggering Doxygen&mdash;particularly because in a dual-core system, Doxygen easily clogs one of the cores for the majority of the build time.</p> <p>Recenlty, though, I figured I could delegate the execution of Doxygen to Travis CI and thus only validate that the docstrings are valid at push time.  In fact, this approach can be generalized to asynchronously run other maintenance tasks but, for illustration purposes, I am focusing only on Doxygen.</p> <h4>Is Travis enough?</h4> <p>By moving the docstrings sanity-check operation to Travis, I lost the continuous validation that happened every time I typed <tt>make</tt>. As a result, there is a higher chance for individual commits to break docstrings unintentionally.</p> <p>But that's just fine.</p> <p><a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/CONTRIBUTING.md#git-workflow">Per the Kyua Git workflow policies</a>, changes should not be committed directly into <tt>master</tt>: it is all too easy to commit something that later fails in Travis and thus requires an embarrassing follow-up check-in of the kind "Fix previous".  It is much better to do all work in a local branch (even for apparent one-commit fixes!), push the new branch to GitHub, let Travis go for a test run, see if there are any failures, use <tt>git rebase -i master</tt> along the <tt>edit</tt> or <tt>fixup</tt> actions, and make the set of commits sane from the ground up without amendments to fix obvious mistakes. (Think of <a href="http://darcs.net/">Darcs</a> if you will.)  With a green build for the branch, merging into master becomes trivial and, more importantly, <i>safe</i>.</p> <p>Therefore, requiring changes to be pushed into <tt>master</tt> only after getting a green build from Travis ensures that <tt>master</tt> never gets bogus commits with invalid docstrings.  The visible effects are the same as before, so this is good enough.</p> <p>Are you convinced yet?  Let's dive in.</p> <h4>Dealing with Doxygen false negatives</h4> <p>The first problem to deal with before integrating Doxygen into Travis are false negatives in docstrings: that is, the cases where Doxygen would complain about an incorrect docstring that is actually correct.  I had trained myself to ignore the false negatives, but a mental process has one major problem: the act of enforcing failures when docstrings are invalid can only be done if the output is deterministic and clean.  In other words: <i>we need Doxygen to return 0 if all docstrings look good and 1 if any do not.  But because of false negatives, we cannot trust the 1 return values.</i>  (I blame Doxygen's C++ parser. Parsing C++ is <i>very</i> difficult and the only reasonable way of doing so these days is by using LLVM's libraries.  Anything else is bound to make mistakes.)</p> <p>The good thing is that the false negatives are deterministic so I wrote a small AWK script (<a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/admin/check-api-docs.awk">see <tt>check-api-docs.awk</tt></a>) that receives the output of Doxygen, strips out any known false negatives, and returns success if there are no new errors and failure if any unknown errors are found.  Plugging this into the <tt>Makefile</tt> results in a <tt>check-api-docs</tt> target that can be properly used in an automated environment (see <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/Makefile.am#L143">Makefile.am</a> for the full details):</p> <pre style="background: #ffeeee; padding: 5px;">if WITH_DOXYGEN<br />check-api-docs: api-docs/api-docs.tag<br /> @$(AWK) -f $(srcdir)/admin/check-api-docs.awk <br />     api-docs/doxygen.out<br /><br />api-docs/api-docs.tag: $(builddir)/Doxyfile $(SOURCES)<br /> @mkdir -p api-docs<br /> @rm -f api-docs/doxygen.out api-docs/doxygen.out.tmp<br /> $(AM_V_GEN)$(DOXYGEN) $(builddir)/Doxyfile <br />     &gt;api-docs/doxygen.out.tmp 2&gt;&1 && <br />     mv api-docs/doxygen.out.tmp api-docs/doxygen.out<br />endif</pre> <p>With this done, we now have a <tt>check-api-docs</tt> <tt>make</tt> target that we can depend on as part of the build.  Such target fails the build only if there are <i>new</i> docstring problems. (Yes, we can manually invoke this target if we so desire.)</p> <h4>Hooking the run into Travis</h4> <p>The <a href="http://docs.travis-ci.com/user/build-configuration/">Travis configuration file</a> supports specifying a single command to fetch the required dependencies and another command to execute the build.  Builds can be configured both by predefined settings, such as the compilers to use or the operating systems to build on, and by manually specified environment variables.</p> <p>The most naive approach to running maintenance tasks would be to add their actions to the <tt>all</tt> target in the <tt>Makefile</tt> so that a simple <tt>make</tt> invocation from the build script ran the maintenance task.  This is overkill though: the maintenance job, which is not going to yield different results in every job matrix entry, will be executed for all entries and thus will stress an already overloaded worker pool.  In particular, installing Doxygen in the builder takes a significant amount of time because of Doxygen's dependency on TeX and running Doxygen sucks precious CPU resources.</p> <p>What is the alternative then?  Easy: have <i>a single entry in the matrix running the maintenance task</i>. Can you do that?  Yes.  How?  With environment variables.</p> <p>Travis allows you to add arbitrary entries to the job matrix in the <a href="http://docs.travis-ci.com/user/build-configuration/">configuration file</a> by specifying combinations of environment variables that are passed to the scripts of the build.  Using this feature, I introduced a global <tt>DO</tt> variable that tells the scripts <i>what</i> is being done: <tt>apidocs</tt> to verify the API documentation and <tt>build</tt> to execute the actual build of Kyua (see <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/admin/travis-build.sh"><tt>travis-build.sh</tt></a> and <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/admin/travis-install-deps.sh"><tt>travis-install-deps.sh</tt></a> for an example).</p> <p>With this new <tt>DO</tt> variable, we can customize the environment entries in the matrix to introduce a new run for the Doxygen invocation (see <a href="https://github.com/jmmv/kyua/blob/c2527eee5471b2fde4aeb2e63121d91cc8aba723/.travis.yml">.travis.yml</a> for full details on this code snippet):</p> <pre style="background: #ffeeee; padding: 5px;">env:<br />    - DO=apidocs<br />    - DO=distcheck AS_ROOT=no<br />    - DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=no<br />    - DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=yes</pre> <p>But this is still suboptimal. Travis builds a <b>matrix</b> of all possible combinations given by the operating systems, compilers, and the environment entries you defined.  Running Doxygen on the source tree is independent of all these parameters: it does not matter what operating system you are running on or what compiler is used to build the source tree: Doxygen will yield the same output every single time.</p> <p>Therefore, adding <tt>DO=apidocs</tt> as an entry to the matrix makes the number of build combinations explode, which is not acceptable because it is wasteful.</p> <p>We can do better.  We can tell Travis to exclude matrix entries that are unnecessary.  To do so, we need to pick an arbitrary combination of settings to serve as the "baseline" for our maintenance tasks and then we have to disable all other matrix entries for this particular environment combination:</p> <pre style="background: #ffeeee; padding: 5px;">matrix:<br />    exclude:<br />        - compiler: gcc<br />          env: DO=apidocs<br />        - compiler: gcc<br />          env: DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=no<br />        - compiler: gcc<br />          env: DO=distcheck AS_ROOT=yes UNPRIVILEGED_USER=yes</pre> <p>Having to think of exclusions is not the most pleasant thing to do, but is easy enough if you have a small set of combinations.  (It'd be easier and nicer if one could just list all matrix entries explicitly.)</p> <p>Anyway: voila!  That gives you a new entry in your build matrix to represent the new maintenance task.  See <a href="https://travis-ci.org/jmmv/kyua/builds/63535926">a green build</a> and <a href="https://travis-ci.org/jmmv/kyua/builds/56788661">a red build</a> for a couple of examples of how things look like.</p>
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -135,7 +684,9 @@ As you might have noticed, Doxygen is an optional component of the build and it 
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -165,6 +716,7 @@ As you might have noticed, Doxygen is an optional component of the build and it 
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">

@@ -73,11 +73,11 @@ My idea was to have a disk image with NetBSD/i386 on it and to be able to mount 
       <form class="navbar-form navbar-right" method="get" role="search"
             action="http://www.google.com/search">
           <div class="form-group">
-            <input type="text" name="query" class="form-control"
+            <input type="text" name="query" class="form-control input-sm"
                    placeholder="Search">
             <input type="hidden" name="sitesearch" value="http://julio.meroh.net/">
           </div>
-          <button type="submit" value="Search" class="btn btn-default">
+          <button type="submit" value="Search" class="btn btn-default btn-sm">
             <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
           </button>
       </form>
@@ -99,11 +99,560 @@ My idea was to have a disk image with NetBSD/i386 on it and to be able to mount 
     </div>
 
     <div class="container">
-      <article>
-        Mac OS X is the only operating system in my iBook and I have no plans to change this in the near future (installing NetBSD was frustrating and I do not want Linux).  However, I want to be able to do NetBSD development on it shall the need arise.  And it has to be easy.<br /><br />My idea was to have a disk image with NetBSD/i386 on it and to be able to mount it from OS X to manage its contents (e.g. to update its kernel or to install new userland).  Therefore, installing on a Apple UFS file system was a must.  NetBSD can read such file systems but unfortunately it cannot boot from them (as far as I know); hence the need for a little boot FAT partition (see below).<br /><br />As a result I have got a NetBSD/i386 installation under <a href="http://www.kberg.ch/q/">Q</a>, completely manageable from OS X.  The overall setup renders a very nice development environment.<br /><br />Let's see how (not exactly trivial):<ol><li>Get NetBSD sources on your OS X machine.</li><li>Build a cross-compiler toolchain for i386, which basically means <tt>./build.sh -m i386 tools</tt>.  Doesn't build.sh rock?</li><li>Prepare a custom i386 kernel configuration and build it.  You can simply get <tt>GENERIC</tt>, but you <i>must</i> enable <tt>options APPLE_UFS</tt> as well as <tt>options FFS_EI</tt> (thanks to Rudi Ludwig for <a href="http://mail-index.netbsd.org/port-macppc/2006/04/09/0001.html">pointing the latter out</a>).  Do not disable <tt>file-system MSDOS</tt>.</li><li>Create a new PC under Q and specify a new 512MB <i>raw</i> disk image (qcow will not work).</li><li>Use the command line <tt>fdisk</tt> utility to partition the new image: create a 50MB FAT16 partition (type 6) and leave the rest for Apple UFS (type 168).  You may have geometry problems here as <tt>fdisk</tt> will think that the disk is extremely large; for the 512MB disk we just created, use 1040 cylinders, 16 heads and 63 sectors per track (you can give this to fdisk as parameters).</li><li>The disk created by Q is stored in <tt>~/Documents/QEMU/pcname.qvm/Harddisk_1.raw</tt>; I will refer to it as <tt>disk.img</tt> for simplicity.  Tell OS X to attach it: <tt>hdiutil attach -nomount disk.img</tt>.</li><li>Format the new partitions.  <i>WARNING: OS X attaches this as <tt>disk1</tt> for me; check the device name in your  machine before proceeding and adjust it accordingly</i>.  Simply do: <tt>newfs_msdos /dev/disk1s1</tt> and <tt>newfs /dev/disk1s2</tt>.</li><li>Detach the image and reattach it, but this time let OS X mount the file systems within them: <tt>hdiutil detach disk1 ; hdiutil attach disk.img</tt>.</li><li>Use the finder to rename the partitions to more representative names.  E.g. NB-Boot and NB-Root.</li></ol>Now it's time to install NetBSD under the new disk.  We need to do this manually.  Assume that all of the following commands are run from within <tt>/Volumes/NB-Root</tt>:<ol><li>Unpack the NetBSD sets by doing: <tt>for f in ~/NetBSD/i386/binary/sets/[bcegmt]*.tgz; do sudo tar xzpf $f; done</tt>.</li><li>Create the device files in <tt>dev</tt> by executing the following: <tt>cd dev && sudo ./MAKEDEV -m ${TOOLDIR}/bin/nbmknod all</tt>.  <tt>TOOLDIR</tt> points to the directory holding the cross tools you built before.</li><li>Create a minimal <tt>etc/fstab</tt>.  E.g.:<br/><tt>/dev/wd0f / ffs rw 1 2<br/>/dev/wd0e /boot msdos ro,-l 0 0</tt></li><li>Create the <tt>boot</tt> directory.  This clashes with the standard <tt>/boot</tt> file in a NetBSD system, but we will not have this one; feel free to use a different name.</li><li>Edit <tt>etc/gettytab</tt> and add <tt>al=root</tt> to the default entry.  This will automatically log into root's session, so we do not need to set a password for it.</li><li>Edit <tt>rc.conf</tt> and set <tt>rc_configured=YES</tt>.  Disable all the services you will not use for better boot up speed: <tt>cron=NO inetd=NO sendmail=NO virecover=NO wscons=YES</tt>.  Do not forget to set the host name: <tt>hostname=devel</tt>.</li><li>Edit <tt>wscons.conf</tt> and disable all extra screens.</li><li>Create links that will point to the kernels: <tt>ln -s boot/netbsd boot</tt> and <tt>ln -s boot/netbsd.gdb</tt>.  This is the reason why my boot partition is 50MB; the debugging kernels take a lot of space.</li></ol>At last, we need to install the boot loader in the FAT partition.  I've chosen GRUB so I needed a GRUB boot floppy (an image) at hand to finish the setup.<ol><li>Mount the GRUB image and copy its files to the boot partition.  E.g.: <tt>cp -rf /Volumes/GRUB/boot /Volumes/NB-Boot</tt>.  You need the <tt>fat_stage1_5</tt> file for this to work.</li><li>Create a minimal <tt>/Volumes/GRUB/boot/grub/menu.lst</tt> file for automatic booting:<br/><tt>default 0<br/>timeout 5<br/>title NetBSD - Development kernel<br/>kernel (hd0,0)/netbsd root=wd0f</tt></li><li>Copy the kernel you built at the beginning to <tt>/Volumes/GRUB/netbsd</tt>.</li><li>Detach all the disk images: <tt>hdiutil detach disk1</tt> and <tt>hdiutil detach disk2</tt>.<li>Configure your virtual PC in Q to boot from this GRUB floppy disk image and embed GRUB into your virtual hard disk: <tt>root (hd0,0)</tt> and <tt>setup (hd0)</tt>.</li><li>Change Q's configuration to boot straight from the hard disk image.</li></ol>And at last... <b>Boot NetBSD!</b><br /><br />With this setup you can mount your development image with <tt>hdiutil attach disk.img</tt>, mess as you want with its contents, detach it and relaunch your Q session.  Pretty neat :-)
+      <div class="row">
+        <div class="col-md-9">
+           <article>Mac OS X is the only operating system in my iBook and I have no plans to change this in the near future (installing NetBSD was frustrating and I do not want Linux).  However, I want to be able to do NetBSD development on it shall the need arise.  And it has to be easy.<br /><br />My idea was to have a disk image with NetBSD/i386 on it and to be able to mount it from OS X to manage its contents (e.g. to update its kernel or to install new userland).  Therefore, installing on a Apple UFS file system was a must.  NetBSD can read such file systems but unfortunately it cannot boot from them (as far as I know); hence the need for a little boot FAT partition (see below).<br /><br />As a result I have got a NetBSD/i386 installation under <a href="http://www.kberg.ch/q/">Q</a>, completely manageable from OS X.  The overall setup renders a very nice development environment.<br /><br />Let's see how (not exactly trivial):<ol><li>Get NetBSD sources on your OS X machine.</li><li>Build a cross-compiler toolchain for i386, which basically means <tt>./build.sh -m i386 tools</tt>.  Doesn't build.sh rock?</li><li>Prepare a custom i386 kernel configuration and build it.  You can simply get <tt>GENERIC</tt>, but you <i>must</i> enable <tt>options APPLE_UFS</tt> as well as <tt>options FFS_EI</tt> (thanks to Rudi Ludwig for <a href="http://mail-index.netbsd.org/port-macppc/2006/04/09/0001.html">pointing the latter out</a>).  Do not disable <tt>file-system MSDOS</tt>.</li><li>Create a new PC under Q and specify a new 512MB <i>raw</i> disk image (qcow will not work).</li><li>Use the command line <tt>fdisk</tt> utility to partition the new image: create a 50MB FAT16 partition (type 6) and leave the rest for Apple UFS (type 168).  You may have geometry problems here as <tt>fdisk</tt> will think that the disk is extremely large; for the 512MB disk we just created, use 1040 cylinders, 16 heads and 63 sectors per track (you can give this to fdisk as parameters).</li><li>The disk created by Q is stored in <tt>~/Documents/QEMU/pcname.qvm/Harddisk_1.raw</tt>; I will refer to it as <tt>disk.img</tt> for simplicity.  Tell OS X to attach it: <tt>hdiutil attach -nomount disk.img</tt>.</li><li>Format the new partitions.  <i>WARNING: OS X attaches this as <tt>disk1</tt> for me; check the device name in your  machine before proceeding and adjust it accordingly</i>.  Simply do: <tt>newfs_msdos /dev/disk1s1</tt> and <tt>newfs /dev/disk1s2</tt>.</li><li>Detach the image and reattach it, but this time let OS X mount the file systems within them: <tt>hdiutil detach disk1 ; hdiutil attach disk.img</tt>.</li><li>Use the finder to rename the partitions to more representative names.  E.g. NB-Boot and NB-Root.</li></ol>Now it's time to install NetBSD under the new disk.  We need to do this manually.  Assume that all of the following commands are run from within <tt>/Volumes/NB-Root</tt>:<ol><li>Unpack the NetBSD sets by doing: <tt>for f in ~/NetBSD/i386/binary/sets/[bcegmt]*.tgz; do sudo tar xzpf $f; done</tt>.</li><li>Create the device files in <tt>dev</tt> by executing the following: <tt>cd dev && sudo ./MAKEDEV -m ${TOOLDIR}/bin/nbmknod all</tt>.  <tt>TOOLDIR</tt> points to the directory holding the cross tools you built before.</li><li>Create a minimal <tt>etc/fstab</tt>.  E.g.:<br/><tt>/dev/wd0f / ffs rw 1 2<br/>/dev/wd0e /boot msdos ro,-l 0 0</tt></li><li>Create the <tt>boot</tt> directory.  This clashes with the standard <tt>/boot</tt> file in a NetBSD system, but we will not have this one; feel free to use a different name.</li><li>Edit <tt>etc/gettytab</tt> and add <tt>al=root</tt> to the default entry.  This will automatically log into root's session, so we do not need to set a password for it.</li><li>Edit <tt>rc.conf</tt> and set <tt>rc_configured=YES</tt>.  Disable all the services you will not use for better boot up speed: <tt>cron=NO inetd=NO sendmail=NO virecover=NO wscons=YES</tt>.  Do not forget to set the host name: <tt>hostname=devel</tt>.</li><li>Edit <tt>wscons.conf</tt> and disable all extra screens.</li><li>Create links that will point to the kernels: <tt>ln -s boot/netbsd boot</tt> and <tt>ln -s boot/netbsd.gdb</tt>.  This is the reason why my boot partition is 50MB; the debugging kernels take a lot of space.</li></ol>At last, we need to install the boot loader in the FAT partition.  I've chosen GRUB so I needed a GRUB boot floppy (an image) at hand to finish the setup.<ol><li>Mount the GRUB image and copy its files to the boot partition.  E.g.: <tt>cp -rf /Volumes/GRUB/boot /Volumes/NB-Boot</tt>.  You need the <tt>fat_stage1_5</tt> file for this to work.</li><li>Create a minimal <tt>/Volumes/GRUB/boot/grub/menu.lst</tt> file for automatic booting:<br/><tt>default 0<br/>timeout 5<br/>title NetBSD - Development kernel<br/>kernel (hd0,0)/netbsd root=wd0f</tt></li><li>Copy the kernel you built at the beginning to <tt>/Volumes/GRUB/netbsd</tt>.</li><li>Detach all the disk images: <tt>hdiutil detach disk1</tt> and <tt>hdiutil detach disk2</tt>.<li>Configure your virtual PC in Q to boot from this GRUB floppy disk image and embed GRUB into your virtual hard disk: <tt>root (hd0,0)</tt> and <tt>setup (hd0)</tt>.</li><li>Change Q's configuration to boot straight from the hard disk image.</li></ol>And at last... <b>Boot NetBSD!</b><br /><br />With this setup you can mount your development image with <tt>hdiutil attach disk.img</tt>, mess as you want with its contents, detach it and relaunch your Q session.  Pretty neat :-)
+</article>
+        </div>
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <h2>Subscribe</h2>
 
-      </article>
+  <div class="row">
+    <div class="col-sm-9">
+      <p><a
+        href="https://twitter.com/jmmv"
+        class="twitter-follow-button"
+        data-show-count="false"
+        data-size="large">Follow @jmmv</a>
+        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    </div>
+    <div class="col-sm-3">
+      <p><a href="/feed.xml"><img
+        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+    </div>
+  </div>
 
+  <form class="feedburner form-horizontal"
+        action="https://feedburner.google.com/fb/a/mailverify"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+    <input type="text" name="email"
+      placeholder="Enter your email and press enter"
+      class="form-control input-sm"/>
+    <input type="hidden" value="jmmv" name="uri"/>
+    <input type="hidden" name="loc" value="en_US"/>
+    <p>
+      <small>Subscription by
+      <a href="https://feedburner.google.com"
+      target="_blank">FeedBurner</a></small>
+    </p>
+  </form>
+</div>
+
+<div class="row archive">
+  <h2>Archive</h2>
+
+  <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+          
+            
+            <li><a href="/essays.html#2017-10">October 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-08">August 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-07">July 2017</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2017-02">February 2017</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+          
+            
+            <li><a href="/essays.html#2016-09">September 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-05">May 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-04">April 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-03">March 2016</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2016-02">February 2016</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2016-01">January 2016</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+          
+            
+            <li><a href="/essays.html#2015-12">December 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-10">October 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-09">September 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-06">June 2015</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2015-05">May 2015</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2015-04">April 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-03">March 2015</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2015-02">February 2015</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+          
+            
+            <li><a href="/essays.html#2014-11">November 2014</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2014-05">May 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-03">March 2014</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2014-02">February 2014</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2014-01">January 2014</a> (3)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+          
+            
+            <li><a href="/essays.html#2013-12">December 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-11">November 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-10">October 2013</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2013-09">September 2013</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2013-08">August 2013</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2013-07">July 2013</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2013-06">June 2013</a> (9)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+          
+            
+            <li><a href="/essays.html#2012-10">October 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-09">September 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-08">August 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-07">July 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-06">June 2012</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2012-05">May 2012</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2012-04">April 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-03">March 2012</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2012-02">February 2012</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2012-01">January 2012</a> (5)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+          
+            
+            <li><a href="/essays.html#2011-12">December 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-11">November 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-10">October 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-09">September 2011</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2011-08">August 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-07">July 2011</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2011-06">June 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-05">May 2011</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2011-04">April 2011</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2011-03">March 2011</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2011-01">January 2011</a> (7)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+          
+            
+            <li><a href="/essays.html#2010-12">December 2010</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2010-09">September 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-07">July 2010</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2010-06">June 2010</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2010-05">May 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-04">April 2010</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2010-03">March 2010</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2010-01">January 2010</a> (2)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+          
+            
+            <li><a href="/essays.html#2009-10">October 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-09">September 2009</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2009-08">August 2009</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2009-07">July 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-06">June 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-05">May 2009</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2009-04">April 2009</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2009-03">March 2009</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2009-01">January 2009</a> (8)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+          
+            
+            <li><a href="/essays.html#2008-12">December 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-11">November 2008</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2008-10">October 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-09">September 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-08">August 2008</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2008-07">July 2008</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2008-06">June 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-05">May 2008</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2008-04">April 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-03">March 2008</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2008-02">February 2008</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2008-01">January 2008</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
+        <ul id="archive-year-2007" class="collapse">
+          
+            
+            <li><a href="/essays.html#2007-12">December 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-11">November 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-10">October 2007</a> (2)</li>
+          
+            
+            <li><a href="/essays.html#2007-09">September 2007</a> (8)</li>
+          
+            
+            <li><a href="/essays.html#2007-08">August 2007</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2007-07">July 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-06">June 2007</a> (15)</li>
+          
+            
+            <li><a href="/essays.html#2007-05">May 2007</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2007-04">April 2007</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2007-03">March 2007</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2007-02">February 2007</a> (1)</li>
+          
+            
+            <li><a href="/essays.html#2007-01">January 2007</a> (6)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
+        <ul id="archive-year-2006" class="collapse">
+          
+            
+            <li><a href="/essays.html#2006-12">December 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-11">November 2006</a> (3)</li>
+          
+            
+            <li><a href="/essays.html#2006-10">October 2006</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2006-09">September 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-08">August 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-07">July 2006</a> (4)</li>
+          
+            
+            <li><a href="/essays.html#2006-06">June 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-05">May 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-04">April 2006</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2006-03">March 2006</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2006-02">February 2006</a> (13)</li>
+          
+            
+            <li><a href="/essays.html#2006-01">January 2006</a> (18)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
+        <ul id="archive-year-2005" class="collapse">
+          
+            
+            <li><a href="/essays.html#2005-12">December 2005</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2005-11">November 2005</a> (7)</li>
+          
+            
+            <li><a href="/essays.html#2005-10">October 2005</a> (22)</li>
+          
+            
+            <li><a href="/essays.html#2005-09">September 2005</a> (10)</li>
+          
+            
+            <li><a href="/essays.html#2005-08">August 2005</a> (14)</li>
+          
+            
+            <li><a href="/essays.html#2005-07">July 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-06">June 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-05">May 2005</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2005-04">April 2005</a> (5)</li>
+          
+            
+            <li><a href="/essays.html#2005-03">March 2005</a> (12)</li>
+          
+            
+            <li><a href="/essays.html#2005-02">February 2005</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2005-01">January 2005</a> (13)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+          
+            
+            <li><a href="/essays.html#2004-12">December 2004</a> (9)</li>
+          
+            
+            <li><a href="/essays.html#2004-11">November 2004</a> (6)</li>
+          
+            
+            <li><a href="/essays.html#2004-10">October 2004</a> (11)</li>
+          
+            
+            <li><a href="/essays.html#2004-09">September 2004</a> (19)</li>
+          
+            
+            <li><a href="/essays.html#2004-07">July 2004</a> (29)</li>
+          
+            
+            <li><a href="/essays.html#2004-06">June 2004</a> (10)</li>
+          
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
+        <ul id="archive-year-2018" class="collapse">
+          
+            
+            <li><a href="/essays.html#2018-02">February 2018</a> (1)</li>
+          
+        </ul>
+      </li>
+    
+  </ul>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
       <div class="post-links">
         <p>
           
@@ -135,7 +684,9 @@ My idea was to have a disk image with NetBSD/i386 on it and to be able to mount 
           <a href="https://feedburner.google.com" target="_blank">FeedBurner</a>
         </form>
       </div>
+      </div>
 
+      <div class="row">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
@@ -165,6 +716,7 @@ My idea was to have a disk image with NetBSD/i386 on it and to be able to mount 
            data-view_type="FILTERED_POSTMOD">
       </div>
       
+      </div>
     </div>
 
     <div class="container">
