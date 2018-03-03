@@ -6,18 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>How to get the window size? - Julio Merino</title>
-  <meta content="How to get the window size? - Julio Merino" property="og:title">
+  <title>My self-powered commute - Julio Merino</title>
+  <meta content="My self-powered commute - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="Today, a friend of mine raised the issue of how to get the terminal window size from within a program. He had observed in his system an environment variable, called COLUMNS, which was automatically set to the window&#39;s width; that variable even changed when resizing the window.
-But then we checked on two more systems (SuSE Linux and NetBSD) and we couldn&#39;t find the variable anywhere. I don&#39;t know where it&#39;s coming from in his system, but this is clearly not the way to go.">
+  <meta name="description" content="People tell me I&amp;rsquo;m crazy. Maybe. But this is the only way I&amp;rsquo;ve found to consistently fit exercise into the hectic schedule of my daily life with two young kids.
+I live in Brooklyn about 10 kilometers (6 miles) away from the Google office in Manhattan. Here is my commute:
+
+">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/2005/03/how-to-get-window-size.html" property="og:url">
+  <meta content="http://julio.meroh.net/2018/03/my-self-powered-commute.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2005/03/how-to-get-window-size.html">
+  <link rel="canonical" href="http://julio.meroh.net/2018/03/my-self-powered-commute.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -90,10 +92,10 @@ But then we checked on two more systems (SuSE Linux and NetBSD) and we couldn&#3
 
     <div class="page-header">
       <div class="container">
-        <h1>How to get the window size?</h1>
+        <h1>My self-powered commute</h1>
 
-        <p>March 3, 2005 &middot;
-        About 2 minutes</p>
+        <p>March 3, 2018 &middot;
+        About 3 minutes</p>
 
         
       </div>
@@ -102,8 +104,67 @@ But then we checked on two more systems (SuSE Linux and NetBSD) and we couldn&#3
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>Today, a friend of mine raised the issue of how to get the terminal window size from within a program. He had observed in his system an environment variable, called <tt>COLUMNS</tt>, which was automatically set to the window's width; that variable even changed when resizing the window.</p>  <p>But then we checked on two more systems (<a href="http://www.suse.com/">SuSE Linux</a> and <a href="http://www.netbsd.org/">NetBSD</a>) and we couldn't find the variable anywhere. I don't know where it's coming from in his system, but this is clearly not the way to go. So, how to do it?</p>  <p>The <tt>tty(4)</tt> driver has an ioctl for this specific purpose, i.e., to get the window size of an specific terminal.  It's called <tt>TIOCGWINSZ</tt> and has to be called over an open descriptor.  (I let to the reader the task to get information about <tt>TIOCSWINSZ</tt>.)</p>  <p>The next question is, which descriptor? It depends, but, usually, you'll want to get it from the descriptor on which you are going to write the output (<tt>STDOUT_FILENO</tt>).  Let's see a bit of code (slightly based on NetBSD's ps(1)):</p>  <pre>struct winsize ws;<br />unsigned short height, width;  <p>if ((ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 &amp;&<br />    ioctl(STDERR_FILENO, TIOCGWINSZ, &ws) == -1 &amp;&<br />    ioctl(STDIN_FILENO,  TIOCGWINSZ, &amp;ws) == -1) ||<br />    ws.ws_col == 0) {<br />   height = 25;<br />   width = 80;<br />} else {<br />   height = ws.ws_row;<br />   width = ws.ws_col;<br />}</p></pre><p></p>  <p>Now that we can get the terminal size on purpose, the next question is how to detect if the window size changes due to an external event - e.g., the user resized his terminal window. The only thing you need to do in this case is to catch the <tt>SIGWINCH</tt> signal (see <tt>signal(7)</tt>) and act accordingly; i.e., run the code shown above from inside the signal handler (or any other method you prefer to use, like delayed evaluation).</p>  <p>I guess this method is not extremely portable, but I'm sure it'll work on a lot more systems than the <tt>COLUMNS</tt> trick.</p><p class="mobile-post"></p>
-</article>
+           <article><p>People tell me I&rsquo;m crazy. Maybe. But this is the only way I&rsquo;ve found to consistently fit exercise into the hectic schedule of my daily life with two young kids.</p>
+
+<p>I live in Brooklyn about 10 kilometers (6 miles) away from the Google office in Manhattan. Here is my commute:</p>
+
+<p></p>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Commute to work</strong></th>
+<th><strong>Commute home</strong></th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td><strong>Monday</strong></td>
+<td>Bike 🚲</td>
+<td>Run 🏃</td>
+</tr>
+
+<tr>
+<td><strong>Tuesday</strong></td>
+<td>Run 🏃</td>
+<td>Bike 🚲</td>
+</tr>
+
+<tr>
+<td><strong>Wednesday</strong></td>
+<td>Bike 🚲</td>
+<td>Bike 🚲</td>
+</tr>
+
+<tr>
+<td><strong>Thursday</strong></td>
+<td>Bike 🚲</td>
+<td>Run 🏃</td>
+</tr>
+
+<tr>
+<td><strong>Friday</strong></td>
+<td>Run 🏃</td>
+<td>Bike 🚲</td>
+</tr>
+</tbody>
+</table>
+
+<p>Commuting by bike is a pretty normal thing to do in New York. But running&hellip; not so much, and that&rsquo;s where the crazy adjective comes into play I guess.</p>
+
+<p><strong>No subway?</strong> That&rsquo;s right! No subway involved at all, which is a relief considering how <a href="https://www.nytimes.com/2017/11/18/nyregion/new-york-subway-system-failure-delays.html">awfully unreliable</a> the NYC transportation has become over the last few years. Seriously, it&rsquo;s not funny. Self-powered commutes are fully predictable time-wise. Subway commutes mean buffering 20 extra minutes to be on time anywhere, e.g. to pick my son up from daycare.</p>
+
+<p><strong>How much exercise is that?</strong> Done right, this routine totals around 40km of running and 60km of biking per week. If wheather and time permit, I try to fit something else in the weekend, but it&rsquo;s rare. <em>Tough&hellip; but not enough.</em> I&rsquo;ve got a spot in this year&rsquo;s <a href="https://www.tcsnycmarathon.org/">NYC TCS Marathon</a> (OMG, I know, and my first ever!) so I&rsquo;ll have to spice the running up a little bit; 40kms a week are not that many.</p>
+
+<p><strong>How are the logistics?</strong> Complicated but I&rsquo;m lucky to have showers and lockers at work. On the bike-to-work days, I carry enough clean clothes for that day and the following one. On the bike-home days, I carry everything back for washing. No backpack for running—just a little waist bag. Things are extra complex because on Tuesday evenings I have Korean lessons in Midtown, which means I have to pack a super-heavy lock and a book for Monday and Tuesday&rsquo;s rides.</p>
+
+<p><strong>Is this every week?</strong> I try to make it. The above is the <em>ideal</em> however. In reality, cold and wet weather gets in the way quite frequently during the winter season. When that happens, I look at the forecast and try to reschedule by prioritizing the runs over the bike rides (e.g. by dropping Wednesday from the schedule and moving the other paired days). But last year was pretty consistent.</p>
+
+<p><strong>Why this post?</strong> Just because. In migrating the blog to Hugo last week, I encountered the archive&rsquo;s time machine. I skimmed through posts from almost 14 years ago to see what I had to say at the time. In doing so, I came across the <a href="/2004/10/do-you-run.html">Do you run?</a> entry that I wrote when I was getting started with this thing&hellip; and the discovery compelled me to write this as a follow-up.</p>
+
+<p>Anyway, this schedule works. Last year I ran 1,920km and biked 1,870km. I also ran my first half marathons without dedicated additional training. But as a friend said to me, the crazy thing is that these two metrics are similar.</p></article>
         </div>
         <div class="col-md-3 sidebar">
           <div class="row">
@@ -672,8 +733,8 @@ But then we checked on two more systems (SuSE Linux and NetBSD) and we couldn&#3
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2005\/03\/how-to-get-window-size.html";
-            this.page.identifier = "2005-03-03-how-to-get-window-size";
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/03\/my-self-powered-commute.html";
+            this.page.identifier = "2018-03-03-my-self-powered-commute";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -688,14 +749,6 @@ But then we checked on two more systems (SuSE Linux and NetBSD) and we couldn&#3
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2005/03/how-to-get-window-size.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
