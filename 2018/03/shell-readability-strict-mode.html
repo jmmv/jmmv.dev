@@ -6,19 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>SoC: ATF 0.1 released - Julio Merino</title>
-  <meta content="SoC: ATF 0.1 released - Julio Merino" property="og:title">
+  <title>Shell readability: strict mode - Julio Merino</title>
+  <meta content="Shell readability: strict mode - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="To conclude the development of ATF as part of SoC, I&#39;ve released a 0.1 version coinciding with the coding deadline (later today). This clearly draws a line between what has been done during the SoC program and what will be done afterwards.
-See the official announcement for more details!
-I hope you enjoy it as much as I did working on it. ">
+  <meta name="description" content="Some programming languages have a feature known as strict mode: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell also has something akin to this feature. The &amp;ldquo;strict mode&amp;rdquo; name, however, is unofficial, so you won&amp;rsquo;t find many references to it online.
+You can enable the shell&amp;rsquo;s strict mode by doing one of the following:">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/2007/08/soc-atf-01-released.html" property="og:url">
+  <meta content="http://julio.meroh.net/2018/03/shell-readability-strict-mode.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2007/08/soc-atf-01-released.html">
+  <link rel="canonical" href="http://julio.meroh.net/2018/03/shell-readability-strict-mode.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -91,10 +90,10 @@ I hope you enjoy it as much as I did working on it. ">
 
     <div class="page-header">
       <div class="container">
-        <h1>SoC: ATF 0.1 released</h1>
+        <h1>Shell readability: strict mode</h1>
 
-        <p>August 20, 2007 &middot;
-        About 1 minutes</p>
+        <p>March 9, 2018 &middot;
+        About 6 minutes</p>
 
         
       </div>
@@ -103,7 +102,101 @@ I hope you enjoy it as much as I did working on it. ">
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article>To conclude the development of ATF as part of SoC, I've released a 0.1 version coinciding with the coding deadline (later today).  This clearly draws a line between what has been done during the SoC program and what will be done afterwards.<br /><br />See the <a href="http://www.netbsd.org/%7Ejmmv/atf/news.html#20070820-atf-0-1-released">official announcement</a> for more details!<br /><br />I hope you enjoy it as much as I did working on it.
+           <article>
+
+<p>Some programming languages have a feature known as <strong>strict mode</strong>: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell <em>also</em> has something akin to this feature. The &ldquo;strict mode&rdquo; <em>name</em>, however, is unofficial, so you won&rsquo;t find many references to it online.</p>
+
+<p>You can enable the shell&rsquo;s strict mode by doing one of the following:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">set</span> -eu            <span class="c1"># For POSIX-compliant shell scripts.
+</span><span class="c1"></span><span class="nb">set</span> -euo pipefail  # For scripts that already depend on Bash.</code></pre></div>
+<p>In the majority of the cases, prefer the former. The reasons to depend on Bash are few and rare, and I will be skeptical if you claim they apply to you&hellip; but that&rsquo;s something I should cover another day.</p>
+
+<p>The commands above enable three independent options: <code>set -e</code>, <code>set -u</code>, and <code>set -o pipefail</code>. I will cover each in detail in this post, including their downsides. I will also glance over <code>set -x</code> which, while not related to strict mode, is handy to troubleshoot strict mode-related problems. For your convenience:</p>
+
+<nav id="TableOfContents">
+<ul>
+<li><a href="#set-e">set -e</a></li>
+<li><a href="#set-u">set -u</a></li>
+<li><a href="#set-o-pipefail-bash-only">set -o pipefail (Bash only)</a></li>
+<li><a href="#set-x">set -x</a></li>
+<li><a href="#references">References</a></li>
+</ul>
+</nav>
+
+
+<p>Let&rsquo;s proceed, but before, a word of caution.</p>
+
+<p><strong>WARNING:</strong> Be wary of using this &ldquo;strict mode&rdquo;. While its features sound good on paper, they have plenty of caveats. In my opinion, <strong>you are better off having comprehensive unit and integration tests for your program.</strong> Strict mode is indeed handy, but mostly for simple throw-away scripts.</p>
+
+<p>Oh, and by the way&hellip; you may disagree, but I feel that the presence of strict mode is an indicator that the language is just flawed. Stay away if you can.</p>
+
+<h1 id="set-e">set -e</h1>
+
+<p><strong><code>set -e</code> causes the shell to exit when an unguarded statement evaluates to a false value.</strong> In other words: the script terminates as soon as a command returns a non-zero exit code that was not expected. You can equate this to the way languages with exceptions work: if you throw an exception and don&rsquo;t catch it, the exception bubbles up and the program crashes.</p>
+
+<p>The tricky thing is to define what an <em>unexpected</em> non-zero exit code is. Consider these as some non-exhaustive examples:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># Bare commands terminate execution if they return non-zero.
+</span><span class="c1"></span><span class="nb">false</span>
+cp /missing-file /tmp
+
+<span class="c1"># Commands protected by a conditional do not terminate execution.
+</span><span class="c1"></span><span class="k">if</span> false<span class="p">;</span> <span class="k">then</span>
+    <span class="nb">echo</span> <span class="s2">&#34;False&#34;</span>
+<span class="k">else</span>
+    <span class="nb">echo</span> <span class="s2">&#34;True&#34;</span>
+<span class="k">fi</span>
+
+<span class="c1"># Guarded commands do not terminate execution if they evaluate to true.
+</span><span class="c1"></span>cp /this-will-fail /tmp <span class="o">||</span> <span class="nb">echo</span> <span class="s2">&#34;cp failed but continuing anyway...&#34;</span>
+
+<span class="c1"># But guarded commands terminate execution if they evaluate to false.
+</span><span class="c1"></span>cp /this-will-fail /tmp <span class="o">||</span> cp /this-fails-too /tmp</code></pre></div>
+<p>The problem is that the set of rules governing the behavior of <code>set -e</code> are obscure, and different shells (even different versions!) handle these rules differently. Here are a few examples of things that might seem fine but that are actually buggy:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># The default arguments are never set because short-circuit evaluation evaluates
+</span><span class="c1"># this to false.
+</span><span class="c1"></span><span class="o">[</span> <span class="nv">$#</span> -eq <span class="m">0</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="nb">set</span> -- <span class="s2">&#34;default&#34;</span> <span class="s2">&#34;arguments&#34;</span>
+
+<span class="c1"># The rm call is always run; local clobbers the subshell&#39;s exit code.
+</span><span class="c1"></span><span class="nb">local</span> <span class="nv">prefix</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>get_config_value PREFIX<span class="k">)</span><span class="s2">&#34;</span>
+rm -rf <span class="s2">&#34;</span><span class="si">${</span><span class="nv">prefix</span><span class="si">}</span><span class="s2">/bin&#34;</span></code></pre></div>
+<p>There are many more cases as described in <a href="http://mywiki.wooledge.org/BashFAQ/105">BashFAQ 105</a>, some of which are pretty hard to reason about.</p>
+
+<p>So, while <code>set -e</code> can be very handy for quick&rsquo;n&rsquo;dirty scripts, I wouldn&rsquo;t really recommend using it for more elaborate ones. Get in the habit of explicitly handling errors and automatically testing error paths.</p>
+
+<h1 id="set-u">set -u</h1>
+
+<p><strong><code>set -u</code> causes the shell to exit with an error when an undefined variable is referenced.</strong> The exceptions are <code>${*}</code> and <code>${@}</code>, which you can refer to at any point: they represent the current function&rsquo;s arguments and these can legitimately be empty.</p>
+
+<p>A small problem with <code>set -u</code> is that, for example, macOS&rsquo;s ancient <code>/bin/bash</code> contains a bug that causes it to mishandle the special case described above. If your script mentions either <code>${*}</code> or <code>${@}</code> at any point, you are doomed to failure. You may be able to workaround the problem, but the contortions involved have always made me stop using this mode.</p>
+
+<h1 id="set-o-pipefail-bash-only">set -o pipefail (Bash only)</h1>
+
+<p>Pipelines evaluate to the exit code of the <em>last</em> command in the pipeline no matter what happened to any of the previous commands in the same pipeline. This is a problem. Consider something like this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">grep -v <span class="s2">&#34;</span><span class="si">${</span><span class="nv">user_to_remove</span><span class="si">}</span><span class="s2">&#34;</span> users <span class="se">\ </span>           <span class="c1"># Remove the given user.
+</span><span class="c1"></span>    <span class="p">|</span> sed -e <span class="s2">&#34;/last edit/s/: .*/: </span><span class="si">${</span><span class="nv">date</span><span class="si">}</span><span class="s2">/&#34;</span> <span class="se">\ </span> <span class="c1"># Update timestamp.
+</span><span class="c1"></span>    &gt;users.new <span class="o">||</span> fail <span class="s2">&#34;Failed to remove user&#34;</span>
+mv users.new users</code></pre></div>
+<p>This <em>seems</em> good: we modify some input file and save the output to a new file, and only if we don&rsquo;t fail, we update the original. The problem is&hellip; what if <code>grep</code> fails because it cannot open <code>users</code>? <code>grep</code> will print nothing and <code>sed</code> will happily run along with that, reporting success at the end. That&rsquo;s not what we expected, right?</p>
+
+<p><strong><code>set -o pipefail</code> to the rescue. This option causes the shell to evaluate the pipeline to the first non-zero exit code.</strong> In our example, <code>grep</code>&rsquo;s error code would &ldquo;win&rdquo; over <code>sed</code>&rsquo;s successful exit and thus trigger the execution of the <code>fail</code> handler. That&rsquo;s the intended behavior and, arguably, the behavior that should apply all the time.</p>
+
+<p>The only problem is that <code>set -o pipefail</code> is a Bash extension. Unless you depend on Bash already for good reason, you cannot not use this setting.</p>
+
+<h1 id="set-x">set -x</h1>
+
+<p>When you enable strict mode, the shell will inevitably terminate your script in unexpected places—and <em>it won&rsquo;t tell you what happened</em>. It can be very hard to isolate the place where the script stopped execution.</p>
+
+<p><code>set -x</code> can help here. <strong>When <code>set -x</code> is enabled, the shell echoes every statement it executes to the console</strong> (remember MS-DOS&rsquo; <code>@echo on</code>?). The output can be extremely verbose so you won&rsquo;t want to keep it in the &ldquo;production&rdquo; version of your script, but enabling it transiently is invaluable in finding where your script abruptly exited.</p>
+
+<h1 id="references">References</h1>
+
+<ul>
+<li><p><a href="http://mywiki.wooledge.org/BashFAQ/105">BashFAQ 105</a>: A collection of cases demonstrating that <code>set -e</code> is confusing and strong advocacy for <em>not</em> using <code>set -e</code>. I bought into it a few years ago when I <a href="https://github.com/jmmv/atf/issues/14">disabled <code>set -e</code> from atf-sh</a>.</p></li>
+
+<li><p><a href="/2010/01/set-e-and-set-x.html">set -e and set -x</a>: A post of mine from 2010 that covered part of what&rsquo;s explained here. That&rsquo;s one of the most popular posts in this blog by organic search. Let&rsquo;s see if I can oust it with this update!</p></li>
+
+<li><p><a href="http://redsymbol.net/articles/unofficial-bash-strict-mode/">Use the Unofficial Bash Strict Mode (Unless You Looove Debugging)</a>: While writing this article, I came across this one. At first sight I thought: &ldquo;hey, this covers exactly what I wanted to describe so no need for me to post!&rdquo;. But I changed my mind. First, because that article does not cover the downsides of each setting. And second, because that article is conflating <code>IFS</code> with strict mode and it has nothing to do with it. In fact, the examples given in the article about <code>IFS</code> are <em>wrong</em>: note the lack of double quotes around the array expansions, which is precisely why mangling <code>IFS</code> &ldquo;helps&rdquo;.</p></li>
+</ul>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -692,8 +785,8 @@ I hope you enjoy it as much as I did working on it. ">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2007\/08\/soc-atf-01-released.html";
-            this.page.identifier = "2007-08-20-soc-atf-01-released";
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/03\/shell-readability-strict-mode.html";
+            this.page.identifier = "2018-03-09-shell-readability-strict-mode";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -708,14 +801,6 @@ I hope you enjoy it as much as I did working on it. ">
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2007/08/soc-atf-01-released.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
