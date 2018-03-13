@@ -6,18 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Live@NYC: Day 12 - Julio Merino</title>
-  <meta content="Live@NYC: Day 12 - Julio Merino" property="og:title">
+  <title>Shell readability: local - Julio Merino</title>
+  <meta content="Shell readability: local - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="At last, my new apartment is... OMG confirmed! Will be moving on August 1st and will stay there for four months. The location is good because it is just one block away from Google and is also very close to lots and lots of pubs and restaurants.
-Haven&#39;t done much work today though. I spent all the morning applying for a SSN number, and then I spent part of the evening opening a bank account and getting used to its online services.">
+  <meta name="description" content="As most programming languages with support for functions, the shell offers locally-scoped variables. Unfortunately, local variables are not the default. You must explicitly declare variables as local and you should be very strict about doing this to prevent subtle but hard-to-diagnose bugs.
+That&amp;rsquo;s it! What else is there to say about this trivial keyword? As it turns out, more than you might think.
+
+">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/2008/07/livenyc-day-12.html" property="og:url">
+  <meta content="http://julio.meroh.net/2018/03/shell-readability-local.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2008/07/livenyc-day-12.html">
+  <link rel="canonical" href="http://julio.meroh.net/2018/03/shell-readability-local.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -90,10 +92,10 @@ Haven&#39;t done much work today though. I spent all the morning applying for a 
 
     <div class="page-header">
       <div class="container">
-        <h1>Live@NYC: Day 12</h1>
+        <h1>Shell readability: local</h1>
 
-        <p>July 30, 2008 &middot;
-        About 1 minutes</p>
+        <p>March 13, 2018 &middot;
+        About 5 minutes</p>
 
         
       </div>
@@ -102,8 +104,98 @@ Haven&#39;t done much work today though. I spent all the morning applying for a 
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article>At last, my new apartment is... OMG confirmed!  Will be moving on August 1st and will stay there for four months. The location is good because it is just one block away from Google and is also very close to lots and lots of pubs and restaurants.<div><br /></div><div>Haven't done much work today though.  I spent all the morning applying for a SSN number, and then I spent part of the evening opening a bank account and getting used to its online services.</div><div><br /></div><div>Hope that tomorrow will be more productive.</div>
-</article>
+           <article><p>As most programming languages with support for functions, the shell offers locally-scoped variables. Unfortunately, <em>local variables are not the default</em>. <strong>You must explicitly declare variables as <code>local</code></strong> and you should <strong>be very strict about doing this</strong> to prevent subtle but hard-to-diagnose bugs.</p>
+
+<p>That&rsquo;s it! What else is there to say about this trivial keyword? As it turns out, more than you might think.</p>
+
+<p></p>
+
+<p>For today&rsquo;s post, let&rsquo;s pick apart the documentation for the <code>local</code> keyword from the <a href="http://netbsd.gw.com/cgi-bin/man-cgi/man?sh++NetBSD-7.1">the <code>sh(1)</code> manual page</a>:</p>
+
+<blockquote>
+<p>Variables may be declared to be local to a function by using a <code>local</code> command. This should appear as the first statement of a function, and the syntax is:</p>
+
+<p><code>local [variable | -] ...</code></p>
+
+<p>Local is implemented as a builtin command.</p>
+</blockquote>
+
+<p>One thing to notice so far is that the <code>local</code> call <em>should</em> appear as the first statement of a function. I&rsquo;ve never observed problems with <code>local</code> being called anywhere else and this sentence says <em>should</em>, not <em>must</em>, so I&rsquo;m going to ignore this suggestion and I suggest you do too. <strong>It&rsquo;s always a better practice to declare variables at the time of their first assignment</strong>; we are way past the C89 days.</p>
+
+<p>Another thing to notice is that the syntax declaration doesn&rsquo;t mention a <em>value</em> anywhere in the <code>local</code> statement. While it&rsquo;s often possible to write <code>local foo=bar</code> as a statement, this can lead to subtle bugs. Take a look at these seemingly-equal definitions:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">local</span> <span class="nv">dir</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>mktemp -d <span class="s2">&#34;</span><span class="si">${</span><span class="nv">TMPDIR</span><span class="k">:-</span><span class="p">/tmp</span><span class="si">}</span><span class="s2">/test.XXXXXX&#34;</span><span class="k">)</span><span class="s2">&#34;</span> <span class="se">\
+</span><span class="se"></span>    <span class="o">||</span> fail <span class="s2">&#34;mktemp failed&#34;</span>
+
+<span class="nb">local</span> dir
+<span class="nv">dir</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>mktemp -d <span class="s2">&#34;</span><span class="si">${</span><span class="nv">TMPDIR</span><span class="k">:-</span><span class="p">/tmp</span><span class="si">}</span><span class="s2">/test.XXXXXX&#34;</span><span class="k">)</span><span class="s2">&#34;</span> <span class="se">\
+</span><span class="se"></span>    <span class="o">||</span> fail <span class="s2">&#34;mktemp failed&#34;</span></code></pre></div>
+<p>The first use of <code>local</code> is <em>wrong</em>: when the <code>mktemp</code> command is expanded, its output is assigned to <code>dir</code>. We expect the guard clause to trigger if <code>mktemp</code> fails, but this never happens: the <code>local</code> &ldquo;call&rdquo; always evaluates to true and masks the return value of the subshell. As a result, the guard clause never runs and the code continues executing.</p>
+
+<p>The second usage of <code>local</code> is correct. If you want to respect the return value of expansions, <strong>you must decouple expansions from the actual variable assignment</strong>. This is especially important if you expect <code>set -e</code> to catch errors on these expressions.</p>
+
+<p>The description for <code>local</code> continues:</p>
+
+<blockquote>
+<p>When a variable is made local, it inherits the initial value and exported and read-only flags from the variable with the same name in the surrounding scope, if there is one. Otherwise, the variable is initially unset. The shell uses dynamic scoping, so that if you make the variable <code>x</code> local to function <code>f</code>, which then calls function <code>g</code>, references to the variable <code>x</code> made inside <code>g</code> will refer to the variable <code>x</code> declared inside <code>f</code>, not to the global variable named <code>x</code>.</p>
+</blockquote>
+
+<p>The dynamic scoping described here is where things get interesting but the description might be a bit hard to read. To elaborate on this point, let&rsquo;s look at a fictitious piece of code:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">exists_in_path<span class="o">()</span> <span class="o">{</span>
+  <span class="nb">local</span> <span class="nv">program</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">1</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">;</span> <span class="nb">shift</span>
+
+  <span class="nb">local</span> <span class="nv">oldifs</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">IFS</span><span class="si">}</span><span class="s2">&#34;</span>
+  <span class="nv">IFS</span><span class="o">=</span>:
+  <span class="nb">local</span> dir  <span class="c1"># &lt;------------------------- IMPORTANT!
+</span><span class="c1"></span>  <span class="k">for</span> dir in <span class="si">${</span><span class="nv">PATH</span><span class="si">}</span><span class="p">;</span> <span class="k">do</span>
+    <span class="k">if</span> <span class="o">[</span> -f <span class="s2">&#34;</span><span class="si">${</span><span class="nv">dir</span><span class="si">}</span><span class="s2">/</span><span class="si">${</span><span class="nv">program</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+      <span class="nv">IFS</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">oldifs</span><span class="si">}</span><span class="s2">&#34;</span>
+      <span class="k">return</span> <span class="m">0</span>
+    <span class="k">fi</span>
+  <span class="k">done</span>
+  <span class="nv">IFS</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">oldifs</span><span class="si">}</span><span class="s2">&#34;</span>
+  <span class="k">return</span> <span class="m">1</span>
+<span class="o">}</span>
+
+run_in_tmpdir<span class="o">()</span> <span class="o">{</span>
+  <span class="nb">local</span> <span class="nv">program</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">1</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">;</span> <span class="nb">shift</span>
+
+  <span class="nb">local</span> <span class="nv">dir</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">TMPDIR</span><span class="k">:-</span><span class="p">/tmp</span><span class="si">}</span><span class="s2">&#34;</span>
+  <span class="k">if</span> exists_in_path <span class="s2">&#34;</span><span class="si">${</span><span class="nv">program</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">;</span> <span class="k">then</span>
+    <span class="o">(</span> <span class="nb">cd</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">dir</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">&amp;&amp;</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">program</span><span class="si">}</span><span class="s2">&#34;</span> <span class="s2">&#34;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">)</span>
+  <span class="k">else</span>
+    <span class="nb">echo</span> <span class="s2">&#34;Program not found; won&#39;t try to run it under </span><span class="si">${</span><span class="nv">dir</span><span class="si">}</span><span class="s2">&#34;</span> <span class="m">1</span>&gt;<span class="p">&amp;</span><span class="m">2</span>
+    <span class="k">return</span> <span class="m">1</span>
+  <span class="k">fi</span>
+<span class="o">}</span></code></pre></div>
+<p>In this piece of code, <code>run_in_tmpdir</code> invokes <code>exists_in_path</code>. Both functions define and use a variable <code>dir</code>. The assignment of <code>dir</code> within <code>exists_in_path</code> is tricky to spot though because this variable only appears as the iterator in the for loop. It would be reasonable to assume that such a variable is local by default, but it&rsquo;s not: that variable must be declared local as well.</p>
+
+<p>What I mean to say is that <strong>it&rsquo;s way too easy to miss variables when sprinkling <code>local</code> through the code</strong>. If you forgot to do so for <code>dir</code> in the code above, <code>run_in_tmpdir</code> would later malfunction because the call to <code>exists_in_path</code> would clobber the value of <code>dir</code> within <code>run_in_tmpdir</code>. The solution, of course, is to have unit tests to catch these sometimes-subtle issues.</p>
+
+<p>And finally, the description for <code>local</code> ends with:</p>
+
+<blockquote>
+<p>The only special parameter that can be made local is <code>-</code>.  Making <code>-</code> local, any shell options that are changed via the <code>set</code> command inside the function are restored to their original values when the function returns.</p>
+</blockquote>
+
+<p>This may sound cryptic so let&rsquo;s look at another example:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">set</span> -eu  <span class="c1"># Enable strict mode for the whole script.
+</span><span class="c1"></span>
+do_easter_egg<span class="o">()</span> <span class="o">{</span>
+  <span class="nb">local</span> -
+  <span class="nb">set</span> +eu  <span class="c1"># Disable strict mode.
+</span><span class="c1"></span>  <span class="o">[</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">ENABLE_SECRET_BEHAVIOR</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">=</span> yes <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="nb">echo</span> <span class="s2">&#34;You found me!&#34;</span>
+<span class="o">}</span></code></pre></div>
+<p>In this example, we have a script that enables <a href="/2018/03/shell-readability-strict-mode.html">the shell&rsquo;s unofficial strict mode</a> and then we have a function that violates the rules guarded against the strict mode. Such a function can make the options local by calling <code>local -</code>. This way, when the function exits, the shell restores the original shell-wide state without having to know what it was. (Manually calling <code>set -eu</code> at the end of the function would require keeping that line in sync with the top of the script, which is fragile.)</p>
+
+<p>To conclude, some food for thought:</p>
+
+<ul>
+<li><p>The fact that the <code>local</code> keyword is optional always feels like a language flaw: the keyword was added in retrospect once the developers realized that it was necessary. Other languages, such as Lua, suffer from this exact same problem. And C++ suffers from a similar issue with its <code>const</code> keyword.</p></li>
+
+<li><p>As a reviewer, the lack of local definitions denotes to me that the code author is not very familiar with the shell. This typically correlates well the code having many other readability issues.</p></li>
+
+<li><p>Why didn&rsquo;t I quote the Bash manual page instead of <a href="https://en.wikipedia.org/wiki/Almquist_shell">ash</a>&rsquo;s? Because the Bash manual page intermingles the explanation of <code>local</code> with the <code>declare</code> command which, as you may guess, is not standard. And as I argued in a previous post, I doubt you need a strict dependency on Bash in most cases.</p></li>
+</ul></article>
         </div>
         <div class="col-md-3 sidebar">
           <div class="row">
@@ -691,8 +783,8 @@ Haven&#39;t done much work today though. I spent all the morning applying for a 
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2008\/07\/livenyc-day-12.html";
-            this.page.identifier = "2008-07-30-livenyc-day-12";
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/03\/shell-readability-local.html";
+            this.page.identifier = "2018-03-13-shell-readability-local";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -707,14 +799,6 @@ Haven&#39;t done much work today though. I spent all the morning applying for a 
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2008/07/livenyc-day-12.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
