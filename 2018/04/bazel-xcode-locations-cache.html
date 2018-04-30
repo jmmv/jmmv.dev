@@ -6,18 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>GNOME 2.8.1 released - Julio Merino</title>
-  <meta content="GNOME 2.8.1 released - Julio Merino" property="og:title">
+  <title>A few extra system calls... and you lose 1% build time - Julio Merino</title>
+  <meta content="A few extra system calls... and you lose 1% build time - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="The 2.8.1 version of the GNOME Desktop has been released today. This is the first minor release of the 2.8 branch, providing lots of bug fixes and minor improvements, such as new and updated translations. 2.8.2 will be published next month, if everything goes well.
-Time to start working in the update of the packages in pkgsrc ;-)">
+  <meta name="description" content="Blaze—the variant of Bazel used internally at Google—was originally designed to build the Google monorepo. One of the beauties of sticking to a monorepo is code reuse, but this has the unfortunate side-effect of dependency bloat. As a result, Bazel and Blaze have evolved to support ever-increasingly-bigger pieces of software.
+The growth of the projects built by Bazel and Blaze has had the unsurprising consequence that our engineers all now have high-end workstations with access to massive amounts of distributed resources.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/2004/10/gnome-281-released.html" property="og:url">
+  <meta content="http://julio.meroh.net/2018/04/bazel-xcode-locations-cache.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2004/10/gnome-281-released.html">
+  <link rel="canonical" href="http://julio.meroh.net/2018/04/bazel-xcode-locations-cache.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -90,10 +90,10 @@ Time to start working in the update of the packages in pkgsrc ;-)">
 
     <div class="page-header">
       <div class="container">
-        <h1>GNOME 2.8.1 released</h1>
+        <h1>A few extra system calls... and you lose 1% build time</h1>
 
-        <p>October 26, 2004 &middot;
-        About 1 minutes</p>
+        <p>April 30, 2018 &middot;
+        About 4 minutes</p>
 
         
       </div>
@@ -102,7 +102,25 @@ Time to start working in the update of the packages in pkgsrc ;-)">
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>The 2.8.1 version of the <a href="http://www.gnome.org/">GNOME Desktop</a> has been <a href="http://mail.gnome.org/archives/gnome-announce-list/2004-October/msg00056.html">released today</a>.  This is the first minor release of the <a href="http://www.gnome.org/start/2.8/">2.8</a> branch, providing lots of bug fixes and minor improvements, such as new and updated translations. 2.8.2 will be published next month, if everything goes well.</p>  <p>Time to start working in the update of the packages in <a href="http://www.pkgsrc.org/">pkgsrc</a> ;-)</p><p class="mobile-post"></p>
+           <article><p>Blaze—the variant of <a href="https://bazel.build/">Bazel</a> used internally at Google—was originally designed to build the <a href="https://cacm.acm.org/magazines/2016/7/204032-why-google-stores-billions-of-lines-of-code-in-a-single-repository/fulltext">Google monorepo</a>. One of the beauties of sticking to a monorepo is code reuse, but this has the unfortunate side-effect of dependency bloat. As a result, Bazel and Blaze have evolved to support ever-increasingly-bigger pieces of software.</p>
+
+<p>The growth of the projects built by Bazel and Blaze has had the unsurprising consequence that our engineers all now have high-end workstations with access to massive amounts of distributed resources. And, as you can imagine, this has had an impact in the design of Blaze: many chunks of our codebase can—and do—assume that everyone has powerful hardware. These assumptions break down as soon as you move into Bazel&rsquo;s open source land: while knowing where the product really runs is out of hand, we can safely assume it is certainly being used on slow<em>er</em> hardware.</p>
+
+<p>Another situation where these assumptions break is when you try to make Blaze run <em>decently</em> on lower-powered machines. Think: laptops, which are not as strong as workstations but they are as strong as they&rsquo;ve ever been. This is precisely the work I&rsquo;m doing these days, and these efforts will spill into Bazel. Mind you, they already have, and in this post I&rsquo;d like to focus on one of my recent changes.</p>
+
+<hr />
+
+<p>In order to execute an action (e.g. compiling a single source file or linking the final binary) on macOS, Bazel must first determine where the right Xcode SDKs are. To do so, Bazel runs the <code>xcrun</code> tool and parses its output. To avoid the penalty of an extra fork+exec per action, Bazel caches the SDK locations so that the costly discovery process runs only once per SDK type/version.</p>
+
+<p>The problem is that&hellip; due to initial assumptions that never materialized, this cache was stored <em>on disk</em>. As a result, each action had to open the cache file, load its contents, parse them, and decide what to do. Not a big deal, you may think&hellip; but consider what happens when you have a medium-size build with 20,000 actions: assuming a mere <em>1ms</em> overhead per action, you get a total of 20 extra <em>seconds</em> for the whole build. Divide by the number of cores and you get a more accurate picture of the penalty: on a powerful 12-core workstation, that&rsquo;s less than 1 extra second of wall time—nothing to lose sleep on. But on a 2-core laptop, that&rsquo;s 10 extra seconds&hellip; which, you know, maybe deserves some optimization.</p>
+
+<p>To fix this, <a href="https://github.com/bazelbuild/bazel/commit/3a292efa55075e020d60daeeb7566b7e2ea721c2">I moved the &ldquo;Xcode locations&rdquo; cache from disk to memory</a>: there really was no reason to persist it <em>at all</em>. This simple reshuffling cut about 3 system calls (open, read, close) per action. Based on performance tests, this translated to a ~1% reduction of the original 1,500 seconds said build took on my Mac Pro 2013. Doing some more math: that&rsquo;s about 2ms less per action.</p>
+
+<p>&ldquo;But 2ms for just 3 system calls is crazy!&rdquo; you may say. And you are right: system calls cannot possibly be that costly. But macOS isn&rsquo;t proving to be super-efficient under extreme load&hellip; and Bazel likes to inflict pain on the machine. (Anecdotally, because I don&rsquo;t yet have good data to back it up, I&rsquo;ve observed file system related activity experience a 10x slowdown under these conditions.)</p>
+
+<p>What am I getting to? Whatever you do in the critical path is important for performance reasons, obviously. The problem is that, sometimes, it&rsquo;s hard to know what the critical path even <em>is</em>. And when you do know, it&rsquo;s too easy to disregard counting system calls as &ldquo;premature optimization&rdquo; when it actually isn&rsquo;t.</p>
+
+<p>This all brings to mind Raymond Chen&rsquo;s <a href="https://blogs.msdn.microsoft.com/oldnewthing/20120102-00/?p=8743">Why wasn’t the Windows 95 shell prototyped on Windows NT?</a> post. In there, Raymond explains that Windows engineers had to use Windows&rsquo; recommended hardware in order to develop the system and that they were generally not allowed access to more powerful machines. Performance dogfooding, basically, which should be applied to oh-so-many products out there&hellip;</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -694,8 +712,8 @@ Time to start working in the update of the packages in pkgsrc ;-)">
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2004\/10\/gnome-281-released.html";
-            this.page.identifier = "2004-10-26-gnome-281-released";
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/04\/bazel-xcode-locations-cache.html";
+            this.page.identifier = "2018-04-30-bazel-xcode-locations-cache";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -710,14 +728,6 @@ Time to start working in the update of the packages in pkgsrc ;-)">
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2004/10/gnome-281-released.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
