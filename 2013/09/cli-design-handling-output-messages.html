@@ -11,8 +11,7 @@
 
   
   <meta name="description" content="Your CLI-based program has to communicate with the user. The most obvious case is to display error or warning messages, but in some cases it is also to report progress status. There are a few details to be considered in this area.
-Quietness vs. verbosity by default
-You&#39;ve probably heard the &#34;No news is good news&#34; principle. This is a major guideline behind the design of most standard Unix tools: when no problems arise, the tool just does what it was asked for and does not print anything on the screen.">
+Quietness vs. verbosity by default You&amp;rsquo;ve probably heard the &amp;ldquo;No news is good news&amp;rdquo; principle. This is a major guideline behind the design of most standard Unix tools: when no problems arise, the tool just does what it was asked for and does not print anything on the screen.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
@@ -103,7 +102,67 @@ You&#39;ve probably heard the &#34;No news is good news&#34; principle. This is 
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>Your CLI-based program has to communicate with the user.  The most obvious case is to display error or warning messages, but in some cases it is also to report progress status.  There are a few details to be considered in this area.</p> <p><b>Quietness vs. verbosity by default</b></p> <p>You've probably heard the "No news is good news" principle.  This is a major guideline behind the design of most standard Unix tools: when no problems arise, the tool just does what it was asked for and does not print anything on the screen.  Only when something goes wrong an error or warning message is printed.  Examples include <tt>cp</tt>, <tt>mv</tt>, <tt>git add</tt>, etc.</p> <p>This quiet behavior is usually fine for "fast" applications — i.e. applications expected to complete in less than a second.  The user is trained not to expect any message and the user knows that the appearance of a message on the console as a result of his invocation means that something failed.  If your program prints a non-error message on the console and then immediately terminates successfully, the user will probably think that something went wrong and the application didn't do what was expected.  (Hint: users don't read.)</p> <p>Of course, it is perfectly fine to implement a <tt>--verbose</tt> or similar flag in these applications that explicitly requests the program to print more data.  But it should not be the default.</p> <p>The counterpart of these "quiet by default" applications are programs that can take a noticeable amount of time to complete — be it seconds, minutes or hours.  Examples include <tt>git clone</tt>, <tt>rsync</tt>, <tt>wget</tt>, etc.</p> <p>In the case of these "slow" applications, it is OK, and recommended, to report the progress of the operation on the screen.  Otherwise the user won't know why the program is not returning (especially in these days where computers have fewer and fewer status lights) and may be tempted to kill it.</p> <p><b>Formatting</b></p> <p>A common approach to format the status messages of CLI-based applications is to <b>print the name of the program first, followed by a colon and a space, and then followed by the message</b>.  For example, for an error:</p> <pre>myprogram: Must provide at least one URL.</pre> <p>And for a warning:</p> <pre>myprogram: Failed to connect to server; skipping.</pre> <p>And for a regular progress message:</p> <pre>myprogram: Connecting to http://www.example.com/...</pre> <p>These are just fine and, in fact, this is the bundled style in the widespread <tt>err(3)</tt> family of functions.  However, I'd personally recommend to toss in the severity of the message in the same line: in other words, specify whether a line is an error, a warning or just informational.</p> <p>The first style you can use is to write the <tt>ERROR</tt> and <tt>WARNING</tt> words in error and warning messages respectively, and leave informational messages alone.  For example:</p> <pre>myprogram: ERROR: Must provide at least one URL.<br />myprogram: WARNING: Failed to connect to server; skipping.<br />myprogram: Connecting to http://www.example.com/...</pre> <p>The second style you can use is to write a single letter indicating the severity of the message and add that letter to every single message printed by the program.  For example:</p> <pre>myprogram: E: Must provide at least one URL.<br />myprogram: W: Failed to connect to server; skipping.<br />myprogram: I: Connecting to http://www.example.com/...</pre> <p>There of course several variations of the above, but not that many really.  You should consider what other applications your program will play with and follow their style for consistency, if applicable.</p> <p>Me? I personally prefer the second style because it preserves the orthogonality of the messages and it makes the severity of every line explicit.</p> <p><b>Where to send the output?</b></p> <p>As we learned from the <a href="/2013/08/cli-design-error-reporting.html">Error reporting</a> post, we know that error messages belong in stderr.  But what about warning messages and informational messages?  They do too!</p> <p>So what goes into stdout?  Only the actual output of the program.  If you are expecting the program to print, say, the contents of a directory when you invoke it, then only the contents of the directory (and nothing else!) can go into stdout.  Any debugging or auxiliary messages have to go to stderr.</p> <p>It is probably easier to think about this guideline this way: if you were to implement a <tt>--verbose</tt> or <tt>--quiet</tt> option in your program, the specification of these options should have no effect on the contents of stdout.  These options should only change the amount of logging that goes into stderr and/or into a separate log.</p> <hr /> <p>With this, we have covered the most important points of handling program output.  There is one issue left though: what do you do with very long messages that do not fit on the screen?  This is a large enough topic to deserve discussion in a separate post, so... stay tuned!</p>
+           <article>
+
+<p>Your CLI-based program has to communicate with the user. The most obvious case is to display error or warning messages, but in some cases it is also to report progress status. There are a few details to be considered in this area.</p>
+
+<h1 id="quietness-vs-verbosity-by-default">Quietness vs. verbosity by default</h1>
+
+<p>You&rsquo;ve probably heard the &ldquo;No news is good news&rdquo; principle. This is a major guideline behind the design of most standard Unix tools: when no problems arise, the tool just does what it was asked for and does not print anything on the screen. Only when something goes wrong an error or warning message is printed. Examples include <code>cp</code>, <code>mv</code>, <code>git add</code>, etc.</p>
+
+<p>This quiet behavior is usually fine for &ldquo;fast&rdquo; applications—i.e. applications expected to complete in less than a second. The user is trained not to expect any message and the user knows that the appearance of a message on the console as a result of his invocation means that something failed. If your program prints a non-error message on the console and then immediately terminates successfully, the user will probably think that something went wrong and the application didn&rsquo;t do what was expected. (Hint: users don&rsquo;t read.)</p>
+
+<p>Of course, it is perfectly fine to implement a <code>--verbose</code> or similar flag in these applications that explicitly requests the program to print more data. But it should not be the default.</p>
+
+<p>The counterpart of these &ldquo;quiet by default&rdquo; applications are programs that can take a noticeable amount of time to complete — be it seconds, minutes or hours. Examples include <code>git clone</code>, <code>rsync</code>, <code>wget</code>, etc.</p>
+
+<p>In the case of these &ldquo;slow&rdquo; applications, it is OK, and recommended, to report the progress of the operation on the screen. Otherwise the user won&rsquo;t know why the program is not returning (especially in these days where computers have fewer and fewer status lights) and may be tempted to kill it.</p>
+
+<h1 id="formatting">Formatting</h1>
+
+<p>A common approach to format the status messages of CLI-based applications is to <strong>print the name of the program first, followed by a colon and a space, and then followed by the message</strong>. For example, for an error:</p>
+
+<pre><code>myprogram: Must provide at least one URL.
+</code></pre>
+
+<p>And for a warning:</p>
+
+<pre><code>myprogram: Failed to connect to server; skipping.
+</code></pre>
+
+<p>And for a regular progress message:</p>
+
+<pre><code>myprogram: Connecting to http://www.example.com/...
+</code></pre>
+
+<p>These are just fine and, in fact, this is the bundled style in the widespread <code>err(3)</code> family of functions. However, I&rsquo;d personally recommend to toss in the severity of the message in the same line: in other words, specify whether a line is an error, a warning or just informational.</p>
+
+<p>The first style you can use is to write the <code>ERROR</code> and <code>WARNING</code> words in error and warning messages respectively, and leave informational messages alone. For example:</p>
+
+<pre><code>myprogram: ERROR: Must provide at least one URL.
+myprogram: WARNING: Failed to connect to server; skipping.
+myprogram: Connecting to http://www.example.com/...
+</code></pre>
+
+<p>The second style you can use is to write a single letter indicating the severity of the message and add that letter to every single message printed by the program. For example:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">myprogram: E: Must provide at least one URL.
+myprogram: W: Failed to connect to server<span class="p">;</span> skipping.
+myprogram: I: Connecting to http://www.example.com/...</code></pre></div>
+<p>There of course several variations of the above, but not that many really. You should consider what other applications your program will play with and follow their style for consistency, if applicable.</p>
+
+<p>Me? I personally prefer the second style because it preserves the orthogonality of the messages and it makes the severity of every line explicit.</p>
+
+<p><strong>Where to send the output?</strong></p>
+
+<p>As we learned from the <a href="/2013/08/cli-design-error-reporting.html">Error reporting</a> post, we know that error messages belong in stderr. But what about warning messages and informational messages? They do too!</p>
+
+<p>So what goes into stdout? Only the actual output of the program. If you are expecting the program to print, say, the contents of a directory when you invoke it, then only the contents of the directory (and nothing else!) can go into stdout. Any debugging or auxiliary messages have to go to stderr.</p>
+
+<p>It is probably easier to think about this guideline this way: if you were to implement a <code>--verbose</code> or <code>--quiet</code> option in your program, the specification of these options should have no effect on the contents of stdout. These options should only change the amount of logging that goes into stderr and/or into a separate log.</p>
+
+<hr />
+
+<p>With this, we have covered the most important points of handling program output. There is one issue left though: what do you do with very long messages that do not fit on the screen? This is a large enough topic to deserve discussion in a separate post, so&hellip; stay tuned!</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">

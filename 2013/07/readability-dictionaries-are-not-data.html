@@ -102,7 +102,125 @@ What do I mean by this? In Python and other similar dynamic languages, dictionar
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>Yes: a dictionary is a data type.  No: a dictionary is not a way to implement abstract data types; doing so is lazy programming and is asking for trouble later on.</p> <p>What do I mean by this?  In Python and other similar dynamic languages, dictionaries are a mapping of keys to values that have no typing restrictions: the dictionary is heterogeneous, and a single dictionary can contain elements of different types both as its keys and its values.  To make things worse, the syntax of the language makes it incredibly easy to create and populate dictionaries (unlike, say, in C++).  Combine these two facts together and the temptation to abuse a dictionary to implement a structured data type is high.</p> <p>Let's look at a fictitious function to check if a given process is within its current resource limits:</p> <pre>def process_within_limits(pid, limits, usages):<br />    """Checks if a process is within its limits.<br /><br />    Args:<br />        pid: int.  The process identifier.<br />        limits: dict(int, dict(str, int)).  Mapping of process<br />            identifiers to the limits for the corresponding<br />            process.  <b>The limits of a process are a mapping of<br />            resource names to the numerical limit.  The valid<br />            names currently are 'cpu' and 'ram'.</b><br />        usages: dict(int, dict(str, int)).  Same as limits but<br />            for the current instantaneous measurements of the<br />            process resource consumption.<br /><br />    Returns:<br />        bool.  True if the process is within its limits.<br />    """<br />    if pid not in limits:<br />        raise ValueError('Missing process limit')<br />    limit = limits[pid]<br /><br />    if pid not in usages:<br />        raise ValueError('Missing process usage')<br />    usage = usages[pid]<br /><br />    <b>assert 'cpu' in usage and 'cpu' in limit<br />    cpu_in_quota = usage['cpu'] &lt;= limit['cpu']<br />    assert 'ram' in usage and 'ram' in limit<br />    ram_in_quota = usage['ram'] &lt;= limit['ram']</b><br />    return cpu_in_quota and ram_in_quota</pre> <p>This code is nesting two dictionaries in the <tt>limits</tt> and <tt>usages</tt> arguments, and is using each level in a different semantical manner.  In the first level we have a mapping of process identifiers to either the process' limits or current usage counts;  in other words, a perfectly valid use case for a dictionary.  In the second level, however, we have a collection of resource names mapped to values; needless to say, this is bad practice (with very few exceptions).</p> <p>The way to improve this code is by defining an actual data type so that the various attributes are properly represented by member fields.  In Python, we can use the standard <tt>collections.namedtuple</tt> class to simplify this:</p> <pre><b>import collections</b><br /><br /><b># Resource limit or usage values for a process.<br />#<br /># Attributes:<br />#     cpu: float.  Resource value for the CPU usage.<br />#     ram: int.  Resource value for the RAM usage, in bytes.<br />Resources = collections.namedtuple('Resources', 'cpu ram')</b><br /><br />def process_within_limits(pid, limits, usages):<br />    """Checks if a process is within its limits.<br /><br />    Args:<br />        pid: int.  The process identifier.<br />        limits: <b>dict(int, Resources)</b>.  Mapping of process<br />            identifiers to the limits for the corresponding<br />            process.<br />        usages: <b>dict(int, Resources)</b>.  Mapping of process<br />            identifiers to the current instantaneous resource<br />            usage values.<br /><br />    Returns:<br />        bool.  True if the process is within its limits.<br />    """<br />    if pid not in limits:<br />        raise ValueError('Missing process limit')<br />    limit = limits[pid]<br /><br />    if pid not in usages:<br />        raise ValueError('Missing process usage')<br />    usage = usages[pid]<br /><br />    <b>cpu_in_quota = usage.cpu &lt;= limit.cpu</b><br />    <b>ram_in_quota = usage.ram &lt;= limit.ram</b><br />    return cpu_in_quota and ram_in_quota</pre> <p>This is already quite an improvement.  There are two things that I want to highlight here:</p> <ul><li>The explanation of the function arguments no longer describes what the contents of the resources dictionary should be.  Doing so is now unnecessary because we have an actual type with documentation to do so.</li><li>Access to the member fields is done via a field instead of dynamically via a map query.  This allows the validation of the accesses at build type (not in the case of Python, of course) and also the enforcement of types and/or data invariants if any.</li></ul> <p>There is one more twist to all this.  By having extracted the dictionary as a data type, we can now clearly see that some functionality belongs in the data type itself for encapsulation purposes: invariant checking, operator overload, auxiliary methods...  In this specific example, just imagine if you ever wanted to add a new resource dimension to the <tt>Resources</tt> class: you wouldn't like to have to hunt down all callers to ensure they know about the new field!  So we move the necessary functionality into the type:</p> <pre>import collections<br /><br /><b>class Resources(collections.namedtuple('Resources',<br />                                       'cpu ram')):<br />    """Resource limit or usage values for a process.<br /><br />    Attributes:<br />        cpu: float.  Resource value for the CPU usage.<br />        ram: int.  Resource value for the RAM usage, in bytes.<br />    """<br /><br />    def __le__(self, other):<br />        return self.cpu &lt;= other.cpu and self.ram &lt;= other.ram</b><br /><br />def process_within_limits(pid, limits, usages):<br />    """Checks if a process is within its limits.<br /><br />    Args:<br />        pid: int.  The process identifier.<br />        limits: dict(int, Resources).  Mapping of process<br />            identifiers to the limits for the corresponding<br />            process.<br />        usages: dict(int, Resources).  Mapping of process<br />            identifiers to the current instantaneous resource<br />            usage values.<br /><br />    Returns:<br />        bool.  True if the process is within its limits.<br />    """<br />    if pid not in limits:<br />        raise ValueError('Missing process limit')<br />    limit = limits[pid]<br /><br />    if pid not in usages:<br />        raise ValueError('Missing process usage')<br />    usage = usages[pid]<br /><br />    <b>return usage &lt;= limit</b></pre> <p>Let me conclude by saying that this is all inspired by actual production code I've had to deal with... so the example and its simplicity are not that contrived.</p>
+           <article><p>Yes: a dictionary is a data type. No: a dictionary is not a way to implement abstract data types; doing so is lazy programming and is asking for trouble later on.</p>
+
+<p>What do I mean by this? In Python and other similar dynamic languages, dictionaries are a mapping of keys to values that have no typing restrictions: the dictionary is heterogeneous, and a single dictionary can contain elements of different types both as its keys and its values. To make things worse, the syntax of the language makes it incredibly easy to create and populate dictionaries (unlike, say, in C++). Combine these two facts together and the temptation to abuse a dictionary to implement a structured data type is high.</p>
+
+<p>Let&rsquo;s look at a fictitious function to check if a given process is within its current resource limits:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">process_within_limits</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">limits</span><span class="p">,</span> <span class="n">usages</span><span class="p">):</span>
+    <span class="sa"></span><span class="s2">&#34;&#34;&#34;Checks if a process is within its limits.
+</span><span class="s2">
+</span><span class="s2">    Args:
+</span><span class="s2">        pid: int.  The process identifier.
+</span><span class="s2">        limits: dict(int, dict(str, int)).  Mapping of process
+</span><span class="s2">            identifiers to the limits for the corresponding
+</span><span class="s2">            process.  The limits of a process are a mapping of
+</span><span class="s2">            resource names to the numerical limit.  The valid
+</span><span class="s2">            names currently are &#39;cpu&#39; and &#39;ram&#39;.
+</span><span class="s2">        usages: dict(int, dict(str, int)).  Same as limits but
+</span><span class="s2">            for the current instantaneous measurements of the
+</span><span class="s2">            process resource consumption.
+</span><span class="s2">
+</span><span class="s2">    Returns:
+</span><span class="s2">        bool.  True if the process is within its limits.
+</span><span class="s2">    &#34;&#34;&#34;</span>
+    <span class="k">if</span> <span class="n">pid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">limits</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Missing process limit&#39;</span><span class="p">)</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="n">limits</span><span class="p">[</span><span class="n">pid</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">pid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">usages</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Missing process usage&#39;</span><span class="p">)</span>
+    <span class="n">usage</span> <span class="o">=</span> <span class="n">usages</span><span class="p">[</span><span class="n">pid</span><span class="p">]</span>
+
+    <span class="k">assert</span> <span class="sa"></span><span class="s1">&#39;cpu&#39;</span> <span class="ow">in</span> <span class="n">usage</span> <span class="ow">and</span> <span class="sa"></span><span class="s1">&#39;cpu&#39;</span> <span class="ow">in</span> <span class="n">limit</span>
+    <span class="n">cpu_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="p">[</span><span class="sa"></span><span class="s1">&#39;cpu&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="p">[</span><span class="sa"></span><span class="s1">&#39;cpu&#39;</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="sa"></span><span class="s1">&#39;ram&#39;</span> <span class="ow">in</span> <span class="n">usage</span> <span class="ow">and</span> <span class="sa"></span><span class="s1">&#39;ram&#39;</span> <span class="ow">in</span> <span class="n">limit</span>
+    <span class="n">ram_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="p">[</span><span class="sa"></span><span class="s1">&#39;ram&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="p">[</span><span class="sa"></span><span class="s1">&#39;ram&#39;</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">cpu_in_quota</span> <span class="ow">and</span> <span class="n">ram_in_quota</span></code></pre></div>
+<p>This code is nesting two dictionaries in the <code>limits</code> and <code>usages</code> arguments, and is using each level in a different semantical manner. In the first level we have a mapping of process identifiers to either the process&rsquo; limits or current usage counts; in other words, a perfectly valid use case for a dictionary. In the second level, however, we have a collection of resource names mapped to values; needless to say, this is bad practice (with very few exceptions).</p>
+
+<p>The way to improve this code is by defining an actual data type so that the various attributes are properly represented by member fields. In Python, we can use the standard <code>collections.namedtuple</code> class to simplify this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">collections</span>
+
+<span class="c1"># Resource limit or usage values for a process.</span>
+<span class="c1">#</span>
+<span class="c1"># Attributes:</span>
+<span class="c1">#     cpu: float.  Resource value for the CPU usage.</span>
+<span class="c1">#     ram: int.  Resource value for the RAM usage, in bytes.</span>
+<span class="n">Resources</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Resources&#39;</span><span class="p">,</span> <span class="sa"></span><span class="s1">&#39;cpu ram&#39;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">process_within_limits</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">limits</span><span class="p">,</span> <span class="n">usages</span><span class="p">):</span>
+    <span class="sa"></span><span class="s2">&#34;&#34;&#34;Checks if a process is within its limits.
+</span><span class="s2">
+</span><span class="s2">    Args:
+</span><span class="s2">        pid: int.  The process identifier.
+</span><span class="s2">        limits: dict(int, Resources).  Mapping of process
+</span><span class="s2">            identifiers to the limits for the corresponding
+</span><span class="s2">            process.
+</span><span class="s2">        usages: dict(int, Resources).  Mapping of process
+</span><span class="s2">            identifiers to the current instantaneous resource
+</span><span class="s2">            usage values.
+</span><span class="s2">
+</span><span class="s2">    Returns:
+</span><span class="s2">        bool.  True if the process is within its limits.
+</span><span class="s2">    &#34;&#34;&#34;</span>
+    <span class="k">if</span> <span class="n">pid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">limits</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Missing process limit&#39;</span><span class="p">)</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="n">limits</span><span class="p">[</span><span class="n">pid</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">pid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">usages</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Missing process usage&#39;</span><span class="p">)</span>
+    <span class="n">usage</span> <span class="o">=</span> <span class="n">usages</span><span class="p">[</span><span class="n">pid</span><span class="p">]</span>
+
+    <span class="n">cpu_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="o">.</span><span class="n">cpu</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="o">.</span><span class="n">cpu</span>
+    <span class="n">ram_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="o">.</span><span class="n">ram</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="o">.</span><span class="n">ram</span>
+    <span class="k">return</span> <span class="n">cpu_in_quota</span> <span class="ow">and</span> <span class="n">ram_in_quota</span></code></pre></div>
+<p>This is already quite an improvement. There are two things that I want to highlight here:</p>
+
+<ul>
+<li>The explanation of the function arguments no longer describes what the contents of the resources dictionary should be. Doing so is now unnecessary because we have an actual type with documentation to do so.</li>
+<li>Access to the member fields is done via a field instead of dynamically via a map query. This allows the validation of the accesses at build type (not in the case of Python, of course) and also the enforcement of types and/or data invariants if any.</li>
+</ul>
+
+<p>There is one more twist to all this. By having extracted the dictionary as a data type, we can now clearly see that some functionality belongs in the data type itself for encapsulation purposes: invariant checking, operator overload, auxiliary methods&hellip; In this specific example, just imagine if you ever wanted to add a new resource dimension to the <code>Resources</code> class: you wouldn&rsquo;t like to have to hunt down all callers to ensure they know about the new field! So we move the necessary functionality into the type:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">collections</span>
+
+<span class="k">class</span> <span class="nc">Resources</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Resources&#39;</span><span class="p">,</span> <span class="sa"></span><span class="s1">&#39;cpu ram&#39;</span><span class="p">)):</span>
+    <span class="sa"></span><span class="s2">&#34;&#34;&#34;Resource limit or usage values for a process.
+</span><span class="s2">
+</span><span class="s2">    Attributes:
+</span><span class="s2">        cpu: float.  Resource value for the CPU usage.
+</span><span class="s2">        ram: int.  Resource value for the RAM usage, in bytes.
+</span><span class="s2">    &#34;&#34;&#34;</span>
+
+    <span class="k">def</span> <span class="fm">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cpu</span> <span class="o">&lt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">cpu</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">ram</span> <span class="o">&lt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">ram</span>
+
+<span class="k">def</span> <span class="nf">process_within_limits</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">limits</span><span class="p">,</span> <span class="n">usages</span><span class="p">):</span>
+    <span class="sa"></span><span class="s2">&#34;&#34;&#34;Checks if a process is within its limits.
+</span><span class="s2">
+</span><span class="s2">    Args:
+</span><span class="s2">        pid: int.  The process identifier.
+</span><span class="s2">        limits: dict(int, Resources).  Mapping of process
+</span><span class="s2">            identifiers to the limits for the corresponding
+</span><span class="s2">            process.
+</span><span class="s2">        usages: dict(int, Resources).  Mapping of process
+</span><span class="s2">            identifiers to the current instantaneous resource
+</span><span class="s2">            usage values.
+</span><span class="s2">
+</span><span class="s2">    Returns:
+</span><span class="s2">        bool.  True if the process is within its limits.
+</span><span class="s2">    &#34;&#34;&#34;</span>
+    <span class="k">if</span> <span class="n">pid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">limits</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Missing process limit&#39;</span><span class="p">)</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="n">limits</span><span class="p">[</span><span class="n">pid</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">pid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">usages</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Missing process usage&#39;</span><span class="p">)</span>
+    <span class="n">usage</span> <span class="o">=</span> <span class="n">usages</span><span class="p">[</span><span class="n">pid</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">usage</span> <span class="o">&lt;=</span> <span class="n">limit</span></code></pre></div>
+<p>Let me conclude by saying that this is all inspired by actual production code I&rsquo;ve had to deal with&hellip; so the example and its simplicity are not that contrived.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">

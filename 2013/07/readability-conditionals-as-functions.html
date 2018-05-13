@@ -10,7 +10,7 @@
   <meta content="Readability: Conditionals as functions - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="Conceptually, there are two kinds of conditional statements: ones that compute —or affect the computation of— a value and others that guard the execution of optional code (e.g. functionality enabled by a command-line flag). In this article we will focus on the former kind.
+  <meta name="description" content="Conceptually, there are two kinds of conditional statements: ones that compute—or affect the computation of—a value and others that guard the execution of optional code (e.g. functionality enabled by a command-line flag). In this article we will focus on the former kind.
 One way to think of those conditionals is as if they were to represent functions, just written inline. In other words: while it should be possible to move the conditional statement to a separate function, it has not been done because the algorithm is simple enough to not warrant it.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
@@ -102,7 +102,40 @@ One way to think of those conditionals is as if they were to represent functions
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>Conceptually, there are two kinds of conditional statements: ones that compute —or affect the computation of— a value and others that guard the execution of optional code (e.g. functionality enabled by a command-line flag).  In this article we will focus on the former kind.</p> <p>One way to think of those conditionals is as if they were to represent functions, just written inline.  In other words: while it should be possible to move the conditional statement to a separate function, it has not been done because the algorithm is simple enough to not warrant it.</p> <p>How can you translate this mentality into code?</p> <p>The first guideline is to <em>make every code path deal with the same input state</em>. This sounds obvious because, upon entry to any branch, the program state is the same.  However, the program state is a really broad concept, and therefore the data the conditional branches reference should be clearly delimited and well-defined.</p> <p>The second guideline is to <em>make every code path have similar "effects" on some particular output state</em>.  This can be setting a particular variable to a value, modifying a specific vector in different ways, etc.</p> <p>In more practical terms, such a conditional inspects a set of input variables and uses them to compute an output value and/or to perform an action.  This small set of input variables should be restricted and well-defined, and ideally consulted in a similar manner by all branches.</p> <p>Let's dive into an example:</p> <pre>color = BLUE<br />if item.color is not None:<br />    color = item.color</pre> <p>This little example violates the functional programming guideline of only assigning a value to a variable once.  Leaving that aside, the point I want to make in this article is the following: if you were to move this to an auxiliary function so that the code looked like this:</p> <pre>color = get_color_with_default(item, BLUE)</pre> <p>Then, your function &mdash;especially if thought of in mathematical terms&mdash; would be something along these lines:</p> <pre>def get_color_with_default(item, default_color):<br />    if item.color is not None:<br />        return item.color<br />    else:<br />        return default_color</pre> <p>This implementation is clear: there are two code paths, the only state accessible are the two input parameters and the only thing this does is return a value.  Therefore, we could rewrite our original code as:</p> <pre>color = None<br />if item.color is not None:<br />    color = item.color<br />else:<br />    color = BLUE<br />assert color is not None</pre> <p>You will notice that this code has the exact same structure as the auxiliary function we defined, but the code is all placed inline.</p> <p>In the general case, think about it this way: whenever you are writing a conditional statement, what would happen if you were to move the code into a separate function?  <i>What would be the inputs and the outputs of such function?</i>  If you have trouble defining these in a concise and generic manner, your conditional statement is not cohesive and is potentially hard to understand.  Reorganize your code.</p>
+           <article><p>Conceptually, there are two kinds of conditional statements: ones that compute—or affect the computation of—a value and others that guard the execution of optional code (e.g. functionality enabled by a command-line flag). In this article we will focus on the former kind.</p>
+
+<p>One way to think of those conditionals is as if they were to represent functions, just written inline. In other words: while it should be possible to move the conditional statement to a separate function, it has not been done because the algorithm is simple enough to not warrant it.</p>
+
+<p>How can you translate this mentality into code?</p>
+
+<p>The first guideline is to <em>make every code path deal with the same input state</em>. This sounds obvious because, upon entry to any branch, the program state is the same. However, the program state is a really broad concept, and therefore the data the conditional branches reference should be clearly delimited and well-defined.</p>
+
+<p>The second guideline is to <em>make every code path have similar &ldquo;effects&rdquo; on some particular output state</em>. This can be setting a particular variable to a value, modifying a specific vector in different ways, etc.</p>
+
+<p>In more practical terms, such a conditional inspects a set of input variables and uses them to compute an output value and/or to perform an action. This small set of input variables should be restricted and well-defined, and ideally consulted in a similar manner by all branches.</p>
+
+<p>Let&rsquo;s dive into an example:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">color</span> <span class="o">=</span> <span class="n">BLUE</span>
+<span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">color</span></code></pre></div>
+<p>This little example violates the functional programming guideline of only assigning a value to a variable once. Leaving that aside, the point I want to make in this article is the following: if you were to move this to an auxiliary function so that the code looked like this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">color</span> <span class="o">=</span> <span class="n">get_color_with_default</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">BLUE</span><span class="p">)</span></code></pre></div>
+<p>Then, your function—especially if thought of in mathematical terms—would be something along these lines:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">get_color_with_default</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">default_color</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">item</span><span class="o">.</span><span class="n">color</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">default_color</span></code></pre></div>
+<p>This implementation is clear: there are two code paths, the only state accessible are the two input parameters and the only thing this does is return a value. Therefore, we could rewrite our original code as:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">color</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">color</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="n">BLUE</span>
+<span class="k">assert</span> <span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span></code></pre></div>
+<p>You will notice that this code has the exact same structure as the auxiliary function we defined, but the code is all placed inline.</p>
+
+<p>In the general case, think about it this way: whenever you are writing a conditional statement, what would happen if you were to move the code into a separate function? <em>What would be the inputs and the outputs of such function?</em> If you have trouble defining these in a concise and generic manner, your conditional statement is not cohesive and is potentially hard to understand. Reorganize your code.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">

@@ -10,8 +10,8 @@
   <meta content="An example of kqueue - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="The documentation of kqueue is quite decent but it lacks some examples. After reading its main manual pages (kqueue(9) and kevent(9)), I wasn&#39;t sure about how it worked, so I had to write a test program to verify its behavior.
-Let&#39;s start by analyzing the test program to later see its full code. The program will monitor changes to the /tmp/foo file and will print messages whenever it is deleted, modified or their attributes change.">
+  <meta name="description" content="The documentation of kqueue is quite decent but it lacks some examples. After reading its main manual pages (kqueue(9) and kevent(9)), I wasn&amp;rsquo;t sure about how it worked, so I had to write a test program to verify its behavior.
+Let&amp;rsquo;s start by analyzing the test program to later see its full code. The program will monitor changes to the /tmp/foo file and will print messages whenever it is deleted, modified or their attributes change.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
@@ -102,7 +102,75 @@ Let&#39;s start by analyzing the test program to later see its full code. The pr
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>The documentation of kqueue is quite decent but it lacks some examples.  After reading its main <a href="http://netbsd.gw.com/cgi-bin/man-cgi?kqueue++NetBSD-current">manual pages</a> (kqueue(9) and kevent(9)), I wasn't sure about how it worked, so I had to write a test program to verify its behavior.</p>  <p>Let's start by analyzing the test program to later see its full code.  The program will monitor changes to the <tt>/tmp/foo</tt> file and will print messages whenever it is deleted, modified or their attributes change. The program finishes when the file being monitoring is deleted.</p>  <p>The steps to use kqueue are the following:</p>  <ol> <li>Call <tt>kqueue(2)</tt> to create a new kernel event queue.  The descriptor it returns will be later used by <tt>kevent(2)</tt>.</li>  <li>Open the file to monitor and keep its descriptor around.  We'll need this to attach an event monitor to it.</li>  <li>Initialize a vector of <tt>struct kevent</tt> elements that describes the changes to monitor. Since we are only monitoring a single file, we need a one-element vector. This vector is filled up with calls to the <tt>EV_SET</tt> macro.  This macro takes: the descriptor of the kqueue, the descriptor of the file to monitor (<i>ident</i>), the <i>filter</i> to apply to it, several flags and optional arguments to the filter.  Note that an entry in this table is identified by its <i>ident/filter</i> pair.</li>  <li>Call the kevent(2) function. This system call takes the list of changes to monitor we constructed before and does not return until at least one event is received (or when an associated timeout is exhausted). The function returns the number of changes received and stores information about them in another vector of <tt>struct kevent</tt> elements (we'll only get notifications of one event at a time, hence we don't use a vector, but a simple variable).</li>  <li>Interpret the results. If kevent(2) returned a number greater than 0, we have to inspect the output vector and see which events were received. Each filter has its semantics about the results. For example, we are using the <tt>EVFILT_VNODE</tt> filter, which takes a list of conditions to monitor in the <tt>fflags</tt> field and modifies it to include only the conditions that triggered the filter.</li> </ol>  <p>With these concepts clear and with help of the manual pages, you should be able to interpret the following code easily:</p>  <pre>#include &lt;sys/event.h&gt;<br />#include &lt;sys/time.h&gt; <br />#include &lt;fcntl.h&gt;<br />#include &lt;stdio.h&gt;<br />#include &lt;stdlib.h&gt; <br /><br />int<br />main(void)<br />{<br />   int f, kq, nev;<br />   struct kevent change;<br />   struct kevent event;<br /><br />   kq = kqueue();<br />   if (kq == -1)<br />       perror("kqueue");<br /><br />   f = open("/tmp/foo", O_RDONLY);<br />   if (f == -1)<br />       perror("open");<br /><br />   EV_SET(&change, f, EVFILT_VNODE,<br />          EV_ADD | EV_ENABLE | EV_ONESHOT,<br />          NOTE_DELETE | NOTE_EXTEND | NOTE_WRITE | NOTE_ATTRIB,<br />          0, 0);<br /><br />   for (;;) {<br />       nev = kevent(kq, &change, 1, &amp;amp;event, 1, NULL);<br />       if (nev == -1)<br />           perror("kevent");<br />       else if (nev > 0) {<br />           if (event.fflags & NOTE_DELETE) {<br />               printf("File deletedn");<br />               break;<br />           }<br />           if (event.fflags & NOTE_EXTEND ||<br />               event.fflags &amp; NOTE_WRITE)<br />               printf("File modifiedn");<br />           if (event.fflags & NOTE_ATTRIB)<br />               printf("File attributes modifiedn");<br />       }<br />   }<br /><br />   close(kq);<br />   close(f);<br />   return EXIT_SUCCESS;<br />}</pre><p></p>  <p>Now compile and run the program in one terminal.  In another one, modify the <tt>/tmp/foo</tt> file and see how our test program shows the events! If you delete the file, the program will terminate. (Note that we are not monitoring all possible events; we'd watch for file renames, as well as other conditions if we needed to).</p><p class="mobile-post"></p>
+           <article><p>The documentation of kqueue is quite decent but it lacks some examples.  After reading its main <a href="http://netbsd.gw.com/cgi-bin/man-cgi?kqueue++NetBSD-current">manual pages</a> (<code>kqueue(9)</code> and <code>kevent(9)</code>), I wasn&rsquo;t sure about how it worked, so I had to write a test program to verify its behavior.</p>
+
+<p>Let&rsquo;s start by analyzing the test program to later see its full code.  The program will monitor changes to the <code>/tmp/foo</code> file and will print messages whenever it is deleted, modified or their attributes change. The program finishes when the file being monitoring is deleted.</p>
+
+<p>The steps to use kqueue are the following:</p>
+
+<ul>
+<li><p>Call <code>kqueue(2)</code> to create a new kernel event queue.  The descriptor it returns will be later used by <code>kevent(2)</code>.</p></li>
+
+<li><p>Open the file to monitor and keep its descriptor around.  We&rsquo;ll need this to attach an event monitor to it.</p></li>
+
+<li><p>Initialize a vector of <code>struct kevent</code> elements that describes the changes to monitor. Since we are only monitoring a single file, we need a one-element vector. This vector is filled up with calls to the <code>EV_SET</code> macro.  This macro takes: the descriptor of the kqueue, the descriptor of the file to monitor (<code>ident</code>), the <code>filter</code> to apply to it, several flags and optional arguments to the filter.  Note that an entry in this table is identified by its <code>ident/filter</code> pair.</p></li>
+
+<li><p>Call the <code>kevent(2)</code> function.  This system call takes the list of changes to monitor we constructed before and does not return until at least one event is received (or when an associated timeout is exhausted).  The function returns the number of changes received and stores information about them in another vector of <code>struct kevent</code> elements (we&rsquo;ll only get notifications of one event at a time, hence we don&rsquo;t use a vector, but a simple variable).</p></li>
+
+<li><p>Interpret the results.  If <code>kevent(2)</code> returned a number greater than 0, we have to inspect the output vector and see which events were received. Each filter has its semantics about the results.  For example, we are using the <code>EVFILT_VNODE</code> filter, which takes a list of conditions to monitor in the <code>fflags</code> field and modifies it to include only the conditions that triggered the filter.</p></li>
+</ul>
+
+<p>With these concepts clear and with help of the manual pages, you should be able to interpret the following code easily:</p>
+<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;sys/event.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;sys/time.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;fcntl.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;unistd.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="kt">int</span>
+<span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+   <span class="kt">int</span> <span class="n">f</span><span class="p">,</span> <span class="n">kq</span><span class="p">,</span> <span class="n">nev</span><span class="p">;</span>
+   <span class="k">struct</span> <span class="n">kevent</span> <span class="n">change</span><span class="p">;</span>
+   <span class="k">struct</span> <span class="n">kevent</span> <span class="n">event</span><span class="p">;</span>
+
+   <span class="n">kq</span> <span class="o">=</span> <span class="n">kqueue</span><span class="p">();</span>
+   <span class="k">if</span> <span class="p">(</span><span class="n">kq</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+       <span class="n">perror</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;kqueue&#34;</span><span class="p">);</span>
+
+   <span class="n">f</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;/tmp/foo&#34;</span><span class="p">,</span> <span class="n">O_RDONLY</span><span class="p">);</span>
+   <span class="k">if</span> <span class="p">(</span><span class="n">f</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+       <span class="n">perror</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;open&#34;</span><span class="p">);</span>
+
+   <span class="n">EV_SET</span><span class="p">(</span><span class="o">&amp;</span><span class="n">change</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">EVFILT_VNODE</span><span class="p">,</span>
+          <span class="n">EV_ADD</span> <span class="o">|</span> <span class="n">EV_ENABLE</span> <span class="o">|</span> <span class="n">EV_ONESHOT</span><span class="p">,</span>
+          <span class="n">NOTE_DELETE</span> <span class="o">|</span> <span class="n">NOTE_EXTEND</span> <span class="o">|</span> <span class="n">NOTE_WRITE</span> <span class="o">|</span> <span class="n">NOTE_ATTRIB</span><span class="p">,</span>
+          <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+
+   <span class="k">for</span> <span class="p">(;;)</span> <span class="p">{</span>
+       <span class="n">nev</span> <span class="o">=</span> <span class="n">kevent</span><span class="p">(</span><span class="n">kq</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">change</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">event</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+       <span class="k">if</span> <span class="p">(</span><span class="n">nev</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+           <span class="n">perror</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;kevent&#34;</span><span class="p">);</span>
+       <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">nev</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+           <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_DELETE</span><span class="p">)</span> <span class="p">{</span>
+               <span class="n">printf</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;File deletedn&#34;</span><span class="p">);</span>
+               <span class="k">break</span><span class="p">;</span>
+           <span class="p">}</span>
+           <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_EXTEND</span> <span class="o">||</span>
+               <span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_WRITE</span><span class="p">)</span>
+               <span class="n">printf</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;File modifiedn&#34;</span><span class="p">);</span>
+           <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_ATTRIB</span><span class="p">)</span>
+               <span class="n">printf</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;File attributes modifiedn&#34;</span><span class="p">);</span>
+       <span class="p">}</span>
+   <span class="p">}</span>
+
+   <span class="n">close</span><span class="p">(</span><span class="n">kq</span><span class="p">);</span>
+   <span class="n">close</span><span class="p">(</span><span class="n">f</span><span class="p">);</span>
+   <span class="k">return</span> <span class="n">EXIT_SUCCESS</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
+<p>Now compile and run the program in one terminal.  In another one, modify the <code>/tmp/foo</code> file and see how our test program shows the events! If you delete the file, the program will terminate. (Note that we are not monitoring all possible events; we&rsquo;d watch for file renames, as well as other conditions if we needed to.)</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">

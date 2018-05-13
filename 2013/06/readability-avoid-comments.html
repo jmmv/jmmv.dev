@@ -10,7 +10,7 @@
   <meta content="Readability: Avoid comments - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="One of the best things you can do to improve the readability of your code is to avoid comments. &#34;Uh, what?&#34; — I hear you say — &#34;That goes against all good coding guidelines, which state to heavily comment your code!&#34;
+  <meta name="description" content="One of the best things you can do to improve the readability of your code is to avoid comments. &amp;ldquo;Uh, what?&amp;ldquo;—I hear you say—&amp;rdquo;That goes against all good coding guidelines, which state to heavily comment your code!&amp;rdquo;
 Right. Except that the real goal is to have valuable comments only, and doing so is a (very) complex matter. The code should document itself at all times, and be crystal-clear at doing so.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
@@ -102,7 +102,131 @@ Right. Except that the real goal is to have valuable comments only, and doing so
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>One of the best things you can do to improve the readability of your code is to <i>avoid</i> comments.  "Uh, <i>what</i>?" — I hear you say — "That goes against all good coding guidelines, which state to heavily comment your code!"</p> <p>Right.  Except that the real goal is to have <em>valuable</em> comments <em>only</em>, and doing so is a (very) complex matter.  The code should document itself at all times, and be crystal-clear at doing so.  Redundant or useless comments hinder readability, if only because their presence denotes that the code is not clear enough to be self-descriptive, because they are obsolete, because they are confusing, or because they very frequently include typos or grammar mistakes.</p> <p>Here is my suggestion: whenever you feel like writing a comment, stop, relax and ask yourself this question:</p> <blockquote>Is the comment explaining <i>why</i> the code behaves as it does, or is the comment outlining <i>how</i> the code works?</blockquote> <p>If your answer is that the comment details the rationale behind the algorithm (aka the "why"), then your comment is probably valuable and should stay.  Otherwise, if the comment does <i>not</i> describe any rationale or some obscure corner case, there is something to be improved about your code.</p> <p>Before moving on, remember that the compiler cannot validate your comments: you can write anything you like in a comment, and the explanation will eventually get out of sync with the code (if it is not already by the time you check it in).  Comments are bound to get stale, contain typos or other inaccuracies, and no tool will help you in making them correct.</p> <p>Having said that, let's look at a few cases where comments can be converted into code that is auto-explanatory so that the comments can be yanked with peace.</p> <p><strong>Statement of various sequential steps</strong></p> <p>First of all, my pet peeve: comments that denote the various chunks, or steps, of an algorithm or function.  Take a look at this function to print a table with all columns vertically aligned:</p> <pre>def print_table(table):<br />    # Early abort if the table is empty.<br />    if len(table) == 0:<br />        return<br /><br />    # First, compute the widths of the columns.<br />    widths = [0] * len(table[0])<br />    for row in table:<br />        for i in xrange(len(row)):<br />            if widths[i] &lt; len(row[i]):<br />                widths[i] = len(row[i])<br /><br />    # Now, format every row as a textual line.<br />    lines = []<br />    for row in table:<br />        line = ''<br />        for i in xrange(len(row)):<br />            padding = ' ' * (widths[i] - len(row[i]))<br />            line += row[i] + padding<br />            if i != len(row) - 1:<br />                line += ' '<br />        lines.append(line)<br /><br />    # And, finally, print the results:<br />    for line in lines:<br />        print line</pre>     <p>In this code snippet, the comments are used to visually mark the different logical steps in the code.  That's fine... except for the fact that you can write this same code in a way to yield the comments irrelevant.  Note, also, that these comments provide no value to the reader other than a small hint of what the code does.</p> <p>Consider what happens if you split every chunk into a separate function, and give the auxiliary function a name that clearly describes the step being taken:</p> <pre><b>def calculate_column_widths(table):</b><br />    assert len(table) &gt; 0<br />    widths = [0] * len(table[0])<br />    for row in table:<br />        for i in xrange(len(row)):<br />            if widths[i] &lt; len(row[i]):<br />                widths[i] = len(row[i])<br />    return widths<br /><br /><b>def format_table(table, widths):</b><br />    lines = []<br />    for row in table:<br />        line = ''<br />        for i in xrange(len(row)):<br />            padding = ' ' * (widths[i] - len(row[i]))<br />            line += row[i] + padding<br />            if i != len(row) - 1:<br />                line += ' '<br />        lines.append(line)<br />    return lines<br /><br />def print_table(table):<br />    if len(table) == 0:<br />        return<br /><br />    <b>widths = calculate_column_widths(table)<br />    lines = format_table(table, widths)</b><br />    for line in lines:<br />        print line</pre> <p>Your complex algorithm is now trivial to follow: the various steps are self-descriptive due to the function calls as are the data dependencies between each.  Oh, and by the way, your code is now easier to unit-test too.</p> <p><strong>Statement of assumptions in the code</strong></p> <p>Another common case of useless comments are those that detail assumptions of the code:</p> <pre>def calculate_memory_size(pid):<br />    current_memory = ...<br />    <b># MINIMUM_SIZE ensures that we never return 0.</b><br />    return max(current_memory, MINIMUM_SIZE)</pre> <p>(Seen forms of that in the real world.)  Note that comments like this can be translated into code, usually in the form of assertions.  Doing so results in something that the compiler and runtime engine can actually validate for you.  So, instead, you could do this:</p> <pre>def calculate_memory_size(pid):<br />    current_memory = ...<br />    result_size = max(current_memory, MINIMUM_SIZE)<br />    <b>assert result_size &gt; 0</b><br />    return result_size</pre> <p><strong>Statement of obvious remarks</strong></p> <p>Everybody has seen variants of these:</p> <pre>i += 2  # Add two to i.<br />return True  # Returns false.</pre> <p>These are comments you would probably not write because you have been taught that these qualify as really bad comments.  Right.  However, it is very easy to fall into the trap of writing comments that follow this same pattern but aren't as obvious.  For example:</p> <pre># An empty string is an error.<br />if len(input) == 0:<br />    raise InvalidInputError(input)</pre> <p>The comment here is completely redundant, because the following piece of code says exactly the same thing in a concise manner.</p> <p><strong>Repetition of the code</strong></p> <p>Comments that state exactly what the purpose of some piece of code does are often problematic.  Consider this:</p> <pre># The package base size is composed of the header (128K),<br /># the list of files (256K) and the tail marker (16K).<br />PACKAGE_BASE_SIZE = (128 + 256 + 16) * units.KiB</pre> <p>This comment is interesting... but it is horrible: any time you update the definition of <tt>PACKAGE_BASE_SIZE</tt> — say to add a new component or to change a particular value — you must also change the comment.  The comment is restating the code.  So, instead, we could do this:</p> <pre>_PACKAGE_HEADER_SIZE = 128 * units.KiB<br />_PACKAGE_FILES_LIST_SIZE = 256 * units.KiB<br />_PACKAGE_TAIL_SIZE = 16 * units.KiB<br />PACKAGE_BASE_SIZE = (_PACKAGE_HEADER_SIZE +<br />                     _PACKAGE_FILES_LIST_SIZE +<br />                     _PACKAGE_TAIL_SIZE)</pre> <p>Or:</p> <pre>PACKAGE_BASE_SIZE = (<br />    128 +  # Header size.<br />    256 +  # Files list size.<br />    16     # Tail size<br />) * units.KiB</pre> <p>These are just some examples to get your mind started on the whole art of avoiding useless comments, and I hope you find them interesting.  If you noted some case that I missed, please write about it!</p>
+           <article>
+
+<p>One of the best things you can do to improve the readability of your code is to <em>avoid</em> comments. &ldquo;Uh, <em>what</em>?&ldquo;—I hear you say—&rdquo;That goes against all good coding guidelines, which state to heavily comment your code!&rdquo;</p>
+
+<p>Right. Except that the real goal is to have <em>valuable</em> comments <em>only</em>, and doing so is a (very) complex matter. The code should document itself at all times, and be crystal-clear at doing so. Redundant or useless comments hinder readability, if only because their presence denotes that the code is not clear enough to be self-descriptive, because they are obsolete, because they are confusing, or because they very frequently include typos or grammar mistakes.</p>
+
+<p>Here is my suggestion: whenever you feel like writing a comment, stop, relax and ask yourself this question:</p>
+
+<blockquote>
+<p>Is the comment explaining <em>why</em> the code behaves as it does, or is the comment outlining <em>how</em> the code works?</p>
+</blockquote>
+
+<p>If your answer is that the comment details the rationale behind the algorithm (aka the &ldquo;why&rdquo;), then your comment is probably valuable and should stay. Otherwise, if the comment does <em>not</em> describe any rationale or some obscure corner case, there is something to be improved about your code.</p>
+
+<p>Before moving on, remember that the compiler cannot validate your comments: you can write anything you like in a comment, and the explanation will eventually get out of sync with the code (if it is not already by the time you check it in). Comments are bound to get stale, contain typos or other inaccuracies, and no tool will help you in making them correct.</p>
+
+<p>Having said that, let&rsquo;s look at a few cases where comments can be converted into code that is auto-explanatory so that the comments can be yanked with peace.</p>
+
+<h1 id="statement-of-various-sequential-steps">Statement of various sequential steps</h1>
+
+<p>First of all, my pet peeve: comments that denote the various chunks, or steps, of an algorithm or function. Take a look at this function to print a table with all columns vertically aligned:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">print_table</span><span class="p">(</span><span class="n">table</span><span class="p">):</span>
+    <span class="c1"># Early abort if the table is empty.</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">table</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="c1"># First, compute the widths of the columns.</span>
+    <span class="n">widths</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">table</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">table</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">widths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">]):</span>
+                <span class="n">widths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+    <span class="c1"># Now, format every row as a textual line.</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">table</span><span class="p">:</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="sa"></span><span class="s1">&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)):</span>
+            <span class="n">padding</span> <span class="o">=</span> <span class="sa"></span><span class="s1">&#39; &#39;</span> <span class="o">*</span> <span class="p">(</span><span class="n">widths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">padding</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">line</span> <span class="o">+=</span> <span class="sa"></span><span class="s1">&#39; &#39;</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+
+    <span class="c1"># And, finally, print the results:</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">line</span></code></pre></div>
+<p>In this code snippet, the comments are used to visually mark the different logical steps in the code. That&rsquo;s fine&hellip; except for the fact that you can write this same code in a way to yield the comments irrelevant. Note, also, that these comments provide no value to the reader other than a small hint of what the code does.</p>
+
+<p>Consider what happens if you split every chunk into a separate function, and give the auxiliary function a name that clearly describes the step being taken:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">calculate_column_widths</span><span class="p">(</span><span class="n">table</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">table</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+    <span class="n">widths</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">table</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">table</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">widths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">]):</span>
+                <span class="n">widths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">widths</span>
+
+<span class="k">def</span> <span class="nf">format_table</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">widths</span><span class="p">):</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">table</span><span class="p">:</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="sa"></span><span class="s1">&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)):</span>
+            <span class="n">padding</span> <span class="o">=</span> <span class="sa"></span><span class="s1">&#39; &#39;</span> <span class="o">*</span> <span class="p">(</span><span class="n">widths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="n">row</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">padding</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">line</span> <span class="o">+=</span> <span class="sa"></span><span class="s1">&#39; &#39;</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">lines</span>
+
+<span class="k">def</span> <span class="nf">print_table</span><span class="p">(</span><span class="n">table</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">table</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">widths</span> <span class="o">=</span> <span class="n">calculate_column_widths</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">format_table</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">widths</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">line</span></code></pre></div>
+<p>Your complex algorithm is now trivial to follow: the various steps are self-descriptive due to the function calls as are the data dependencies between each. Oh, and by the way, your code is now easier to unit-test too.</p>
+
+<h1 id="statement-of-assumptions-in-the-code">Statement of assumptions in the code</h1>
+
+<p>Another common case of useless comments are those that detail assumptions of the code:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">calculate_memory_size</span><span class="p">(</span><span class="n">pid</span><span class="p">):</span>
+    <span class="n">current_memory</span> <span class="o">=</span> <span class="o">...</span>
+    <span class="c1"># MINIMUM_SIZE ensures that we never return 0.</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">current_memory</span><span class="p">,</span> <span class="n">MINIMUM_SIZE</span><span class="p">)</span></code></pre></div>
+<p>(Seen forms of that in the real world.) Note that comments like this can be translated into code, usually in the form of assertions. Doing so results in something that the compiler and runtime engine can actually validate for you. So, instead, you could do this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">calculate_memory_size</span><span class="p">(</span><span class="n">pid</span><span class="p">):</span>
+    <span class="n">current_memory</span> <span class="o">=</span> <span class="o">...</span>
+    <span class="n">result_size</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">current_memory</span><span class="p">,</span> <span class="n">MINIMUM_SIZE</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">result_size</span> <span class="o">&gt;</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="n">result_size</span></code></pre></div>
+<h1 id="statement-of-obvious-remarks">Statement of obvious remarks</h1>
+
+<p>Everybody has seen variants of these:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">i</span> <span class="o">+=</span> <span class="mi">2</span>  <span class="c1"># Add two to i.</span>
+<span class="k">return</span> <span class="bp">True</span>  <span class="c1"># Returns false.</span></code></pre></div>
+<p>These are comments you would probably not write because you have been taught that these qualify as really bad comments. Right. However, it is very easy to fall into the trap of writing comments that follow this same pattern but aren&rsquo;t as obvious. For example:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="c1"># An empty string is an error.</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="n">InvalidInputError</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span></code></pre></div>
+<p>The comment here is completely redundant, because the following piece of code says exactly the same thing in a concise manner.</p>
+
+<h1 id="repetition-of-the-code">Repetition of the code</h1>
+
+<p>Comments that state exactly what the purpose of some piece of code does are often problematic. Consider this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="c1"># The package base size is composed of the header (128K),</span>
+<span class="c1"># the list of files (256K) and the tail marker (16K).</span>
+<span class="n">PACKAGE_BASE_SIZE</span> <span class="o">=</span> <span class="p">(</span><span class="mi">128</span> <span class="o">+</span> <span class="mi">256</span> <span class="o">+</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">KiB</span></code></pre></div>
+<p>This comment is interesting&hellip; but it is horrible: any time you update the definition of <code>PACKAGE_BASE_SIZE</code>—say to add a new component or to change a particular value—you must also change the comment. The comment is restating the code. So, instead, we could do this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">_PACKAGE_HEADER_SIZE</span> <span class="o">=</span> <span class="mi">128</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">KiB</span>
+<span class="n">_PACKAGE_FILES_LIST_SIZE</span> <span class="o">=</span> <span class="mi">256</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">KiB</span>
+<span class="n">_PACKAGE_TAIL_SIZE</span> <span class="o">=</span> <span class="mi">16</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">KiB</span>
+<span class="n">PACKAGE_BASE_SIZE</span> <span class="o">=</span> <span class="p">(</span><span class="n">_PACKAGE_HEADER_SIZE</span> <span class="o">+</span>
+                     <span class="n">_PACKAGE_FILES_LIST_SIZE</span> <span class="o">+</span>
+                     <span class="n">_PACKAGE_TAIL_SIZE</span><span class="p">)</span></code></pre></div>
+<p>Or:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">PACKAGE_BASE_SIZE</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="mi">128</span> <span class="o">+</span>  <span class="c1"># Header size.</span>
+    <span class="mi">256</span> <span class="o">+</span>  <span class="c1"># Files list size.</span>
+    <span class="mi">16</span>     <span class="c1"># Tail size</span>
+<span class="p">)</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">KiB</span></code></pre></div>
+<p>These are just some examples to get your mind started on the whole art of avoiding useless comments, and I hope you find them interesting. If you noted some case that I missed, please write about it!</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">

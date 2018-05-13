@@ -11,8 +11,7 @@
 
   
   <meta name="description" content="Following up on the previous C&#43;&#43; post, here comes one more thing to consider when writing header files in this language.
-using and using namespace
-The C&#43;&#43; using directive and its more generic using namespace counterpart, allow the programmer to bring a given symbol or all the symbols in a namespace, respectively, into the calling scope. This feature exists to simplify typing and, to some extent, to make the code more readable.">
+using and using namespace The C&#43;&#43; using directive and its more generic using namespace counterpart, allow the programmer to bring a given symbol or all the symbols in a namespace, respectively, into the calling scope. This feature exists to simplify typing and, to some extent, to make the code more readable.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
@@ -103,7 +102,71 @@ The C&#43;&#43; using directive and its more generic using namespace counterpart
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>Following up on the previous C++ post, here comes one more thing to consider when writing header files in this language.</p> <p><b><tt>using</tt> and <tt>using namespace</tt></b></p> <p>The C++ <tt>using</tt> directive and its more generic <tt>using namespace</tt> counterpart, allow the programmer to bring a given symbol or all the symbols in a namespace, respectively, into the calling scope.  This feature exists to simplify typing and, to some extent, to make the code more readable.  (It may have come into existence to simplify the porting of old, non-ISO C++ code to modern C++, but that's just a guess.)</p> <p>The most common use of these that I have seen is to slap a <tt>using namespace std;</tt> at the beginning of a source file so that all of the symbols in the standard library are available without having to prefix each one of them with <tt>std::</tt>.  So far so good.</p> <p>Another not-so-common practice is to rarely use this directive and, when using it, place it in the innermost scope where it is needed.  In particular, this can make a function much easier to digest:</p> <pre>int complex_computation(... inputs ...) {<br />    using my_long_namespace::and_another_one::compute_engine;<br /><br />    compute_engine ce(compute_engine::DO_MAGIC);<br />    const compute_engine::result r = ce.run(... inputs ...);<br />    return r.to_integer();<br />}</pre> <p>Imagine how this function would look like if you had to prefix every instance of <tt>compute_engine</tt> with <tt>my_long_namespace::and_another_one::</tt>!</p> <p><b>The rule</b></p> <p>To recap, <tt>using</tt> directives in implementation, <tt>cpp</tt> files, is perfectly fine.</p> <p>Now, what's wrong &mdash; really, really wrong &mdash; is to place a <tt>using</tt> directive <i>in a header file</i>.  These directives exist to be used at the source file level where the programmer has full control of all included headers and their possible conflicts.  If header files decide to import names within a namespace into, say, the global scope, it is highly likely that two header files collide.  Not to mention that doing so renders namespaces useless!</p> <p>So: keep all declarations in a header file well-contained into a namespace and do not ever expose those to the global scope with a <tt>using</tt> directive.  Even more: do not ever do this for namespaces you do not control, like <tt>std</tt>.</p> <p><b>The exception</b></p> <p>But I think there is a little exception, as usual.</p> <p>Sometimes, standard libraries from different vendors differ in what they expose via the C++-style headers for standard C functionality.  Take <tt>vsnprintf(3)</tt> as an example.  This function is declared in the <tt>stdio.h</tt> file in C and in the <tt>cstdio</tt> file in C++.  Using the latter should mean that the function is made available only in the <tt>std</tt> namespace, not globally... but that's not always the case.  Some standard libraries will expose <tt>vsnprintf(3)</tt> as a global symbol even when using <tt>cstdio</tt>.</p> <p>The question is: how do you use this function in your code?  Because, depending on the compiler, you will either have to prefix its call with <tt>std::</tt> or not.  You have two alternatives:</p> <table><tr><td><pre>// Option 1.<br /><br />#include &lt;cstdio&gt;<br />#if !defined(HAVE_STD_VSNPRINTF)<br />namespace std {<br />using ::vsnprintf;<br />}<br />#endif<br /><br />...<br /><br />    // Assume it is in std::<br />    std::vsnprintf(...);</pre></td><td><pre>// Option 2.<br /><br />#include &lt;cstdio&gt;<br />#if defined(HAVE_STD_VSNPRINTF)<br />using std::vsnprintf;<br />#endif<br /><br /><br /><br />...<br /><br />    // Assume it is in ::<br />    ::vsnprintf(...);</pre></td></tr></table> <p>These rely on you being able to define <tt>HAVE_STD_VSNPRINTF</tt> accordingly, which you can do with a manually-crafted <tt>autoconf</tt> test or with more complex magic that relies on compiler-defined constants.</p> <p>What happens when you have to use this function in many different header files, though?  Do you repeat this compatibility hack in all of the files you care about, or do you try to code reuse by putting it in a header file?  Obviously, the latter is better.  But if you do the latter, you really should go for option 1 because option 2 would violate the rule above pretty badly.</p> <p>Can you think of other exceptions?</p>
+           <article>
+
+<p>Following up on the previous C++ post, here comes one more thing to consider when writing header files in this language.</p>
+
+<h1 id="using-and-using-namespace"><code>using</code> and <code>using namespace</code></h1>
+
+<p>The C++ <code>using</code> directive and its more generic <code>using namespace</code> counterpart, allow the programmer to bring a given symbol or all the symbols in a namespace, respectively, into the calling scope. This feature exists to simplify typing and, to some extent, to make the code more readable. (It may have come into existence to simplify the porting of old, non-ISO C++ code to modern C++, but that&rsquo;s just a guess.)</p>
+
+<p>The most common use of these that I have seen is to slap a <code>using namespace std;</code> at the beginning of a source file so that all of the symbols in the standard library are available without having to prefix each one of them with <code>std::</code>. So far so good.</p>
+
+<p>Another not-so-common practice is to rarely use this directive and, when using it, place it in the innermost scope where it is needed. In particular, this can make a function much easier to digest:</p>
+<div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="kt">int</span> <span class="nf">complex_computation</span><span class="p">(...</span> <span class="n">inputs</span> <span class="p">...)</span> <span class="p">{</span>
+    <span class="k">using</span> <span class="n">my_long_namespace</span><span class="o">::</span><span class="n">and_another_one</span><span class="o">::</span><span class="n">compute_engine</span><span class="p">;</span>
+
+    <span class="n">compute_engine</span> <span class="n">ce</span><span class="p">(</span><span class="n">compute_engine</span><span class="o">::</span><span class="n">DO_MAGIC</span><span class="p">);</span>
+    <span class="k">const</span> <span class="n">compute_engine</span><span class="o">::</span><span class="n">result</span> <span class="n">r</span> <span class="o">=</span> <span class="n">ce</span><span class="p">.</span><span class="n">run</span><span class="p">(...</span> <span class="n">inputs</span> <span class="p">...);</span>
+    <span class="k">return</span> <span class="n">r</span><span class="p">.</span><span class="n">to_integer</span><span class="p">();</span>
+<span class="p">}</span></code></pre></div>
+<p>Imagine how this function would look like if you had to prefix every instance of <code>compute_engine</code> with <code>my_long_namespace::and_another_one::</code>!</p>
+
+<h1 id="the-rule">The rule</h1>
+
+<p>To recap, <code>using</code> directives in implementation, <code>cpp</code> files, is perfectly fine.</p>
+
+<p>Now, what&rsquo;s wrong—really, really wrong—is to place a <code>using</code> directive <em>in a header file</em>. These directives exist to be used at the source file level where the programmer has full control of all included headers and their possible conflicts. If header files decide to import names within a namespace into, say, the global scope, it is highly likely that two header files collide. Not to mention that doing so renders namespaces useless!</p>
+
+<p>So: keep all declarations in a header file well-contained into a namespace and do not ever expose those to the global scope with a <code>using</code> directive. Even more: do not ever do this for namespaces you do not control, like <code>std</code>.</p>
+
+<h1 id="the-exception">The exception</h1>
+
+<p>But I think there is a little exception, as usual.</p>
+
+<p>Sometimes, standard libraries from different vendors differ in what they expose via the C++-style headers for standard C functionality. Take <code>vsnprintf(3)</code> as an example. This function is declared in the <code>stdio.h</code> file in C and in the <code>cstdio</code> file in C++. Using the latter should mean that the function is made available only in the <code>std</code> namespace, not globally&hellip; but that&rsquo;s not always the case. Some standard libraries will expose <code>vsnprintf(3)</code> as a global symbol even when using <code>cstdio</code>.</p>
+
+<p>The question is: how do you use this function in your code? Because, depending on the compiler, you will either have to prefix its call with <code>std::</code> or not. You have two alternatives:</p>
+<div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="c1">// ----- OPTION 1 -----
+</span><span class="c1"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;cstdio&gt;</span><span class="cp">
+</span><span class="cp">#if !defined(HAVE_STD_VSNPRINTF)
+</span><span class="cp"></span><span class="k">namespace</span> <span class="n">std</span> <span class="p">{</span>
+<span class="k">using</span> <span class="o">::</span><span class="n">vsnprintf</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="cp">#endif
+</span><span class="cp"></span>
+<span class="p">...</span>
+
+    <span class="c1">// Assume it is in std::
+</span><span class="c1"></span>    <span class="n">std</span><span class="o">::</span><span class="n">vsnprintf</span><span class="p">(...);</span>
+
+<span class="c1">// ----- OPTION 2 -----
+</span><span class="c1"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;cstdio&gt;</span><span class="cp">
+</span><span class="cp">#if defined(HAVE_STD_VSNPRINTF)
+</span><span class="cp"></span><span class="k">using</span> <span class="n">std</span><span class="o">::</span><span class="n">vsnprintf</span><span class="p">;</span>
+<span class="cp">#endif
+</span><span class="cp"></span>
+<span class="p">...</span>
+
+    <span class="c1">// Assume it is in ::
+</span><span class="c1"></span>    <span class="o">::</span><span class="n">vsnprintf</span><span class="p">(...);</span></code></pre></div>
+<p>These rely on you being able to define <code>HAVE_STD_VSNPRINTF</code> accordingly, which you can do with a manually-crafted <code>autoconf</code> test or with more complex magic that relies on compiler-defined constants.</p>
+
+<p>What happens when you have to use this function in many different header files, though? Do you repeat this compatibility hack in all of the files you care about, or do you try to code reuse by putting it in a header file? Obviously, the latter is better. But if you do the latter, you really should go for option 1 because option 2 would violate the rule above pretty badly.</p>
+
+<p>Can you think of other exceptions?</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">

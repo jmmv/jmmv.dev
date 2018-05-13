@@ -10,7 +10,7 @@
   <meta content="Readability: Narrow try/catch blocks - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="Try/catch blocks (or try/except, or whatever they happen to be named in your favorite language) are the mechanism by which you capture exceptions raised by a chunk of code in a controlled manner. Within that chunk of code, it does not matter which line throws the exception: any exception specified in the catch statement will be captured, and it is &#34;impossible&#34; to know at that point where it originated.
+  <meta name="description" content="Try/catch blocks (or try/except, or whatever they happen to be named in your favorite language) are the mechanism by which you capture exceptions raised by a chunk of code in a controlled manner. Within that chunk of code, it does not matter which line throws the exception: any exception specified in the catch statement will be captured, and it is &amp;ldquo;impossible&amp;rdquo; to know at that point where it originated.
 Consider this piece of code:">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
@@ -102,7 +102,59 @@ Consider this piece of code:">
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p><tt>Try</tt>/<tt>catch</tt> blocks (or <tt>try</tt>/<tt>except</tt>, or whatever they happen to be named in your favorite language) are the mechanism by which you capture exceptions raised by a chunk of code in a controlled manner.  Within that chunk of code, it does not matter which line throws the exception: any exception specified in the <tt>catch</tt> statement will be captured, and it is "impossible" to know at that point where it originated.</p> <p>Consider this piece of code:</p> <pre>try:<br />    input_data = None<br />    with open("list.txt", "r") as input_file:<br />        input_data = load_data_from_file(input_file)<br /><br />    connection = Database.connect()<br /><br />    data_for_import = prepare_data_for_import(input_data)<br /><br />    for entry in data_for_input:<br />        connection.add(entry)<br />except DatabaseError, e:<br />    logging.error('Failed to connect to the database')<br />    raise e<br />except IOError, e:<br />    logging.error("Failed to open the input file')<br />    raise e</pre> <p>Can you tell if there is anything wrong in this code?  Maybe, maybe not, because there is not enough context to tell with certainty.</p> <p>Let's look at the exception handler for <tt>DatabaseError</tt>: if you check the error message, the error says <tt>"Failed to <b>connect</b> to the database"</tt>.  Is that right?  The chunk of code protected by the <tt>try</tt> block has two calls to the database code: one via <tt>Database.connect()</tt> and another via <tt>connection.add(entry)</tt>.  So, which is it: a) is the message bogus because it applies to exceptions that arise when connecting <em>and</em> when writing to the database, b) does the write to the database raise a different exception that we are not handling, or c) does the call to <tt>connection.add(entry)</tt> not raise any exception (unlikely) and therefore our <tt>try</tt> block is too wide?</p> <p>Let's also look at the exception handler for <tt>IOError</tt>, which shows the same issue as the previous one.  The error message talks about failures to <strong>open</strong> the input file, but not about reading from it.  Maybe that is the right thing to do in some piece of code, but most likely it isn't.</p> <p>My <i>weak</i> guideline &mdash; weak because I only apply it counted times&mdash; to clarify such a piece of code and make it more robust is to make <tt>try</tt>/<tt>catch</tt> blocks as narrow as possible.  This indicates to the reader that you are aware that the contained piece of code raises the mentioned exceptions and no more, and that the code outside of the block does not raise such exceptions.</p> <p>Following this rule, the above code snippet would look like this:</p> <pre>input_data = None<br />try:<br />    with open("list.txt", "r") as input_file:<br />        input_data = load_data_from_file(input_file)<br />except IOError, e:<br />    logging.error("Failed to load the input file')<br />    raise e<br />assert input_data is not None<br /><br />connection = None<br />try:<br />    connection = Database.connect()<br />except DatabaseError, e:<br />    logging.error('Failed to connect to the database')<br />    raise e<br />assert connection is not None<br /><br />data_for_import = prepare_data_for_import(input_data)<br /><br />for entry in data_for_input:<br />    connection.add(entry)</pre> <p>Now it is obvious that <tt>connection.add</tt> most likely needs some kind of exception handling, as a write to an external system can always fail in some way.  At this point, we are forced to decide whether we want to surround the single statement in a <tt>try</tt>/<tt>catch</tt> block, or instead we want to do so for the loop as a whole.  This will depend on whether we want a fail-fast approach or a more greedy algorithm.</p> <p>You may have noticed by now that the above looks pretty much like a poor man's replacement for explicit error handling, and you may be right.  Exceptions may sounds like a nice idea and, depending on the language, cannot be avoided... but getting them right and implementing accurate error handling with them is just <a href="http://blogs.msdn.com/b/oldnewthing/archive/2005/01/14/352949.aspx">really hard</a>.  Keep your code simple.</p>
+           <article><p><code>Try</code>/<code>catch</code> blocks (or <code>try</code>/<code>except</code>, or whatever they happen to be named in your favorite language) are the mechanism by which you capture exceptions raised by a chunk of code in a controlled manner. Within that chunk of code, it does not matter which line throws the exception: any exception specified in the <code>catch</code> statement will be captured, and it is &ldquo;impossible&rdquo; to know at that point where it originated.</p>
+
+<p>Consider this piece of code:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">try</span><span class="p">:</span>
+    <span class="n">input_data</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa"></span><span class="s2">&#34;list.txt&#34;</span><span class="p">,</span> <span class="sa"></span><span class="s2">&#34;r&#34;</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_file</span><span class="p">:</span>
+        <span class="n">input_data</span> <span class="o">=</span> <span class="n">load_data_from_file</span><span class="p">(</span><span class="n">input_file</span><span class="p">)</span>
+
+    <span class="n">connection</span> <span class="o">=</span> <span class="n">Database</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+
+    <span class="n">data_for_import</span> <span class="o">=</span> <span class="n">prepare_data_for_import</span><span class="p">(</span><span class="n">input_data</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">data_for_input</span><span class="p">:</span>
+        <span class="n">connection</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">DatabaseError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa"></span><span class="s1">&#39;Failed to connect to the database&#39;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="n">e</span>
+<span class="k">except</span> <span class="ne">IOError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa"></span><span class="s2">&#34;Failed to open the input file&#39;)</span><span class="err">
+</span><span class="err"></span><span class="s2">    raise e</span></code></pre></div>
+<p>Can you tell if there is anything wrong in this code? Maybe, maybe not, because there is not enough context to tell with certainty.</p>
+
+<p>Let&rsquo;s look at the exception handler for <code>DatabaseError</code>: if you check the error message, the error says <code>&quot;Failed to connect to the database&quot;</code>. Is that right? The chunk of code protected by the <code>try</code> block has two calls to the database code: one via <code>Database.connect()</code> and another via <code>connection.add(entry)</code>. So, which is it: a) is the message bogus because it applies to exceptions that arise when connecting <em>and</em> when writing to the database, b) does the write to the database raise a different exception that we are not handling, or c) does the call to <code>connection.add(entry)</code> not raise any exception (unlikely) and therefore our <code>try</code> block is too wide?</p>
+
+<p>Let&rsquo;s also look at the exception handler for <code>IOError</code>, which shows the same issue as the previous one. The error message talks about failures to <strong>open</strong> the input file, but not about reading from it. Maybe that is the right thing to do in some piece of code, but most likely it isn&rsquo;t.</p>
+
+<p>My <em>weak</em> guideline — weak because I only apply it counted times— to clarify such a piece of code and make it more robust is to make <code>try</code>/<code>catch</code> blocks as narrow as possible. This indicates to the reader that you are aware that the contained piece of code raises the mentioned exceptions and no more, and that the code outside of the block does not raise such exceptions.</p>
+
+<p>Following this rule, the above code snippet would look like this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">input_data</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa"></span><span class="s2">&#34;list.txt&#34;</span><span class="p">,</span> <span class="sa"></span><span class="s2">&#34;r&#34;</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_file</span><span class="p">:</span>
+        <span class="n">input_data</span> <span class="o">=</span> <span class="n">load_data_from_file</span><span class="p">(</span><span class="n">input_file</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">IOError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa"></span><span class="s2">&#34;Failed to load the input file&#34;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="n">e</span>
+<span class="k">assert</span> <span class="n">input_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+
+<span class="n">connection</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">connection</span> <span class="o">=</span> <span class="n">Database</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+<span class="k">except</span> <span class="n">DatabaseError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa"></span><span class="s2">&#34;Failed to connect to the database&#34;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="n">e</span>
+<span class="k">assert</span> <span class="n">connection</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+
+<span class="n">data_for_import</span> <span class="o">=</span> <span class="n">prepare_data_for_import</span><span class="p">(</span><span class="n">input_data</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">data_for_input</span><span class="p">:</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span></code></pre></div>
+<p>Now it is obvious that <code>connection.add</code> most likely needs some kind of exception handling, as a write to an external system can always fail in some way. At this point, we are forced to decide whether we want to surround the single statement in a <code>try</code>/<code>catch</code> block, or instead we want to do so for the loop as a whole. This will depend on whether we want a fail-fast approach or a more greedy algorithm.</p>
+
+<p>You may have noticed by now that the above looks pretty much like a poor man&rsquo;s replacement for explicit error handling, and you may be right. Exceptions may sounds like a nice idea and, depending on the language, cannot be avoided&hellip; but getting them right and implementing accurate error handling with them is just <a href="http://blogs.msdn.com/b/oldnewthing/archive/2005/01/14/352949.aspx">really hard</a>. Keep your code simple.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">

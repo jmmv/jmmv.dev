@@ -102,7 +102,85 @@ To illustrate what this means, consider this snippet in which we define a functi
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-           <article><p>In a dynamically-typed language, it is common for the scoping semantics of a variable to be wider than a single code block.  For example: in at least Python and the shell, it is the case that a variable defined <i>anywhere</i> within a function —even inside conditionals or loops— is reachable anywhere in the function from there on.</p> <p>To illustrate what this means, consider this snippet in which we define a function to compute the CPU requirements needed in a database system to support a set of tables:</p> <pre>def cpu_requirements(database):<br />    disk_bytes, tables_count = calculate_summaries(database)<br />    if disk_bytes &gt; 0:<br />        cpu = cpu_favoring_disk_bytes(disk_bytes)<br />    elif tables_count &gt; 0:<br />        cpu = cpu_favoring_tables_count(tables_count)<br />    else:<br />        cpu = 0<br /><br />    ... various tens of lines of code ...<br /><br />    return cpu + SAFETY_MARGIN</pre> <p>The thing I want you to note in this code snippet is that we are defining the <tt>cpu</tt> variable in all code paths of the conditional and later using the computed value <i>outside</i> the conditional, possibly after tens of lines of code.  Practically, there is nothing wrong with this as long as the code works as intended, but I personally find this style to be confusing: the code does not show the <i>intent</i> of the programmer regarding where a variable is going to be used.</p> <p>As a guideline, define a variable in the outmost block where it is used.  Visually, this means defining the variable at the leftmost indentation level in which it is going to be referenced later.</p> <p>The code above would be rewritten as follows:</p> <pre>def cpu_requirements(tables_info):<br />    disk_bytes, tables_count = calculate_summaries(database)<br />    <b>cpu = None</b><br />    if disk_bytes &gt; 0:<br />        cpu = cpu_favoring_disk_bytes(disk_bytes)<br />    elif tables_count &gt; 0:<br />        cpu = cpu_favoring_tables_count(tables_count)<br />    else:<br />        cpu = 0<br />    <b>assert cpu is not None, 'cpu not defined in a code path'</b><br /><br />    ... various tens of lines of code ...<br /><br />    return cpu + SAFETY_MARGIN</pre> <p>There are two key ideas behind these tiny adjustments:</p> <ul> <li>First, the scope of the <tt>cpu</tt> variable is explicitly declared to be outside of the conditional.  This happens right before entering the alternative code paths, so there is a clear expectation that this variable <i>will</i> be used later on outside of the conditional statement.</li> <li>And second, the expectation that the <tt>cpu</tt> variable has been assigned a value in all possible code paths is explicitly coded by an assertion.  This is important.  Consider that the code in each branch of the conditional could be multiple lines long, and the assignment of a value to our variable might be buried among those lines.  With the assertion, we want to ensure that whatever happens to the contents of the conditional branches in future revisions does not mean that the initialization of the variable is lost (by mistake).</li> </ul> <p>Everything mentioned here applies to loops and other higher-level constructs as well, particularly <tt>try</tt>/<tt>catch</tt> blocks.  Consider this code:</p> <pre>def get_current_user_data():<br />    try:<br />        user_data = helper_module.get_user_data(os.getuid())<br />    except helper_module.UserQueryError, e:<br />        raise BackendError(e)<br /><br />    try:<br />        group_data = helper_module.get_group_data(os.getgid())<br />    except helper_module.GroupQueryError, e:<br />        raise BackendError(e)<br /><br />    return user_data, group_data</pre> <p>The code in this example performs two separate queries via a helper module, and these queries raise exceptions defined in the helper module.  To be self-contained, our <tt>get_current_user_data()</tt> rewrites these exceptions as a generic exception defined in the current module.  The issue, however, is that the variables defined within the <tt>try</tt> block are accessed later separately.  I would instead do:</p> <pre>def get_current_user_data():<br />    <b>user_data = None</b><br />    try:<br />        user_data = helper_module.get_user_data(os.getuid())<br />    except helper_module.UserQueryError, e:<br />        raise BackendError(e)<br />    <b>assert user_data is not None</b><br /><br />    <b>group_data = None</b><br />    try:<br />        group_data = helper_module.get_group_data(os.getgid())<br />    except helper_module.GroupQueryError, e:<br />        raise BackendError(e)<br />    <b>assert group_data is not None</b><br /><br />    return user_data, group_data</pre> <p>Which is very similar to what we did above for conditionals.</p> <p>To wrap everything up, keep these guidelines in mind:</p> <ul><li>Define variables in the outmost block where they are referenced.</li><li>If you don't have a good default value to which to initialize the variable to —because, for example, its value is computed in a conditional path— set it to <tt>None</tt> and later assert that it has been set to something different.</li></ul>
+           <article><p>In a dynamically-typed language, it is common for the scoping semantics of a variable to be wider than a single code block. For example: in at least Python and the shell, it is the case that a variable defined <em>anywhere</em> within a function —even inside conditionals or loops— is reachable anywhere in the function from there on.</p>
+
+<p>To illustrate what this means, consider this snippet in which we define a function to compute the CPU requirements needed in a database system to support a set of tables:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">cpu_requirements</span><span class="p">(</span><span class="n">database</span><span class="p">):</span>
+    <span class="n">disk_bytes</span><span class="p">,</span> <span class="n">tables_count</span> <span class="o">=</span> <span class="n">calculate_summaries</span><span class="p">(</span><span class="n">database</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">disk_bytes</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="n">cpu_favoring_disk_bytes</span><span class="p">(</span><span class="n">disk_bytes</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">tables_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="n">cpu_favoring_tables_count</span><span class="p">(</span><span class="n">tables_count</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="o">...</span> <span class="n">various</span> <span class="n">tens</span> <span class="n">of</span> <span class="n">lines</span> <span class="n">of</span> <span class="n">code</span> <span class="o">...</span>
+
+    <span class="k">return</span> <span class="n">cpu</span> <span class="o">+</span> <span class="n">SAFETY_MARGIN</span></code></pre></div>
+<p>The thing I want you to note in this code snippet is that we are defining the <code>cpu</code> variable in all code paths of the conditional and later using the computed value <em>outside</em> the conditional, possibly after tens of lines of code. Practically, there is nothing wrong with this as long as the code works as intended, but I personally find this style to be confusing: the code does not show the <em>intent</em> of the programmer regarding where a variable is going to be used.</p>
+
+<p>As a guideline, define a variable in the outermost block where it is used. Visually, this means defining the variable at the leftmost indentation level in which it is going to be referenced later.</p>
+
+<p>The code above would be rewritten as follows:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">cpu_requirements</span><span class="p">(</span><span class="n">tables_info</span><span class="p">):</span>
+    <span class="n">disk_bytes</span><span class="p">,</span> <span class="n">tables_count</span> <span class="o">=</span> <span class="n">calculate_summaries</span><span class="p">(</span><span class="n">database</span><span class="p">)</span>
+    <span class="n">cpu</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">disk_bytes</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="n">cpu_favoring_disk_bytes</span><span class="p">(</span><span class="n">disk_bytes</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">tables_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="n">cpu_favoring_tables_count</span><span class="p">(</span><span class="n">tables_count</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cpu</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">assert</span> <span class="n">cpu</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">,</span> <span class="sa"></span><span class="s1">&#39;cpu not defined in a code path&#39;</span>
+
+    <span class="o">...</span> <span class="n">various</span> <span class="n">tens</span> <span class="n">of</span> <span class="n">lines</span> <span class="n">of</span> <span class="n">code</span> <span class="o">...</span>
+
+    <span class="k">return</span> <span class="n">cpu</span> <span class="o">+</span> <span class="n">SAFETY_MARGIN</span></code></pre></div>
+<p>There are two key ideas behind these tiny adjustments:</p>
+
+<ul>
+<li>First, the scope of the <code>cpu</code> variable is explicitly declared to be outside of the conditional. This happens right before entering the alternative code paths, so there is a clear expectation that this variable <em>will</em> be used later on outside of the conditional statement.</li>
+<li>And second, the expectation that the <code>cpu</code> variable has been assigned a value in all possible code paths is explicitly coded by an assertion. This is important. Consider that the code in each branch of the conditional could be multiple lines long, and the assignment of a value to our variable might be buried among those lines. With the assertion, we want to ensure that whatever happens to the contents of the conditional branches in future revisions does not mean that the initialization of the variable is lost (by mistake).</li>
+</ul>
+
+<p>Everything mentioned here applies to loops and other higher-level constructs as well, particularly <code>try</code>/<code>catch</code> blocks. Consider this code:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">get_current_user_data</span><span class="p">():</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">user_data</span> <span class="o">=</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">get_user_data</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getuid</span><span class="p">())</span>
+    <span class="k">except</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">UserQueryError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">BackendError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">group_data</span> <span class="o">=</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">get_group_data</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getgid</span><span class="p">())</span>
+    <span class="k">except</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">GroupQueryError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">BackendError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">user_data</span><span class="p">,</span> <span class="n">group_data</span></code></pre></div>
+<p>The code in this example performs two separate queries via a helper module, and these queries raise exceptions defined in the helper module. To be self-contained, our <code>get_current_user_data()</code> rewrites these exceptions as a generic exception defined in the current module. The issue, however, is that the variables defined within the <code>try</code> block are accessed later separately. I would instead do:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">get_current_user_data</span><span class="p">():</span>
+    <span class="n">user_data</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">user_data</span> <span class="o">=</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">get_user_data</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getuid</span><span class="p">())</span>
+    <span class="k">except</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">UserQueryError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">BackendError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">user_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+
+    <span class="n">group_data</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">group_data</span> <span class="o">=</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">get_group_data</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getgid</span><span class="p">())</span>
+    <span class="k">except</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">GroupQueryError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">BackendError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">group_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+
+    <span class="k">return</span> <span class="n">user_data</span><span class="p">,</span> <span class="n">group_data</span></code></pre></div>
+<p>Which is very similar to what we did above for conditionals.</p>
+
+<p>To wrap everything up, keep these guidelines in mind:</p>
+
+<ul>
+<li>Define variables in the outermost block where they are referenced.</li>
+<li>If you don&rsquo;t have a good default value to which to initialize the variable to—because, for example, its value is computed in a conditional path—set it to <code>None</code> and later assert that it has been set to something different.</li>
+</ul>
 </article>
         </div>
         <div class="col-md-3 sidebar">
