@@ -6,17 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Julio Merino</title>
-  <meta content="Julio Merino" property="og:title">
+  <title>Rust review: Immutable by default - Julio Merino</title>
+  <meta content="Rust review: Immutable by default - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="This is Julio Merino&#39;s homepage and blog. Software artist.  Writer aficionado.  Open source enthusiast.  Runner. Father of two.">
+  <meta name="description" content="Let&amp;rsquo;s start the deep dive by looking into a powerful feature of Rust: all variables and references are immutable by default unless qualified with mut.
+To understand why this is important, let&amp;rsquo;s cover some context first. One of my pet peeves when reviewing C&#43;&#43; code is to ask authors to sprinkle the const qualifier everywhere: if something ain&amp;rsquo;t mutated, say so explicitly. This includes marking local variables, function arguments, function return values, class attributes, etc.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/" property="og:url">
+  <meta content="http://julio.meroh.net/2018/05/rust-review-immutable-by-default.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/">
+  <link rel="canonical" href="http://julio.meroh.net/2018/05/rust-review-immutable-by-default.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -99,269 +100,64 @@
 </header>
 
 
-    <!-- We need these to be present early during load so we can avoid hiding
-     or showing elements once the page has already been rendered. -->
-<script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/js/js.cookie-2.1.1.min.js"></script>
+    <div class="page-header">
+      <div class="container">
+        <h1>Rust review: Immutable by default</h1>
 
-<script>
-  function loadMarketing() {
-      var cookie = Cookies.get("marketing-visible");
-      if (cookie === undefined || cookie === "true") {
-        toggleMarketing(true);
-      } else {
-        toggleMarketing(false);
-      }
-  }
+        <p>May 29, 2018 &middot;
+        About 3 minutes</p>
 
-  function toggleMarketing(action) {
-    if (action) {
-      $("#collapse-row").show();
-      $("#buttons").show();
-      $("#expand-row").hide();
-      Cookies.set("marketing-visible", "true", {path: ""});
-    } else {
-      $("#expand-row").show();
-      $("#buttons").hide();
-      $("#collapse-row").hide();
-      Cookies.set("marketing-visible", "false", {path: ""});
-    }
-  }
-</script>
-
-<div class="page-header">
-  <div class="container">
-    <h1>Julio Merino</h1>
-
-    <p>Software artist.  Writer aficionado.  Open source enthusiast.
-    Runner.  Father of two.<br/>
-    <strong>Currently:</strong> Senior Software Engineer at Google,
-    New York City.</p>
-
-    <div class="marketing row" style="display: none" id="buttons">
-      <div class="col-md-3">
-        <a href="/essays.html">
-          <span class="glyphicon glyphicon-print" aria-hidden="true"></span>
-        </a>
-        <h2>Author</h2>
-
-        <p>Writer by hobby, typically covering programming topics.
-        No fiction.  Find below for the most recent posts or
-        open this section for general highlights.</p>
-      </div>
-
-      <div class="col-md-3">
-        <a href="/software.html">
-          <span class="glyphicon glyphicon-cog" aria-hidden="true"></span>
-        </a>
-        <h2>Developer</h2>
-
-        <p>Author of various Open Source projects and contributor to many
-        more.  BSD enthusiast.  Motto: production software can be
-        beautiful.</p>
-      </div>
-
-      <div class="col-md-3">
-        <a href="/work.html">
-          <span class="glyphicon glyphicon-briefcase" aria-hidden="true"></span>
-        </a>
-        <h2>Engineer</h2>
-
-        <p>Senior Software Engineer (and, previously, Senior Site Reliability
-        Engineer) at Google in New York City.</p>
-      </div>
-
-      <div class="col-md-3">
-        <a href="/about.html">
-          <span class="glyphicon glyphicon-envelope" aria-hidden="true"></span>
-        </a>
-        <h2>Social</h2>
-
-        <p>Reachable via all the traditional contact mechanisms and the major
-        social networks.  See my about page for all the references.</p>
+        
       </div>
     </div>
-
-    <div class="row" style="display: none" id="collapse-row">
-      <p class="text-center"><small>
-        <a href="javascript:toggleMarketing(false)">
-          <span class="glyphicon glyphicon-chevron-up"
-                aria-hidden="true"></span>
-          Collapse
-          <span class="glyphicon glyphicon-chevron-up"
-                aria-hidden="true"></span>
-        </a>
-      </small></p>
-    </div>
-
-    <div class="row" style="display: none" id="expand-row">
-      <p class="text-center"><small>
-        <a href="javascript:toggleMarketing(true)">
-          <span class="glyphicon glyphicon-chevron-down"
-                aria-hidden="true"></span>
-          Expand
-          <span class="glyphicon glyphicon-chevron-down"
-                aria-hidden="true"></span>
-        </a>
-      </small></p>
-    </div>
-
-    <!-- All the rows above were loaded hidden, so display only the needed
-         ones now.  This ensures that we are able to render the page
-         sequentially and prevent strange jumps during rendering. -->
-    <script>loadMarketing();</script>
-  </div>
-</div>
-
 
     <div class="container">
       <div class="row">
         <div class="col-md-9">
           
-
-          <ul class="post-list">
-            
-              <li>
-                <h2><a class="post-link" href="/2005/08/hollywood-os.html">Hollywood OS</a></h2>
-                <p>
-                  Have you ever been disappointed by how software looks and behaves on almost all movies? If so, just go and read the description of Hollywood OS; it's worth it ;-)
-                </p>
-                <p class="post-meta">August 3, 2005
-                    &middot;
-                    <a href="/2005/08/hollywood-os.html">Continue reading
-                      (about 1 minutes)</a>
-                    &middot;
-                    <a href="/2005/08/hollywood-os.html#disqus_thread">
-                      <span class="disqus-comment-count"
-                            data-disqus-url="http://julio.meroh.net/2005/08/hollywood-os.html">Comments</span>
-                    </a>
-                  </p>
-                </li>
-            
-              <li>
-                <h2><a class="post-link" href="/2005/08/soc-status-report-3.html">SoC: Status report 3</a></h2>
-                <p>
-                  It has been a long time since the previous status report; I'm sorry for that, but I haven't been able to publish one earlier. The good thing is I'm finally back from my vacations, so I'll able to work on tmpfs more seriously and continuously from now on (and I have to!).
-Anyway, to the point of this post. I've just pushed all the changes I had in my work tree to the mainstream CVS server.
-                </p>
-                <p class="post-meta">August 2, 2005
-                    &middot;
-                    <a href="/2005/08/soc-status-report-3.html">Continue reading
-                      (about 2 minutes)</a>
-                    &middot;
-                    <a href="/2005/08/soc-status-report-3.html#disqus_thread">
-                      <span class="disqus-comment-count"
-                            data-disqus-url="http://julio.meroh.net/2005/08/soc-status-report-3.html">Comments</span>
-                    </a>
-                  </p>
-                </li>
-            
-              <li>
-                <h2><a class="post-link" href="/2005/07/soc-thoughts-about-tmpfs-data.html">SoC: Thoughts about tmpfs data representation</a></h2>
-                <p>
-                  The text below is a message I just sent to NetBSD's tech-kern mailing list. I'm reproducing it here with better formatting and with some e-mail specific sentences removed.
-The tmpfs code is up to the point where I have to start implementing the vnode operations. To do this, I have to decide how to organize the file data in memory as well as all other information needed to manage it.
-                </p>
-                <p class="post-meta">July 19, 2005
-                    &middot;
-                    <a href="/2005/07/soc-thoughts-about-tmpfs-data.html">Continue reading
-                      (about 4 minutes)</a>
-                    &middot;
-                    <a href="/2005/07/soc-thoughts-about-tmpfs-data.html#disqus_thread">
-                      <span class="disqus-comment-count"
-                            data-disqus-url="http://julio.meroh.net/2005/07/soc-thoughts-about-tmpfs-data.html">Comments</span>
-                    </a>
-                  </p>
-                </li>
-            
-              <li>
-                <h2><a class="post-link" href="/2005/07/soc-status-report-2.html">SoC: Status report 2</a></h2>
-                <p>
-                  After several days since the previous status report, it's time for a new one. During the past week, I've improved several aspects of the existing code, without adding many new stuff.
-First of all, I added several other VFS hooks needed to avoid crashes due to null pointers and completed the code up to the point where the file system can be mounted and unmounted (the latter was more difficult than I thought).
-                </p>
-                <p class="post-meta">July 18, 2005
-                    &middot;
-                    <a href="/2005/07/soc-status-report-2.html">Continue reading
-                      (about 2 minutes)</a>
-                    &middot;
-                    <a href="/2005/07/soc-status-report-2.html#disqus_thread">
-                      <span class="disqus-comment-count"
-                            data-disqus-url="http://julio.meroh.net/2005/07/soc-status-report-2.html">Comments</span>
-                    </a>
-                  </p>
-                </li>
-            
-              <li>
-                <h2><a class="post-link" href="/2005/07/soc-status-report-1.html">SoC: Status report 1</a></h2>
-                <p>
-                  During this past week, I've been working a bit on my SoC project; only a bit because I had to prepare the slides for the NetBSD presentation I'm giving tomorrow at Partyzip@. Fortunately, from now on I won't have anything else to do, so I'll be able to devote all my time to tmpfs :-)
-So... here is a little status report: I started the week reading the I/O chapter from the Design and Implementation of the 4.
-                </p>
-                <p class="post-meta">July 9, 2005
-                    &middot;
-                    <a href="/2005/07/soc-status-report-1.html">Continue reading
-                      (about 3 minutes)</a>
-                    &middot;
-                    <a href="/2005/07/soc-status-report-1.html#disqus_thread">
-                      <span class="disqus-comment-count"
-                            data-disqus-url="http://julio.meroh.net/2005/07/soc-status-report-1.html">Comments</span>
-                    </a>
-                  </p>
-                </li>
-            
-              <li>
-                <h2><a class="post-link" href="/2005/07/monotones-cvs-gateway-part-2.html">Monotone&#39;s CVS gateway, part 2</a></h2>
-                <p>
-                  After explaining what is the Monotone's CVS gateway, I've been asked to post a little step by step tutorial about it. I'll focus the example towards pkgsrc. Here it goes:
-The first step is to create a local database for Monotone and a key for personal use:
-$ monotone --db=~/pkgsrc.db db init
-$ monotone --db=~/pkgsrc.db genkey user@example.com
-Once this is done, we can proceed to import the CVS repository into the database.
-                </p>
-                <p class="post-meta">July 6, 2005
-                    &middot;
-                    <a href="/2005/07/monotones-cvs-gateway-part-2.html">Continue reading
-                      (about 2 minutes)</a>
-                    &middot;
-                    <a href="/2005/07/monotones-cvs-gateway-part-2.html#disqus_thread">
-                      <span class="disqus-comment-count"
-                            data-disqus-url="http://julio.meroh.net/2005/07/monotones-cvs-gateway-part-2.html">Comments</span>
-                    </a>
-                  </p>
-                </li>
-            
-              <li>
-                <h2><a class="post-link" href="/2005/07/going-on-vacation.html">Going on vacation</a></h2>
-                <p>
-                  I'm going on vacation tomorrow and will be back by the end of the month. I'll bring my laptop with me, but I won't have regular Internet access (unless there is an open AP close to the place, that is). This will make my SoC's project development a bit more difficult, as I won't have my workstation (fast build machine) nor a test machine (very useful for kernel development).
-I hope I've collected enough information to start working on the project and will continue to devour it in the next days; until now, I've read a bit of the I/O chapter from the 4.
-                </p>
-                <p class="post-meta">July 1, 2005
-                    &middot;
-                    <a href="/2005/07/going-on-vacation.html">Continue reading
-                      (about 1 minutes)</a>
-                    &middot;
-                    <a href="/2005/07/going-on-vacation.html#disqus_thread">
-                      <span class="disqus-comment-count"
-                            data-disqus-url="http://julio.meroh.net/2005/07/going-on-vacation.html">Comments</span>
-                    </a>
-                  </p>
-                </li>
-            
-          </ul>
-
-          <div class="pagination">
-            
-              <span class="previous"><a href="/page/82.html">&laquo;
-              Newer posts</a></span>
             
 
-            
-              <span class="next"><a href="/page/84.html">Older posts
-              &raquo;</a></span>
-            
-          </div>
+
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+
+<p><i>This article is part number
+
+  2 of the
+
+<a href="/series.html#Rust%20review"><b>
+Rust review</b> series</a>.</i></p>
+
+<hr/>
+
+          
+          <article><p>Let&rsquo;s start the deep dive by looking into a powerful feature of Rust: <strong>all variables and references are immutable by default unless qualified with <code>mut</code></strong>.</p>
+
+<p>To understand why this is important, let&rsquo;s cover some context first. One of my pet peeves when reviewing C++ code is to ask authors to sprinkle the <code>const</code> qualifier <em>everywhere</em>: if something ain&rsquo;t mutated, say so explicitly. This includes marking local variables, function arguments, function return values, class attributes, etc. Unfortunately, there are plenty of people that argue that doing so is stupid: <a href="http://www.gotw.ca/gotw/081.htm"><code>const</code> doesn&rsquo;t help the compiler apply optimizations</a> and it makes the code harder to <em>write</em>. So why should everything be marked immutable?</p>
+
+<ol>
+<li><p><strong>To make the code easier to <em>read</em>.</strong> Code is read many more times than it&rsquo;s written. The easiest code to read is the code that requires keeping the least state in mind: i.e. the code with the smallest &ldquo;working set&rdquo; at any point. Reducing the number of mutable variables in a chunk makes its understanding infinitely easier because you know that once a variable has been given a value, it remains that way. You don&rsquo;t need to carefully look for places where the value might be mutated within the function nor in any of the called functions.</p></li>
+
+<li><p><strong>To prevent mistakes when using APIs.</strong> Projects grow and it&rsquo;s hard to track all the interactions between components. You&rsquo;d pass everything by value, in which case immutability wouldn&rsquo;t give you anything, but in practice you end up passing lots of values by reference to avoid copy costs. In those cases, it&rsquo;s very useful to know that calling a specific function won&rsquo;t mutate its arguments—which, again, reduces the working set you need to keep in mind.</p></li>
+
+<li><p><strong>To come up with better designs.</strong> Combining the previous two items, thinking of immutability has strong implications in the design of your types and interfaces. The reason I routinely highlight the lack of immutability during code reviews is because, inevitably, adding these qualifiers causes the author to have to redesign the code with immutability in mind. The results are cleaner code that is easier to read and easier to test. See my previous post <a href="/2013/07/readability-don-modify-variables.html">Readability: Don&rsquo;t modify variables</a> for some examples.</p></li>
+
+<li><p><strong>To help with concurrency.</strong> Immutable data structures are trivial to parallelize. Code that deals with immutable data could can be made parallel with ease and, in theory, this could be done automatically.</p></li>
+</ol>
+
+<p>In the C++ case, I&rsquo;ve always found it unfortunate that <code>const</code> is not the default modifier—and we can probably blame <a href="https://en.wikipedia.org/wiki/Const_(computer_programming)#History">historical heritage</a> for that: <code>const</code> was a late addition to C (first appearing in C89) and C++ had to remain compatible with existing C APIs.</p>
+
+<p>But thankfully, Rust is not bound by such legacy: Rust <em>does</em> differentiate between immutable and mutable data (unlike e.g. Go, which is also a modern language), and has chosen to make the immutable case the default. And, aside from all of the benefits listed above, <strong>the borrow checker can take immutability to its advantage and make very powerful sanity-checks about the code</strong>. We&rsquo;ll explore this in the next episode.</p>
+</article>
         </div>
         <div class="col-md-3 sidebar">
           <div class="row">
@@ -938,6 +734,42 @@ I hope I've collected enough information to start working on the project and wil
 
         </div>
       </div>
+
+      <div class="row">
+      <div class="post-links">
+        <p>
+          
+
+          
+
+          <a href="/archive.html">Go to posts index</a>
+        </p>
+      </div>
+      </div>
+
+      <div class="row">
+      <div id="disqus_thread">
+        <script>
+          var disqus_config = function () {
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/05\/rust-review-immutable-by-default.html";
+            this.page.identifier = "2018-05-29-rust-review-immutable-by-default";
+          };
+          (function() { 
+            var d = document, s = d.createElement('script');
+
+            s.src = '//jmmv.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+        <noscript>Please enable JavaScript to view the
+          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+          powered by Disqus.</a>
+        </noscript>
+      </div>
+      
+      </div>
     </div>
 
     <div class="container">
@@ -979,7 +811,5 @@ $("p:contains('DANGER: ')").addClass("callout callout-danger");
   ga('send', 'pageview');
 </script>
 
-
-    <script id="dsq-count-scr" src="//jmmv.disqus.com/count.js" async></script>
   </body>
 </html>
