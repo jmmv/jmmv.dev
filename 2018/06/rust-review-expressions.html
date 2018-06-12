@@ -6,18 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Using &#39;goto&#39;s in C - Julio Merino</title>
-  <meta content="Using &#39;goto&#39;s in C - Julio Merino" property="og:title">
+  <title>Rust review: Expressions, expressions, expressions - Julio Merino</title>
+  <meta content="Rust review: Expressions, expressions, expressions - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="It is common knowledge that usages of the goto statement are potentially dangerous in any structured programming language, as their abuse can quickly make your code unreadable. This is why this construction is seldom explained to people learning how to program and their use is strongly discouraged.
-However, there are some situations in which it is very useful and, despite what some people might say, makes your code more readable. I had never used gotos before, but have experienced this recently while writing tmpfs.">
+  <meta name="description" content="Rust resembles a functional language in many ways although it does not claim to be one. In fact, I have been thinking of Rust as a &amp;ldquo;pragmatic Haskell&amp;rdquo; or as a &amp;ldquo;well-balanced mixture between C&#43;&#43; and Haskell&amp;ldquo;.
+One of the ways the functional aspects show up is via expressions and how pretty much any construct in Rust can be treated as an expression. But before we begin, a little warning: the examples below are, by no means, idiomatic Rust—I just hope they are simple enough to illustrate what I want to show.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/2005/08/using-gotos-in-c.html" property="og:url">
+  <meta content="http://julio.meroh.net/2018/06/rust-review-expressions.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2005/08/using-gotos-in-c.html">
+  <link rel="canonical" href="http://julio.meroh.net/2018/06/rust-review-expressions.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -102,10 +102,10 @@ However, there are some situations in which it is very useful and, despite what 
 
     <div class="page-header">
       <div class="container">
-        <h1>Using &#39;goto&#39;s in C</h1>
+        <h1>Rust review: Expressions, expressions, expressions</h1>
 
-        <p>August 7, 2005 &middot;
-        About 2 minutes</p>
+        <p>June 12, 2018 &middot;
+        About 3 minutes</p>
 
         
       </div>
@@ -115,7 +115,91 @@ However, there are some situations in which it is very useful and, despite what 
       <div class="row">
         <div class="col-md-9">
           
-          <article><p>It is common knowledge that usages of the <tt>goto</tt> statement are potentially dangerous in any structured programming language, as their abuse can quickly make your code unreadable. This is why this construction is seldom explained to people learning how to program and their use is strongly discouraged.</p><p>However, there are some situations in which it is very useful and, despite what some people might say, makes your code more readable. I had never used <tt>goto</tt>s before, but have experienced this recently while writing <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">tmpfs</a>.</p><p>One of the situations where a <tt>goto</tt> is useful is when you need break from within a set of nested loops. This is the most cited example of "correct" usage of this statement, but personally, I don't like it. FWIW some languages, such as <a href="http://www.perl.com/">Perl</a>, provide a nice <tt>break</tt> statement to do exactly this.</p><p>Another scenario where <tt>goto</tt> is useful is what I'm using it for now: to control all exit conditions from a function.  Instead of placing <tt>return</tt> statements all around inside them (after each error check, for example), I put a <tt>goto</tt> that jumps to the end of the function; that block is responsible for checking postconditions, doing any necessary cleanup and return the correct error code.</p>  <p>Here is an outline of such a function:</p><pre>int<br />foo(...)<br />{<br />    int error;<br /><br />    /* Check function preconditions here using assert(3). */<br /><br />    if (error condition one) {<br />        error = EFOO;<br />        goto out;<br />    }<br />    if (error condition two) {<br />        error = EBAR;<br />        goto out;<br />    }<br /><br />    /* Code executed when there are no errors. */<br /><br />    error = 0;<br />out:<br />    /* Release unneeded resources here. */<br /><br />    /* Check function postconditions here using assert(3). */<br />    return error;<br />}</pre><p>As you can see, if I wanted to avoid using <tt>goto</tt>s, I'd have to duplicate a lot of code inside each error condition check. Using this structure, all exit-related stuff is kept in just one place; specially postconditions (remember that they must be fulfilled whichever action the function did). And the function is far more readable (at least to my eyes).</p><p>If you have any other example of nice <tt>goto</tt> usages, or if you see another way to do what I described above, please share! ;-)</p><p><b><a href="http://julipedia.meroh.net/feeds/posts/default">Subscribe to the Julipedia</a> to stay tuned on posts similar to this one and <a href="http://julipedia.meroh.net/p/about.html">read more about this blog</a> to see what you may be missing!</b></p>
+            
+
+
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+
+<p><i>This article is part number
+
+  6 of the
+
+<a href="/series.html#Rust%20review"><b>
+Rust review</b> series</a>.</i></p>
+
+<hr/>
+
+          
+          <article><p>Rust resembles a functional language in many ways although it <a href="http://rust-lang.org/">does not claim</a> to be one. In fact, <strong>I have been thinking of Rust as a &ldquo;<em>pragmatic Haskell</em>&rdquo; or as a &ldquo;<em>well-balanced mixture between C++ and Haskell</em>&ldquo;</strong>.</p>
+
+<p>One of the ways the functional aspects show up is via expressions and how pretty much any construct in Rust can be treated as an expression. But before we begin, a little warning: the examples below are, by no means, idiomatic Rust—I just hope they are simple enough to illustrate what I want to show.</p>
+
+<p>First of all, functions <em>can</em> have return statements—but the preferred style is to avoid them. Instead, the preferred style is to let the evaluation of the last statement serve as the return value, and doing so is as simple as eliding the semicolon of that last statement. This felt weird and confusing at first, but in the end this syntax quirk is not a big deal and it actually feels quite natural. To show this, consider the following function:</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">get_color_with_default</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">default_color</span>: <span class="nc">Color</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Color</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">None</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">default_color</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>In a previous post titled &ldquo;<a href="/2013/07/readability-conditionals-as-functions.html">Readability: Conditionals as functions</a>&rdquo;, I argued that you should structure your function by thinking of it as a set of cases, each with an explicit return value. To apply that idea here, we expand the conditional to make all of its branches explicit:</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">get_color_with_default</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">default_color</span>: <span class="nc">Color</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Color</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">None</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">default_color</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>And once we have this, we can transform the code by dropping the <code>return</code> keywords and the trailing semicolons, thus allowing the conditional statement to yield the function&rsquo;s return value:</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">get_color_with_default</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">default_color</span>: <span class="nc">Color</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Color</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">None</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">default_color</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span></code></pre></div>
+<p>When written this way, the function becomes just an expression. You can imagine more elaborate versions of the above with nested conditionals and auxiliary variable definitions, but in the end, most functions can be expressed as just that: complex expressions that transform input values into output values.</p>
+
+<p>But let&rsquo;s take a closer look to the last example: note that we have <em>two</em> &ldquo;final&rdquo; statements, one per conditional branch. This leads me to the second place where we can tell that everything is really an expression, and this includes conditional statements, loops, and even inner blocks. All of these constructions can &ldquo;return&rdquo; a value which can be assigned to a variable. For example, we can take the conditional statement from the example above and turn it into the value assigned to a variable:</p>
+<div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">color</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">None</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">default_color</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
+</span><span class="w"></span><span class="p">};</span></code></pre></div>
+<p>This feature helps in writing clean code because it lets you abide by the principle of only assigning variables once even if their value is derived from a complex computation, which I previously presented in &ldquo;<a href="/2013/07/readability-don-modify-variables.html">Readability: Don&rsquo;t modify variables</a>&rdquo;. And this also helps in narrowing the scope of each variable definition to the smallest piece of code in which it is relevant.</p>
+
+<p>There are many more details of the language that make this a reality and which remind me of Haskell. The final one I&rsquo;d like to mention is the collection of functional types that plague the standard library, like <code>Option</code> and <code>Some</code>, and the many places where high-order functions such as maps and filters show up. These are all designed to ensure that the computation of a value can be expressed as a single expression, without intermediate statements and without having to worry about how exactly the computation is executed.</p>
+
+<p>Oh, and by the way: did you notice I referenced two of my previous Readability posts in the text above? One of the reasons I&rsquo;m enjoying Rust so far is precisely this: the principles of the language are closely aligned with my views on how readable code looks like, and this language kinda forces you to write code that way.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -701,13 +785,13 @@ However, there are some situations in which it is very useful and, despite what 
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2005/08/dedicated-machine-for-kernel-testing.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2018/06/rust-review-learning-curve.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2005/08/soc-status-report-4.html">Next post &raquo;</a></span>
+              <span></span>
             
           </div>
 
@@ -719,8 +803,8 @@ However, there are some situations in which it is very useful and, despite what 
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2005\/08\/using-gotos-in-c.html";
-            this.page.identifier = "2005-08-07-using-gotos-in-c";
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/06\/rust-review-expressions.html";
+            this.page.identifier = "2018-06-12-rust-review-expressions";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -735,14 +819,6 @@ However, there are some situations in which it is very useful and, despite what 
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2005/08/using-gotos-in-c.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
