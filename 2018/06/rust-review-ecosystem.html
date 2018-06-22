@@ -6,19 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Projects migrated to Git - Julio Merino</title>
-  <meta content="Projects migrated to Git - Julio Merino" property="og:title">
+  <title>Rust review: The ecosystem - Julio Merino</title>
+  <meta content="Rust review: The ecosystem - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="I finally took the plunge. Yesterday night, I migrated the Kyua and Lutok repositories from Subversion to Git. And this morning I migrated ATF from Monotone and custom hosting to Git and Google Code; oh, and this took way longer than expected.
-Migration of Kyua and Lutok
-Migrating these two projects was straightforward. After preparing a fresh local Git repository following the instructions posted yesterday, pushing to Google Code is a simple matter:">
+  <meta name="description" content="In this part of the review, I would like to focus on Rust&amp;rsquo;s ecosystem: in other words, how Rust plays with other parts of a functioning system and how Rust&amp;rsquo;s standard library vs. external libraries interact with each other. There are a lot of pieces to cover in these areas and they have left me with mixed feelings. Let&amp;rsquo;s look at some.
+The standard library The std library feels generally well-thought out and full of features.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/2012/02/projects-migrated-to-git.html" property="og:url">
+  <meta content="http://julio.meroh.net/2018/06/rust-review-ecosystem.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2012/02/projects-migrated-to-git.html">
+  <link rel="canonical" href="http://julio.meroh.net/2018/06/rust-review-ecosystem.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -103,10 +102,10 @@ Migrating these two projects was straightforward. After preparing a fresh local 
 
     <div class="page-header">
       <div class="container">
-        <h1>Projects migrated to Git</h1>
+        <h1>Rust review: The ecosystem</h1>
 
-        <p>February 26, 2012 &middot;
-        About 3 minutes</p>
+        <p>June 22, 2018 &middot;
+        About 4 minutes</p>
 
         
       </div>
@@ -116,7 +115,99 @@ Migrating these two projects was straightforward. After preparing a fresh local 
       <div class="row">
         <div class="col-md-9">
           
-          <article>I finally took the plunge. Yesterday night, I migrated the <a href="http://code.google.com/p/kyua/">Kyua</a> and <a href="http://code.google.com/p/lutok/">Lutok</a> repositories from Subversion to Git. And this morning I migrated ATF from Monotone and custom hosting to Git and Google Code; oh, and this took way longer than expected.<br /><br /><b>Migration of Kyua and Lutok</b><br /><br />Migrating these two projects was straightforward. After preparing a fresh local Git repository following the <a href="/2012/02/converting-subversion-repository-to-git.html">instructions posted yesterday</a>, pushing to Google Code is a simple matter:<br /><br /><pre>$ git remote add googlecode https://code.google.com/p/your-project<br />$ git push googlecode --all<br />$ git push googlecode --tags</pre><br />One of the nice things I discovered while doing this is that a Google Code project supports multiple repositories when the VCS system is set to Git or Mercurial. By default, the system creates the <tt>default</tt> and <tt>wiki</tt> repositories, but you can add more at will. This is understandable given that, in Subversion, you have the ability to check out individual directories of a project whereas you cannot do that in the other supported VCSs: you actually need different repositories to group different parts of the project.<br /><br />I performed the full migration under a Linux box so that I could avail of the most recent Git version along with a proven binary package. The migration went alright, but I encountered a little problem when attempting a fresh checkout from NetBSD: git under NetBSD will <i>not</i> work correctly against SSL servers because it lacks the necessary CA certificates. The solution is to install the <tt>security/mozilla-rootcerts</tt> package and follow the instructions printed during installation; why this does not happen automatically escapes my mind.<br /><br /><b>Migration of ATF</b><br /><br />I had been having doubts about migrating ATF itself, although if Kyua was moved to Git, it was a prerequisite to move ATF as well. &nbsp;Certainly I could convert the repository to Git, but where could I host it afterwards? &nbsp;Creating a new Google Code project just for this seemed too much of a hassle. My illumination came when I found out, as above, that Google Code supports an arbitrary amount of repositories in a particular project when converting it to Git.<br /><br />So, for ATF, I just ran <tt>mtn git_export</tt> with appropriate flags, created a new <tt>atf</tt> repository on the Kyua site, and pushed the contents there. Along the way, I also decided to kill the home-grown ATF web site and replace it by a <a href="http://code.google.com/p/kyua/wiki/ATF">single page</a> containing all the relevant information. At this point, ATF and Kyua are supposed to work together quite tightly (in the sense that ATF is just a "subcomponent" of Kyua), so coupling the two projects on the same site makes sense.<br /><br />Now, let's drink the kool aid.
+            
+
+
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+
+<p><i>This article is part number
+
+  9 of the
+
+<a href="/series.html#Rust%20review"><b>
+Rust review</b> series</a>.</i></p>
+
+<hr/>
+
+          
+          <article>
+
+<p>In this part of the review, I would like to focus on Rust&rsquo;s ecosystem: in other words, how Rust plays with other parts of a functioning system and how Rust&rsquo;s standard library vs. external libraries interact with each other. There are a lot of pieces to cover in these areas and they have left me with mixed feelings. Let&rsquo;s look at some.</p>
+
+<h1 id="the-standard-library">The standard library</h1>
+
+<p>The <a href="https://doc.rust-lang.org/std/"><code>std</code></a> library feels generally well-thought out and full of features.</p>
+
+<p>One specific thing I have found to be neat is the separation of generic concepts from platform-specific features. For example, the <a href="https://doc.rust-lang.org/std/fs/"><code>fs</code></a> module restricts itself to portable APIs that work on any operating system, but you can import platform-specific traits from other modules (like <a href="https://doc.rust-lang.org/std/os/unix/fs/trait.MetadataExt.html">Unix&rsquo;s variant of <code>MetadataExt</code></a>) which magically extends these APIs with those platform&rsquo;s features. I&rsquo;ve never observed such seamless integration between generic and platform-specific APIs anywhere else.</p>
+
+<p>On the other hand, it&rsquo;s sad that basic functionality such as options parsing and logging are not in the standard library. This makes it harder to write command-line tools, which arguably are one of the main things you&rsquo;d want to write with a systems-oriented language like Rust. And the reason I qualify this as sad is because, by pushing these responsibilities to external libraries, there is no &ldquo;standard&rdquo; way to implement these features which results in inconsistencies among tools.</p>
+
+<p>Finally, the standard library is also lacking in some of the most low-level parts. For example: there is no way to change file owners without resorting to an unsafe <code>libc</code> call or to <a href="https://github.com/rust-lang/rfcs/issues/1368">handle Unix signals</a> in a good manner. Again, these are things you&rsquo;d expect a systems-oriented language to offer from the get go, but Rust doesn&rsquo;t do this fully yet.</p>
+
+<p>But maybe I&rsquo;m being unfair. After all, <a href="https://blog.rust-lang.org/2015/05/15/Rust-1.0.html">Rust 1.0 was only published 3 years ago</a> and that release explicitly claimed that the <code>std</code> library wasn&rsquo;t &ldquo;done&rdquo;.</p>
+
+<h1 id="nightly-builds-and-unstable-apis">Nightly builds and unstable APIs</h1>
+
+<p>Another &ldquo;problematic&rdquo; area are nightly builds and unstable APIs. I haven&rsquo;t had a chance to experience the pain myself much, but I&rsquo;ve read many stories on how some tools may require specific nightly builds and some of their dependencies may require other specific versions, making it impossible to build the final product. I have the impression, though, that this is becoming less of a problem these days because people are aware of this issue, and because the standard library has quickly gained many of the missing features that required nightly builds.</p>
+
+<p>What I have had to deal with are unstable APIs. I&rsquo;ve been a bit surprised by how some functionality I was looking for, which seemed pretty essential, was marked &ldquo;nightly-only&rdquo;. The good thing is that these APIs are clearly highlighted in the documentation and the compiler does not allow you to use them unless you <a href="https://doc.rust-lang.org/unstable-book/index.html">explicitly declare their use</a>. In other words: to use unstable features, you must make a conscious choice to do so, and you must specify this in the code.</p>
+
+<h1 id="ide-integration">IDE integration</h1>
+
+<p>During my experimentation, I only played with the <a href="https://github.com/rust-lang-nursery/rls-vscode">Visual Studio Code integration</a> via the <a href="https://github.com/rust-lang-nursery/rls">Rust Language Server (RLS)</a>, which incidentally is the reference IDE implementation using the RLS.</p>
+
+<p>On the one hand, it&rsquo;s great that the editor &ldquo;just works&rdquo; on a Cargo-based project: no need to fiddle with the manual installation of tools nor any kind of configuration. On the other hand, I&rsquo;ve found the whole integration a bit unstable. In many occasions, code completion or code hints stop to work and the only way to recover is to restart the RLS.</p>
+
+<h1 id="open-source-world">Open-source world</h1>
+
+<p>To conclude, a few words on the &ldquo;open-source world&rdquo;, by which I try to refer to the ecosystem of tools that form the foundations of the Unix-like systems we use every day.</p>
+
+<p>Rust feels like a well-behaved player in this area. Rust seems to support the specifics of the underlying operating systems without claiming that they are &ldquo;wrong&rdquo;. One example is in what I explained above about the standard library and its ability to expose platform-specific features; the other is in <a href="https://doc.rust-lang.org/reference/linkage.html">supporting a variety of library styles</a>. As we shall see soon, this is a huge contrast to Go&rsquo;s approach.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -702,13 +793,13 @@ Migrating these two projects was straightforward. After preparing a fresh local 
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2012/02/converting-subversion-repository-to-git.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2018/06/rust-review-book.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2012/03/kyua-generates-its-first-public-html.html">Next post &raquo;</a></span>
+              <span></span>
             
           </div>
 
@@ -720,8 +811,8 @@ Migrating these two projects was straightforward. After preparing a fresh local 
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2012\/02\/projects-migrated-to-git.html";
-            this.page.identifier = "2012-02-26-projects-migrated-to-git";
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/06\/rust-review-ecosystem.html";
+            this.page.identifier = "2018-06-22-rust-review-ecosystem";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -736,14 +827,6 @@ Migrating these two projects was straightforward. After preparing a fresh local 
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2012/02/projects-migrated-to-git.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
