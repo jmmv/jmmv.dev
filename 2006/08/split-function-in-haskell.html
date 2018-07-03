@@ -10,7 +10,7 @@
   <meta content="A split function in Haskell - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="Splitting a string into parts based on a token delimiter is a very common operation in some problem domains. Languages such as Perl or Java provide a split function in their standard library to execute this algorithm, yet I&#39;m often surprised to see how many languages do not have one. As far as I can tell neither C&#43;&#43; nor Haskell have it so I have coded such a function in the past multiple times in both languages.">
+  <meta name="description" content="Splitting a string into parts based on a token delimiter is a very common operation in some problem domains. Languages such as Perl or Java provide a split function in their standard library to execute this algorithm, yet I&amp;rsquo;m often surprised to see how many languages do not have one. As far as I can tell neither C&#43;&#43; nor Haskell have it so I have coded such a function in the past multiple times in both languages.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
@@ -114,7 +114,61 @@
       <div class="row">
         <div class="col-md-9">
           
-          <article>Splitting a string into parts based on a token delimiter is a very common operation in some problem domains.  Languages such as Perl or Java provide a <tt>split</tt> function in their standard library to execute this algorithm, yet I'm often surprised to see how many languages do not have one.  As far as I can tell neither C++ nor Haskell have it so I have coded such a function in the past multiple times in both languages.  (This is not exactly true: Haskell has the <tt>words</tt> function which splits a string by whitespace characters.  Nevertheless I didn't know this when I wrote my custom implementation.)<br /><br />When I implemented a custom <tt>split</tt> function in Haskell I was really amazed to see how easy and clean the resulting code was.  I'm sure there is some better and even cleaner way to write it because I'm still a Haskell newbie!  Here is it:<pre>split :: String -> Char -> [String]<br />split [] delim = [""]<br />split (c:cs) delim<br />   | c == delim = "" : rest<br />   | otherwise = (c : head rest) : tail rest<br />   where<br />       rest = split cs delim</pre>The above code starts by declaring the function's type; this is <i>optional</i> because Haskell's type system is able to <i>automatically deduce it</i>.  It then uses pattern matching to specify the algorithm's base and recursive cases.  At last, the recursive case is defined by parts, just as you do in mathematics.  Oh, and why recursivity?  Because iteration does not exist in functional programming in the well-known sense of imperative languages.  Also note the lack of variables (except for the input ones) and that everything is an evaluable <i>expression</i>.<br /><br />Let's now compare the above code with two implementations in C++.  A first approach to the problem following common imperative programming thinking results in an iterative algorithm:<pre>std::deque&lt; std::string &gt;<br />split_iterative(const std::string& str, char delim)<br />{<br />   std::deque&lt; std::string &gt; parts;<br /><br />   std::string word;<br />   for (std::string::const_iterator iter = str.begin();<br />        iter != str.end(); iter++) {<br />       if (*iter == delim) {<br />           parts.push_back(word);<br />           word.clear();<br />       } else<br />           word += *iter;<br />   }<br />   parts.push_back(word);<br /><br />   return parts;<br />}</pre>This is certainly uglier and much more difficult to prove right; iteration is a complex concept in that sense.  In this code we have variables that act as acumulators, temporary objects, commands, etc.  Be glad that I used C++ and not C to take advantage of STL containers.<br /><br />OK, to be fair the code should be implemented in a recursive way to be really comparable to the Haskell sample function.  Let's attempt it:<pre>std::deque&lt; std::string &gt;<br />split_recursive(const std::string& str, char delim)<br />{<br />   std::deque&lt; std::string &gt; parts;<br /><br />   if (!str.empty()) {<br />       std::string str2 = str;<br />       parts = split_recursive(str2.erase(0, 1), delim);<br /><br />       if (str[0] == delim)<br />           parts.push_front("");<br />       else<br />           parts[0] = str[0] + parts[0];<br />   } else<br />       parts.push_front("");<br /><br />   return parts;<br />}</pre>This <tt>split_recursive</tt> function follows the same algorithm as the <tt>split</tt> written in Haskell.  I find that it is still harder to read and more delicate (I had some segmentation fault s until I got it right).<br /><br />Of course Haskell is not appropriate for everything (which is true for <i>every</i> language out there).  I have yet to write a big and useful program in Haskell to really see its power and to be able to relly compare it to other languages.  All I can do at the moment is to compare trivial stuff as the above.
+          <article><p>Splitting a string into parts based on a token delimiter is a very common operation in some problem domains. Languages such as Perl or Java provide a <code>split</code> function in their standard library to execute this algorithm, yet I&rsquo;m often surprised to see how many languages do not have one. As far as I can tell neither C++ nor Haskell have it so I have coded such a function in the past multiple times in both languages. (This is not exactly true: Haskell has the <code>words</code> function which splits a string by whitespace characters. Nevertheless I didn&rsquo;t know this when I wrote my custom implementation.)</p>
+
+<p>When I implemented a custom <code>split</code> function in Haskell I was really amazed to see how easy and clean the resulting code was. I&rsquo;m sure there is some better and even cleaner way to write it because I&rsquo;m still a Haskell newbie! Here is it:</p>
+<div class="highlight"><pre class="chroma"><code class="language-haskell" data-lang="haskell"><span class="nf">split</span> <span class="ow">::</span> <span class="kt">String</span> <span class="ow">-&gt;</span> <span class="kt">Char</span> <span class="ow">-&gt;</span> <span class="p">[</span><span class="kt">String</span><span class="p">]</span>
+<span class="nf">split</span> <span class="kt">[]</span> <span class="nf">delim</span> <span class="ow">=</span> <span class="p">[</span><span class="s">&#34;&#34;</span><span class="p">]</span>
+<span class="nf">split</span> <span class="p">(</span><span class="nf">c</span><span class="kt">:</span><span class="nf">cs</span><span class="p">)</span> <span class="nf">delim</span>
+    <span class="o">|</span> <span class="nf">c</span> <span class="o">==</span> <span class="nf">delim</span> <span class="ow">=</span> <span class="s">&#34;&#34;</span> <span class="kt">:</span> <span class="nf">rest</span>
+    <span class="o">|</span> <span class="nf">otherwise</span> <span class="ow">=</span> <span class="p">(</span><span class="nf">c</span> <span class="kt">:</span> <span class="nf">head</span> <span class="nf">rest</span><span class="p">)</span> <span class="kt">:</span> <span class="nf">tail</span> <span class="nf">rest</span>
+    <span class="kr">where</span>
+        <span class="nf">rest</span> <span class="ow">=</span> <span class="nf">split</span> <span class="nf">cs</span> <span class="nf">delim</span></code></pre></div>
+<p>The above code starts by declaring the function&rsquo;s type; this is <em>optional</em> because Haskell&rsquo;s type system is able to <em>automatically deduce it</em>. It then uses pattern matching to specify the algorithm&rsquo;s base and recursive cases. At last, the recursive case is defined by parts, just as you do in mathematics. Oh, and why recursivity? Because iteration does not exist in functional programming in the well-known sense of imperative languages. Also note the lack of variables (except for the input ones) and that everything is an evaluable <em>expression</em>.</p>
+
+<p>Let&rsquo;s now compare the above code with two implementations in C++. A first approach to the problem following common imperative programming thinking results in an iterative algorithm:</p>
+<div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="n">std</span><span class="o">::</span><span class="n">deque</span><span class="o">&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="o">&gt;</span>
+<span class="n">split_iterative</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">str</span><span class="p">,</span> <span class="kt">char</span> <span class="n">delim</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">std</span><span class="o">::</span><span class="n">deque</span><span class="o">&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="o">&gt;</span> <span class="n">parts</span><span class="p">;</span>
+
+    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">word</span><span class="p">;</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">::</span><span class="n">const_iterator</span> <span class="n">iter</span> <span class="o">=</span> <span class="n">str</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span>
+         <span class="n">iter</span> <span class="o">!=</span> <span class="n">str</span><span class="p">.</span><span class="n">end</span><span class="p">();</span> <span class="n">iter</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">*</span><span class="n">iter</span> <span class="o">==</span> <span class="n">delim</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">parts</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">word</span><span class="p">);</span>
+            <span class="n">word</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
+        <span class="p">}</span> <span class="k">else</span>
+            <span class="n">word</span> <span class="o">+=</span> <span class="o">*</span><span class="n">iter</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="n">parts</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">word</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="n">parts</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
+<p>This is certainly uglier and much more difficult to prove right; iteration is a complex concept in that sense. In this code we have variables that act as acumulators, temporary objects, commands, etc. Be glad that I used C++ and not C to take advantage of STL containers.</p>
+
+<p>OK, to be fair the code should be implemented in a recursive way to be really comparable to the Haskell sample function. Let&rsquo;s attempt it:</p>
+<div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="n">std</span><span class="o">::</span><span class="n">deque</span><span class="o">&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="o">&gt;</span>
+<span class="n">split_recursive</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">str</span><span class="p">,</span> <span class="kt">char</span> <span class="n">delim</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">std</span><span class="o">::</span><span class="n">deque</span><span class="o">&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="o">&gt;</span> <span class="n">parts</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">str</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+        <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">str2</span> <span class="o">=</span> <span class="n">str</span><span class="p">;</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="n">split_recursive</span><span class="p">(</span><span class="n">str2</span><span class="p">.</span><span class="n">erase</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">delim</span><span class="p">);</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">str</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">delim</span><span class="p">)</span>
+            <span class="n">parts</span><span class="p">.</span><span class="n">push_front</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;&#34;</span><span class="p">);</span>
+        <span class="k">else</span>
+            <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">str</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+    <span class="p">}</span> <span class="k">else</span>
+        <span class="n">parts</span><span class="p">.</span><span class="n">push_front</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;&#34;</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="n">parts</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
+<p>This <code>split_recursive</code> function follows the same algorithm as the <code>split</code> written in Haskell. I find that it is still harder to read and more delicate (I had some segmentation fault s until I got it right).</p>
+
+<p>Of course Haskell is not appropriate for everything (which is true for <em>every</em> language out there). I have yet to write a big and useful program in Haskell to really see its power and to be able to relly compare it to other languages. All I can do at the moment is to compare trivial stuff as the above.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -180,11 +234,11 @@
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (22)
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (24)
         <ul id="archive-year-2018" class="collapse">
           
             
-            <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+            <li><a href="/archive.html#2018-06">June 2018</a> (9)</li>
           
             
             <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>

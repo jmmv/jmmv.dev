@@ -143,22 +143,18 @@ The project What I set out to build is a read-only caching file system to try to
 <ul>
 <li><p><strong>Enforced coding style:</strong> You may or may not like Go&rsquo;s coding style (I personally would change a few things), but the fact that it is chosen for you and that <code>gofmt</code> exists beats any personal preferences you may have. No more thinking about tabs vs. spaces; no more thinking about brace placement; no more thinking about the look of your code. <em>It. Just. Does. Not. Matter.</em> Focus on your code&rsquo;s logic and let the machine format it in a consistent manner across the whole Go ecosystem.</p></li>
 
-<li><p><strong>Explicit error handling:</strong> Yes, the <code>if err != nil { return err }</code> pattern gets old very quickly, but having to explicitly handle errors shows you how hard it is to write robust code.</p></li>
-</ul>
+<li><p><strong>Explicit error handling:</strong> Yes, the <code>if err != nil { return err }</code> pattern gets old very quickly, but having to explicitly handle errors shows you how hard it is to write robust code.</p>
 
 <p>You&rsquo;d say that C is similar in this regard, but not really. There are two key differences: the first is that Go functions can return more than one result, which makes it more difficult to ignore the error code if you want to use the actual result; and the second is the <code>defer</code> keyword, which helps avoid leaks in error paths. I personally prefer C++&rsquo;s ability to implement <a href="https://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization">the RAII pattern</a>, but <code>defer</code> is a good compromise.</p>
 
-<p>Do I miss exceptions? Not really. While exceptions let you keep your main code path clean of error handling, they also relegate error handling to a secondary place. This is OKish if the language has provisions to ensure that exceptions are handled at some point like Java&rsquo;s <code>throws</code> definition, but that&rsquo;s not how the majority of languages work. Just think of how easy is for exceptions leak all the way through the program&rsquo;s entry point in C++ or Python.</p>
+<p>Do I miss exceptions? Not really. While exceptions let you keep your main code path clean of error handling, they also relegate error handling to a secondary place. This is OKish if the language has provisions to ensure that exceptions are handled at some point like Java&rsquo;s <code>throws</code> definition, but that&rsquo;s not how the majority of languages work. Just think of how easy is for exceptions leak all the way through the program&rsquo;s entry point in C++ or Python.</p></li>
 
-<ul>
 <li><p><strong>Strong typing, even for native types:</strong> The fact that the equivalent of C&rsquo;s <code>typedef</code> generates types that can&rsquo;t be implicitly mixed, or the fact that numeric types are not automatically promoted to other types, is a good way to prevent subtle bugs. Having to explicitly convert among types forces you to think about the consequences of doing so: Integer overflow? Check. Sign issues? Check. Precision issues? Check.</p></li>
 
-<li><p><strong>Builtin profiling with pprof:</strong> The <a href="http://blog.golang.org/profiling-go-programs">pprof profiling tool</a> was invaluable to diagnose performance and memory consumption deficiencies in my caching file system <em>and</em> the libraries I used. What&rsquo;s best is that pprof was also incredibly easy to plug into my program.</p></li>
-</ul>
+<li><p><strong>Builtin profiling with pprof:</strong> The <a href="http://blog.golang.org/profiling-go-programs">pprof profiling tool</a> was invaluable to diagnose performance and memory consumption deficiencies in my caching file system <em>and</em> the libraries I used. What&rsquo;s best is that pprof was also incredibly easy to plug into my program.</p>
 
-<p>Honestly, I&rsquo;m in awe to see that this tooling is open-source because I&rsquo;ve gotten very accustomed to this particular way of debugging at Google.</p>
+<p>Honestly, I&rsquo;m in awe to see that this tooling is open-source because I&rsquo;ve gotten very accustomed to this particular way of debugging at Google.</p></li>
 
-<ul>
 <li><p><strong>The standard library:</strong> While Go by itself is a decent language, it becomes excellent because of its <a href="https://golang.org/pkg/">extensive standard library</a>. The existence of tooling to implement pretty much anything you want wins over any deficiencies you may think the language has. The same applies to Java, by the way.</p></li>
 
 <li><p><strong>Simple package management:</strong> Getting started with a piece of code is easy, and pulling in additional dependencies is <em>trivial</em>. I actually do not like the underpinnings of this &ldquo;modern&rdquo; trend of language-specific package management systems, but I must admit that it has been a pleasure to just add new imports, call <code>go get</code>, and have everything up and running in a matter of seconds.</p></li>
@@ -171,36 +167,30 @@ The project What I set out to build is a read-only caching file system to try to
 <ul>
 <li><p><strong><code>GOPATH</code>:</strong> Sorry but having to modify the environment to get a program to run in the default case is ridiculous in this day and age: things should &ldquo;just work&rdquo; and Go is different. I have mitigated my concerns about this by writing a <code>Makefile</code> that sets things up automatically so I do not have to worry about customizing my environment on a project basis.</p></li>
 
-<li><p><strong>Package management:</strong> As we saw in the good parts, Go&rsquo;s package management gets the job done but its views on the world are too simplistic. On the one hand, the development environment assumes that you will always want to use the <code>HEAD</code> versions of your dependencies; and on the other hand, the default is to merge the dependencies with your personal code in the same workspace.</p></li>
+<li><p><strong>Package management:</strong> As we saw in the good parts, Go&rsquo;s package management gets the job done but its views on the world are too simplistic. On the one hand, the development environment assumes that you will always want to use the <code>HEAD</code> versions of your dependencies; and on the other hand, the default is to merge the dependencies with your personal code in the same workspace.</p>
+
+<p>I&rsquo;ve managed to work around the latter by splitting my dependencies in a separate directory and using <code>GOPATH</code> to find them. The excellent article <a href="https://medium.com/@sdboyer/so-you-want-to-write-a-package-manager-4ae9c17d9527#.e666sl8yr">So you want to write a packaging system</a> is a great resource on this topic, and as you read through it, you will realize that it&rsquo;s geared towards revamping Go&rsquo;s package manager.</p></li>
+
+<li><p><strong>The simplistic <code>log</code> module:</strong> It is good that the standard library provides a logging module, but it seems way too simple for anything other than trivial logging. Fortunately, the external <a href="https://github.com/golang/glog"><code>glog</code></a> module provides increased functionality such as level-based logging and persistent logging. Therefore, you may say that being able to choose between something simple and something more complex is good, right?!</p>
+
+<p>Unfortunately, that&rsquo;s not the case and this is the reason I pinpoint this particular module from the standard library. The real benefits of using <code>glog</code> come when the <em>whole stack</em> uses the same logging infrastructure and principles. Because <code>glog</code> is not the standard module, some Go packages will use it and others will not. As a result, you do not get the full benefits of using <code>glog</code> in your project because most libraries you depend on will not do the same.</p></li>
+
+<li><p><strong>Mutability by default (aka no <code>const</code> keyword):</strong> Before you say &ldquo;hey, <code>const</code> is currently not present, but if we find the need for it later on, we&rsquo;ll add it!&ldquo;, that&rsquo;s&hellip; not great. The problem with adding a <code>const</code> keyword post-facto is that this is the wrong keyword to add: <em>state should be immutable by default</em>, and what the language should have is a <code>mutable</code> keyword to clearly mark those variables that hold multiple values throughout their lifetime.</p>
+
+<p>The reason I point out this specific language feature is because I&rsquo;ve mentally gotten very accustomed to separating constant vs. mutable variables in code. Reading code that adheres to this strict separation is easy to follow: you can quickly map the immutable state in your mind and then focus on the mutable pieces of the code to understand what&rsquo;s happening. Without these clues, you need extra effort.</p></li>
 </ul>
-
-<p>I&rsquo;ve managed to work around the latter by splitting my dependencies in a separate directory and using <code>GOPATH</code> to find them. The excellent article <a href="https://medium.com/@sdboyer/so-you-want-to-write-a-package-manager-4ae9c17d9527#.e666sl8yr">So you want to write a packaging system</a> is a great resource on this topic, and as you read through it, you will realize that it&rsquo;s geared towards revamping Go&rsquo;s package manager.</p>
-
-<ul>
-<li><strong>The simplistic <code>log</code> module:</strong> It is good that the standard library provides a logging module, but it seems way too simple for anything other than trivial logging. Fortunately, the external <a href="https://github.com/golang/glog"><code>glog</code></a> module provides increased functionality such as level-based logging and persistent logging. Therefore, you may say that being able to choose between something simple and something more complex is good, right?!</li>
-</ul>
-
-<p>Unfortunately, that&rsquo;s not the case and this is the reason I pinpoint this particular module from the standard library. The real benefits of using <code>glog</code> come when the <em>whole stack</em> uses the same logging infrastructure and principles. Because <code>glog</code> is not the standard module, some Go packages will use it and others will not. As a result, you do not get the full benefits of using <code>glog</code> in your project because most libraries you depend on will not do the same.</p>
-
-<ul>
-<li><strong>Mutability by default (aka no <code>const</code> keyword):</strong> Before you say &ldquo;hey, <code>const</code> is currently not present, but if we find the need for it later on, we&rsquo;ll add it!&ldquo;, that&rsquo;s&hellip; not great. The problem with adding a <code>const</code> keyword post-facto is that this is the wrong keyword to add: <em>state should be immutable by default</em>, and what the language should have is a <code>mutable</code> keyword to clearly mark those variables that hold multiple values throughout their lifetime.</li>
-</ul>
-
-<p>The reason I point out this specific language feature is because I&rsquo;ve mentally gotten very accustomed to separating constant vs. mutable variables in code. Reading code that adheres to this strict separation is easy to follow: you can quickly map the immutable state in your mind and then focus on the mutable pieces of the code to understand what&rsquo;s happening. Without these clues, you need extra effort.</p>
 
 <h2 id="the-ugly">The ugly</h2>
 
 <ul>
-<li><strong>Short identifiers:</strong> A lot of Go code, including the snippets in the documentation, is plagued by extremely short identifiers. Those are used as local variables, function arguments, method receivers, and even structure members. Combined with the heavy use of interfaces, it is hard to read the code: What&rsquo;s a <code>c</code>? And an <code>r</code>? And an <code>s.wg</code>? Yes, there is bad code all around, but when the official language documentation seems to recommend this approach, you can expect that others will follow the apparent recommendation in all cases.</li>
+<li><p><strong>Short identifiers:</strong> A lot of Go code, including the snippets in the documentation, is plagued by extremely short identifiers. Those are used as local variables, function arguments, method receivers, and even structure members. Combined with the heavy use of interfaces, it is hard to read the code: What&rsquo;s a <code>c</code>? And an <code>r</code>? And an <code>s.wg</code>? Yes, there is bad code all around, but when the official language documentation seems to recommend this approach, you can expect that others will follow the apparent recommendation in all cases.</p>
+
+<p>Remember that <em>code is written to be read many more times than it is written</em>. Fully spelled-out identifiers help significantly.</p></li>
+
+<li><p><strong>Maximum line length:</strong> Even though Go has a predefined coding style, there is no pre-specified maximum line length. While it is great to want to abolish a custom that remains from the punch-card days, keeping code narrow has its benefits: think of two or three side-by-side editors in a small laptop screen.</p>
+
+<p>This would be a non-issue if editors were able to wrap long code lines in a way that made sense&mdash;just like word processors do with text&mdash;but current editors are terrible at this. So, personally, I will stick to the 80 character limit; I have given 100 a try per more modern recommendations&hellip; but when I opened the code in my laptop and couldn&rsquo;t see two files at once without wrapping, I knew I had to go back to 80.</p></li>
 </ul>
-
-<p>Remember that <em>code is written to be read many more times than it is written</em>. Fully spelled-out identifiers help significantly.</p>
-
-<ul>
-<li><strong>Maximum line length:</strong> Even though Go has a predefined coding style, there is no pre-specified maximum line length. While it is great to want to abolish a custom that remains from the punch-card days, keeping code narrow has its benefits: think of two or three side-by-side editors in a small laptop screen.</li>
-</ul>
-
-<p>This would be a non-issue if editors were able to wrap long code lines in a way that made sense&mdash;just like word processors do with text&mdash;but current editors are terrible at this. So, personally, I will stick to the 80 character limit; I have given 100 a try per more modern recommendations&hellip; but when I opened the code in my laptop and couldn&rsquo;t see two files at once without wrapping, I knew I had to go back to 80.</p>
 
 <h1 id="a-note-on-visual-studio-code">A note on Visual Studio Code</h1>
 
@@ -280,11 +270,11 @@ The project What I set out to build is a read-only caching file system to try to
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (22)
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (24)
         <ul id="archive-year-2018" class="collapse">
           
             
-            <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+            <li><a href="/archive.html#2018-06">June 2018</a> (9)</li>
           
             
             <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
