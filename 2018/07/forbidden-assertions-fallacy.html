@@ -6,17 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Piled Higher and Deeper - Julio Merino</title>
-  <meta content="Piled Higher and Deeper - Julio Merino" property="og:title">
+  <title>The fallacy of forbidding assertions - Julio Merino</title>
+  <meta content="The fallacy of forbidding assertions - Julio Merino" property="og:title">
 
   
-  <meta name="description" content="I&#39;ve been told today about the Piled Higher and Deeper website, also known as phdcomics (easier to remember). And so far I&#39;m hooked. I love this comic strip! May it be because I&#39;m already involved in the research area due to my PFC and I know what they are talking about? Possibly. And it also illustrates what I can &#34;expect&#34; if I finally enroll in a Ph.D. course. ">
+  <meta name="description" content="There are two ways to handle abnormal conditions in a program: errors and assertions.
+Errors are a controlled mechanism by which the program propagates details about a faulty condition up the call chain—be it with explicit error return statements or with exceptions. Errors must be used to validate all conditions that might be possible but aren&amp;rsquo;t valid given the context. Examples include: sanitizing any kind of input (as provided by the user or incoming from the network), and handling error codes from system calls or libraries.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.36.1" />
 
-  <meta content="http://julio.meroh.net/2007/05/piled-higher-and-deeper.html" property="og:url">
+  <meta content="http://julio.meroh.net/2018/07/forbidden-assertions-fallacy.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2007/05/piled-higher-and-deeper.html">
+  <link rel="canonical" href="http://julio.meroh.net/2018/07/forbidden-assertions-fallacy.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -101,10 +102,10 @@
 
     <div class="page-header">
       <div class="container">
-        <h1>Piled Higher and Deeper</h1>
+        <h1>The fallacy of forbidding assertions</h1>
 
-        <p>May 24, 2007 &middot;
-        About 1 minutes</p>
+        <p>July 24, 2018 &middot;
+        About 5 minutes</p>
 
         
       </div>
@@ -114,7 +115,39 @@
       <div class="row">
         <div class="col-md-9">
           
-          <article>I've been told today about the <a href="http://www.phdcomics.com/">Piled Higher and Deeper</a> website, also known as phdcomics (easier to remember).  And so far I'm hooked.  I love this comic strip!  May it be because I'm already involved in the research area due to my PFC and I know what they are talking about?  Possibly.  And it also illustrates what I can "expect" if I finally enroll in a Ph.D. course.
+          <article>
+
+<p>There are two ways to handle abnormal conditions in a program: errors and assertions.</p>
+
+<p><strong>Errors are a controlled mechanism by which the program propagates details about a <em>faulty condition</em> up the call chain</strong>—be it with explicit error return statements or with exceptions. Errors must be used to validate all <em>conditions that might be possible but aren&rsquo;t valid</em> given the context. Examples include: sanitizing any kind of input (as provided by the user or incoming from the network), and handling error codes from system calls or libraries.</p>
+
+<p><strong>Assertions are a fatal mechanism by which the program crashes immediately when it encounters an <em>invalid state</em></strong>. Assertions are appropriate to <em>validate program logic</em>: in other words, to specify conditions about the state <em>you expect</em> the program will have at a given point. If the state is not what you thought it ought to be, there is a bug: either the assertion is wrong because your mental model about the program is incorrect, or the program&rsquo;s logic is actually bogus. The program must terminate in either case: continuing with an invalid state can cause more serious problems down the road like data corruption or, worse, <a href="https://docs.google.com/presentation/d/17bKudNDduvN-7hWv7S84MiHUj2AnOPNbwjTM8euDC8w/edit">a privilege escalation</a>.</p>
+
+<p>Assertions are pretty tragic, aren&rsquo;t they? They kill the program when they trigger. And they are also easy to misuse, for writing an assertion does not require changing any APIs in regards to error codes. When working on existing code, one can misplace an assertion in a code path where an actual error check should be used. The reasons are varied: expedited &ldquo;totally-safe one-line fixes&rdquo;, programmer inexperience, honest mistakes when assuming a piece of data is sane when it isn&rsquo;t, etc.</p>
+
+<p>To illustrate the problem assertions can cause, let&rsquo;s talk about a specific <strong>query of death (QOD)</strong> problem.</p>
+
+<h1 id="the-disaster">The disaster</h1>
+
+<p>Let&rsquo;s consider a distributed system composed of a single frontend controller and a set of backend servers, each responsible for a different part of a dataset. The frontend server receives user requests and redirects them to the backends. One of such requests is a textual search query that requires the frontend to contact <em>all</em> backends for processing.</p>
+
+<p>Let&rsquo;s also consider that the programmer has made a little mistake in the <em>backend</em>&rsquo;s query serving path and has used an assertion to validate the contents of the request from the frontend. After all, we trust the frontend, so the contents of the request must be valid, right? But&hellip; the request contains the original query that the user provided so the assertion triggers when this query is malformed.</p>
+
+<p>Now, what happens when a user sends an invalid query, be it malicious or not? The frontend happily redirects the query to all the backends and all the backends trip over the assertion&hellip; crashing in unison. Oops. We have a correlated failure against which no replication would have helped. What&rsquo;s worse: if you have sufficiently smart traffic routing, your routing system might determine that the cluster has died and decide to redirect the query to a different cluster&hellip; triggering the same failure on a new set of servers. Rinse and repeat. Our innocent assertion has caused a global cascading failure, taking all of our service down.</p>
+
+<p>Alright, that was bad. You go ahead and write a <a href="https://landing.google.com/sre/book/chapters/postmortem-culture.html">blameless postmortem</a> in which you identify the assertion as the root cause. As a <em>corrective measure</em>, you fix that piece of code to handle the condition with a graceful error. And as a <em>preventive measure</em>, you reassess the validity of all assertions in your codebase and then <strong>decide to forbid assertions in the serving path, project-wide</strong>.</p>
+
+<h1 id="the-fallacy">The fallacy</h1>
+
+<p>Wait, what? Blindly forbidding assertions is not going to fix the problem. This policy change will prevent a possible <em>cause</em> but will not make the service more reliable. After all, this new policy only eliminates a certain class of bugs. What if, next time, the invalid query triggers a correlated crash because of a null-pointer dereference? Or what if handling the query tickles a kernel bug? Or what if you trip over a processor bug? Or what if, instead of crashing, you cause a deadlock and your backends stay alive but stop responding to just a certain kind of queries?</p>
+
+<p>There is no way you can eliminate all classes of bugs—and if there is, nobody has discovered it yet. So what do you do? You rëengineer the system so that the possibility of a correlated failure doesn&rsquo;t exist. <strong>An idea</strong>: instead of sending the query to all servers at once, send the query first to a single backend server and, if it don&rsquo;t reply within a short period of time, abort the query because it&rsquo;s risky.</p>
+
+<h1 id="a-word-about-go">A word about Go</h1>
+
+<p>And that, I believe, is the rationale behind <a href="https://golang.org/doc/faq#assertions">Go&rsquo;s ban on assertions</a>, which took me on a little rant in my <a href="/2018/07/rust-vs-go.html#code-sanity">Rust vs. Go</a> comparison. After all, Go originated at Google and we have had our fair share of query-of-death problems. In fact, the postmortem story described above is based on, at least, a couple of real-life situations I&rsquo;ve previously encountered—but I cannot remember which projects these were about.</p>
+
+<p>I suspect the Go language designers, in their pragmatism, wanted to eradicate this kind of issue&hellip; but as we have seen&hellip; that&rsquo;s not of much help: you can still crash a Go program due to bad pointer references and you can deadlock it, so query of deaths are still perfectly possible in a Go service. And mind you, they could be possible as well in a Rust service because bugs can be made in any language. So, design your <em>systems</em> for reliability.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -703,13 +736,13 @@
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2007/05/monotones-help-rewrite-merged.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2018/07/rust-vs-go.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2007/05/keeping-pkgsrc-packages-up-to-date.html">Next post &raquo;</a></span>
+              <span></span>
             
           </div>
 
@@ -721,8 +754,8 @@
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2007\/05\/piled-higher-and-deeper.html";
-            this.page.identifier = "2007-05-24-piled-higher-and-deeper";
+            this.page.url = "http:\/\/julio.meroh.net\/2018\/07\/forbidden-assertions-fallacy.html";
+            this.page.identifier = "2018-07-24-forbidden-assertions-fallacy";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -737,14 +770,6 @@
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2007/05/piled-higher-and-deeper.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
