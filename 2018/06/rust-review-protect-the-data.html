@@ -190,6 +190,8 @@ Rust review</b> series</a>.</i></p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="k">template</span><span class="o">&lt;</span> <span class="k">typename</span> <span class="n">T</span> <span class="o">&gt;</span>
 <span class="k">class</span> <span class="nc">Lock</span> <span class="p">{</span>
     <span class="n">T</span><span class="o">&amp;</span> <span class="n">_data</span><span class="p">;</span>
+
+    <span class="k">friend</span> <span class="k">class</span> <span class="nc">Mutex</span><span class="p">;</span>
     <span class="n">Lock</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;</span><span class="p">);</span>  <span class="c1">// Grabs non-owning reference to the data.
 </span><span class="c1"></span>
   <span class="k">public</span><span class="o">:</span>
@@ -206,7 +208,7 @@ Rust review</b> series</a>.</i></p>
     <span class="k">explicit</span> <span class="n">Mutex</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span><span class="p">);</span>  <span class="c1">// Grabs ownership of the data.
 </span><span class="c1"></span>    <span class="n">Lock</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">lock</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>  <span class="c1">// Acquires mutex.
 </span><span class="c1"></span><span class="p">};</span></code></pre></div>
-<p>Looks legit, right?  We can only construct a <code>Mutex</code> by moving an arbitrary object into it, and from there on, the only way to get back to the object is to first call <code>lock()</code> on the mutex. Doing so returns us a <code>Lock</code> RAII construct that automatically releases the lock on destruction. And with that done, the only way to reach the data is by invoking <code>get()</code> on a valid <code>Lock</code>, which we knows holds the mutex.</p>
+<p>Looks legit, right?  We can only construct a <code>Mutex</code> by moving an arbitrary object into it, and from there on, the only way to get back to the object is to first call <code>lock()</code> on the mutex. Doing so returns us a <code>Lock</code> RAII construct that automatically releases the lock on destruction. And with that done, the only way to reach the data is by invoking <code>get()</code> on a valid <code>Lock</code>, which we know holds the mutex.</p>
 
 <p>But, ha ha, it is trivial to escape all these nice intentions:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="n">Mutex</span><span class="o">&lt;</span><span class="n">SuperDuperType</span><span class="o">&gt;</span> <span class="n">mutex</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">data</span><span class="p">));</span>
