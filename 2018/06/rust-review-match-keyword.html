@@ -15,7 +15,7 @@ As you write and read Rust, you will notice that this keyword is used everywhere
 For example:
 matchnode.get_parent(){// node is an Option&amp;lt;Something&amp;gt;. Some(parent)=&amp;gt;{// Do something with &amp;#34;parent&amp;#34;, which we know points to a node.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.36.1" />
+  <meta name="generator" content="Hugo 0.53" />
 
   <meta content="http://julio.meroh.net/2018/06/rust-review-match-keyword.html" property="og:url">
 
@@ -194,7 +194,8 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">    </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">        </span><span class="c1">// There is no parent so do something else.
 </span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span></code></pre></div>
 <p>In the snippet above, we have a <code>match</code> statement with two <em>arms</em>. One key detail to observe is how the <code>parent</code> variable, which was used as a pattern to peek inside the <code>Some</code> value, is only available in the first arm. The <code>None</code> arm has no access to the <code>parent</code> variable, which is obvious because there is no parent in this case.</p>
 
 <p>OK so&hellip; I just said statement. But as we saw in <a href="/2018/06/rust-review-expressions.html">the previous post</a>, everything in Rust is an expression—and you guessed right, <code>match</code> is no exception. A <code>match</code> can be assigned to a variable:</p>
@@ -202,7 +203,8 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">    </span><span class="nb">Some</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">parent</span><span class="p">,</span><span class="w">
 </span><span class="w">    </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="s">&#34;ROOT&#34;</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">};</span><span class="w">
-</span><span class="w"></span><span class="o">//</span><span class="w"> </span><span class="n">Do</span><span class="w"> </span><span class="n">something</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="s">&#34;parent&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">which</span><span class="w"> </span><span class="n">we</span><span class="w"> </span><span class="n">know</span><span class="w"> </span><span class="n">points</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">node</span><span class="p">.</span></code></pre></div>
+</span><span class="w"></span><span class="c1">// Do something with &#34;parent&#34;, which we know points to a node.
+</span><span class="c1"></span></code></pre></div>
 <p>The most attractive feature of <code>match</code>, however, and the primary reason I am writing about it in its own post, is that <strong>the <em>arms</em> are evaluated in order and <em>must</em> be exhaustive</strong>: any expression fed to <code>match</code> must have a case where it&rsquo;s accepted. For example, this results in a build <em>error</em>:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">enum</span> <span class="nc">Shape</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Circle</span><span class="p">,</span><span class="w"> </span><span class="n">Triangle</span><span class="p">,</span><span class="w"> </span><span class="n">Square</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w">
@@ -212,7 +214,8 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">    </span><span class="n">Shape</span>::<span class="n">Triangle</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="s">&#34;triangle&#34;</span><span class="p">,</span><span class="w">
 </span><span class="w">    </span><span class="c1">// ERROR: We forgot the Shape::Square case.
 </span><span class="c1"></span><span class="w">  </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span></code></pre></div>
 <p>This is an <strong>extremely useful feature to deliver safe and future-proof code</strong>: by using <code>match</code>, there is no way you can forget to handle a case <em>even if the code later changes to cover more cases</em>. E.g. if you ever decided to add a new shape to the <code>enum</code> above, the compiler would refuse to build your code, so you would be forced to add the missing arms. (Yes, I know, other languages like C++ will warn you if <code>switch</code> statements miss cases on enumerations&hellip; but will only do so under these specific circumstances; <code>match</code> is useful outside of <code>enum</code>s.)</p>
 
 <p>To conclude: the reason I find this interesting is because this feature aligns perfectly well with my <a href="/2013/07/readability-explicitly-state.html">Readability: Explicitly state complementary conditions</a> post.</p>
@@ -783,17 +786,6 @@ Rust review</b> series</a>.</i></p>
         </ul>
       </li>
     
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
-        <ul id="archive-year-2018" class="collapse">
-          
-            
-            <li><a href="/archive.html#2018-07">July 2018</a> (1)</li>
-          
-        </ul>
-      </li>
-    
   </ul>
 </div>
 
@@ -846,7 +838,7 @@ Rust review</b> series</a>.</i></p>
     <div class="container">
   <footer>
     <p class="pull-right"><a href="#">Back to top</a></p>
-    <p>Copyright 2018 Julio Merino</p>
+    <p>Copyright 2019 Julio Merino</p>
   </footer>
 </div>
 

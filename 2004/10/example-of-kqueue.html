@@ -13,7 +13,7 @@
   <meta name="description" content="The documentation of kqueue is quite decent but it lacks some examples. After reading its main manual pages (kqueue(9) and kevent(9)), I wasn&amp;rsquo;t sure about how it worked, so I had to write a test program to verify its behavior.
 Let&amp;rsquo;s start by analyzing the test program to later see its full code. The program will monitor changes to the /tmp/foo file and will print messages whenever it is deleted, modified or their attributes change.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.36.1" />
+  <meta name="generator" content="Hugo 0.53" />
 
   <meta content="http://julio.meroh.net/2004/10/example-of-kqueue.html" property="og:url">
 
@@ -151,11 +151,11 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
 
    <span class="n">kq</span> <span class="o">=</span> <span class="n">kqueue</span><span class="p">();</span>
    <span class="k">if</span> <span class="p">(</span><span class="n">kq</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-       <span class="n">perror</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;kqueue&#34;</span><span class="p">);</span>
+       <span class="n">perror</span><span class="p">(</span><span class="s">&#34;kqueue&#34;</span><span class="p">);</span>
 
-   <span class="n">f</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;/tmp/foo&#34;</span><span class="p">,</span> <span class="n">O_RDONLY</span><span class="p">);</span>
+   <span class="n">f</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&#34;/tmp/foo&#34;</span><span class="p">,</span> <span class="n">O_RDONLY</span><span class="p">);</span>
    <span class="k">if</span> <span class="p">(</span><span class="n">f</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-       <span class="n">perror</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;open&#34;</span><span class="p">);</span>
+       <span class="n">perror</span><span class="p">(</span><span class="s">&#34;open&#34;</span><span class="p">);</span>
 
    <span class="n">EV_SET</span><span class="p">(</span><span class="o">&amp;</span><span class="n">change</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">EVFILT_VNODE</span><span class="p">,</span>
           <span class="n">EV_ADD</span> <span class="o">|</span> <span class="n">EV_ENABLE</span> <span class="o">|</span> <span class="n">EV_ONESHOT</span><span class="p">,</span>
@@ -165,17 +165,17 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
    <span class="k">for</span> <span class="p">(;;)</span> <span class="p">{</span>
        <span class="n">nev</span> <span class="o">=</span> <span class="n">kevent</span><span class="p">(</span><span class="n">kq</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">change</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">event</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
        <span class="k">if</span> <span class="p">(</span><span class="n">nev</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-           <span class="n">perror</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;kevent&#34;</span><span class="p">);</span>
+           <span class="n">perror</span><span class="p">(</span><span class="s">&#34;kevent&#34;</span><span class="p">);</span>
        <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">nev</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
            <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_DELETE</span><span class="p">)</span> <span class="p">{</span>
-               <span class="n">printf</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;File deletedn&#34;</span><span class="p">);</span>
+               <span class="n">printf</span><span class="p">(</span><span class="s">&#34;File deletedn&#34;</span><span class="p">);</span>
                <span class="k">break</span><span class="p">;</span>
            <span class="p">}</span>
            <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_EXTEND</span> <span class="o">||</span>
                <span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_WRITE</span><span class="p">)</span>
-               <span class="n">printf</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;File modifiedn&#34;</span><span class="p">);</span>
+               <span class="n">printf</span><span class="p">(</span><span class="s">&#34;File modifiedn&#34;</span><span class="p">);</span>
            <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_ATTRIB</span><span class="p">)</span>
-               <span class="n">printf</span><span class="p">(</span><span class="sa"></span><span class="s">&#34;File attributes modifiedn&#34;</span><span class="p">);</span>
+               <span class="n">printf</span><span class="p">(</span><span class="s">&#34;File attributes modifiedn&#34;</span><span class="p">);</span>
        <span class="p">}</span>
    <span class="p">}</span>
 
@@ -751,17 +751,6 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
         </ul>
       </li>
     
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
-        <ul id="archive-year-2018" class="collapse">
-          
-            
-            <li><a href="/archive.html#2018-07">July 2018</a> (1)</li>
-          
-        </ul>
-      </li>
-    
   </ul>
 </div>
 
@@ -822,7 +811,7 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
     <div class="container">
   <footer>
     <p class="pull-right"><a href="#">Back to top</a></p>
-    <p>Copyright 2018 Julio Merino</p>
+    <p>Copyright 2019 Julio Merino</p>
   </footer>
 </div>
 

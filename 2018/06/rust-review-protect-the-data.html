@@ -13,7 +13,7 @@
   <meta name="description" content="The one thing that blew my mind about Rust is its approach to data sharing in concurrent situations.
 I had always thought of mutexes as something that is easy to get wrong and was convinced that the use of a RAII pattern to prevent lock leaks never happen (like with Abseil&amp;rsquo;s MutexLock) was the panacea. (I&amp;rsquo;m a fan of RAII in C&#43;&#43; by the way, in case you haven&amp;rsquo;t noticed.)">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.36.1" />
+  <meta name="generator" content="Hugo 0.53" />
 
   <meta content="http://julio.meroh.net/2018/06/rust-review-protect-the-data.html" property="og:url">
 
@@ -188,10 +188,10 @@ Rust review</b> series</a>.</i></p>
 
 <p><em>&ldquo;Ah! Not so fast! You can do exactly the same in C++ or even in Go!&rdquo;</em>, you claim.  Yeeee&hellip; no, not at all. Sure, you can implement a container that holds the data and only exposes its contents via a getter after grabbing the lock. But there is <em>nothing</em> preventing the code from leaking a reference to that inner data after the mutex is released. Let&rsquo;s imagine an interface like this (with lots of details omitted, like suppression of copies and assignments):</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="k">template</span><span class="o">&lt;</span> <span class="k">typename</span> <span class="n">T</span> <span class="o">&gt;</span>
-<span class="k">class</span> <span class="nc">Lock</span> <span class="p">{</span>
+<span class="k">class</span><span class="err"> </span><span class="nc">Lock</span> <span class="p">{</span>
     <span class="n">T</span><span class="o">&amp;</span> <span class="n">_data</span><span class="p">;</span>
 
-    <span class="k">friend</span> <span class="k">class</span> <span class="nc">Mutex</span><span class="p">;</span>
+    <span class="k">friend</span> <span class="k">class</span><span class="err"> </span><span class="nc">Mutex</span><span class="p">;</span>
     <span class="n">Lock</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;</span><span class="p">);</span>  <span class="c1">// Grabs non-owning reference to the data.
 </span><span class="c1"></span>
   <span class="k">public</span><span class="o">:</span>
@@ -201,13 +201,14 @@ Rust review</b> series</a>.</i></p>
 <span class="p">};</span>
 
 <span class="k">template</span><span class="o">&lt;</span> <span class="k">typename</span> <span class="n">T</span> <span class="o">&gt;</span>
-<span class="k">class</span> <span class="nc">Mutex</span> <span class="p">{</span>
+<span class="k">class</span><span class="err"> </span><span class="nc">Mutex</span> <span class="p">{</span>
     <span class="n">T</span> <span class="n">_data</span><span class="p">;</span>
 
   <span class="k">public</span><span class="o">:</span>
     <span class="k">explicit</span> <span class="n">Mutex</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span><span class="p">);</span>  <span class="c1">// Grabs ownership of the data.
 </span><span class="c1"></span>    <span class="n">Lock</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">lock</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>  <span class="c1">// Acquires mutex.
-</span><span class="c1"></span><span class="p">};</span></code></pre></div>
+</span><span class="c1"></span><span class="p">};</span>
+</code></pre></div>
 <p>Looks legit, right?  We can only construct a <code>Mutex</code> by moving an arbitrary object into it, and from there on, the only way to get back to the object is to first call <code>lock()</code> on the mutex. Doing so returns us a <code>Lock</code> RAII construct that automatically releases the lock on destruction. And with that done, the only way to reach the data is by invoking <code>get()</code> on a valid <code>Lock</code>, which we know holds the mutex.</p>
 
 <p>But, ha ha, it is trivial to escape all these nice intentions:</p>
@@ -221,7 +222,8 @@ Rust review</b> series</a>.</i></p>
 </span><span class="c1"></span>
 <span class="c1">// Oh oh.  We now have a pointer to the inner object, which is not locked any
 </span><span class="c1">// more... and it wouldn&#39;t even be valid if the mutex had gone out of scope.
-</span><span class="c1"></span><span class="n">dangling_pointer</span><span class="o">-&gt;</span><span class="n">i_will_misbehave</span><span class="p">();</span></code></pre></div>
+</span><span class="c1"></span><span class="n">dangling_pointer</span><span class="o">-&gt;</span><span class="n">i_will_misbehave</span><span class="p">();</span>
+</code></pre></div>
 <p>No matter how good your intentions are, such an API will leak the data in one way or another and, <a href="http://www.hyrumslaw.com">eventually, someone will write broken code</a> like the one shown above—possibly along a lengthy comment explaining why they had to go through such nastiness.</p>
 
 <p>So no. It&rsquo;s just impossible to <em>safely</em> implement a mutex as a data container in C++—and, for that matter, in Go as well because the language has even fewer protections. The resulting interface would be so fragile that you may as well not bother implementing it in the first place.</p>
@@ -245,7 +247,8 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">        </span><span class="n">locked_data</span><span class="p">.</span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span><span class="w">
 </span><span class="w">        </span><span class="n">leaked</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">locked_data</span><span class="p">;</span><span class="w">  </span><span class="c1">// Impossible.
 </span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w"></span><span class="p">}</span></code></pre></div>
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w"></span></code></pre></div>
 <p>If we try to <em>build</em> this code, we&rsquo;ll be greeted with the following <em>error</em> at the point were we tried to leak the reference to the inner, locked data:</p>
 
 <pre><code>error[E0597]: `locked_data` does not live long enough
@@ -834,17 +837,6 @@ Rust review</b> series</a>.</i></p>
         </ul>
       </li>
     
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (1)
-        <ul id="archive-year-2018" class="collapse">
-          
-            
-            <li><a href="/archive.html#2018-07">July 2018</a> (1)</li>
-          
-        </ul>
-      </li>
-    
   </ul>
 </div>
 
@@ -897,7 +889,7 @@ Rust review</b> series</a>.</i></p>
     <div class="container">
   <footer>
     <p class="pull-right"><a href="#">Back to top</a></p>
-    <p>Copyright 2018 Julio Merino</p>
+    <p>Copyright 2019 Julio Merino</p>
   </footer>
 </div>
 
