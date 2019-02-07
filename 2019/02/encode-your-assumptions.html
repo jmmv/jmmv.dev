@@ -6,19 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Kyua: Weekly status report - Julio Merino</title>
-  <meta content="Kyua: Weekly status report - Julio Merino" property="og:title">
+  <title>Encode your assumptions - Julio Merino</title>
+  <meta content="Encode your assumptions - Julio Merino" property="og:title">
 
   
 
   
-  <meta name="description" content="My goal for this past week was to change the database layer to be able to store full definitions of the test cases, and to later be able to load these while scanning an action. This is to allow the report command to provide all kinds of information about the executed tests, not just their names and their results. However, adding this functionality has proven to be more complex than I wished because the current types to represent test programs and test cases are kinda broken: that the abstractions chosen a while ago do not seem to be appropriate, and this is complicating further changes.">
+  <meta name="description" content="The point of this post is simple and I&amp;rsquo;ll spoil it from the get go: every time you make an assumption in a piece of code, make such assumption explicit in the form of an assertion or error check. If you cannot do that (are you sure?), then write a detailed comment.
+In fact, I&amp;rsquo;m exceedingly convinced that the amount of assertion-like checks in a piece of code is a good indicator of the programmer&amp;rsquo;s expertise.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.53" />
 
-  <meta content="http://julio.meroh.net/2011/11/kyua-weekly-status-report_28.html" property="og:url">
+  <meta content="http://julio.meroh.net/2019/02/encode-your-assumptions.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2011/11/kyua-weekly-status-report_28.html">
+  <link rel="canonical" href="http://julio.meroh.net/2019/02/encode-your-assumptions.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -103,10 +104,10 @@
 
     <div class="page-header">
       <div class="container">
-        <h1>Kyua: Weekly status report</h1>
+        <h1>Encode your assumptions</h1>
 
-        <p>November 28, 2011 &middot;
-        About 1 minutes</p>
+        <p>February 7, 2019 &middot;
+        About 4 minutes</p>
 
         
       </div>
@@ -116,7 +117,51 @@
       <div class="row">
         <div class="col-md-9">
           
-          <article>My goal for this past week was to change the database layer to be able to store full definitions of the test cases, and to later be able to load these while scanning an action. This is to allow the <tt>report</tt> command to provide all kinds of information about the executed tests, not just their names and their results. However, adding this functionality has proven to be more complex than I wished because the current types to represent test programs and test cases are kinda broken: that the abstractions chosen a while ago do not seem to be appropriate, and this is complicating further changes.<br /><br />Due to this, I ended up doing some cleanups. First, I reimplemented the way in which test programs that fail to list their test cases are represented. And second, I got rid of the useless <tt>test_case_id</tt> class, which exposed even further problems in the data types that represent test cases.<br /><br />It's now time to sit and think if the current representations of test programs and test cases make sense and, if not, how to better redo them. Not going to be easy, but I hope to have some time for this cleanup during this upcoming week.
+          <article>
+
+<p>The point of this post is simple and I&rsquo;ll spoil it from the get go: <strong>every time you make an assumption in a piece of code, make such assumption explicit in the form of an assertion or error check</strong>. If you cannot do that (are you sure?), then write a detailed comment.</p>
+
+<p>In fact, I&rsquo;m exceedingly convinced that the amount of assertion-like checks in a piece of code is a good indicator of the programmer&rsquo;s expertise.</p>
+
+<p>But&hellip; why? Story time!</p>
+
+<h1 id="the-bug">The bug</h1>
+
+<p>Bazel has a progress reporting message that says how many build actions are currently runnable and how many are actually running. For example, given a <code>--jobs=16</code> setting on a machine with 12 cores and assuming your build graph has sufficient parallelism, there can be 16 active actions but only 12 can run because that&rsquo;s what the machine&rsquo;s resources allow: the other 4 are waiting on those resources. Under these conditions, the progress reporting message would say: <code>16 actions, 12 running</code>.</p>
+
+<p>Bazel also has a feature known as dynamic scheduling, which we <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">recently announced</a>. With this feature, all actions allowed by the <code>--jobs</code> concurrency degree are sent to a remote execution service and a subset of those actions, as allowed by the machine&rsquo;s resources, are <em>also</em> executed on the local machine. In other words: a subset of actions run in two places <em>at the same time</em>.</p>
+
+<p>One of our initial adopters for this dynamic scheduling feature reported that Bazel often said <code>100 actions, 24 running</code>, with varying counts of <code>24</code>. They were curious to know why this implied that 100 actions (as specified by our <code>--jobs=100</code> setting) were runnable but only ~24 were truly running. This made no sense because we have sufficient remote execution capacity to allow those 100 actions to run at the same time. Furthermore, the low running counts had no relation to the number of CPUs on their machine.</p>
+
+<p>I wanted to track this down to understand what these numbers were really counting. To do this, I searched for the progress message with the regexp <code>actions,.*running</code>, which quickly yielded <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/runtime/ExperimentalStateTracker.java;l=563?q=actions,.*running"><code>ExperimentalStateTracker.java:563</code></a>. From there, it didn&rsquo;t take long to understand what was going on.</p>
+
+<h1 id="some-details-on-bazel-s-architecture">Some details on Bazel&rsquo;s architecture</h1>
+
+<p>But before we continue, it is important to understand a couple of concepts of behind Bazel&rsquo;s design:</p>
+
+<ol>
+<li><p>Bazel is implemented as a loosely-coupled collection of modules, defined by the <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/runtime/BlazeModule.java"><code>BlazeModule</code></a> interface.</p></li>
+
+<li><p>To keep the coupling low, Bazel uses <a href="https://github.com/google/guava/wiki/EventBusExplained">Guava&rsquo;s event bus</a> to post state change notifications across modules.</p></li>
+</ol>
+
+<p>This all sounds good on paper, but the problem is that the possible set of messages, the conditions in which they get sent, and their relative ordering is&hellip; under-specified (which is a mild way of saying &ldquo;not specified at all&rdquo;).</p>
+
+<h1 id="understanding-the-bug">Understanding the bug</h1>
+
+<p>Why is any of this related? Well, as it turns out, the progress reporting code in <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/runtime/ExperimentalStateTracker.java"><code>ExperimentalStateTracker</code></a> extensively relies on processing events to process what is going on in Bazel. In particular, this code receives <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/actions/ActionStatusMessage.java"><code>ActionStatusMessage</code></a> notifications, which indicate action status changes. These messages are &ldquo;keyed&rdquo; by the action identifier and are posted, for example, when an action becomes runnable or when an action is truly running.</p>
+
+<p>You may start to see where the pieces fall together. As I said above, dynamic scheduling causes some actions to run twice concurrently&hellip; which means we end up with &ldquo;conflicting&rdquo; <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/actions/ActionStatusMessage.java"><code>ActionStatusMessage</code></a> events for the action. It is possible for an action to start running remotely, at which point it is counted by the tracker as runnable and running&hellip; but once we try to run the action locally and realize we don&rsquo;t have enough spare resources, its local counterpart blocks on the scheduling stage and is reported as runnable, not running. From the tracker&rsquo;s perspective, the action &ldquo;regressed&rdquo; and went from running to runnable, which is something that should never happen&hellip; and miscounts actions.</p>
+
+<h1 id="conclusion">Conclusion</h1>
+
+<p>Alright, so how does this relate, at all, to my initial claim? Well, the author of the status tracker mentioned that, yes, the tracker <em>assumes</em> that actions are unique. This is a perfectly reasonable thing to assume. But this assumption was&hellip; nowhere. Not in the code, not in comments. Which means that the bug in action counting manifested itself when the assumptions were violated and we only knew about it because of an avid user.</p>
+
+<p>Now imagine: if the tracker had validated this assumption, say with an assertion, Bazel would have crashed the moment it detected this action miscounting. Given that this behavior is triggered by a new feature, the developer of the new feature would have immediately noticed the breakage in progress reporting: CI pre-submit tests would have failed and would not have let them check the code in. But instead, the bug persisted and it took some curiosity and digging after-the-fact to find out the issue. Which luckily gave me enough material for a post 😉</p>
+
+<p>This bug is tracked at <a href="https://github.com/bazelbuild/bazel/issues/7345">https://github.com/bazelbuild/bazel/issues/7345</a>.</p>
+
+<p>Fixing this bug seems like a nice starter project to get into the core of Bazel&rsquo;s architecture! Let me know if you are interested in helping.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -708,13 +753,13 @@
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2011/11/kyua-weekly-status-report_20.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2019/02/hello-sandboxfs-0.1.0.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2011/12/kyua-weekly-status-report.html">Next post &raquo;</a></span>
+              <span></span>
             
           </div>
 
@@ -726,8 +771,8 @@
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2011\/11\/kyua-weekly-status-report_28.html";
-            this.page.identifier = "2011-11-28-kyua-weekly-status-report_28";
+            this.page.url = "http:\/\/julio.meroh.net\/2019\/02\/encode-your-assumptions.html";
+            this.page.identifier = "2019-02-07-encode-your-assumptions";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -742,14 +787,6 @@
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2011/11/kyua-weekly-status-report_28.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
