@@ -6,19 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Kyua: Weekly status report - Julio Merino</title>
-  <meta content="Kyua: Weekly status report - Julio Merino" property="og:title">
+  <title>Optimizing tree deletions in Bazel - Julio Merino</title>
+  <meta content="Optimizing tree deletions in Bazel - Julio Merino" property="og:title">
 
   
 
   
-  <meta name="description" content="Implemented the &#34;debug&#34; command. Still very rudimentary, this command allows the user to run a test case without capturing its stdout nor stderr to aid in debugging of failed test cases. In the future, this command will also allow things like keeping the work directory for manual inspection, or spawning a shell or a debugger in the work directory after a test case is executed. Many build fixes under different platforms in preparation for a 0.">
+  <meta name="description" content="Bazel likes creating very deep and large trees on disk during a build. One example is the output tree, which naturally contains all the artifacts of your build. Another, more problematic example is the symlink forest trees created for every action when sandboxing is enabled. As garbage gets created, it must be deleted.
+It turns out, however, that deleting file system trees can be very expensive&amp;mdash;and especially so on macOS. In fact, calls to our deleteTree algorithm routinely showed up in my profiling runs when trying to diagnose slowdowns using the dynamic scheduler.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.54.0" />
 
-  <meta content="http://julio.meroh.net/2011/08/kyua-weekly-status-report_22.html" property="og:url">
+  <meta content="http://julio.meroh.net/2019/03/optimizing-tree-deletions.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2011/08/kyua-weekly-status-report_22.html">
+  <link rel="canonical" href="http://julio.meroh.net/2019/03/optimizing-tree-deletions.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -103,10 +104,10 @@
 
     <div class="page-header">
       <div class="container">
-        <h1>Kyua: Weekly status report</h1>
+        <h1>Optimizing tree deletions in Bazel</h1>
 
-        <p>August 21, 2011 &middot;
-        About 1 minutes</p>
+        <p>March 22, 2019 &middot;
+        About 4 minutes</p>
 
         
       </div>
@@ -116,10 +117,52 @@
       <div class="row">
         <div class="col-md-9">
           
-          <article><br /><ul><li>Implemented the "debug" command. Still very rudimentary, this command allows the user to run a test case without capturing its stdout nor stderr to aid in debugging of failed test cases. In the future, this command will also allow things like keeping the work directory for manual inspection, or spawning a shell or a debugger in the work directory after a test case is executed.</li>
-<li>Many build fixes under different platforms in preparation for a 0.2 release. In particular, Kyua now builds under Ubuntu 10.04.1 LTS but some tests fail.</li>
-<li>Had to disable the execution of the bootstrap test suite within Kyua because it stalls in systems where the default shell is not bash. &nbsp;I presume this is a bug in GNU Autotest, so I <a href="https://lists.gnu.org/archive/html/bug-autoconf/2011-08/msg00009.html">filed a report</a>.</li>
+          <article><p>Bazel likes creating very deep and large trees on disk during a build. One example is the output tree, which naturally contains all the artifacts of your build. Another, more problematic example is the symlink forest trees created for every action when sandboxing is enabled. As garbage gets created, it must be deleted.</p>
+
+<p>It turns out, however, that deleting file system trees can be very expensive&mdash;and especially so on macOS. In fact, calls to our <code>deleteTree</code> algorithm routinely showed up in my profiling runs when trying to diagnose slowdowns using the <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">dynamic scheduler</a>. One thing I quickly wondered is: why can I easily catch Bazel stuck in the tree deletion but I can never catch it busily creating such a tree? Is tree deletion inherently slow or are we doing something stupid?</p>
+
+<p>A quick look at the algorithm we used to have in <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/vfs/FileSystemUtils.java;drc=a539293149375850b82dda2b51f38bb440584336;bpv=;bpt=0;l=559"><code>FileSystemUtils#deleteTree()</code></a> reveals that it is the latter. Paraphrasing to remove the irrelevant differences between <code>deleteTree</code> and <code>deleteTreesBelow</code>:</p>
+<div class="highlight"><pre class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">deleteTree</span><span class="o">(</span><span class="n">Path</span> <span class="n">path</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">IOException</span> <span class="o">{</span>
+  <span class="k">if</span> <span class="o">(</span><span class="n">path</span><span class="o">.</span><span class="na">isDirectory</span><span class="o">(</span><span class="n">Symlinks</span><span class="o">.</span><span class="na">NOFOLLOW</span><span class="o">))</span> <span class="o">{</span>
+    <span class="n">path</span><span class="o">.</span><span class="na">setReadable</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+    <span class="n">path</span><span class="o">.</span><span class="na">setWritable</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+    <span class="n">path</span><span class="o">.</span><span class="na">setExecutable</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+    <span class="k">for</span> <span class="o">(</span><span class="n">Path</span> <span class="n">child</span> <span class="o">:</span> <span class="n">path</span><span class="o">.</span><span class="na">getDirectoryEntries</span><span class="o">())</span> <span class="o">{</span>
+      <span class="n">deleteTree</span><span class="o">(</span><span class="n">child</span><span class="o">);</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+  <span class="n">path</span><span class="o">.</span><span class="na">delete</span><span class="o">();</span>
+<span class="o">}</span></code></pre></div>
+<p>We can observe a few inefficiencies here:</p>
+
+<ol>
+<li>Those three <code>path.set*</code> calls end up being individual <code>chmod(2)</code> calls. They could all be combined into one. Why wasn&rsquo;t this done?</li>
+<li>Do we always have to &ldquo;unprotect&rdquo; the directories before trying to delete their contents? Protected directories are likely not the common case given that the majority of the trees we try to delete from within Bazel are trees we created ourselves.</li>
+<li>How does the <code>path.delete()</code> call know if it has to issue an <code>rmdir(2)</code> or an <code>unlink(2)</code>? It likely has to try both, or it has to stat the file. But note we <em>already</em> stated the file once to check if it was a directory! We should be able to reuse that information.</li>
+<li>Reading the contents of a directory typically also returns the types of those entries. We could use that to avoid the stats.</li>
+<li>We are constructing a ton of superfluous strings (one for each entry to be removed), all of which are absolute paths. Paths in Bazel tend to be very long, so the amount of data copied every single time is non-trivial and thus likely has a noticeable CPU cost.</li>
+</ol>
+
+<p>Wow.</p>
+
+<p>The major problem is the disproportionate number of system calls issued: <strong>for every file to delete we issue 2-3 system calls, and for every directory, 7+</strong>.</p>
+
+<p>We should and can do much better:</p>
+
+<ul>
+<li><code>readdir(2)</code> returns the type of the entries it finds in the common case so we can avoid the stat to query the type of each entry. (We may still get <code>DT_UNKNOWN</code> as the type, for example when on NFS, but we can handle that with a stat.)</li>
+<li>Once we know what type of entry we have to delete, we can directly issue <code>unlink(2)</code> or <code>rmdir(2)</code> system calls to avoid having to guess later on via <code>remove(3)</code>.</li>
+<li>We can assume that the tree to be deleted is readable and writable, so we shouldn&rsquo;t issue any <code>chown(2)</code> calls unless we really have to.</li>
+<li>We don&rsquo;t need to build any intermediate paths: we can use operations like <code>openat(2)</code> and <code>unlinkat(2)</code> to work purely on file descriptors.</li>
 </ul>
+
+<p>All of this is much easier to do efficiently from C code than from Java code. Fortunately, the <code>UnixFileSystem</code> implementation of the file system objects backing the paths we deal with already had JNI glue, so I only had to update that piece of code. The amount of code to implement this is larger than I expected however. See <a href="https://github.com/bazelbuild/bazel/commit/fac322b1ef7a9acbe71f3718143c0dae43fb5833">commit fac322b1</a>.</p>
+
+<p>So. Does this make any difference? You bet!</p>
+
+<p>For a large build of an iOS app on macOS using sandboxing (the default configuration in Bazel), this cut down total build times from 7,300s to 5,100s. That&rsquo;s <strong>a 30% speedup</strong>. And this has had nice (unthought) effects on other parts of the code too: cleaning up the results of that same build via <code>bazel clean</code> used to take about 18s and now takes about 12s (similar ~30% speedup).</p>
+
+<p>Moral of the story? Be mindful of overheads. All the powerful abstractions we rely on make it too easy to miss <a href="/2018/04/bazel-xcode-locations-cache.html">details like this</a>.</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -714,13 +757,13 @@
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2011/08/kyua-weekly-status-report_15.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2019/03/macos-threads-qos-and-bazel.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2011/08/kyua-02-released.html">Next post &raquo;</a></span>
+              <span></span>
             
           </div>
 
@@ -732,8 +775,8 @@
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2011\/08\/kyua-weekly-status-report_22.html";
-            this.page.identifier = "2011-08-21-kyua-weekly-status-report_22_2";
+            this.page.url = "http:\/\/julio.meroh.net\/2019\/03\/optimizing-tree-deletions.html";
+            this.page.identifier = "2019-03-22-optimizing-tree-deletions";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -748,14 +791,6 @@
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2011/08/kyua-weekly-status-report_22.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
