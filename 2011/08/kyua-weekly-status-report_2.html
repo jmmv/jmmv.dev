@@ -6,19 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Open files limit, macOS, and the JVM - Julio Merino</title>
-  <meta content="Open files limit, macOS, and the JVM - Julio Merino" property="og:title">
+  <title>Kyua: Weekly status report - Julio Merino</title>
+  <meta content="Kyua: Weekly status report - Julio Merino" property="og:title">
 
   
 
   
-  <meta name="description" content="Bazel&amp;rsquo;s original raison d&amp;rsquo;etre was to support Google&amp;rsquo;s monorepo. A consequence of using a monorepo is that some builds will become very large. And large builds can be very resource hungry, especially when using a tool like Bazel that tries to parallelize as many actions as possible for efficiency reasons. There are many resource types in a system, but today I&amp;rsquo;d like to focus on the number of open files at any given time (nofiles).">
+  <meta name="description" content="Implemented the &#34;plain&#34; test interface. This allows plugging &#34;foreign test programs&#34; into a Kyua-based test suite. (A foreign test program is a program that does not use any testing framework: it reports success and failure by means of an exit code.)Generalized code between the atf and plain interfaces and did some cleanups.Attempted to fix the ATF_REQUIRE_EQ macros in ATF to evaluate their arguments only once. This has proven to be tricky and therefore it is not done yet.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="http://julio.meroh.net/2019/01/open-files-limit-macos-and-the-jvm.html" property="og:url">
+  <meta content="http://julio.meroh.net/2011/08/kyua-weekly-status-report_2.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2019/01/open-files-limit-macos-and-the-jvm.html">
+  <link rel="canonical" href="http://julio.meroh.net/2011/08/kyua-weekly-status-report_2.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -103,10 +103,10 @@
 
     <div class="page-header">
       <div class="container">
-        <h1>Open files limit, macOS, and the JVM</h1>
+        <h1>Kyua: Weekly status report</h1>
 
-        <p>January 29, 2019 &middot;
-        About 3 minutes</p>
+        <p>August 1, 2011 &middot;
+        About 1 minutes</p>
 
         
       </div>
@@ -116,19 +116,7 @@
       <div class="row">
         <div class="col-md-9">
           
-          <article><p>Bazel&rsquo;s original <a href="https://www.dictionary.com/browse/raison-d-etre">raison d&rsquo;etre</a> was to support Google&rsquo;s monorepo. A consequence of using a monorepo is that some builds will become very large. And large builds can be very resource hungry, especially when using a tool like Bazel that tries to parallelize as many actions as possible for efficiency reasons. There are many resource types in a system, but today I&rsquo;d like to focus on the number of open files at any given time (<code>nofiles</code>).</p>
-
-<p>macOS&rsquo;s default <em>soft limit</em> for <code>nofiles</code> is pretty low: on all the systems I&rsquo;ve checked, this is set to 256. Fortunately, the default <em>hard limit</em> is <code>unlimited</code> so unprivileged users can bump their own limits to support large builds. Having to tweak limits by hand is ugly, so in July 2017 I made Bazel raise its own soft limit to the hard limit in <a href="https://github.com/bazelbuild/bazel/commit/a96369c1c66df624bbee0d9e1c7ad38fea55cd26">commit a96369c</a>.</p>
-
-<p>This automatic unlimiting wasn&rsquo;t trivial because of another cap in macOS: the  the <code>kern.maxfilesperproc</code> system property. Neither the soft nor the hard limit can exceed this cap. More specifically, the soft and hard limits cannot be <em>set</em> to a value higher than the kernel&rsquo;s cap&hellip; but it&rsquo;s possible for them to <em>already</em> exceed the cap (which is strange and maybe a bug in Darwin). To support this, I made Bazel restrict its upping of the soft limit to the minimum of the hard limit and the kernel cap.</p>
-
-<p>Things seemed fine for a while (more than a year!): common build failures vanished after this fix and I assumed this issue was fixed for real. Except&hellip; this came back to bite us again recently. Under some adversary conditions, some subprocesses were failing with errors indicating that they had exceeded their <code>nofiles</code> limit. And this was strange because the kernel cap is a pretty high value.</p>
-
-<p>When I got this bug report, I quickly wrote a <code>genrule</code> (a custom build action in Bazel) to print its own view of <code>ulimit -a -H</code>&hellip; and found that the <code>nofiles</code> limit was set to 10240. But the kernel cap was 24576 and the hard limit before starting Bazel was <code>unlimited</code>. Where was this number coming from? There were no matches of it in the Bazel source tree&hellip;</p>
-
-<p>A bit of digging (which I can&rsquo;t remember right now how I pursued) soon surfaced something pretty interesting: the JVM&rsquo;s HotSpot <em>also</em> has similar logic during its startup process. This logic is enabled by default and is controlled via the <a href="https://www.oracle.com/technetwork/articles/java/vmoptions-jsp-140102.html"><code>-XX:+MaxFDLimit</code></a> option. And guess what, <a href="https://hg.openjdk.java.net/jdk10/jdk10/hotspot/file/5ab7a67bc155/src/os/bsd/vm/os_bsd.cpp#l3435">on Darwin <em>only</em></a> and because the <code>setrlimit(2)</code> manpage says so, this logic restricts the <code>nofiles</code> soft limit to the <code>OPEN_MAX</code> constant, which, drumroll, happens to be 10240.</p>
-
-<p>With this knowledge in mind, the solution was easy: pass the opposite option, <code>-XX:-MaxFDLimit</code>, to the JVM so that our own higher limited was left untouched.  See <a href="https://github.com/bazelbuild/bazel/commit/30dd8715847e4c797cd28da13e14eab7721b518d">commit 30dd871</a>. And of course, the hardest part of the solution involved adding an integration test to ensure that what subprocesses see is actually what we wanted.</p>
+          <article><ul><li>Implemented the "plain" test interface. This allows plugging "foreign test programs" into a Kyua-based test suite. (A foreign test program is a program that does not use any testing framework: it reports success and failure by means of an exit code.)</li><li>Generalized code between the atf and plain interfaces and did some cleanups.</li><li>Attempted to fix the ATF_REQUIRE_EQ macros in ATF to evaluate their arguments only once. This has proven to be tricky and therefore it is not done yet. At the moment, the macros reevaluate the arguments on a failure condition, which is not too big of a deal.</li></ul>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -175,7 +163,7 @@
     
       <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
     
-      <li><a href="/2019/02/hello-sandboxfs-0.1.0.html">Hello, sandboxfs 0.1.0</a></li>
+      <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
     
       <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
     
@@ -194,8 +182,11 @@
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (7)
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (8)
         <ul id="archive-year-2019" class="collapse">
+          
+            
+            <li><a href="/archive.html#2019-09">September 2019</a> (1)</li>
           
             
             <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
@@ -723,13 +714,13 @@
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2019/01/smartphones-email-procrastination.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2011/07/kyua-weekly-status-report_25.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2019/02/hello-sandboxfs-0.1.0.html">Next post &raquo;</a></span>
+              <span><a href="http://julio.meroh.net/2011/08/kyua-weekly-status-report_08_2.html">Next post &raquo;</a></span>
             
           </div>
 
@@ -741,8 +732,8 @@
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2019\/01\/open-files-limit-macos-and-the-jvm.html";
-            this.page.identifier = "2019-01-29-open-files-limit-macos-and-jvm";
+            this.page.url = "http:\/\/julio.meroh.net\/2011\/08\/kyua-weekly-status-report_2.html";
+            this.page.identifier = "2011-08-01-kyua-weekly-status-report";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -757,6 +748,14 @@
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
+      </div>
+      
+      <p>Comments from the original Blogger-hosted post:</p>
+      <script src="https://apis.google.com/js/plusone.js"></script>
+      <div class="g-comments"
+           data-href="http://julipedia.meroh.net/2011/08/kyua-weekly-status-report.html"
+           data-first_party_property="BLOGGER"
+           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>

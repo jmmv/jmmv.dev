@@ -6,20 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>SoC: Status report 3 - Julio Merino</title>
-  <meta content="SoC: Status report 3 - Julio Merino" property="og:title">
+  <title>Hello, sandboxfs 0.1.0 - Julio Merino</title>
+  <meta content="Hello, sandboxfs 0.1.0 - Julio Merino" property="og:title">
 
   
 
   
-  <meta name="description" content="Only 8 more days and SoC will be officially over... Time has passed very fast and my project required much more work than I initially thought. It certainly cannot be completed before the deadline but I assure you that it will not fall into oblivion afterwards; I have spent too much time on it to forget ;-)
-There have been many changes in Boost.Process&#39; code base since the previous status report; let&#39;s see a brief summary:">
+  <meta name="description" content="I am pleased to announce that the first release of sandboxfs, 0.1.0, is finally here! You can download the sources and prebuilt binaries from the 0.1.0 release page and you can read the installation instructions for more details.
+The journey to this first release has been a long one. sandboxfs was first conceived over two years ago, was first announced in August 2017, showed its first promising results in April 2018, and has been undergoing a rewrite from Go to Rust.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="http://julio.meroh.net/2006/08/soc-status-report-3.html" property="og:url">
+  <meta content="http://julio.meroh.net/2019/02/sandboxfs-0-1-0.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2006/08/soc-status-report-3.html">
+  <link rel="canonical" href="http://julio.meroh.net/2019/02/sandboxfs-0-1-0.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -104,10 +104,10 @@ There have been many changes in Boost.Process&#39; code base since the previous 
 
     <div class="page-header">
       <div class="container">
-        <h1>SoC: Status report 3</h1>
+        <h1>Hello, sandboxfs 0.1.0</h1>
 
-        <p>August 12, 2006 &middot;
-        About 3 minutes</p>
+        <p>February 5, 2019 &middot;
+        About 7 minutes</p>
 
         
       </div>
@@ -117,7 +117,76 @@ There have been many changes in Boost.Process&#39; code base since the previous 
       <div class="row">
         <div class="col-md-9">
           
-          <article>Only 8 more days and SoC will be officially over... Time has passed very fast and my project required much more work than I initially thought.  It certainly cannot be completed before the deadline but I assure you that it will not fall into oblivion afterwards; I have spent too much time on it to forget ;-)<br /><br />There have been many changes in Boost.Process' code base since the <a href="http://julipedia.blogspot.com/2006/07/soc-status-report-2.html">previous</a> status report; let's see a brief summary:<br /><ul><li>The library has been simplified removing all those bits that were aimed at "generic process management".  Now it is focused on child process managing only, although extending it to support other process-related functionality is still possible (preserving compatibility with the current API).  It'll be better to design and implement these features when really needed because they will require <i>a lot</i> of work and cannot be planned right now; doing so might result in an incomplete and clusmy design.  Yup... my mentor (Jeff Garland) was right when he suggested to go this simplified route at the very beginning!</li><li>Due to the above simplifications, some classes are not templated any more (the stuff that depended on the template parameters is now gone).  I bet some of them could still be, but this can be easily changed later on.<br /></li><li>There is now a specialized launcher in the library to painlessly start command pipelines.  This also comes with a helper process group class to treat the set of processes as a unique entity.</li><li>The user now has much more flexibility to specify how a child process' channels behave.  While documenting the previous API it became clear that it was incomplete and hard to understand.</li><li>Code from all launchers has been unified in a base private class to avoid duplication and ensure consistency across those classes.  Similar changes have ocurred in the test suite, which helped in catching some obscure problems.</li><li>Related to previous, many of the code used to do the actual task of spawning a process has been moved out of the individual launcher classes into some generic private functions.  This was done to share more code, improve cohesion and readability.<br /></li><li>The documentation is now much better, although it still lacks a chapter about design issues.  See the <a href="http://www.NetBSD.org/%7Ejmmv/process/">online snapshot</a> for more details.</li><li>And, of course, multiple bug fixes and cleanups.<br /></li></ul>Still, I haven't had a chance to ask for a public review in Boost's developers mailing list.  The problem is that I continously find things to improve or to complete and prefer to do them before asking for the review.  However, as time is running out I'll be forced to do this in the forthcoming week to get some more feedback in time.
+          <article>
+
+<p>I am pleased to announce that the first release of <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a>, 0.1.0, is <em>finally</em> here! You can download the sources and prebuilt binaries from the <a href="https://github.com/bazelbuild/sandboxfs/releases/tag/sandboxfs-0.1.0">0.1.0 release page</a> and you can read the <a href="https://github.com/bazelbuild/sandboxfs/blob/master/INSTALL.md">installation instructions</a> for more details.</p>
+
+<p>The journey to this first release has been a long one. sandboxfs was first conceived over two years ago, was <a href="/2017/08/introducing-sandboxfs.html">first announced in August 2017</a>, showed its <a href="https://blog.bazel.build/2018/04/13/preliminary-sandboxfs-support.html">first promising results in April 2018</a>, and has been undergoing a rewrite from Go to Rust. (And by the way, this has been my 20% project at Google so rest assured that they are still possible!)</p>
+
+<p>Alright. All that basic information laid out, let&rsquo;s take a look at what this is.</p>
+
+<h1 id="what-is-sandboxfs">What is sandboxfs?</h1>
+
+<p>sandboxfs is a FUSE file system that exposes an arbitrary view of the host&rsquo;s file system. In other words: it exposes directories or files from your file system in a completely different layout without having to copy or symlink them. You can think of sandboxfs as an advanced version of <a href="https://bindfs.org/">bindfs</a> (or <code>mount --bind</code> or <code>mount_null(8)</code> depending on your system) in which you can combine and nest files.</p>
+
+<p>To put this in a concrete example, let&rsquo;s say you want to create a container to run a compiler in. You could do something like the following:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">$ sandboxfs <span class="se">\
+</span><span class="se"></span>    --mapping<span class="o">=</span>rw:/:/tmp/scratch <span class="se">\
+</span><span class="se"></span>    --mapping<span class="o">=</span>ro:/usr/bin:/usr/bin <span class="se">\
+</span><span class="se"></span>    --mapping<span class="o">=</span>ro:/usr/include:/usr/include <span class="se">\
+</span><span class="se"></span>    --mapping<span class="o">=</span>ro:/usr/lib:/usr/lib <span class="se">\
+</span><span class="se"></span>    /tmp/mnt</code></pre></div>
+<p>which would create a hierarchy under <code>/tmp/mnt</code>. Under that tree, all writes would go to <code>/tmp/scratch</code> except for the <code>/usr/bin</code>, <code>/usr/include</code> and <code>/usr/lib</code> subdirectories which would be read-only and correspond to the real directories at root. With this, you could constrain a compiler under <code>/tmp/mnt</code> (say, using chroot) and have it see only the things you allowed it to see.</p>
+
+<p>So far so good. But the real key feature of sandboxfs is that it provides a &ldquo;side channel&rdquo; to reconfigure the mappings at runtime without having to remount the file system. This is critical for the Bazel use case described below as is what allows us to achieve good performance.</p>
+
+<h1 id="use-cases">Use cases</h1>
+
+<p>sandboxfs was primarily targeted at making <a href="https://bazel.build/">Bazel</a>&rsquo;s sandboxing mechanism faster. The Bazel build system allows each build action to be isolated from the rest of the system, and to do so, it currently constructs a sandbox using symlinks. The problems are that: symlinks do not scale because they require a system call for each input, and symlinks are &ldquo;unsafe&rdquo; because some tools like to use their real paths (possibly &ldquo;escaping&rdquo; the sandbox). You can read much more about this topic in the <a href="https://blog.bazel.build/2017/08/25/introducing-sandboxfs.html">Introducing sandboxfs</a> post.</p>
+
+<p>But there are more use cases than this. The one that I&rsquo;d like to get to at some point, and the one that really sparked the idea for this project even before Bazel, is pkg_comp. <a href="https://github.com/jmmv/pkg_comp">pkg_comp</a> uses chroot sandboxes to build pkgsrc packages in and, at the moment, constructs the contents of the chroot using either bindfs or <code>mount_null</code> depending on the platform. Instantiating many mount points is problematic (e.g. each mount operation can be slow and OSXFUSE has a limit on the number of mount points), and fragile. Using sandboxfs would let pkg_comp instantiate a single mount point, resolving these issues.</p>
+
+<p>Lastly, you can imagine this being useful for cases where you have to generate a file system that resembles a &ldquo;real system&rdquo; in which to run contained commands or services &ndash; i.e. the root file system of a container. Using sandboxfs, you can create such a view very cheaply, both in time and in disk space.</p>
+
+<h1 id="rust-rewrite">Rust rewrite</h1>
+
+<p>The original implementation of sandboxfs was in Go, which was great to make something functional and relatively robust. Unfortunately, I reached a point where that implementation was showing performance problems that were hard to overcome and, at that time, I was getting interested in Rust.</p>
+
+<p>If you remember from my <a href="/2018/05/rust-review-introduction.html">Rust review: Introduction</a> post from almost a year ago, I decided to learn Rust and, as part of the process, rewrite sandboxfs in it. Well, the sandboxfs 0.1.0 release is the culmination of this experiment!</p>
+
+<p>The journey has been mostly good. I&rsquo;m <em>much</em> more confident about the new codebase than the old one due to the robustness enforced by the language, and I feel we can obtain all possible performance out of it. Profiling the Go version showed bottlenecks in the Go&rsquo;s runtime, and Rust doesn&rsquo;t have a runtime. That might have been fixable&hellip; but after having spotted a bunch of concurrency bugs in the Go code while writing the Rust version (because Rust wouldn&rsquo;t just let me transcribe the old code structure &ldquo;as is&rdquo;), I can&rsquo;t say I want to go back to the old version.</p>
+
+<p>At this point, however, the major problem is the lack of maturity in critical dependencies: I&rsquo;m particularly concerned about the FUSE library, for example, as it feels mostly abandoned and in poor shape (which is the same that happened with Go by the way). I mean, it works, but it lacks some important features that prevent implementing sandboxfs completely, like kernel cache invalidations. Upgrading the library to support a more-recent FUSE protocol versions is certainly possible, but that&rsquo;d likely mean forking <em>and</em> maintaining the bindings.</p>
+
+<h1 id="performance">Performance</h1>
+
+<p>The million-dollar question: <strong>is the new Rust version faster than the old Go version?</strong> Well&hellip; it <em>should</em> be and original prototyping showed that it was&hellip;. but I&rsquo;m having trouble getting good measurements with Bazel builds. In fact, even the Go version of a year ago is behaving much worse than it did!?</p>
+
+<p>I think a bug deep in our build stack is responsible for these regressions. We recently diagnosed what the problem was and fixed it, so I&rsquo;m hopeful that I&rsquo;ll be able to get good measurements once the fix rolls out. At that point I&rsquo;ll benchmark large builds again and publish a post in the Bazel blog.</p>
+
+<p>To be honest, the inability to measure great performance is the reason why I&rsquo;ve postponed this release for so long. I wanted to be able to post impressive numbers at release time&hellip; but delaying the release any further is harmful. Given that sandboxfs now works well-enough in combination with Bazel, having a simple installation mechanism from crates.io and prebuilt binaries will be very helpful to let people try things out.</p>
+
+<h1 id="parting-words">Parting words</h1>
+
+<p>Anyway, time for you to try this out!</p>
+
+<p>If you have Cargo installed, you should be up and running with a simple <code>cargo install sandboxfs</code> (assuming you have <code>pkgconfig</code> and the FUSE development libraries on your system). Otherwise, please head to the <a href="https://github.com/bazelbuild/sandboxfs/blob/master/INSTALL.md">installation instructions</a> for more details and alternative installation methods.</p>
+
+<p>Make sure to read the <code>sandboxfs(1)</code> manual page once installed as it contains a lot more information on usage and caveats. Unfortunately I cannot easily serve it preformatted in HTML (<a href="https://dspinellis.github.io/manview/">manview</a> looked very promising&hellip; but it fails to render this page correctly).</p>
+
+<p>NOTE: If you are a Bazel user&hellip; simply pass <code>--experimental_use_sandboxfs</code> to Bazel to get faster sandboxed builds! But, as the name implies, this is experimental so expect the possibility of breakage.</p>
+
+<p>And I need help in many areas! Roughly:</p>
+
+<ul>
+<li><p>Addressing To-Dos in the codebase: there are plenty of &ldquo;little&rdquo; problems annotated with <code>TODO</code> which would deliver more features, fix some obvious corner cases, and improve performance.</p></li>
+
+<li><p>Figuring out what to do with the FUSE library. I would like to bring it up to a current kernel protocol version and make it multithreaded, but these changes are very intrusive and would likely require a fork. Not sure I have the time to maintain that&hellip;</p></li>
+
+<li><p>Adding more features to OSXFUSE. In particular, the thing I would really like is to add <code>getattrlist(2)</code> support to the kernel extension (dunno if we&rsquo;d need to change the protocol). Without this, <a href="https://github.com/jmmv/sandboxctl/blob/90e556b8d8760b9ec2e5383db88fff4c8882148a/modules/darwin_native.subr#L233">Xcode tools do not run within a chroot</a>&hellip; which prevents the pkg_comp use case described above.</p></li>
+</ul>
+
+<p>Either way, let me know how it goes or if you would like to help 😊</p>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -164,7 +233,7 @@ There have been many changes in Boost.Process&#39; code base since the previous 
     
       <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
     
-      <li><a href="/2019/02/hello-sandboxfs-0.1.0.html">Hello, sandboxfs 0.1.0</a></li>
+      <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
     
       <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
     
@@ -183,8 +252,11 @@ There have been many changes in Boost.Process&#39; code base since the previous 
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (7)
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (8)
         <ul id="archive-year-2019" class="collapse">
+          
+            
+            <li><a href="/archive.html#2019-09">September 2019</a> (1)</li>
           
             
             <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
@@ -712,13 +784,13 @@ There have been many changes in Boost.Process&#39; code base since the previous 
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2006/08/imap-gateway-to-gmail.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2019/01/open-files-limit-macos-and-jvm.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2006/08/soc-boostprocess-published.html">Next post &raquo;</a></span>
+              <span><a href="http://julio.meroh.net/2019/02/encode-your-assumptions.html">Next post &raquo;</a></span>
             
           </div>
 
@@ -730,8 +802,8 @@ There have been many changes in Boost.Process&#39; code base since the previous 
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2006\/08\/soc-status-report-3.html";
-            this.page.identifier = "2006-08-12-soc-status-report-3";
+            this.page.url = "http:\/\/julio.meroh.net\/2019\/02\/sandboxfs-0-1-0.html";
+            this.page.identifier = "2019-02-05-sandboxfs-0-1-0";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -746,14 +818,6 @@ There have been many changes in Boost.Process&#39; code base since the previous 
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2006/08/soc-status-report-3.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>

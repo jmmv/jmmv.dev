@@ -6,21 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
 
-  <title>Kyua: Weekly status report - Julio Merino</title>
-  <meta content="Kyua: Weekly status report - Julio Merino" property="og:title">
+  <title>Safely restoring the previous working directory - Julio Merino</title>
+  <meta content="Safely restoring the previous working directory - Julio Merino" property="og:title">
 
   
 
   
-  <meta name="description" content="This week&#39;s work has been quite active on the ATF front but not so much in the Kyua one. I keep being incredibly busy on the weekends (read: traveling!) so it&#39;s hard to get any serious development work done.
-What has happened?
-Finally tracked down and fixed some random atf-run crashes that had been hunting the NetBSD test suite for months (see PR bin/44176). The fix is in reality an ugly workaround for the fact that a work directory cannot be considered &#34;">
+  <meta name="description" content="The current working directory, or CWD for short, is a process-wide property. It is good practice to treat the CWD as read-only because it is essentially global state: if you change the CWD of your process at any point, any relative paths you might have stored in memory1 will stop working. I learned this first many years ago when using the Boost.Filesystem library: I could not find a function to change the CWD and that was very much intentional for this reason.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="http://julio.meroh.net/2011/04/kyua-weekly-status-report.html" property="og:url">
+  <meta content="http://julio.meroh.net/2019/09/safe-chdir-to-previous.html" property="og:url">
 
-  <link rel="canonical" href="http://julio.meroh.net/2011/04/kyua-weekly-status-report.html">
+  <link rel="canonical" href="http://julio.meroh.net/2019/09/safe-chdir-to-previous.html">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino" href="/feed.xml" />
 
@@ -105,10 +103,10 @@ Finally tracked down and fixed some random atf-run crashes that had been hunting
 
     <div class="page-header">
       <div class="container">
-        <h1>Kyua: Weekly status report</h1>
+        <h1>Safely restoring the previous working directory</h1>
 
-        <p>April 3, 2011 &middot;
-        About 2 minutes</p>
+        <p>September 21, 2019 &middot;
+        About 3 minutes</p>
 
         
       </div>
@@ -118,7 +116,51 @@ Finally tracked down and fixed some random atf-run crashes that had been hunting
       <div class="row">
         <div class="col-md-9">
           
-          <article>This week's work has been quite active on the ATF front but not so much in the Kyua one. I keep being incredibly busy on the weekends (read: traveling!) so it's hard to get any serious development work done.<br /><br />What has happened?<br /><br /><ul><li>Finally tracked down and fixed some random atf-run crashes that had been hunting the NetBSD test suite for months (see <a href="http://gnats.netbsd.org/cgi-bin/query-pr-single.pl?number=44176">PR bin/44176</a>). The fix is in reality an ugly workaround for the fact that a work directory cannot be considered "stable" even after the test case terminates. There may be dying processes around that touch the work directory contents, and the cleanup code in atf-run was not coping well with those. As it turns out, this problem also exists in Kyua (even though it's not as pronounced because arbitrary failures when running a test case do not crash the runtime engine) so I filed <a href="http://code.google.com/p/kyua/issues/detail?id=17">issue 17</a> to address it.</li><li><a href="http://www.netbsd.org/~jmmv/atf/news.html#20110331-atf-0-13-released">Released ATF 0.13</a> and imported it both to NetBSD-current and pkgsrc. As a side note, Kyua requires the new features in this release, so putting it out there is a requirement to release Kyua 0.1. This new release does not have a big effect on NetBSD though, because the copy of ATF in NetBSD has been constantly receiving cherry-picks of the upstream fixes.</li><li>Replaced several TODO items in the Kyua code with proper calls to the logging subsystem. These TODO items were referring to conditions in the code that should not happen, but for which we cannot do any proper recovery (like errors in a destructor). Sure, these could be better signaled as an assertion... but these code paths can be triggered in extremely-tricky conditions and having Kyua crash because of them is not nice (particularly when the side-effects of executing that code paths are non-critical).</li></ul><div>So, in retrospect, I have fulfilled the goal set past week of releasing ATF 0.13, but I haven't got to the addition of integration tests. Oh well... let's see if this upcoming week provides more spare time.</div>
+          <article><p>The <strong>current working directory</strong>, or CWD for short, is a process-wide property. It is good practice to treat the CWD as read-only because it is essentially global state: if you change the CWD of your process at any point, any relative paths you might have stored in memory<sup class="footnote-ref" id="fnref:abspaths"><a href="#fn:abspaths">1</a></sup> will stop working. I learned this first many years ago when using the Boost.Filesystem library: I could not find a function to change the CWD and that was very much intentional for this reason.</p>
+
+<p>The good thing is that, in the vast majority of the cases, you do <em>not</em> have to change the CWD of your process. For example, when you spawn a subprocess, you can change the CWD of that subprocess only, not your own. So think twice before you call into <code>chdir</code>: there is almost certainly another way to do what you intend without using <code>chdir</code>.</p>
+
+<p>Unfortunately, there might still be cases where you are forced to change the CWD of your process. And in those cases, you must be prepared to restore the previous directory to minimize the scope of your global state changes. The common thing you will see people do is:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">os</span>
+
+<span class="n">previous</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span>
+<span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="s2">&#34;/bin&#34;</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="k">print</span><span class="p">(</span><span class="s2">&#34;Entered&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span>
+    <span class="c1"># Do some time-consuming operation.</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">previous</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="s2">&#34;Restored&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span></code></pre></div>
+<p>Which looks OK, right? Except&hellip; the file system is a system-wide multi-threaded beast. What happens if the previous directory moved or disappeared between the <code>os.getcwd</code> call and the <code>os.chdir</code> call? The second call will fail, you won&rsquo;t be able to go back to the previous directory, and you will leave the process in an inconsistent state because there is no way for you to recover from the error.</p>
+
+<p>To resolve this, <strong>think about file descriptors, not paths</strong>.</p>
+
+<p>The idea is to open a file descriptor for the CWD <em>before</em> you change it. If this operation fails, you fail early before you get to do any state-mutating operations (the <code>chdir</code>). And if this operation succeeds, then you hold a reference to the previous directory so, no matter what happens to the file system, you will be able to restore access to the previous CWD. Then, when you are done with your operations, you restore the CWD by using the <code>fchdir</code> system call instead. The above code would look like:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">os</span>
+
+<span class="n">previous</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="nb">open</span><span class="p">(</span><span class="s2">&#34;.&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">O_RDONLY</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="s2">&#34;/bin&#34;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s2">&#34;Entered&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span>
+        <span class="c1"># Do some time-consuming operation.</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">fchdir</span><span class="p">(</span><span class="n">previous</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="s2">&#34;Restored&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">previous</span><span class="p">)</span></code></pre></div>
+<p>That&rsquo;s it. This is a very simple change that will make your code more robust in the face of file system modifications.</p>
+
+<p>You might want to try to see what happens if you do actually move or delete the previous directory while &ldquo;Do some time-consuming operation&rdquo; runs. Replace that line with a <code>time.sleep(10)</code> and mess around with the previous directory from the console. Note that you might get errors coming from the <code>os.getcwd</code> calls in log messages, but the <code>os.fchdir</code> call will succeed.</p>
+<div class="footnotes">
+
+<hr />
+
+<ol>
+<li id="fn:abspaths">There are plenty of programs around that turn any paths given to them to their absolute form to workaround issues with changes to the CWD. Doing so, however, carries its own problems: users typically provide relative paths to programs and if the program modifies them in any way, users get confused because what they typed doesn&rsquo;t match what the program printed back in e.g. error messages.
+ <a class="footnote-return" href="#fnref:abspaths"><sup>[return]</sup></a></li>
+</ol>
+</div>
 </article>
         </div>
         <div class="col-md-3 sidebar">
@@ -165,7 +207,7 @@ Finally tracked down and fixed some random atf-run crashes that had been hunting
     
       <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
     
-      <li><a href="/2019/02/hello-sandboxfs-0.1.0.html">Hello, sandboxfs 0.1.0</a></li>
+      <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
     
       <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
     
@@ -184,8 +226,11 @@ Finally tracked down and fixed some random atf-run crashes that had been hunting
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (7)
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (8)
         <ul id="archive-year-2019" class="collapse">
+          
+            
+            <li><a href="/archive.html#2019-09">September 2019</a> (1)</li>
           
             
             <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
@@ -713,13 +758,13 @@ Finally tracked down and fixed some random atf-run crashes that had been hunting
         <div class="post-links">
           <div class="pagination">
             
-              <span><a href="http://julio.meroh.net/2011/03/kyua-weekly-status-report_27.html">&laquo; Previous post</a></span>
+              <span><a href="http://julio.meroh.net/2019/03/optimizing-tree-deletions.html">&laquo; Previous post</a></span>
             
 
             <span><a href="/archive.html">All posts</a></span>
 
             
-              <span><a href="http://julio.meroh.net/2011/04/kyua-weekly-status-report_10.html">Next post &raquo;</a></span>
+              <span></span>
             
           </div>
 
@@ -731,8 +776,8 @@ Finally tracked down and fixed some random atf-run crashes that had been hunting
       <div id="disqus_thread">
         <script>
           var disqus_config = function () {
-            this.page.url = "http:\/\/julio.meroh.net\/2011\/04\/kyua-weekly-status-report.html";
-            this.page.identifier = "2011-04-03-kyua-weekly-status-report";
+            this.page.url = "http:\/\/julio.meroh.net\/2019\/09\/safe-chdir-to-previous.html";
+            this.page.identifier = "2019-09-21-safe-chdir-to-previous";
           };
           (function() { 
             var d = document, s = d.createElement('script');
@@ -747,14 +792,6 @@ Finally tracked down and fixed some random atf-run crashes that had been hunting
           <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
           powered by Disqus.</a>
         </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2011/04/kyua-weekly-status-report.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
       </div>
       
       </div>
