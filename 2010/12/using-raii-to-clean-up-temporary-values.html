@@ -1,9 +1,10 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
   <title>Using RAII to clean up temporary values from a stack - jmmv.dev</title>
@@ -36,65 +37,73 @@
   <body>
     <header class="site-header">
 
-<nav class="navbar navbar-default navbar-fixed-top">
-  <div class="container-fluid">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle collapsed"
-              data-toggle="collapse" data-target="#navbar"
-              aria-expanded="false" aria-controls="navbar">
-        <span class="sr-only">Toggle navigation</span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <a class="navbar-brand" href="/">jmmv.dev</a>
-    </div>
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+  <a class="navbar-brand" href="/">jmmv.dev</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
 
-    <div id="navbar" class="navbar-collapse collapse">
-      <ul class="nav navbar-nav">
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
         
-          
-            <li><a class="page-link" href="/about.html" >About</a></li>
-          
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
         
-          
-            <li><a class="page-link" href="/essays.html" >Essays</a></li>
-          
+      
         
-          
-            <li><a class="page-link" href="/software.html" >Software</a></li>
-          
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
         
-          
-            <li><a class="page-link" href="/work.html" >Work</a></li>
-          
+      
         
-      </ul>
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/work.html" >Work</a>
+          </li>
+        
+      
+    </ul>
 
-      <form class="navbar-form navbar-right" method="get" role="search"
-            action="http://www.google.com/search">
-          <div class="form-group">
-            <input type="text" name="query" class="form-control input-sm"
-                   placeholder="Search">
-            <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-          </div>
-          <button type="submit" value="Search" class="btn btn-default btn-sm">
-            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="http://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
           </button>
-      </form>
-
-      <ul class="nav navbar-nav navbar-right">
-        
-          
-            <li><a class="page-link" href="/archive.html" >Archive</a></li>
-          
-        
-          
-            <li><a class="page-link" href="/series.html" >Series</a></li>
-          
-        
-      </ul>
-    </div>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
   </div>
 </nav>
 
@@ -115,88 +124,124 @@
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-          
-          <article>For the last couple of days, I have been playing around with the <a href="http://www.lua.org/">Lua</a> C API and have been writing a thin wrapper library for C++. The main purpose of this auxiliary library is to ensure that global interpreter resources such as the global state or the execution stack are kept consistent in the presence of exceptions &mdash; and, in particular, that none of these are leaked due to programming mistakes when handling error codes.<br /><br />To illustrate this point, let's forget about Lua and consider a simpler case. Suppose we lost the ability to pass arguments and return values from functions in C++ and all we have is a stack that we pass around. With this in mind, we could implement a <tt>multiply</tt> function as follows:<pre>void multiply(std::stack< int >& context) {<br />    const int arg1 = context.top();<br />    context.pop();<br />    const int arg2 = context.top();<br />    context.pop();<br />    context.push(arg1 * arg2);<br />}</pre>And we could call our function as this:<pre>std::stack< int > context;<br />context.push(5);<br />context.push(6);<br />multiply(context);<br />const int result = s.top();<br />s.pop();</pre>In fact, my friends, this is more-or-less what your C/C++ compiler is internally doing when converting code to assembly language. The way the stack is organized to perform calls is known as the <a href="http://en.wikipedia.org/wiki/Calling_conventions">calling conventions</a> of an ABI (language/platform combination).<br /><br />Anyway, back to our point. One important property of such a stack-based system is that any function that deals with the stack must leave it in a consistent state: if the function pushes temporary values (read: local variables) into the stack, such temporary values must be gone upon return no matter how the function terminates. Otherwise, the caller will not find the stack as it expects, which will surely cause trouble at a later stage. The above example works just fine because our function is extremely simple and does not put anything on the stack.<br /><br />But things get messier when our functions can fail halfway through, and, in particular, if such failures are signaled by exceptions. In these cases, the function will abort abruptly and the function must take care to clean up any values that may still be left on the stack. Let's consider another example:<pre>void magic(std::stack< int >& context) {<br />    const int arg1 = context.top();<br />    context.pop();<br />    const int arg2 = context.top();<br />    context.pop();<br /><br />    context.push(arg1 * arg2);<br />    context.push(arg1 / arg2);<br />    try {<br />        ... do something with the two values on top ...<br /><br />        context.push(arg1 - arg2);<br />        try {<br />            ... do something with the three values on top ...<br />        } catch (...) {<br />            context.pop();  // arg1 - arg2<br />            throw;<br />        }<br />        context.pop();<br />    } catch (...) {<br />        context.pop();  // arg1 / arg2<br />        context.pop();  // arg1 * arg2<br />        throw;<br />    }<br />    context.pop();<br />    context.pop();<br />}</pre>The above is a completely fictitious and useless function, but serves to illustrate the point.  <tt>magic()</tt> starts by pushing two values on the stack and then performs some computation that reads these two values.  It later pushes an additional value and does some more computations on the three temporary values that are on the top of the stack.<br /><br />The "problem" is that the computation code can throw an exception. If it does, we must sanitize the stack to remove the two or three values we have already pushed. Otherwise, the caller will receive the exception, it will assume nothing has happened, and will leak values on the stack (bad thing). To prevent this, we have added a couple of try/catch clauses to capture these possible exceptions and to clean up the already-pushed values before exiting the function. Unfortunately, this gets old very quickly: having to add try/catch statements surrounding every call is boring, ugly, and hard to read (remember that, <i>potentially</i>, any statement can throw an exception).  You can see this in the example above with the two nested try/catch blocks.<br /><br />To mitigate this situation, we can apply a <a href="http://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization">RAII</a>-like technique to make popping elements on errors completely transparent and automated. If we can make it transparent, writing the code is easier and reading it is trivial; if we can make it automated, we can be certain that our error paths (rarely tested!) correctly clean up any global state. In C++, destructors are <i>deterministically</i> executed whenever a variable goes out of scope, so we can use this to our advantage to clean up temporary values. Let's consider this class:<pre>class temp_stack {<br />    std::stack< int >& _stack;<br />    int _pop_count;<br /><br />public:<br />    temp_stack(std::stack< int >& stack_) :<br />        _stack(stack_), _pop_count(0) {}<br /><br />    ~temp_stack(void)<br />    {<br />        while (_pop_count-- > 0)<br />            _stack.pop();<br />    }<br /><br />    void push(int i)<br />    {<br />        _stack.push(i);<br />        _pop_count++;<br />    }<br />};</pre>With this, we can rewrite our function as:<pre>void magic(std::stack< int >& context) {<br />    const int arg1 = context.top();<br />    context.pop();<br />    const int arg2 = context.top();<br />    context.pop();<br /><br />    temp_stack temp(context);<br /><br />    temp_stack.push(arg1 * arg2);<br />    temp_stack.push(arg1 / arg2);<br />    ... do something with the two values on top ...<br /><br />    temp_stack.push(arg1 - arg2);<br />    ... do something with the three values on top ...<br /><br />    // Yes, we can return now.  No need to do manual pop()s!<br />}</pre>Simple, huh?  Our <tt>temp_stack</tt> function keeps track of how many elements have been pushed on the stack.  Whenever the function terminates, be it due to reaching the end of the body or due to an exception thrown anywhere, the <tt>temp_stack</tt> destructor will remove all elements previously registered from the stack.  This ensures that the function leaves the global state (the stack) as it was on entry &mdash; modulo the function parameters consumed as part of the calling conventions.<br /><br />So how does all this play together with Lua? Well, Lua maintains a stack to communicate parameters and return values between C and Lua. Such stack can be managed in a similar way with a RAII class, which makes it very easy to write native functions that deal with the stack and clean it up correctly in all cases.  I would like to show you some non-fictitious code right now, but it's not ready yet ;-)  But when it is, it will be part of <a href="http://code.google.com/p/kyua/">Kyua</a>.  Stay tuned!<br /><br />And, to conclude: to make C++ code robust, wrap objects that need manual clean up (pointers, file descriptors, etc.) with small wrapper classes that perform such clean up on destruction. These classes are typically fully inlined and contain a single member field, so they do not impose any performance penalty. But, on the contrary, your code can avoid the need of many try/catch blocks, which are tricky to get right and hard to validate.  (Unfortunately, this technique cannot be applied in, e.g. Java or Python, because the execution of the class destructors is completely non-deterministic and not guaranteed to happen whatsoever!)
+          <div class="row">
+            <div class="col">
+              
+              <article>For the last couple of days, I have been playing around with the <a href="http://www.lua.org/">Lua</a> C API and have been writing a thin wrapper library for C++. The main purpose of this auxiliary library is to ensure that global interpreter resources such as the global state or the execution stack are kept consistent in the presence of exceptions &mdash; and, in particular, that none of these are leaked due to programming mistakes when handling error codes.<br /><br />To illustrate this point, let's forget about Lua and consider a simpler case. Suppose we lost the ability to pass arguments and return values from functions in C++ and all we have is a stack that we pass around. With this in mind, we could implement a <tt>multiply</tt> function as follows:<pre>void multiply(std::stack< int >& context) {<br />    const int arg1 = context.top();<br />    context.pop();<br />    const int arg2 = context.top();<br />    context.pop();<br />    context.push(arg1 * arg2);<br />}</pre>And we could call our function as this:<pre>std::stack< int > context;<br />context.push(5);<br />context.push(6);<br />multiply(context);<br />const int result = s.top();<br />s.pop();</pre>In fact, my friends, this is more-or-less what your C/C++ compiler is internally doing when converting code to assembly language. The way the stack is organized to perform calls is known as the <a href="http://en.wikipedia.org/wiki/Calling_conventions">calling conventions</a> of an ABI (language/platform combination).<br /><br />Anyway, back to our point. One important property of such a stack-based system is that any function that deals with the stack must leave it in a consistent state: if the function pushes temporary values (read: local variables) into the stack, such temporary values must be gone upon return no matter how the function terminates. Otherwise, the caller will not find the stack as it expects, which will surely cause trouble at a later stage. The above example works just fine because our function is extremely simple and does not put anything on the stack.<br /><br />But things get messier when our functions can fail halfway through, and, in particular, if such failures are signaled by exceptions. In these cases, the function will abort abruptly and the function must take care to clean up any values that may still be left on the stack. Let's consider another example:<pre>void magic(std::stack< int >& context) {<br />    const int arg1 = context.top();<br />    context.pop();<br />    const int arg2 = context.top();<br />    context.pop();<br /><br />    context.push(arg1 * arg2);<br />    context.push(arg1 / arg2);<br />    try {<br />        ... do something with the two values on top ...<br /><br />        context.push(arg1 - arg2);<br />        try {<br />            ... do something with the three values on top ...<br />        } catch (...) {<br />            context.pop();  // arg1 - arg2<br />            throw;<br />        }<br />        context.pop();<br />    } catch (...) {<br />        context.pop();  // arg1 / arg2<br />        context.pop();  // arg1 * arg2<br />        throw;<br />    }<br />    context.pop();<br />    context.pop();<br />}</pre>The above is a completely fictitious and useless function, but serves to illustrate the point.  <tt>magic()</tt> starts by pushing two values on the stack and then performs some computation that reads these two values.  It later pushes an additional value and does some more computations on the three temporary values that are on the top of the stack.<br /><br />The "problem" is that the computation code can throw an exception. If it does, we must sanitize the stack to remove the two or three values we have already pushed. Otherwise, the caller will receive the exception, it will assume nothing has happened, and will leak values on the stack (bad thing). To prevent this, we have added a couple of try/catch clauses to capture these possible exceptions and to clean up the already-pushed values before exiting the function. Unfortunately, this gets old very quickly: having to add try/catch statements surrounding every call is boring, ugly, and hard to read (remember that, <i>potentially</i>, any statement can throw an exception).  You can see this in the example above with the two nested try/catch blocks.<br /><br />To mitigate this situation, we can apply a <a href="http://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization">RAII</a>-like technique to make popping elements on errors completely transparent and automated. If we can make it transparent, writing the code is easier and reading it is trivial; if we can make it automated, we can be certain that our error paths (rarely tested!) correctly clean up any global state. In C++, destructors are <i>deterministically</i> executed whenever a variable goes out of scope, so we can use this to our advantage to clean up temporary values. Let's consider this class:<pre>class temp_stack {<br />    std::stack< int >& _stack;<br />    int _pop_count;<br /><br />public:<br />    temp_stack(std::stack< int >& stack_) :<br />        _stack(stack_), _pop_count(0) {}<br /><br />    ~temp_stack(void)<br />    {<br />        while (_pop_count-- > 0)<br />            _stack.pop();<br />    }<br /><br />    void push(int i)<br />    {<br />        _stack.push(i);<br />        _pop_count++;<br />    }<br />};</pre>With this, we can rewrite our function as:<pre>void magic(std::stack< int >& context) {<br />    const int arg1 = context.top();<br />    context.pop();<br />    const int arg2 = context.top();<br />    context.pop();<br /><br />    temp_stack temp(context);<br /><br />    temp_stack.push(arg1 * arg2);<br />    temp_stack.push(arg1 / arg2);<br />    ... do something with the two values on top ...<br /><br />    temp_stack.push(arg1 - arg2);<br />    ... do something with the three values on top ...<br /><br />    // Yes, we can return now.  No need to do manual pop()s!<br />}</pre>Simple, huh?  Our <tt>temp_stack</tt> function keeps track of how many elements have been pushed on the stack.  Whenever the function terminates, be it due to reaching the end of the body or due to an exception thrown anywhere, the <tt>temp_stack</tt> destructor will remove all elements previously registered from the stack.  This ensures that the function leaves the global state (the stack) as it was on entry &mdash; modulo the function parameters consumed as part of the calling conventions.<br /><br />So how does all this play together with Lua? Well, Lua maintains a stack to communicate parameters and return values between C and Lua. Such stack can be managed in a similar way with a RAII class, which makes it very easy to write native functions that deal with the stack and clean it up correctly in all cases.  I would like to show you some non-fictitious code right now, but it's not ready yet ;-)  But when it is, it will be part of <a href="http://code.google.com/p/kyua/">Kyua</a>.  Stay tuned!<br /><br />And, to conclude: to make C++ code robust, wrap objects that need manual clean up (pointers, file descriptors, etc.) with small wrapper classes that perform such clean up on destruction. These classes are typically fully inlined and contain a single member field, so they do not impose any performance penalty. But, on the contrary, your code can avoid the need of many try/catch blocks, which are tricky to get right and hard to validate.  (Unfortunately, this technique cannot be applied in, e.g. Java or Python, because the execution of the class destructors is completely non-deterministic and not guaranteed to happen whatsoever!)
 </article>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2010/12/dependency-injection-simple-class.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span><a href="https://jmmv.dev/2011/01/happy-new-year.html">Next post &raquo;</a></span>
+                
+              </div>
+            </div>
+
+            <div class="row mt-4">
+              <div class="col">
+                
+              </div>
+            </div>
+          </div>
         </div>
+
         <div class="col-md-3 sidebar">
           <div class="row">
-  <h2>Subscribe</h2>
+  <div class="col">
+    <h2>Subscribe</h2>
 
-  <div class="row">
-    <div class="col-sm-9">
-      <p><a
-        href="https://twitter.com/jmmv"
-        class="twitter-follow-button"
-        data-show-count="false"
-        data-size="large">Follow @jmmv</a>
-        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    <div class="row">
+      <div class="col-sm-9">
+        <p><a
+          href="https://twitter.com/jmmv"
+          class="twitter-follow-button"
+          data-show-count="false"
+          data-size="large">Follow @jmmv</a>
+          <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+      </div>
+      <div class="col-sm-3">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
     </div>
-    <div class="col-sm-3">
-      <p><a href="/feed.xml"><img
-        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-    </div>
+
+    <form class="feedburner form-horizontal"
+          action="https://feedburner.google.com/fb/a/mailverify"
+          method="post"
+          target="popupwindow"
+          onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+      <input type="text" name="email"
+        placeholder="Enter your email and press enter"
+        class="form-control input-sm"/>
+      <input type="hidden" value="jmmv" name="uri"/>
+      <input type="hidden" name="loc" value="en_US"/>
+      <p>
+        <small>Subscription by
+        <a href="https://feedburner.google.com"
+        target="_blank">FeedBurner</a></small>
+      </p>
+    </form>
   </div>
-
-  <form class="feedburner form-horizontal"
-        action="https://feedburner.google.com/fb/a/mailverify"
-        method="post"
-        target="popupwindow"
-        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
-    <input type="text" name="email"
-      placeholder="Enter your email and press enter"
-      class="form-control input-sm"/>
-    <input type="hidden" value="jmmv" name="uri"/>
-    <input type="hidden" name="loc" value="en_US"/>
-    <p>
-      <small>Subscription by
-      <a href="https://feedburner.google.com"
-      target="_blank">FeedBurner</a></small>
-    </p>
-  </form>
 </div>
 
-<div class="row featured">
-  <h2>Featured posts</h2>
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
 
-  <ul>
-    
-      <li><a href="/2019/09/rest-api-rust-go.html">Sample REST API in Rust and Go</a></li>
-    
-      <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
-    
-      <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
-    
-      <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
-    
-      <li><a href="/2018/03/stick-to-projects-core-language-in-tests.html">Stick to your project&#39;s core language in your tests</a></li>
-    
-    <li><a href="/essays.html#featured">More...</a></li>
-  </ul>
+    <ul>
+      
+        <li><a href="/2019/09/rest-api-rust-go.html">Sample REST API in Rust and Go</a></li>
+      
+        <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
+      
+        <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
+      
+        <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
+      
+        <li><a href="/2018/03/stick-to-projects-core-language-in-tests.html">Stick to your project&#39;s core language in your tests</a></li>
+      
+      <li><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
 </div>
 
-<div class="row archive">
-  <h2>Archive</h2>
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
 
-  <ul>
+    <ul>
     
       <li>
         
         <a data-toggle="collapse" href="#archive-year-2019">2019</a> (9)
         <ul id="archive-year-2019" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
         </ul>
       </li>
     
@@ -204,25 +249,25 @@
         
         <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
         <ul id="archive-year-2018" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -230,19 +275,19 @@
         
         <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
         <ul id="archive-year-2017" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -250,25 +295,25 @@
         
         <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
         <ul id="archive-year-2016" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
         </ul>
       </li>
     
@@ -276,31 +321,31 @@
         
         <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
         <ul id="archive-year-2015" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -308,22 +353,22 @@
         
         <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
         <ul id="archive-year-2014" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -331,28 +376,28 @@
         
         <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
         <ul id="archive-year-2013" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
         </ul>
       </li>
     
@@ -360,37 +405,37 @@
         
         <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
         <ul id="archive-year-2012" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
         </ul>
       </li>
     
@@ -398,40 +443,40 @@
         
         <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
         <ul id="archive-year-2011" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
         </ul>
       </li>
     
@@ -439,31 +484,31 @@
         
         <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
         <ul id="archive-year-2010" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
         </ul>
       </li>
     
@@ -471,34 +516,34 @@
         
         <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
         <ul id="archive-year-2009" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
         </ul>
       </li>
     
@@ -506,43 +551,43 @@
         
         <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
         <ul id="archive-year-2008" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
         </ul>
       </li>
     
@@ -550,43 +595,43 @@
         
         <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
         <ul id="archive-year-2007" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-03">March 2007</a> (7)</li>
+          <li><a href="/archive.html#2007-03">March 2007</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
         </ul>
       </li>
     
@@ -594,43 +639,43 @@
         
         <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
         <ul id="archive-year-2006" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-05">May 2006</a> (6)</li>
+          <li><a href="/archive.html#2006-05">May 2006</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
         </ul>
       </li>
     
@@ -638,43 +683,43 @@
         
         <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
         <ul id="archive-year-2005" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-10">October 2005</a> (22)</li>
+          <li><a href="/archive.html#2005-10">October 2005</a> (22)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-04">April 2005</a> (5)</li>
+          <li><a href="/archive.html#2005-04">April 2005</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-03">March 2005</a> (12)</li>
+          <li><a href="/archive.html#2005-03">March 2005</a> (12)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
         </ul>
       </li>
     
@@ -682,101 +727,90 @@
         
         <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
         <ul id="archive-year-2004" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
         </ul>
       </li>
     
-  </ul>
+    </ul>
+  </div>
 </div>
 
         </div>
       </div>
 
       <div class="row">
-        <div class="post-links">
-          <div class="pagination">
-            
-              <span><a href="https://jmmv.dev/2010/12/dependency-injection-simple-class.html">&laquo; Previous post</a></span>
-            
+        <div class="col">
+          <div id="disqus_thread">
+            <script>
+              var disqus_config = function () {
+                this.page.url = "https:\/\/jmmv.dev\/2010\/12\/using-raii-to-clean-up-temporary-values.html";
+                this.page.identifier = "2010-12-27-using-raii-to-clean-up-temporary-values";
+              };
+              (function() { 
+                var d = document, s = d.createElement('script');
 
-            <span><a href="/archive.html">All posts</a></span>
+                s.src = '//jmmv.disqus.com/embed.js';
 
-            
-              <span><a href="https://jmmv.dev/2011/01/happy-new-year.html">Next post &raquo;</a></span>
-            
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+              })();
+            </script>
+            <noscript>Please enable JavaScript to view the
+              <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+              powered by Disqus.</a>
+            </noscript>
           </div>
-
+          
+          <p>Comments from the original Blogger-hosted post:</p>
+          <script src="https://apis.google.com/js/plusone.js"></script>
+          <div class="g-comments"
+              data-href="http://julipedia.meroh.net/2010/12/using-raii-to-clean-up-temporary-values.html"
+              data-first_party_property="BLOGGER"
+              data-view_type="FILTERED_POSTMOD">
+          </div>
           
         </div>
       </div>
-
-      <div class="row">
-      <div id="disqus_thread">
-        <script>
-          var disqus_config = function () {
-            this.page.url = "https:\/\/jmmv.dev\/2010\/12\/using-raii-to-clean-up-temporary-values.html";
-            this.page.identifier = "2010-12-27-using-raii-to-clean-up-temporary-values";
-          };
-          (function() { 
-            var d = document, s = d.createElement('script');
-
-            s.src = '//jmmv.disqus.com/embed.js';
-
-            s.setAttribute('data-timestamp', +new Date());
-            (d.head || d.body).appendChild(s);
-          })();
-        </script>
-        <noscript>Please enable JavaScript to view the
-          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
-          powered by Disqus.</a>
-        </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2010/12/using-raii-to-clean-up-temporary-values.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
-      </div>
-      
-      </div>
     </div>
 
-    <div class="container">
-  <footer>
-    <p class="pull-right"><a href="#">Back to top</a></p>
-    <p>Copyright 2019 Julio Merino</p>
-  </footer>
-</div>
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2019 Julio Merino</p>
+    </div>
+  </div>
+</footer>
 
 <script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/css/bootstrap.min.js"></script>
+<script src="/js/bootstrap.min.js"></script>
 
 <script>
 $('article :header').each(function() {
   var attr = $(this).attr('id');
   if (typeof attr !== typeof undefined && attr !== false) {
     $(this).append('<a class="anchor" href="#' + $(this).context.id + '">' +
-      '<span class="glyphicon glyphicon-link" aria-hidden="true"></span>' +
+      '<img src="/octicons/link.svg" aria-hidden="true">' +
       '</a>')
   }
 })

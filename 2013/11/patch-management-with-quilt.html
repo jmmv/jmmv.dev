@@ -1,9 +1,10 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
   <title>Patch management with Quilt - jmmv.dev</title>
@@ -39,65 +40,73 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
   <body>
     <header class="site-header">
 
-<nav class="navbar navbar-default navbar-fixed-top">
-  <div class="container-fluid">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle collapsed"
-              data-toggle="collapse" data-target="#navbar"
-              aria-expanded="false" aria-controls="navbar">
-        <span class="sr-only">Toggle navigation</span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <a class="navbar-brand" href="/">jmmv.dev</a>
-    </div>
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+  <a class="navbar-brand" href="/">jmmv.dev</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
 
-    <div id="navbar" class="navbar-collapse collapse">
-      <ul class="nav navbar-nav">
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
         
-          
-            <li><a class="page-link" href="/about.html" >About</a></li>
-          
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
         
-          
-            <li><a class="page-link" href="/essays.html" >Essays</a></li>
-          
+      
         
-          
-            <li><a class="page-link" href="/software.html" >Software</a></li>
-          
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
         
-          
-            <li><a class="page-link" href="/work.html" >Work</a></li>
-          
+      
         
-      </ul>
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/work.html" >Work</a>
+          </li>
+        
+      
+    </ul>
 
-      <form class="navbar-form navbar-right" method="get" role="search"
-            action="http://www.google.com/search">
-          <div class="form-group">
-            <input type="text" name="query" class="form-control input-sm"
-                   placeholder="Search">
-            <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-          </div>
-          <button type="submit" value="Search" class="btn btn-default btn-sm">
-            <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="http://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
           </button>
-      </form>
-
-      <ul class="nav navbar-nav navbar-right">
-        
-          
-            <li><a class="page-link" href="/archive.html" >Archive</a></li>
-          
-        
-          
-            <li><a class="page-link" href="/series.html" >Series</a></li>
-          
-        
-      </ul>
-    </div>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
   </div>
 </nav>
 
@@ -118,88 +127,124 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
     <div class="container">
       <div class="row">
         <div class="col-md-9">
-          
-          <article><p>Creating and managing patches on top of a source tree maintained in a non-distributed VCS needn't be hard.  Some people handle this with Git, but I use a tool that seems to have fallen in disuse but was once very popular to create patchsets against the Linux kernel: <a href="http://savannah.nongnu.org/projects/quilt">Quilt</a>.</p> <p>What is Quilt?  As the <tt>quilt(1)</tt> manual page says:</p> <blockquote><p><b>quilt</b> - tool to manage series of patches</p><p>Quilt is a tool to manage large sets of patches by keeping track of the changes each patch makes.  Patches  can be applied, un-applied, refreshed, etc.  The key philosophical concept is that your primary output is patches.</p></blockquote> <p>In other words: Quilt is a utility that lets you create and maintain independent patches on top of a source tree. The patches you create may all be interrelated (e.g. to provide different building blocks for a bigger feature) and Quilt supports that via the concept of a stack, or series, of patches.</p> <p>To illustrate how to use Quilt in practice, I'll go over my workflow to patch the FreeBSD source tree.  The FreeBSD source tree is maintained in a Subversion repository, which is non-distributed.  This means that, if you are not a committer, you have to provide your contributions via patches.  Some contributions are tricky enough that you should attempt to submit them as a collection of simpler patches, for easier review and incorporation.  Similarly, and even if you are a committer, you may still want to work on your feature offline while preparing the different commits you will issue to the tree once you are ready: Subversion branches are not lightweight enough to use them for smallish changes.</p> <p>Let's start.</p> <p><b>The patches directory</b></p> <p>Quilt stores all the patches you manage in a <tt>patches</tt> directory of your choice.  This directory is created the first time you create a patch (see below) in the directory where you execute Quilt.  From there on, Quilt will look for this directory in the directory you currently are on in any parent directory up to the root.</p> <p>What all this means is that the first time you invoke Quilt to create a patch, you should do so from the top-most directory of the source tree.  This will ensure that, no matter where you later invoke other Quilt commands within that project, Quilt will use the same <tt>patches</tt> directory.</p> <p>You can inspect the contents of the <tt>patches</tt> directory by hand if you wish.  If you do, you will notice that all it contains are your patches plus a <tt>series</tt> file that indicates the order in which the patches need to be applied.  The data in this directory is all the information you need to share your work with the world for review or submission.</p> <p><b>Creating a new patch</b></p> <p>Creating a new patch is easy: just use <tt>quilt new</tt> and give this command the name of the patch file you are creating.  You have to append the <tt>.diff</tt> or <tt>.patch</tt> suffix to the name explicitly.  Note that all this does is register the existence of the patch, but the patch will so far be empty.  (If you are curious, you can check the contents of the <tt>.pc</tt> directory that has just been created and that Quilt uses for internal tracking.)</p> <p>Keeping in mind what we saw in the previous section, you should create your first patch by invoking Quilt from the top-level directory of the source tree.  For example:</p> <pre>~$ cd /usr/src<br />/usr/src$ quilt new move-kyuafiles.diff</pre> <p><b>Registering changes into the patch</b></p> <p>Now that you have a new patch registered, you <i>must</i> tell Quilt which files you are going to edit <b>before editing them</b>!  This is different to the majority of the version control systems as they are able to discover this on their own (with the exception of Perforce which needs to you manually "open" files upfront, albeit for different reasons).</p> <p>To do this, you can use the <tt>quilt add</tt> command or the <tt>quilt edit</tt> command.  The former only registers a file for editing into the patch while the latter invokes an editor for you.</p> <pre>/usr/src$ quilt add lib/Makefile<br />/usr/src$ vim lib/Makefile<br />... hack, hack, hack existing file ...<br />/usr/src$ mkdir lib/tests<br />/usr/src$ quilt add lib/tests/Makefile<br />... hack, hack, hack new file ...<br />/usr/src$ vim lib/tests/Makefile</pre> <p>Yes: you can just edit the original files after telling Quilt you are going to do so.  And you can even create new files from scratch.</p> <p><b>Preparing the patch</b></p> <p>Once are done with all the necessary changes to define your patch, it is time to prepare it.  There are two things to do here: the first is to (re)generate the patch file to include all your changes; and the second is to write a patch header to provide details on your patch.  The latter will be particularly useful if you share your patch for review later, but you can even use the description as your commit log.</p> <p>To regenerate the <i>current</i> patch file, use the <tt>quilt refresh</tt> command.  This has to be done explicitly for the files in the <tt>patches</tt> directory to be updated.  Until you do so, you won't see any files in there!</p> <p>To edit the patch description, use <tt>quilt header -e</tt>.  This will open an editor for you and let you type the patch description, which is later prepended to the patch file.  Take the chance to <a href="/2013/08/top-5-tips-to-write-great-commit-log.html">write a good description</a>.</p> <p>So, for every patch you create:</p> <pre>/usr/src$ quilt refresh<br />/usr/src$ quilt header -e<br />... write some text, save and exit ...</pre> <p><b>Walking the patch series up and down</b></p> <p>All we have done so far is creating a <i>single</i> patch, which is easy, but you could have done that as well by manually creating copies of the files before editing them or simply by invoking <tt>svn diff</tt> on the source tree.  Why the hassle, then?</p> <p>Where Quilt really shines is when you start defining various patches on top of each other.  For any non-trivial work you do, splitting your changes into different commits is pretty much a requirement.  Doing so simplifies the initial review and also makes the history of the code easier to understand.</p> <p>OK, so how do we create a new patch that is "detached" from the previous one?  Easy!  Invoke <tt>quilt new</tt> again.  When you do that, you will get a brand-new, empty patch on top of the stack that you can later populate.  But more importantly, don't forget now to also use <tt>quilt add</tt> on any files that will be part of this new patch.</p> <p>And here comes the really cool thing: the <tt>quilt push</tt> and <tt>quilt pop</tt> commands.  These two allow you to apply or unapply the top-most patchset and thus let you go back and forth between the various patches to work on them individually and at any time.  In other words, it's just fine to pop various patches, do some edits, do a refresh and then do the corresponding pushes to get back to the top of the set.  Ideal for when you receive feedback on your patchset and you want to address the issues before checking the code in.</p> <p>Lastly, to know where you are at, use the <tt>quilt series</tt> command.  This will print the full list of existing patches and will use different colors to show you which patches are applied, which patch you are currently working on and which patches have not yet been applied.  Play with <tt>push</tt>, <tt>pop</tt> and <tt>series</tt> to see how things move along.</p> <p><b>Caveats</b></p> <p>Unfortunately, it's not all roses.  Quilt does not "own" your source tree and, for this reason, it cannot know when you modify files without telling Quilt upfront.  As a result, it is relatively easy for unexpected changes to sneak into your patch set.  There are two things to keep in mind that will prevent most uncomfortable moments.</p> <p>The single most important thing you should remember is: <b>DO NOT UPDATE THE SOURCES WHILE THERE ARE PATCHES APPLIED</b>!  Doing so will confuse your patch set and you'll have a hard time restoring it.  The reason is that a <tt>svn update</tt> may end up modifying the files you have <i>already</i> changed, and those changes will appear to Quilt as if they were changes of your own... which means they will be integrated into your patch incorrectly.  A quick <tt>quilt pop -a && svn update && quilt push -a</tt> should do the trick though.</p> <p>Also, if you intend to create a new patch to re-edit a file that you <i>already</i> modified in another patch, do not forget to register the file with quilt! Otherwise your changes won't be segregated into the two different patches as you intended and you'll have to do this later...</p> <hr /> <p>So there you go.  You have no excuse now to contribute to open-source projects by dumping single gigantic patches that are impossible to understand nor review.  Break your contributions apart.  Your collaboration experience will be much better and, hopefully, your patches will be integrated much quicker.</p> <p>And yes, most of this can also be achieved (ab)using Git.  There goes an idea for a future post.</p>
+          <div class="row">
+            <div class="col">
+              
+              <article><p>Creating and managing patches on top of a source tree maintained in a non-distributed VCS needn't be hard.  Some people handle this with Git, but I use a tool that seems to have fallen in disuse but was once very popular to create patchsets against the Linux kernel: <a href="http://savannah.nongnu.org/projects/quilt">Quilt</a>.</p> <p>What is Quilt?  As the <tt>quilt(1)</tt> manual page says:</p> <blockquote><p><b>quilt</b> - tool to manage series of patches</p><p>Quilt is a tool to manage large sets of patches by keeping track of the changes each patch makes.  Patches  can be applied, un-applied, refreshed, etc.  The key philosophical concept is that your primary output is patches.</p></blockquote> <p>In other words: Quilt is a utility that lets you create and maintain independent patches on top of a source tree. The patches you create may all be interrelated (e.g. to provide different building blocks for a bigger feature) and Quilt supports that via the concept of a stack, or series, of patches.</p> <p>To illustrate how to use Quilt in practice, I'll go over my workflow to patch the FreeBSD source tree.  The FreeBSD source tree is maintained in a Subversion repository, which is non-distributed.  This means that, if you are not a committer, you have to provide your contributions via patches.  Some contributions are tricky enough that you should attempt to submit them as a collection of simpler patches, for easier review and incorporation.  Similarly, and even if you are a committer, you may still want to work on your feature offline while preparing the different commits you will issue to the tree once you are ready: Subversion branches are not lightweight enough to use them for smallish changes.</p> <p>Let's start.</p> <p><b>The patches directory</b></p> <p>Quilt stores all the patches you manage in a <tt>patches</tt> directory of your choice.  This directory is created the first time you create a patch (see below) in the directory where you execute Quilt.  From there on, Quilt will look for this directory in the directory you currently are on in any parent directory up to the root.</p> <p>What all this means is that the first time you invoke Quilt to create a patch, you should do so from the top-most directory of the source tree.  This will ensure that, no matter where you later invoke other Quilt commands within that project, Quilt will use the same <tt>patches</tt> directory.</p> <p>You can inspect the contents of the <tt>patches</tt> directory by hand if you wish.  If you do, you will notice that all it contains are your patches plus a <tt>series</tt> file that indicates the order in which the patches need to be applied.  The data in this directory is all the information you need to share your work with the world for review or submission.</p> <p><b>Creating a new patch</b></p> <p>Creating a new patch is easy: just use <tt>quilt new</tt> and give this command the name of the patch file you are creating.  You have to append the <tt>.diff</tt> or <tt>.patch</tt> suffix to the name explicitly.  Note that all this does is register the existence of the patch, but the patch will so far be empty.  (If you are curious, you can check the contents of the <tt>.pc</tt> directory that has just been created and that Quilt uses for internal tracking.)</p> <p>Keeping in mind what we saw in the previous section, you should create your first patch by invoking Quilt from the top-level directory of the source tree.  For example:</p> <pre>~$ cd /usr/src<br />/usr/src$ quilt new move-kyuafiles.diff</pre> <p><b>Registering changes into the patch</b></p> <p>Now that you have a new patch registered, you <i>must</i> tell Quilt which files you are going to edit <b>before editing them</b>!  This is different to the majority of the version control systems as they are able to discover this on their own (with the exception of Perforce which needs to you manually "open" files upfront, albeit for different reasons).</p> <p>To do this, you can use the <tt>quilt add</tt> command or the <tt>quilt edit</tt> command.  The former only registers a file for editing into the patch while the latter invokes an editor for you.</p> <pre>/usr/src$ quilt add lib/Makefile<br />/usr/src$ vim lib/Makefile<br />... hack, hack, hack existing file ...<br />/usr/src$ mkdir lib/tests<br />/usr/src$ quilt add lib/tests/Makefile<br />... hack, hack, hack new file ...<br />/usr/src$ vim lib/tests/Makefile</pre> <p>Yes: you can just edit the original files after telling Quilt you are going to do so.  And you can even create new files from scratch.</p> <p><b>Preparing the patch</b></p> <p>Once are done with all the necessary changes to define your patch, it is time to prepare it.  There are two things to do here: the first is to (re)generate the patch file to include all your changes; and the second is to write a patch header to provide details on your patch.  The latter will be particularly useful if you share your patch for review later, but you can even use the description as your commit log.</p> <p>To regenerate the <i>current</i> patch file, use the <tt>quilt refresh</tt> command.  This has to be done explicitly for the files in the <tt>patches</tt> directory to be updated.  Until you do so, you won't see any files in there!</p> <p>To edit the patch description, use <tt>quilt header -e</tt>.  This will open an editor for you and let you type the patch description, which is later prepended to the patch file.  Take the chance to <a href="/2013/08/top-5-tips-to-write-great-commit-log.html">write a good description</a>.</p> <p>So, for every patch you create:</p> <pre>/usr/src$ quilt refresh<br />/usr/src$ quilt header -e<br />... write some text, save and exit ...</pre> <p><b>Walking the patch series up and down</b></p> <p>All we have done so far is creating a <i>single</i> patch, which is easy, but you could have done that as well by manually creating copies of the files before editing them or simply by invoking <tt>svn diff</tt> on the source tree.  Why the hassle, then?</p> <p>Where Quilt really shines is when you start defining various patches on top of each other.  For any non-trivial work you do, splitting your changes into different commits is pretty much a requirement.  Doing so simplifies the initial review and also makes the history of the code easier to understand.</p> <p>OK, so how do we create a new patch that is "detached" from the previous one?  Easy!  Invoke <tt>quilt new</tt> again.  When you do that, you will get a brand-new, empty patch on top of the stack that you can later populate.  But more importantly, don't forget now to also use <tt>quilt add</tt> on any files that will be part of this new patch.</p> <p>And here comes the really cool thing: the <tt>quilt push</tt> and <tt>quilt pop</tt> commands.  These two allow you to apply or unapply the top-most patchset and thus let you go back and forth between the various patches to work on them individually and at any time.  In other words, it's just fine to pop various patches, do some edits, do a refresh and then do the corresponding pushes to get back to the top of the set.  Ideal for when you receive feedback on your patchset and you want to address the issues before checking the code in.</p> <p>Lastly, to know where you are at, use the <tt>quilt series</tt> command.  This will print the full list of existing patches and will use different colors to show you which patches are applied, which patch you are currently working on and which patches have not yet been applied.  Play with <tt>push</tt>, <tt>pop</tt> and <tt>series</tt> to see how things move along.</p> <p><b>Caveats</b></p> <p>Unfortunately, it's not all roses.  Quilt does not "own" your source tree and, for this reason, it cannot know when you modify files without telling Quilt upfront.  As a result, it is relatively easy for unexpected changes to sneak into your patch set.  There are two things to keep in mind that will prevent most uncomfortable moments.</p> <p>The single most important thing you should remember is: <b>DO NOT UPDATE THE SOURCES WHILE THERE ARE PATCHES APPLIED</b>!  Doing so will confuse your patch set and you'll have a hard time restoring it.  The reason is that a <tt>svn update</tt> may end up modifying the files you have <i>already</i> changed, and those changes will appear to Quilt as if they were changes of your own... which means they will be integrated into your patch incorrectly.  A quick <tt>quilt pop -a && svn update && quilt push -a</tt> should do the trick though.</p> <p>Also, if you intend to create a new patch to re-edit a file that you <i>already</i> modified in another patch, do not forget to register the file with quilt! Otherwise your changes won't be segregated into the two different patches as you intended and you'll have to do this later...</p> <hr /> <p>So there you go.  You have no excuse now to contribute to open-source projects by dumping single gigantic patches that are impossible to understand nor review.  Break your contributions apart.  Your collaboration experience will be much better and, hopefully, your patches will be integrated much quicker.</p> <p>And yes, most of this can also be achieved (ab)using Git.  There goes an idea for a future post.</p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2013/11/how-to-add-mac-os-x-screensaver-to-dock.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span><a href="https://jmmv.dev/2013/11/header-files-series-introduction.html">Next post &raquo;</a></span>
+                
+              </div>
+            </div>
+
+            <div class="row mt-4">
+              <div class="col">
+                
+              </div>
+            </div>
+          </div>
         </div>
+
         <div class="col-md-3 sidebar">
           <div class="row">
-  <h2>Subscribe</h2>
+  <div class="col">
+    <h2>Subscribe</h2>
 
-  <div class="row">
-    <div class="col-sm-9">
-      <p><a
-        href="https://twitter.com/jmmv"
-        class="twitter-follow-button"
-        data-show-count="false"
-        data-size="large">Follow @jmmv</a>
-        <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+    <div class="row">
+      <div class="col-sm-9">
+        <p><a
+          href="https://twitter.com/jmmv"
+          class="twitter-follow-button"
+          data-show-count="false"
+          data-size="large">Follow @jmmv</a>
+          <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+      </div>
+      <div class="col-sm-3">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
     </div>
-    <div class="col-sm-3">
-      <p><a href="/feed.xml"><img
-        src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-    </div>
+
+    <form class="feedburner form-horizontal"
+          action="https://feedburner.google.com/fb/a/mailverify"
+          method="post"
+          target="popupwindow"
+          onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+      <input type="text" name="email"
+        placeholder="Enter your email and press enter"
+        class="form-control input-sm"/>
+      <input type="hidden" value="jmmv" name="uri"/>
+      <input type="hidden" name="loc" value="en_US"/>
+      <p>
+        <small>Subscription by
+        <a href="https://feedburner.google.com"
+        target="_blank">FeedBurner</a></small>
+      </p>
+    </form>
   </div>
-
-  <form class="feedburner form-horizontal"
-        action="https://feedburner.google.com/fb/a/mailverify"
-        method="post"
-        target="popupwindow"
-        onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
-    <input type="text" name="email"
-      placeholder="Enter your email and press enter"
-      class="form-control input-sm"/>
-    <input type="hidden" value="jmmv" name="uri"/>
-    <input type="hidden" name="loc" value="en_US"/>
-    <p>
-      <small>Subscription by
-      <a href="https://feedburner.google.com"
-      target="_blank">FeedBurner</a></small>
-    </p>
-  </form>
 </div>
 
-<div class="row featured">
-  <h2>Featured posts</h2>
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
 
-  <ul>
-    
-      <li><a href="/2019/09/rest-api-rust-go.html">Sample REST API in Rust and Go</a></li>
-    
-      <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
-    
-      <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
-    
-      <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
-    
-      <li><a href="/2018/03/stick-to-projects-core-language-in-tests.html">Stick to your project&#39;s core language in your tests</a></li>
-    
-    <li><a href="/essays.html#featured">More...</a></li>
-  </ul>
+    <ul>
+      
+        <li><a href="/2019/09/rest-api-rust-go.html">Sample REST API in Rust and Go</a></li>
+      
+        <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
+      
+        <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
+      
+        <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
+      
+        <li><a href="/2018/03/stick-to-projects-core-language-in-tests.html">Stick to your project&#39;s core language in your tests</a></li>
+      
+      <li><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
 </div>
 
-<div class="row archive">
-  <h2>Archive</h2>
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
 
-  <ul>
+    <ul>
     
       <li>
         
         <a data-toggle="collapse" href="#archive-year-2019">2019</a> (9)
         <ul id="archive-year-2019" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
         </ul>
       </li>
     
@@ -207,25 +252,25 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
         <ul id="archive-year-2018" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
           
-            
-            <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -233,19 +278,19 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
         <ul id="archive-year-2017" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -253,25 +298,25 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
         <ul id="archive-year-2016" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
         </ul>
       </li>
     
@@ -279,31 +324,31 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
         <ul id="archive-year-2015" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -311,22 +356,22 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
         <ul id="archive-year-2014" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
         </ul>
       </li>
     
@@ -334,28 +379,28 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
         <ul id="archive-year-2013" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
         </ul>
       </li>
     
@@ -363,37 +408,37 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
         <ul id="archive-year-2012" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
         </ul>
       </li>
     
@@ -401,40 +446,40 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
         <ul id="archive-year-2011" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
         </ul>
       </li>
     
@@ -442,31 +487,31 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
         <ul id="archive-year-2010" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
         </ul>
       </li>
     
@@ -474,34 +519,34 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
         <ul id="archive-year-2009" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
         </ul>
       </li>
     
@@ -509,43 +554,43 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
         <ul id="archive-year-2008" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
         </ul>
       </li>
     
@@ -553,43 +598,43 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2007">2007</a> (85)
         <ul id="archive-year-2007" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-03">March 2007</a> (7)</li>
+          <li><a href="/archive.html#2007-03">March 2007</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
           
-            
-            <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
         </ul>
       </li>
     
@@ -597,43 +642,43 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2006">2006</a> (102)
         <ul id="archive-year-2006" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-05">May 2006</a> (6)</li>
+          <li><a href="/archive.html#2006-05">May 2006</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
           
-            
-            <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
         </ul>
       </li>
     
@@ -641,43 +686,43 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2005">2005</a> (126)
         <ul id="archive-year-2005" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-10">October 2005</a> (22)</li>
+          <li><a href="/archive.html#2005-10">October 2005</a> (22)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-04">April 2005</a> (5)</li>
+          <li><a href="/archive.html#2005-04">April 2005</a> (5)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-03">March 2005</a> (12)</li>
+          <li><a href="/archive.html#2005-03">March 2005</a> (12)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
           
-            
-            <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
         </ul>
       </li>
     
@@ -685,101 +730,90 @@ Quilt is a tool to manage large sets of patches by keeping track of the changes 
         
         <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
         <ul id="archive-year-2004" class="collapse">
+        
           
-            
-            <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
           
-            
-            <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
         </ul>
       </li>
     
-  </ul>
+    </ul>
+  </div>
 </div>
 
         </div>
       </div>
 
       <div class="row">
-        <div class="post-links">
-          <div class="pagination">
-            
-              <span><a href="https://jmmv.dev/2013/11/how-to-add-mac-os-x-screensaver-to-dock.html">&laquo; Previous post</a></span>
-            
+        <div class="col">
+          <div id="disqus_thread">
+            <script>
+              var disqus_config = function () {
+                this.page.url = "https:\/\/jmmv.dev\/2013\/11\/patch-management-with-quilt.html";
+                this.page.identifier = "2013-11-14-patch-management-with-quilt";
+              };
+              (function() { 
+                var d = document, s = d.createElement('script');
 
-            <span><a href="/archive.html">All posts</a></span>
+                s.src = '//jmmv.disqus.com/embed.js';
 
-            
-              <span><a href="https://jmmv.dev/2013/11/header-files-series-introduction.html">Next post &raquo;</a></span>
-            
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+              })();
+            </script>
+            <noscript>Please enable JavaScript to view the
+              <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+              powered by Disqus.</a>
+            </noscript>
           </div>
-
+          
+          <p>Comments from the original Blogger-hosted post:</p>
+          <script src="https://apis.google.com/js/plusone.js"></script>
+          <div class="g-comments"
+              data-href="http://julipedia.meroh.net/2013/11/patch-management-with-quilt.html"
+              data-first_party_property="BLOGGER"
+              data-view_type="FILTERED_POSTMOD">
+          </div>
           
         </div>
       </div>
-
-      <div class="row">
-      <div id="disqus_thread">
-        <script>
-          var disqus_config = function () {
-            this.page.url = "https:\/\/jmmv.dev\/2013\/11\/patch-management-with-quilt.html";
-            this.page.identifier = "2013-11-14-patch-management-with-quilt";
-          };
-          (function() { 
-            var d = document, s = d.createElement('script');
-
-            s.src = '//jmmv.disqus.com/embed.js';
-
-            s.setAttribute('data-timestamp', +new Date());
-            (d.head || d.body).appendChild(s);
-          })();
-        </script>
-        <noscript>Please enable JavaScript to view the
-          <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
-          powered by Disqus.</a>
-        </noscript>
-      </div>
-      
-      <p>Comments from the original Blogger-hosted post:</p>
-      <script src="https://apis.google.com/js/plusone.js"></script>
-      <div class="g-comments"
-           data-href="http://julipedia.meroh.net/2013/11/patch-management-with-quilt.html"
-           data-first_party_property="BLOGGER"
-           data-view_type="FILTERED_POSTMOD">
-      </div>
-      
-      </div>
     </div>
 
-    <div class="container">
-  <footer>
-    <p class="pull-right"><a href="#">Back to top</a></p>
-    <p>Copyright 2019 Julio Merino</p>
-  </footer>
-</div>
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2019 Julio Merino</p>
+    </div>
+  </div>
+</footer>
 
 <script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/css/bootstrap.min.js"></script>
+<script src="/js/bootstrap.min.js"></script>
 
 <script>
 $('article :header').each(function() {
   var attr = $(this).attr('id');
   if (typeof attr !== typeof undefined && attr !== false) {
     $(this).append('<a class="anchor" href="#' + $(this).context.id + '">' +
-      '<span class="glyphicon glyphicon-link" aria-hidden="true"></span>' +
+      '<img src="/octicons/link.svg" aria-hidden="true">' +
       '</a>')
   }
 })
