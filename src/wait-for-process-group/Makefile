@@ -1,9 +1,7 @@
-all: leak-child wait-all
+all: wait-all
 
 .PHONY: clean
 clean:
-	rm -f leak-child wait-all
-
-leak-child: leak-child.c
+	rm -f wait-all
 
 wait-all: wait-all.c
