@@ -7,20 +7,20 @@
         content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
-  <title>Setting up BoostBook under Windows - jmmv.dev</title>
-  <meta content="Setting up BoostBook under Windows - jmmv.dev" property="og:title">
+  <title>Waiting for process groups, introduction - jmmv.dev</title>
+  <meta content="Waiting for process groups, introduction - jmmv.dev" property="og:title">
 
   
 
   
-  <meta name="description" content="In order to have a complete development environment for my SoC project under Windows, I still had to install and configure BoostBook. Why I want this is beyond the aim of this post, but for the curious ones: my NetBSD setup is severely broken and I want to be able to work on documentation when I will be doing the Win32 part.
-I have spent a lot of time to get BoostBook properly configured, although now that I know the appropriate path it is quite simple.">
+  <meta name="description" content="Process groups are a feature of Unix systems to group related processes under a common identifier, known as the PGID. Using the PGID, one can look for these related process and send signals in unison to them. This is typically used by shell interpreters to manage processes.
+For example, let&amp;rsquo;s launch a shell command that puts two sleep invocations in the background (those with the 10- and 20-second delays) and then sleeps the direct child (with a 5-second delay)&amp;mdash;while also putting the whole invocation in the background so that we can inspect what&amp;rsquo;s going on:">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="https://jmmv.dev/2006/06/setting-up-boostbook-under-windows.html" property="og:url">
+  <meta content="https://jmmv.dev/2019/11/wait-for-process-group.html" property="og:url">
 
-  <link rel="canonical" href="https://jmmv.dev/2006/06/setting-up-boostbook-under-windows.html">
+  <link rel="canonical" href="https://jmmv.dev/2019/11/wait-for-process-group.html">
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
@@ -113,10 +113,10 @@ I have spent a lot of time to get BoostBook properly configured, although now th
 
     <div class="page-header">
       <div class="container">
-        <h1>Setting up BoostBook under Windows</h1>
+        <h1>Waiting for process groups, introduction</h1>
 
-        <p>June 16, 2006 &middot;
-        About 2 minutes</p>
+        <p>November 12, 2019 &middot;
+        About 6 minutes</p>
 
         
       </div>
@@ -128,7 +128,126 @@ I have spent a lot of time to get BoostBook properly configured, although now th
           <div class="row">
             <div class="col">
               
-              <article>In order to have a complete development environment for my SoC project under Windows, I still had to install and configure <a href="http://www.boost.org/doc/html/boostbook.html">BoostBook</a>.  Why I want this is beyond the aim of this post, but for the curious ones: my NetBSD setup is severely broken and I want to be able to work on documentation when I will be doing the Win32 part.<br /><br />I have spent a lot of time to get BoostBook properly configured, although now that I know the appropriate path it is quite simple.  Let's see how.<br /><br />First of all, you need to have xsltproc in Windows.  "Easy", I thought; "I can install it through Cygwin".  It wasn't that nice when I started to see bash crashing during installation, probably due to some Vista-related issue.  I discarded Cygwin and soon after discovered some prebuilt, standalone binaries that made the task a lot easier.<br /><br />So, the required steps are:<br /><ol><li>Get the iconv, zlib, libxml2 and libxslt <a href="http://www.zlatkovic.com/pub/libxml/">binary packages</a> made by Igor Zlatkovic.</li><li>Unpack all these packages in the same directory so that you get unique <tt>bin</tt>, <tt>include</tt> and <tt>lib</tt> directories within the hierarchy.  I used <tt>C:UsersjmmvDocumentsboostxml</tt> as the root for all files.</li><li>Go to the <tt>bin</tt> directory and launch <tt>xsltproc.exe</tt>.  It should just work.<br /></li><li>Download <a href="http://www.docbook.org/xml/4.2/docbook-xml-4.2.zip">Docbook XML 4.2</a> and unpack it; for example, in the same directory as above.  In my case I used <tt>C:UsersjmmvDocumentsboostxmldocbook-xml</tt>.</li><li>Download the latest <a href="http://sourceforge.net/project/showfiles.php?group_id=21935&package_id=16608">Docbook XSL</a> version and unpack it; you can use the same root directory used previously.  To make things easier, rename the directory created during the extraction to <tt>docbook-xsl</tt> (bypassing the version name).  Here I have: <tt>C:UsersjmmvDocumentsboostxmldocbook-xsl</tt>.</li><li>Add the following to your <tt>user-config.jam</tt> file, which probably lives in your home directory (<tt>%HOMEDRIVE%%HOMEPATH%</tt>).  You must already have it, or otherwise you could not be building Boost.<br /><br /><tt>using xsltproc : "C:/Users/jmmv/Documents/boost/xml/bin/xsltproc.exe" ;</tt><br /><br /><tt>using boostbook</tt><br /><tt>    : "C:/Users/jmmv/Documents/boost/xml/docbook-xsl"</tt><br /><tt>    : "C:/Users/jmmv/Documents/boost/xml/docbook-xml"</tt><br /><tt>    ;</tt><br /><br />Adjust the paths as appropriate.</li></ol>As you can see, it is quite simple.  Just keep one thing in mind: if you try to build some documents and the process breaks due to misconfiguration, be sure to delete any <tt>bin</tt> and <tt>bin.v2</tt> directories generated by the build before you try again.  Otherwise your configuration changes will not take any effect.  This is what made me lose a <i>lot</i> of time because, although I had already fixed the configuration problems, they were not being honored!<br /><br />For more information, check out the official documentation about <a href="http://www.boost.org/doc/html/boostbook/setup/manual.html">manual setup</a>.
+              <article><p><strong>Process groups</strong> are a feature of Unix systems to group related processes under a common identifier, known as the <strong>PGID</strong>. Using the PGID, one can look for these related process and send signals in unison to them. This is typically used by shell interpreters to manage processes.</p>
+
+<p>For example, let&rsquo;s launch a shell command that puts two <code>sleep</code> invocations in the background (those with the 10- and 20-second delays) and then sleeps the direct child (with a 5-second delay)&mdash;while also putting the whole invocation in the background so that we can inspect what&rsquo;s going on:</p>
+
+<pre><code>$ /bin/sh -c 'sleep 10 &amp; sleep 20 &amp; sleep 5' &amp;
+[1] 799
+$ ps -o pid,pgid,command
+  PID  PGID COMMAND
+  612   612 -zsh
+  799   799 /bin/sh -c sleep 10 &amp; sleep 20 &amp; sleep 5
+  800   799 sleep 10
+  801   799 sleep 20
+  802   799 sleep 5
+  803   803 ps -o pid,pgid,command
+</code></pre>
+
+<p>In the output of <code>ps</code>, we can observe two interesting things: first, the <code>PGID</code> column has the value <code>799</code> for all processes that belong to that invocation; and second, there is one process with the same PID as PGID. That process is known as the process group <em>leader</em> and corresponds to the command we typed.</p>
+
+<p>As we covered in the <a href="/2019/11/bazel-process-wrapper.html">previous post</a>, Bazel&rsquo;s process-wrapper helper tool uses process groups as a mechanism to terminate the process it directly spawns (e.g. a test program) <em>and</em> any other subprocesses that this first process might have spawned (e.g. helper tools run by the test program). In essence, the process wrapper does <code>setgpid(getpid(), getpid())</code> immediately before the call to <code>exec(3)</code> to place its direct child in a new process group&mdash;just as the shell example above did&mdash;and then uses this handle to terminate the whole group at once with <code>kill(-PGID, SIGKILL)</code>.</p>
+
+<p>But you must remember that <code>kill(2)</code> just <em>posts</em> the signal to the given process(es). There is no guarantee that the signal was delivered and handled once <code>kill(2)</code> returns. The signal is processed at a later time (or maybe not at all, if the signal can be and is ignored)&mdash;and if the process is blocked in the kernel, whatever thing it is doing may be allowed to complete before the signal takes effect.</p>
+
+<p>Which poses a problem: the Bazel process wrapper is supposed to abide by the contract that, once it terminates, the command given to it has <em>also</em> terminated. If the process wrapper did not wait for all of its descendent processes to fully terminate, we would violate that contract and we would experience very difficult-to-diagnose race conditions. All hypotheticals&hellip; right? Well, no, because the process wrapper does <em>not</em> actually wait for the process group to complete, so we have a bug. Stay calm though, because the bug is extremely hard to hit (we use <code>SIGKILL</code>, not <code>SIGTERM</code>), and it&rsquo;s only a correctness issue if you are playing with my new <code>--experimental_local_lockfree_output</code> feature combined with dynamic execution.</p>
+
+<p>So&hellip; how do we actually wait for all processes in the same process group to terminate? Let&rsquo;s start by looking at the documentation of <code>waitpid(2)</code>. Quoting the macOS 10.15 manual page, we&rsquo;ll see:</p>
+
+<blockquote>
+<p>The <code>pid</code> parameter specifies the set of child processes for which to wait. If <code>pid</code> is <code>-1</code>, the call waits for any child process. If <code>pid</code> is <code>0</code>, the call waits for any child process in the process group of the caller. If <code>pid</code> is greater than zero, the call waits for the process with process id <code>pid</code>. <strong>If <code>pid</code> is less than <code>-1</code>, the call waits for any process whose process group id equals the absolute value of <code>pid</code>.</strong></p>
+</blockquote>
+
+<p>(Emphasis mine.) That sounds promising! It sounds like, if we just do <code>waitpid(-PGID, NULL, 0)</code> repeatedly until we get <code>ECHILD</code>, we&rsquo;ll wait for all subprocesses in the group after we have sent them the termination signal.</p>
+
+<p>Let&rsquo;s try! Build this sample program, which is intended to spawn the command given as arguments:</p>
+
+<div class="src">
+  
+  
+  <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;err.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;errno.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;unistd.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="c1">// Convenience macro to abort quickly if a syscall fails with -1.
+</span><span class="c1">//
+</span><span class="c1">// Not great error handling, but better have some than none given that you, the
+</span><span class="c1">// reader, might be copy/pasting this into real production code.
+</span><span class="c1"></span><span class="cp">#define CHECK_OK(call) if (call == -1) err(EXIT_FAILURE, #call);
+</span><span class="cp"></span>
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span><span class="o">**</span> <span class="n">argv</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">argc</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">errx</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">,</span> <span class="s">&#34;Must provide a program name and arguments&#34;</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="kt">int</span> <span class="n">fds</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">pipe</span><span class="p">(</span><span class="n">fds</span><span class="p">));</span>
+    <span class="n">pid_t</span> <span class="n">pid</span><span class="p">;</span>
+    <span class="n">CHECK_OK</span><span class="p">((</span><span class="n">pid</span> <span class="o">=</span> <span class="n">fork</span><span class="p">()));</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">pid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// Enter a new process group for all of our descendents.
+</span><span class="c1"></span>        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">setpgid</span><span class="p">(</span><span class="n">getpid</span><span class="p">(),</span> <span class="n">getpid</span><span class="p">()));</span>
+
+        <span class="c1">// Tell the parent that we have successfully created the group.
+</span><span class="c1"></span>        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">]));</span>
+        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">write</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s">&#34;</span><span class="se">\0</span><span class="s">&#34;</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">char</span><span class="p">)));</span>
+        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">1</span><span class="p">]));</span>
+
+        <span class="c1">// Execute the given program now that the environment is ready.
+</span><span class="c1"></span>        <span class="n">execv</span><span class="p">(</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">argv</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+        <span class="n">err</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">,</span> <span class="s">&#34;execv&#34;</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="c1">// Wait until the child has created its own process group.
+</span><span class="c1"></span>    <span class="c1">//
+</span><span class="c1"></span>    <span class="c1">// This is a must to prevent a race between the parent waiting for the
+</span><span class="c1"></span>    <span class="c1">// group and the group not existing yet, and is the only safe way to do so.
+</span><span class="c1"></span>    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">1</span><span class="p">]));</span>
+    <span class="kt">char</span> <span class="n">dummy</span><span class="p">;</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">dummy</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">char</span><span class="p">)));</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">]));</span>
+
+    <span class="c1">// Wait for the direct child to finish.  We do this separately to collect
+</span><span class="c1"></span>    <span class="c1">// and propagate its exit status.
+</span><span class="c1"></span>    <span class="kt">int</span> <span class="n">status</span><span class="p">;</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">waitpid</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">status</span><span class="p">,</span> <span class="mi">0</span><span class="p">));</span>
+
+    <span class="c1">// And now wait for any other process in the group to terminate, as the
+</span><span class="c1"></span>    <span class="c1">// documentation claims.
+</span><span class="c1"></span>    <span class="k">while</span> <span class="p">(</span><span class="n">waitpid</span><span class="p">(</span><span class="o">-</span><span class="n">pid</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// Got a child.  Wait for more.
+</span><span class="c1"></span>    <span class="p">}</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">errno</span> <span class="o">==</span> <span class="n">ECHILD</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="n">WIFEXITED</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="o">?</span> <span class="n">WEXITSTATUS</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="o">:</span> <span class="n">EXIT_FAILURE</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+  <div class="footer">
+      <div class="filename">
+        <a href="/src/wait-for-process-group/wait-all.c" type="text/plain">wait-all.c</a>
+      </div>
+    </div>
+  </div>
+
+
+<p>and then run it against the same sample command we used in the previous post:</p>
+
+<pre><code>$ ./wait-all /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
+1
+$ 2
+</code></pre>
+
+<p>Uh oh&hellip; Notice that <code>wait-all</code> exits quickly and that the subprocess that prints <code>2</code> remains, printing this a few seconds later.</p>
+
+<p>Not good. What the documentation for <code>waitpid(2)</code> quoted above fails to mention&mdash;and I haven&rsquo;t been able to find this documented anywhere&mdash;is that this call only waits for <em>direct</em> children processes with the given PGID. It will do nothing for grandchildren processes.</p>
+
+<p>And this makes sense if you think about how the <code>wait(2)</code> family of system calls work internally. What these calls do is block until the process receives a <code>SIGCHLD</code>. This signal is only sent from a child process to its parent when the child changes its status; there is no transitive forwarding of signals&mdash;hence why <code>waitpid(2)</code> cannot wait for grandchildren.</p>
+
+<p>So how do we fix this? Well&hellip; there is no good answer to this question as the solution varies across platforms. And, in fact, it may not be possible to implement at all (correctly) in some, though we can obtain a good approximation.</p>
+
+<p>We&rsquo;ll dive into the possible alternatives for Linux and macOS in the next posts, which will help us fix the bug that currently exists in Bazel&rsquo;s process wrapper.</p>
 </article>
             </div>
           </div>
@@ -137,7 +256,7 @@ I have spent a lot of time to get BoostBook properly configured, although now th
             <div class="row">
               <div class="col-md mr-auto text-left">
                 
-                <span><a href="https://jmmv.dev/2006/06/win32-mappings-for-unicode-support.html">&laquo; Previous post</a></span>
+                <span><a href="https://jmmv.dev/2019/11/bazel-process-wrapper.html">&laquo; Previous post</a></span>
                 
               </div>
 
@@ -147,7 +266,7 @@ I have spent a lot of time to get BoostBook properly configured, although now th
 
               <div class="col-md ml-auto text-right">
                 
-                <span><a href="https://jmmv.dev/2006/06/windows-vista-beta-2-review.html">Next post &raquo;</a></span>
+                <span></span>
                 
               </div>
             </div>
@@ -768,8 +887,8 @@ I have spent a lot of time to get BoostBook properly configured, although now th
           <div id="disqus_thread">
             <script>
               var disqus_config = function () {
-                this.page.url = "https:\/\/jmmv.dev\/2006\/06\/setting-up-boostbook-under-windows.html";
-                this.page.identifier = "2006-06-16-setting-up-boostbook-under-windows";
+                this.page.url = "https:\/\/jmmv.dev\/2019\/11\/wait-for-process-group.html";
+                this.page.identifier = "2019-11-12-wait-for-process-group";
               };
               (function() { 
                 var d = document, s = d.createElement('script');
@@ -784,14 +903,6 @@ I have spent a lot of time to get BoostBook properly configured, although now th
               <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
               powered by Disqus.</a>
             </noscript>
-          </div>
-          
-          <p>Comments from the original Blogger-hosted post:</p>
-          <script src="https://apis.google.com/js/plusone.js"></script>
-          <div class="g-comments"
-              data-href="http://julipedia.meroh.net/2006/06/setting-up-boostbook-under-windows.html"
-              data-first_party_property="BLOGGER"
-              data-view_type="FILTERED_POSTMOD">
           </div>
           
         </div>
