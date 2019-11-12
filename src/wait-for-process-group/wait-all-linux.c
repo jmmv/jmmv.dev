@@ -1,5 +1,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
+#if defined(WITH_SUBREAPER)
+#   include <sys/prctl.h>
+#endif
 
 #include <assert.h>
 #include <err.h>
@@ -17,6 +20,12 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         errx(EXIT_FAILURE, "Must provide a program name and arguments");
     }
+
+#if defined(WITH_SUBREAPER)
+    if (prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) == -1) {
+        err(EXIT_FAILURE, "prctl");
+    }
+#endif
 
     int fds[2];
     CHECK_OK(pipe(fds));
@@ -51,8 +60,7 @@ int main(int argc, char** argv) {
     int status;
     CHECK_OK(waitpid(pid, &status, 0));
 
-    // And now wait for any other process in the group to terminate, as the
-    // documentation claims.
+    // And now wait for any other process in the group to terminate... or not.
     while (waitpid(-pid, NULL, 0) != -1) {
         // Got a child.  Wait for more.
     }
