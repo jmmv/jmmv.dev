@@ -1,7 +1,8 @@
-all: wait-all
+all: wait-all wait-all-darwin
 
 .PHONY: clean
 clean:
-	rm -f wait-all
+	rm -f wait-all wait-all-darwin
 
 wait-all: wait-all.c
+wait-all-darwin: wait-all-darwin.c wait-pid-darwin.c wait-pgid-darwin.c
