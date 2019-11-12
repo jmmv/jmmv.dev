@@ -1,16 +1,12 @@
-#include <sys/types.h>
-#include <sys/wait.h>
-
-#include <assert.h>
 #include <err.h>
 #include <errno.h>
-#include <signal.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <unistd.h>
 
 // Convenience macro to abort quickly if a syscall fails with -1.
+//
+// Not great error handling, but better have some than none given that you, the
+// reader, might be copy/pasting this into real production code.
 #define CHECK_OK(call) if (call == -1) err(EXIT_FAILURE, #call);
 
 int main(int argc, char** argv) {
