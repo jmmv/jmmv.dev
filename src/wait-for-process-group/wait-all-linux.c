@@ -1,16 +1,10 @@
-#include <sys/types.h>
 #include <sys/wait.h>
-#if defined(WITH_SUBREAPER)
-#   include <sys/prctl.h>
-#endif
+#include <sys/prctl.h>
 
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
-#include <signal.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <unistd.h>
 
 // Convenience macro to abort quickly if a syscall fails with -1.
@@ -21,11 +15,13 @@ int main(int argc, char** argv) {
         errx(EXIT_FAILURE, "Must provide a program name and arguments");
     }
 
-#if defined(WITH_SUBREAPER)
+    // Configure ourselves to act as the child subreaper, in essence replacing
+    // the functionality of init(8).  We should do this before forking to avoid
+    // a race between our child spawning subprocesses and us doing this
+    // operation.
     if (prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) == -1) {
         err(EXIT_FAILURE, "prctl");
     }
-#endif
 
     int fds[2];
     CHECK_OK(pipe(fds));
@@ -60,8 +56,9 @@ int main(int argc, char** argv) {
     int status;
     CHECK_OK(waitpid(pid, &status, 0));
 
-    // And now wait for any other process in the group to terminate... or not.
-    while (waitpid(-pid, NULL, 0) != -1) {
+    // And now wait for any other process to terminate.  We don't care about
+    // them being in our process group any longer.
+    while (wait(NULL) != -1) {
         // Got a child.  Wait for more.
     }
     assert(errno == ECHILD);
