@@ -7,20 +7,20 @@
         content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
-  <title>Kyua: Design of the configuration system - jmmv.dev</title>
-  <meta content="Kyua: Design of the configuration system - jmmv.dev" property="og:title">
+  <title>Waiting for process groups, Linux edition - jmmv.dev</title>
+  <meta content="Waiting for process groups, Linux edition - jmmv.dev" property="og:title">
 
   
 
   
-  <meta name="description" content="Over a week ago, I mostly finished the implementation of the runtime engine for test cases of Kyua and, along the way, realized that it is imperative to write a configuration system right now before the configuration code becomes messier than it already is.
-To that end, I spent the last week working on a design document for the configuration system. Summarizing, the document describes what the requirements for the configuration files of Kyua are, what the possible alternatives to implement them are, and advocates the use of Lua &amp;mdash; a tiny embedded programming language &amp;mdash; to bring these configuration files to life.">
+  <meta name="description" content="In the previous post, we saw why waiting for a process group to terminate is important (at least in the context of Bazel), and we also saw why this is a difficult thing to do in a portable manner. So today, let&amp;rsquo;s dive into how to do this properly on a Linux system.
+On Linux, we have two routes: using the child subreaper feature or using PID namespaces. We&amp;rsquo;ll focus on the former because that&amp;rsquo;s what we&amp;rsquo;ll use to fix the the process wrapper1, and because they are sufficient to fully address our problem.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="https://jmmv.dev/2010/12/kyua-design-of-configuration-system.html" property="og:url">
+  <meta content="https://jmmv.dev/2019/11/wait-for-process-group-linux.html" property="og:url">
 
-  <link rel="canonical" href="https://jmmv.dev/2010/12/kyua-design-of-configuration-system.html">
+  <link rel="canonical" href="https://jmmv.dev/2019/11/wait-for-process-group-linux.html">
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
@@ -113,10 +113,10 @@ To that end, I spent the last week working on a design document for the configur
 
     <div class="page-header">
       <div class="container">
-        <h1>Kyua: Design of the configuration system</h1>
+        <h1>Waiting for process groups, Linux edition</h1>
 
-        <p>December 22, 2010 &middot;
-        About 1 minute</p>
+        <p>November 14, 2019 &middot;
+        About 4 minutes</p>
 
         
       </div>
@@ -128,7 +128,127 @@ To that end, I spent the last week working on a design document for the configur
           <div class="row">
             <div class="col">
               
-              <article>Over a week ago, I mostly finished the implementation of the runtime engine for test cases of <a href="http://code.google.com/p/kyua/">Kyua</a> and, along the way, realized that it is imperative to write a configuration system right now before the configuration code becomes messier than it already is.<br /><br />To that end, I spent the last week working on a <a href="http://code.google.com/p/kyua/wiki/ConfigurationDesign">design document for the configuration system</a>. Summarizing, the document describes what the requirements for the configuration files of Kyua are, what the possible alternatives to implement them are, and advocates the use of <a href="http://www.lua.org/">Lua</a> &mdash; a tiny embedded programming language &mdash; to bring these configuration files to life.<br /><br />It is your chance to get involved in the early stages of the development of Kyua! :-) Take a look at the <a href="http://groups.google.com/group/kyua-discuss/browse_thread/thread/913edd8cf58567da">email to kyua-discuss asking for comments</a> and feel free to join the mailing list ;-)
+              <article><p>In the <a href="/2019/11/wait-for-process-group.html">previous post</a>, we saw why waiting for a process group to terminate is important (at least in the context of Bazel), and we also saw why this is a difficult thing to do in a portable manner. So today, let&rsquo;s dive into how to do this properly on a Linux system.</p>
+
+<p>On Linux, we have two routes: using the <strong>child subreaper</strong> feature or using <strong>PID namespaces</strong>. We&rsquo;ll focus on the former because that&rsquo;s what we&rsquo;ll use to fix the the process wrapper<sup class="footnote-ref" id="fnref:namespaces"><a href="#fn:namespaces">1</a></sup>, and because they are sufficient to fully address our problem.</p>
+
+<p>But before going into what the child subreaper feature does, let&rsquo;s recap what happens to orphaned processes.</p>
+
+<p>When a process terminates, the kernel must keep some of its information around&mdash;the exit code, among other details&mdash;until its parent collects such details. The process is said to be in the <strong>zombie</strong> state at this point because the process still exists on the system tables but is dead. When the parent collects the details of the process via a call to <code>wait(2)</code>, the kernel doesn&rsquo;t need to keep the state of the process any longer and the zombie disappears.</p>
+
+<p>Processes also have a pointer to their parent (the parent PID, or PPID). So&hellip; what happens if such parent becomes a zombie and then disappears? Its children become <strong>orphan</strong>, and they must be assigned to a new parent to keep the PPID valid. The traditional solution in Unix is to give those processes to PID 1, or <code>init(8)</code>, which in turn takes care of clearing their state when they terminate. The way the <code>init(8)</code> daemon does this is with a &ldquo;reaper&rdquo; loop that repeatedly calls <code>wait(2)</code> to discard the state of these adopted processes when they terminate.</p>
+
+<p>The <strong>child subreaper</strong> feature allows us to change the process that becomes the new parent. By using this feature on a given process, we tell the kernel that, when a grandchild of that process becomes orphan, we want to take ownership of it. We have essentially replaced <code>init(8)</code>&rsquo;s responsibilities for a subset of the process tree.</p>
+
+<p>So let&rsquo;s go back to our sample code to fix it:</p>
+
+<div class="src">
+  
+  
+  <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;sys/wait.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;sys/prctl.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;assert.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;err.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;errno.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;unistd.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="c1">// Convenience macro to abort quickly if a syscall fails with -1.
+</span><span class="c1"></span><span class="cp">#define CHECK_OK(call) if (call == -1) err(EXIT_FAILURE, #call);
+</span><span class="cp"></span>
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span><span class="o">**</span> <span class="n">argv</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">argc</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">errx</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">,</span> <span class="s">&#34;Must provide a program name and arguments&#34;</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="c1">// Configure ourselves to act as the child subreaper, in essence replacing
+</span><span class="c1"></span>    <span class="c1">// the functionality of init(8).  We should do this before forking to avoid
+</span><span class="c1"></span>    <span class="c1">// a race between our child spawning subprocesses and us doing this
+</span><span class="c1"></span>    <span class="c1">// operation.
+</span><span class="c1"></span>    <span class="k">if</span> <span class="p">(</span><span class="n">prctl</span><span class="p">(</span><span class="n">PR_SET_CHILD_SUBREAPER</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">err</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">,</span> <span class="s">&#34;prctl&#34;</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="kt">int</span> <span class="n">fds</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">pipe</span><span class="p">(</span><span class="n">fds</span><span class="p">));</span>
+    <span class="n">pid_t</span> <span class="n">pid</span><span class="p">;</span>
+    <span class="n">CHECK_OK</span><span class="p">((</span><span class="n">pid</span> <span class="o">=</span> <span class="n">fork</span><span class="p">()));</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">pid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// Enter a new process group for all of our descendents.
+</span><span class="c1"></span>        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">setpgid</span><span class="p">(</span><span class="n">getpid</span><span class="p">(),</span> <span class="n">getpid</span><span class="p">()));</span>
+
+        <span class="c1">// Tell the parent that we have successfully created the group.
+</span><span class="c1"></span>        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">]));</span>
+        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">write</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s">&#34;</span><span class="se">\0</span><span class="s">&#34;</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">char</span><span class="p">)));</span>
+        <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">1</span><span class="p">]));</span>
+
+        <span class="c1">// Execute the given program now that the environment is ready.
+</span><span class="c1"></span>        <span class="n">execv</span><span class="p">(</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">argv</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+        <span class="n">err</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">,</span> <span class="s">&#34;execv&#34;</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="c1">// Wait until the child has created its own process group.
+</span><span class="c1"></span>    <span class="c1">//
+</span><span class="c1"></span>    <span class="c1">// This is a must to prevent a race between the parent waiting for the
+</span><span class="c1"></span>    <span class="c1">// group and the group not existing yet, and is the only safe way to do so.
+</span><span class="c1"></span>    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">1</span><span class="p">]));</span>
+    <span class="kt">char</span> <span class="n">dummy</span><span class="p">;</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">dummy</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">char</span><span class="p">)));</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">]));</span>
+
+    <span class="c1">// Wait for the direct child to finish.  We do this separately to collect
+</span><span class="c1"></span>    <span class="c1">// and propagate its exit status.
+</span><span class="c1"></span>    <span class="kt">int</span> <span class="n">status</span><span class="p">;</span>
+    <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">waitpid</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">status</span><span class="p">,</span> <span class="mi">0</span><span class="p">));</span>
+
+    <span class="c1">// And now wait for any other process to terminate.  We don&#39;t care about
+</span><span class="c1"></span>    <span class="c1">// them being in our process group any longer.
+</span><span class="c1"></span>    <span class="k">while</span> <span class="p">(</span><span class="n">wait</span><span class="p">(</span><span class="nb">NULL</span><span class="p">)</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// Got a child.  Wait for more.
+</span><span class="c1"></span>    <span class="p">}</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">errno</span> <span class="o">==</span> <span class="n">ECHILD</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="n">WIFEXITED</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="o">?</span> <span class="n">WEXITSTATUS</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="o">:</span> <span class="n">EXIT_FAILURE</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+  <div class="footer">
+      <div class="filename">
+        <a href="/src/wait-for-process-group/wait-all-linux.c" type="text/plain">wait-all-linux.c</a>
+      </div>
+    </div>
+  </div>
+
+
+<p>There are two changes to notice compared to the previous post:</p>
+
+<ul>
+<li><p>The call to <code>prctl(2)</code><sup class="footnote-ref" id="fnref:portability"><a href="#fn:portability">2</a></sup> with a first argument of <code>1</code>, which configures our tool to become the child subreaper before it spawns any subprocess. (This API is not cryptic at all.)</p></li>
+
+<li><p>More subtly, we now use <code>wait(2)</code> instead of <code>waitpid(2)</code> to wait for all stray subprocesses. This is because, as the acting child subreaper, we will be assigned <em>any</em> subprocess that terminates <em>even if said process decided to escape the process group</em>&mdash;which is nice.</p></li>
+</ul>
+
+<p>If we build our sample program and run the same command as in the previous post:</p>
+
+<pre><code>$ ./wait-all-linux /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
+1
+2
+$
+</code></pre>
+
+<p>You&rsquo;ll see that <code>wait-all-linux</code> did not terminate until the nested subshell did, even though the outer shell exited quickly.</p>
+<div class="footnotes">
+
+<hr />
+
+<ol>
+<li id="fn:namespaces">PID namespaces are already in use by the <code>linux-sandbox</code> tool in Bazel, but note that using them can cause <a href="https://github.com/bazelbuild/bazel/issues/3236">other kinds of subtle problems</a> due to PID virtualization.
+ <a class="footnote-return" href="#fnref:namespaces"><sup>[return]</sup></a></li>
+<li id="fn:portability">FreeBSD also provides the child subreaper feature via <code>procctl(PROC_REAP_ACQUIRE)</code> since the 10.2 release so this post could apply to that system as well. I haven&rsquo;t found any other system with this though.
+ <a class="footnote-return" href="#fnref:portability"><sup>[return]</sup></a></li>
+</ol>
+</div>
 </article>
             </div>
           </div>
@@ -137,7 +257,7 @@ To that end, I spent the last week working on a design document for the configur
             <div class="row">
               <div class="col-md mr-auto text-left">
                 
-                <span><a href="https://jmmv.dev/2010/12/sticky-bit-trivia.html">&laquo; Previous post</a></span>
+                <span><a href="https://jmmv.dev/2019/11/wait-for-process-group.html">&laquo; Previous post</a></span>
                 
               </div>
 
@@ -147,7 +267,7 @@ To that end, I spent the last week working on a design document for the configur
 
               <div class="col-md ml-auto text-right">
                 
-                <span><a href="https://jmmv.dev/2010/12/dependency-injection-and-testing.html">Next post &raquo;</a></span>
+                <span></span>
                 
               </div>
             </div>
@@ -768,8 +888,8 @@ To that end, I spent the last week working on a design document for the configur
           <div id="disqus_thread">
             <script>
               var disqus_config = function () {
-                this.page.url = "https:\/\/jmmv.dev\/2010\/12\/kyua-design-of-configuration-system.html";
-                this.page.identifier = "2010-12-22-kyua-design-of-configuration-system";
+                this.page.url = "https:\/\/jmmv.dev\/2019\/11\/wait-for-process-group-linux.html";
+                this.page.identifier = "2019-11-14-wait-for-process-group-linux";
               };
               (function() { 
                 var d = document, s = d.createElement('script');
@@ -784,14 +904,6 @@ To that end, I spent the last week working on a design document for the configur
               <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
               powered by Disqus.</a>
             </noscript>
-          </div>
-          
-          <p>Comments from the original Blogger-hosted post:</p>
-          <script src="https://apis.google.com/js/plusone.js"></script>
-          <div class="g-comments"
-              data-href="http://julipedia.meroh.net/2010/12/kyua-design-of-configuration-system.html"
-              data-first_party_property="BLOGGER"
-              data-view_type="FILTERED_POSTMOD">
           </div>
           
         </div>
