@@ -7,20 +7,20 @@
         content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
-  <title>Waiting for process groups, Linux edition - jmmv.dev</title>
-  <meta content="Waiting for process groups, Linux edition - jmmv.dev" property="og:title">
+  <title>Waiting for process groups, macOS edition - jmmv.dev</title>
+  <meta content="Waiting for process groups, macOS edition - jmmv.dev" property="og:title">
 
   
 
   
-  <meta name="description" content="In the previous post, we saw why waiting for a process group to terminate is important (at least in the context of Bazel), and we also saw why this is a difficult thing to do in a portable manner. So today, let&amp;rsquo;s dive into how to do this properly on a Linux system.
-On Linux, we have two routes: using the child subreaper feature or using PID namespaces. We&amp;rsquo;ll focus on the former because that&amp;rsquo;s what we&amp;rsquo;ll use to fix (#10245) the process wrapper1, and because they are sufficient to fully address our problem.">
+  <meta name="description" content="In the previous posts, we saw why waiting for a process group is complicated and we covered a specific, bullet-proof mechanism to accomplish this on Linux. Now is the time to investigate this same topic on macOS. Remember that the problem we are trying to solve (#10245) is the following: given a process group, wait for all of its processes to fully terminate.
+macOS has a bunch of fancy features that other systems do not have, but process control is not among them.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="https://jmmv.dev/2019/11/wait-for-process-group-linux.html" property="og:url">
+  <meta content="https://jmmv.dev/2019/11/wait-for-process-group-darwin.html" property="og:url">
 
-  <link rel="canonical" href="https://jmmv.dev/2019/11/wait-for-process-group-linux.html">
+  <link rel="canonical" href="https://jmmv.dev/2019/11/wait-for-process-group-darwin.html">
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
@@ -113,10 +113,10 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
 
     <div class="page-header">
       <div class="container">
-        <h1>Waiting for process groups, Linux edition</h1>
+        <h1>Waiting for process groups, macOS edition</h1>
 
-        <p>November 14, 2019 &middot;
-        About 4 minutes</p>
+        <p>November 15, 2019 &middot;
+        About 8 minutes</p>
 
         
       </div>
@@ -128,46 +128,179 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
           <div class="row">
             <div class="col">
               
-              <article><p>In the <a href="/2019/11/wait-for-process-group.html">previous post</a>, we saw why waiting for a process group to terminate is important (at least in the context of Bazel), and we also saw why this is a difficult thing to do in a portable manner. So today, let&rsquo;s dive into how to do this properly on a Linux system.</p>
+              <article><p>In the previous posts, we saw why <a href="/2019/11/wait-for-process-group.html">waiting for a process group is complicated</a> and we covered a specific, bullet-proof mechanism to <a href="/2019/11/wait-for-process-group-linux.html">accomplish this on Linux</a>. Now is the time to investigate this same topic on macOS. Remember that the problem we are trying to solve (<a href="https://github.com/bazelbuild/bazel/issues/10245">#10245</a>) is the following: given a process group, wait for all of its processes to fully terminate.</p>
 
-<p>On Linux, we have two routes: using the <strong>child subreaper</strong> feature or using <strong>PID namespaces</strong>. We&rsquo;ll focus on the former because that&rsquo;s what we&rsquo;ll use to fix (<a href="https://github.com/bazelbuild/bazel/issues/10245">#10245</a>) the process wrapper<sup class="footnote-ref" id="fnref:namespaces"><a href="#fn:namespaces">1</a></sup>, and because they are sufficient to fully address our problem.</p>
+<p>macOS has a bunch of fancy features that <a href="/2019/03/macos-threads-qos-and-bazel.html">other systems do not have</a>, but process control is not among them. We do not have features like Linux&rsquo;s child subreaper or PID namespaces to keep track of process groups. Therefore, we&rsquo;ll have to roll our own. And the only way to do this is to scan the process table looking for processes with the desired process group identifier (PGID) and waiting until they are gone.</p>
 
-<p>But before going into what the child subreaper feature does, let&rsquo;s recap what happens to orphaned processes.</p>
+<p>Unfortunately, there is no portable API to programmatically access the process table. Sure, you can imagine shelling out to <code>ps(1)</code> and parsing its output, but this would be very inefficient and error-prone. So we have no choice but to rely on Darwin-specific primitives for efficiency and reliability.</p>
 
-<p>When a process terminates, the kernel must keep some of its information around&mdash;the exit code, among other details&mdash;until its parent collects such details. The process is said to be in the <strong>zombie</strong> state at this point because the process still exists on the system tables but is dead. When the parent collects the details of the process via a call to <code>wait(2)</code>, the kernel doesn&rsquo;t need to keep the state of the process any longer and the zombie disappears.</p>
+<p>We can query the process table in Darwin by using <code>sysctl(3)</code> and looking under the <code>kern.proc.pgrp.&lt;PGID&gt;</code> name (MIB). (It&rsquo;s interesting to see that this is modeled after the BSD&rsquo;s <code>kvm_getprocs(2)</code> interface and I&rsquo;m not sure why Darwin had to merge it with <code>sysctl(3)</code>.) However: this MIB doesn&rsquo;t appear to be documented so things might break in the future. The way I found this is by looking at <a href="https://opensource.apple.com/source/adv_cmds/adv_cmds-172/ps/ps.c.auto.html">Apple&rsquo;s own <code>ps.c</code> source code</a>.</p>
 
-<p>Processes also have a pointer to their parent (the parent PID, or PPID). So&hellip; what happens if such parent becomes a zombie and then disappears? Its children become <strong>orphan</strong>, and they must be assigned to a new parent to keep the PPID valid. The traditional solution in Unix is to give those processes to PID 1, or <code>init(8)</code>, which in turn takes care of clearing their state when they terminate. The way the <code>init(8)</code> daemon does this is with a &ldquo;reaper&rdquo; loop that repeatedly calls <code>wait(2)</code> to discard the state of these adopted processes when they terminate.</p>
+<p>Let&rsquo;s coerce the <code>sysctl(3)</code> interface to give us what we want. The interface is not the easiest to use, but it&rsquo;s not that difficult either; we just have to account for the fact that its return value is of variable size:</p>
 
-<p>The <strong>child subreaper</strong> feature allows us to change the process that becomes the new parent. By using this feature on a given process, we tell the kernel that, when a grandchild of that process becomes orphan, we want to take ownership of it. We have essentially replaced <code>init(8)</code>&rsquo;s responsibilities for a subset of the process tree.</p>
+<div class="src">
+  
+  
+  <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;sys/types.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;sys/sysctl.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;assert.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;errno.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="c1">// Waits for a process group to terminate.  Assumes that the process leader
+</span><span class="c1">// still exists in the process table (though it may be a zombie), and allows
+</span><span class="c1">// it to remain.
+</span><span class="c1">//
+</span><span class="c1">// May never converge if the processes in the group are still spawning their
+</span><span class="c1">// own subprocesses.
+</span><span class="c1"></span><span class="kt">int</span> <span class="nf">wait_for_process_group</span><span class="p">(</span><span class="n">pid_t</span> <span class="n">pgid</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">name</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span><span class="n">CTL_KERN</span><span class="p">,</span> <span class="n">KERN_PROC</span><span class="p">,</span> <span class="n">KERN_PROC_PGRP</span><span class="p">,</span> <span class="n">pgid</span><span class="p">};</span>
 
-<p>So let&rsquo;s go back to our sample code to fix it:</p>
+    <span class="k">for</span> <span class="p">(;;)</span> <span class="p">{</span>
+        <span class="c1">// Query the list of processes in the group by using sysctl(3).
+</span><span class="c1"></span>        <span class="c1">// This is &#34;hard&#34; because we don&#39;t know how big that list is, so we
+</span><span class="c1"></span>        <span class="c1">// have to first query the size of the output data and then account for
+</span><span class="c1"></span>        <span class="c1">// the fact that the size might change by the time we actually issue
+</span><span class="c1"></span>        <span class="c1">// the query.
+</span><span class="c1"></span>        <span class="k">struct</span> <span class="n">kinfo_proc</span> <span class="o">*</span><span class="n">procs</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+        <span class="n">size_t</span> <span class="n">nprocs</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="k">do</span> <span class="p">{</span>
+            <span class="n">size_t</span> <span class="n">len</span><span class="p">;</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">sysctl</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">len</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+            <span class="p">}</span>
+            <span class="n">procs</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">kinfo_proc</span> <span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">len</span><span class="p">);</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">sysctl</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">procs</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">len</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">assert</span><span class="p">(</span><span class="n">errno</span> <span class="o">==</span> <span class="n">ENOMEM</span><span class="p">);</span>
+                <span class="n">free</span><span class="p">(</span><span class="n">procs</span><span class="p">);</span>
+                <span class="n">procs</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="n">nprocs</span> <span class="o">=</span> <span class="n">len</span> <span class="o">/</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">kinfo_proc</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span> <span class="k">while</span> <span class="p">(</span><span class="n">procs</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">);</span>
+        <span class="n">assert</span><span class="p">(</span><span class="n">nprocs</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">);</span>  <span class="c1">// Must have found the group leader at least.
+</span><span class="c1"></span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">nprocs</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="c1">// Found only one process, which must be the leader because we have
+</span><span class="c1"></span>            <span class="c1">// purposely expect it as a zombie.
+</span><span class="c1"></span>            <span class="n">assert</span><span class="p">(</span><span class="n">procs</span><span class="o">-&gt;</span><span class="n">kp_proc</span><span class="p">.</span><span class="n">p_pid</span> <span class="o">==</span> <span class="n">pgid</span><span class="p">);</span>
+            <span class="n">free</span><span class="p">(</span><span class="n">procs</span><span class="p">);</span>
+            <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="p">}</span>
+
+        <span class="c1">// More than one process left in the process group.  Pause a little bit
+</span><span class="c1"></span>        <span class="c1">// before retrying to avoid burning CPU.
+</span><span class="c1"></span>        <span class="k">struct</span> <span class="n">timespec</span> <span class="n">ts</span><span class="p">;</span>
+        <span class="n">ts</span><span class="p">.</span><span class="n">tv_sec</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="n">ts</span><span class="p">.</span><span class="n">tv_nsec</span> <span class="o">=</span> <span class="mi">1000000</span><span class="p">;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">nanosleep</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ts</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+  <div class="footer">
+      <div class="filename">
+        <a href="/src/wait-for-process-group/wait-pgid-darwin.c" type="text/plain">wait-pgid-darwin.c</a>
+      </div>
+    </div>
+  </div>
+
+
+<p>The above code snippet gives us a <code>wait_for_process_group</code> function that ensures all processes in a process group are gone, except for the leader. With this, we could implement the following algorithm:</p>
+
+<ol>
+<li>Start process group.</li>
+<li>Wait for the process group leader to terminate using <code>waitpid(2)</code>. Remember that we want to report the exit status of the leader, so we must do this.</li>
+<li>Wait for all other processes in the group to exit by calling <code>wait_for_process_group</code>.</li>
+</ol>
+
+<p>This works&hellip; but there is a little problem. Once <code>waitpid(2)</code> returns, the kernel has cleared all knowledge of our process leader, which means all of its children became orphan and were reparented to <code>init(8)</code>. The PGID was thus reclaimed and could now be used by a racing process. (This is very unlikely because the kernel will try hard to not reallocate PIDs too quickly, but it&rsquo;s still a possibility and experience has shown me that, with scale, the unlikely is actually common.)</p>
+
+<p>So how do we fix this? We need to introduce an extra step. We have to detect when the process group leader becomes a zombie <em>without actually reaping its status</em> so that the PGID remains assigned while we do our <code>wait_for_process_group</code> dance.</p>
+
+<p>And to do this, we use another Darwin-specific primitive: <code>kqueue(2)</code>. With this functionality, we can wait for the child process to change its status. (We could possibly do this by monitoring <code>SIGCHLD</code> but I haven&rsquo;t found a way to make this not racy, and anything dealing with signals always makes me cringe.) The code looks like follows:</p>
+
+<div class="src">
+  
+  
+  <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;sys/types.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;sys/event.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&lt;assert.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;stddef.h&gt;</span><span class="cp">
+</span><span class="cp">#include</span> <span class="cpf">&lt;unistd.h&gt;</span><span class="cp">
+</span><span class="cp"></span>
+<span class="c1">// Waits for a process to terminate but does *not* collect its exit status,
+</span><span class="c1">// thus leaving the process as a zombie.
+</span><span class="c1">//
+</span><span class="c1">// According to the kqueue(2) documentation (and I confirmed it experimentally),
+</span><span class="c1">// registering for an event reports any pending such events, so this is not racy
+</span><span class="c1">// if the process happened to exit before we got to installing the kevent.
+</span><span class="c1"></span><span class="kt">int</span> <span class="nf">wait_for_process</span><span class="p">(</span><span class="n">pid_t</span> <span class="n">pid</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">int</span> <span class="n">kq</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">kq</span> <span class="o">=</span> <span class="n">kqueue</span><span class="p">())</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">struct</span> <span class="n">kevent</span> <span class="n">kc</span><span class="p">;</span>
+    <span class="n">EV_SET</span><span class="p">(</span><span class="o">&amp;</span><span class="n">kc</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">EVFILT_PROC</span><span class="p">,</span> <span class="n">EV_ADD</span> <span class="o">|</span> <span class="n">EV_ENABLE</span><span class="p">,</span> <span class="n">NOTE_EXIT</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+
+    <span class="kt">int</span> <span class="n">nev</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="n">kevent</span> <span class="n">ke</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">nev</span> <span class="o">=</span> <span class="n">kevent</span><span class="p">(</span><span class="n">kq</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">kc</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">ke</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">))</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">nev</span> <span class="o">==</span> <span class="mi">1</span><span class="p">);</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">ke</span><span class="p">.</span><span class="n">ident</span> <span class="o">==</span> <span class="n">pid</span><span class="p">);</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">ke</span><span class="p">.</span><span class="n">fflags</span> <span class="o">&amp;</span> <span class="n">NOTE_EXIT</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="n">close</span><span class="p">(</span><span class="n">kq</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+  <div class="footer">
+      <div class="filename">
+        <a href="/src/wait-for-process-group/wait-pid-darwin.c" type="text/plain">wait-pid-darwin.c</a>
+      </div>
+    </div>
+  </div>
+
+
+<p>Alright. So now we have another function, called <code>wait_for_process</code>, that will wait until the given PID becomes a zombie. With this, our algorithm looks like:</p>
+
+<ol>
+<li>Start process group.</li>
+<li>Wait for the process group leader to become a zombie with <code>wait_for_process</code>. At this point, the PGID is still assigned to us.</li>
+<li>Wait for all other processes in the group to exit by calling <code>wait_for_process_group</code>.</li>
+<li>Collect the leader&rsquo;s status by using <code>waitpid(2)</code>.</li>
+</ol>
+
+<p>Simple, right? It was all in the details&mdash;which is why I had to come up with the sample code in these posts.</p>
+
+<p>Let&rsquo;s put it all into practice by updating our original test tool:</p>
 
 <div class="src">
   
   
   <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;sys/wait.h&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;sys/prctl.h&gt;</span><span class="cp">
 </span><span class="cp"></span>
-<span class="cp">#include</span> <span class="cpf">&lt;assert.h&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;err.h&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;errno.h&gt;</span><span class="cp">
+<span class="cp">#include</span> <span class="cpf">&lt;err.h&gt;</span><span class="cp">
 </span><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
 </span><span class="cp">#include</span> <span class="cpf">&lt;unistd.h&gt;</span><span class="cp">
 </span><span class="cp"></span>
+<span class="kt">int</span> <span class="nf">wait_for_process</span><span class="p">(</span><span class="n">pid_t</span><span class="p">);</span>
+<span class="kt">int</span> <span class="nf">wait_for_process_group</span><span class="p">(</span><span class="n">pid_t</span><span class="p">);</span>
+
 <span class="c1">// Convenience macro to abort quickly if a syscall fails with -1.
+</span><span class="c1">//
+</span><span class="c1">// Not great error handling, but better have some than none given that you, the
+</span><span class="c1">// reader, might be copy/pasting this into real production code.
 </span><span class="c1"></span><span class="cp">#define CHECK_OK(call) if (call == -1) err(EXIT_FAILURE, #call);
 </span><span class="cp"></span>
 <span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span><span class="o">**</span> <span class="n">argv</span><span class="p">)</span> <span class="p">{</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">argc</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">)</span> <span class="p">{</span>
         <span class="n">errx</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">,</span> <span class="s">&#34;Must provide a program name and arguments&#34;</span><span class="p">);</span>
-    <span class="p">}</span>
-
-    <span class="c1">// Configure ourselves to act as the child subreaper, in essence replacing
-</span><span class="c1"></span>    <span class="c1">// the functionality of init(8).  We should do this before forking to avoid
-</span><span class="c1"></span>    <span class="c1">// a race between our child spawning subprocesses and us doing this
-</span><span class="c1"></span>    <span class="c1">// operation.
-</span><span class="c1"></span>    <span class="k">if</span> <span class="p">(</span><span class="n">prctl</span><span class="p">(</span><span class="n">PR_SET_CHILD_SUBREAPER</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
-        <span class="n">err</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">,</span> <span class="s">&#34;prctl&#34;</span><span class="p">);</span>
     <span class="p">}</span>
 
     <span class="kt">int</span> <span class="n">fds</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
@@ -198,57 +331,44 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
     <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">dummy</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">char</span><span class="p">)));</span>
     <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">]));</span>
 
-    <span class="c1">// Wait for the direct child to finish.  We do this separately to collect
-</span><span class="c1"></span>    <span class="c1">// and propagate its exit status.
+    <span class="c1">// Now wait for the direct child to terminate and keep it around as a
+</span><span class="c1"></span>    <span class="c1">// zombie.  This ensures that the process group is not reparented to init,
+</span><span class="c1"></span>    <span class="c1">// which allows us to query it without racing other processes getting the
+</span><span class="c1"></span>    <span class="c1">// same group identifier.
+</span><span class="c1"></span>    <span class="n">wait_for_process</span><span class="p">(</span><span class="n">pid</span><span class="p">);</span>
+
+    <span class="c1">// The direct child is dead and the kernel would reparent all processes of
+</span><span class="c1"></span>    <span class="c1">// our group to init if we hadn&#39;t kept the child around as a zombie.  Wait
+</span><span class="c1"></span>    <span class="c1">// for all of them to vanish.
+</span><span class="c1"></span>    <span class="n">wait_for_process_group</span><span class="p">(</span><span class="n">pid</span><span class="p">);</span>
+
+    <span class="c1">// And now reap the exit status of the direct child.
 </span><span class="c1"></span>    <span class="kt">int</span> <span class="n">status</span><span class="p">;</span>
     <span class="n">CHECK_OK</span><span class="p">(</span><span class="n">waitpid</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">status</span><span class="p">,</span> <span class="mi">0</span><span class="p">));</span>
-
-    <span class="c1">// And now wait for any other process to terminate.  We don&#39;t care about
-</span><span class="c1"></span>    <span class="c1">// them being in our process group any longer.
-</span><span class="c1"></span>    <span class="k">while</span> <span class="p">(</span><span class="n">wait</span><span class="p">(</span><span class="nb">NULL</span><span class="p">)</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
-        <span class="c1">// Got a child.  Wait for more.
-</span><span class="c1"></span>    <span class="p">}</span>
-    <span class="n">assert</span><span class="p">(</span><span class="n">errno</span> <span class="o">==</span> <span class="n">ECHILD</span><span class="p">);</span>
-
     <span class="k">return</span> <span class="n">WIFEXITED</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="o">?</span> <span class="n">WEXITSTATUS</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="o">:</span> <span class="n">EXIT_FAILURE</span><span class="p">;</span>
 <span class="p">}</span>
 </code></pre></div>
   <div class="footer">
       <div class="filename">
-        <a href="/src/wait-for-process-group/wait-all-linux.c" type="text/plain">wait-all-linux.c</a>
+        <a href="/src/wait-for-process-group/wait-all-darwin.c" type="text/plain">wait-all-darwin.c</a>
       </div>
     </div>
   </div>
 
 
-<p>There are two changes to notice compared to the previous post:</p>
+<p>And if we build and run it with the same same sample command as before:</p>
 
-<ul>
-<li><p>The call to <code>prctl(2)</code><sup class="footnote-ref" id="fnref:portability"><a href="#fn:portability">2</a></sup> with a first argument of <code>1</code>, which configures our tool to become the child subreaper before it spawns any subprocess. (This API is not cryptic at all.)</p></li>
-
-<li><p>More subtly, we now use <code>wait(2)</code> instead of <code>waitpid(2)</code> to wait for all stray subprocesses. This is because, as the acting child subreaper, we will be assigned <em>any</em> subprocess that terminates <em>even if said process decided to escape the process group</em>&mdash;which is nice.</p></li>
-</ul>
-
-<p>If we build our sample program and run the same command as in the previous post:</p>
-
-<pre><code>$ ./wait-all-linux /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
+<pre><code>$ ./wait-all-darwin /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
 1
 2
 $
 </code></pre>
 
-<p>You&rsquo;ll see that <code>wait-all-linux</code> did not terminate until the nested subshell did, even though the outer shell exited quickly.</p>
-<div class="footnotes">
+<p>you&rsquo;ll see that <code>wait-all-darwin</code> did not terminate until the nested subshell did, even though the outer shell exited quickly.</p>
 
-<hr />
+<p>Great. <em>However</em>, be aware that this solution is <em>not</em> bullet-proof: if a subprocess creates a new process group, it will escape our algorithm and there is nothing we can do about it. (It looks like FreeBSD has a <code>NOTE_TRACK</code> event that could let us track those processes&hellip; but of course this doesn&rsquo;t exist on Darwin.) Anyway, in the context of <a href="/2019/11/bazel-process-wrapper.html">Bazel&rsquo;s process wrapper</a>, we are willing to live with this limitation.</p>
 
-<ol>
-<li id="fn:namespaces">PID namespaces are already in use by the <code>linux-sandbox</code> tool in Bazel, but note that using them can cause <a href="https://github.com/bazelbuild/bazel/issues/3236">other kinds of subtle problems</a> due to PID virtualization.
- <a class="footnote-return" href="#fnref:namespaces"><sup>[return]</sup></a></li>
-<li id="fn:portability">FreeBSD also provides the child subreaper feature via <code>procctl(PROC_REAP_ACQUIRE)</code> since the 10.2 release so this post could apply to that system as well. I haven&rsquo;t found any other system with this though.
- <a class="footnote-return" href="#fnref:portability"><sup>[return]</sup></a></li>
-</ol>
-</div>
+<p>Lastly note that this solution should be generalizable to other systems. In the worst case, you&rsquo;d need to use <code>ps(1)</code> to walk the process table, but you could still do it. The only issue is that you might race against other processes grabbing the PGID as described above, but it&rsquo;s a pretty unlikely scenario and maybe it can be fixed with some <code>SIGCHLD</code> magic.</p>
 </article>
             </div>
           </div>
@@ -257,7 +377,7 @@ $
             <div class="row">
               <div class="col-md mr-auto text-left">
                 
-                <span><a href="https://jmmv.dev/2019/11/wait-for-process-group.html">&laquo; Previous post</a></span>
+                <span><a href="https://jmmv.dev/2019/11/wait-for-process-group-linux.html">&laquo; Previous post</a></span>
                 
               </div>
 
@@ -267,7 +387,7 @@ $
 
               <div class="col-md ml-auto text-right">
                 
-                <span><a href="https://jmmv.dev/2019/11/wait-for-process-group-darwin.html">Next post &raquo;</a></span>
+                <span></span>
                 
               </div>
             </div>
@@ -888,8 +1008,8 @@ $
           <div id="disqus_thread">
             <script>
               var disqus_config = function () {
-                this.page.url = "https:\/\/jmmv.dev\/2019\/11\/wait-for-process-group-linux.html";
-                this.page.identifier = "2019-11-14-wait-for-process-group-linux";
+                this.page.url = "https:\/\/jmmv.dev\/2019\/11\/wait-for-process-group-darwin.html";
+                this.page.identifier = "2019-11-15-wait-for-process-group-darwin";
               };
               (function() { 
                 var d = document, s = d.createElement('script');

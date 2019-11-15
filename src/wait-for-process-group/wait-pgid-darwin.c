@@ -6,7 +6,8 @@
 #include <stdlib.h>
 
 // Waits for a process group to terminate.  Assumes that the process leader
-// still exists in the process table (though it may be a zombie).
+// still exists in the process table (though it may be a zombie), and allows
+// it to remain.
 //
 // May never converge if the processes in the group are still spawning their
 // own subprocesses.

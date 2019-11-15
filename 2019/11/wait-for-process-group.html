@@ -150,7 +150,7 @@ $ ps -o pid,pgid,command
 
 <p>But you must remember that <code>kill(2)</code> just <em>posts</em> the signal to the given process(es). There is no guarantee that the signal was delivered and handled once <code>kill(2)</code> returns. The signal is processed at a later time (or maybe not at all, if the signal can be and is ignored)&mdash;and if the process is blocked in the kernel, whatever thing it is doing may be allowed to complete before the signal takes effect.</p>
 
-<p>Which poses a problem: the Bazel process wrapper is supposed to abide by the contract that, once it terminates, the command given to it has <em>also</em> terminated. If the process wrapper did not wait for all of its descendent processes to fully terminate, we would violate that contract and we would experience very difficult-to-diagnose race conditions. All hypotheticals&hellip; right? Well, no, because the process wrapper does <em>not</em> actually wait for the process group to complete, so we have a bug. Stay calm though, because the bug is extremely hard to hit (we use <code>SIGKILL</code>, not <code>SIGTERM</code>), and it&rsquo;s only a correctness issue if you are playing with my new <code>--experimental_local_lockfree_output</code> feature combined with dynamic execution.</p>
+<p>Which poses a problem: the Bazel process wrapper is supposed to abide by the contract that, once it terminates, the command given to it has <em>also</em> terminated. If the process wrapper did not wait for all of its descendent processes to fully terminate, we would violate that contract and we would experience very difficult-to-diagnose race conditions. All hypotheticals&hellip; right? Well, no, because the process wrapper does <em>not</em> actually wait for the process group to complete, so we have a bug (<a href="https://github.com/bazelbuild/bazel/issues/10245">#10245</a>). Stay calm though, because the bug is extremely hard to hit (we use <code>SIGKILL</code>, not <code>SIGTERM</code>), and it&rsquo;s only a correctness issue if you are playing with my new <code>--experimental_local_lockfree_output</code> feature combined with dynamic execution.</p>
 
 <p>So&hellip; how do we actually wait for all processes in the same process group to terminate? Let&rsquo;s start by looking at the documentation of <code>waitpid(2)</code>. Quoting the macOS 10.15 manual page, we&rsquo;ll see:</p>
 
@@ -251,6 +251,8 @@ $ 2
 <p>So how do we fix this? Well&hellip; there is no good answer to this question as the solution varies across platforms. And, in fact, it may not be possible to implement at all (correctly) in some, though we can obtain a good approximation.</p>
 
 <p>We&rsquo;ll dive into the possible alternatives for Linux and macOS in the next posts, which will help us fix the bug that currently exists in Bazel&rsquo;s process wrapper.</p>
+
+<p><em>See the followup posts with <a href="/2019/11/wait-for-process-group-linux.html">Linux-specific</a> and <a href="/2019/11/wait-for-process-group-darwin.html">macOS-specific</a> details.</em></p>
 </article>
             </div>
           </div>
@@ -350,11 +352,11 @@ $ 2
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (14)
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (15)
         <ul id="archive-year-2019" class="collapse">
         
           
-          <li><a href="/archive.html#2019-11">November 2019</a> (4)</li>
+          <li><a href="/archive.html#2019-11">November 2019</a> (5)</li>
         
           
           <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>

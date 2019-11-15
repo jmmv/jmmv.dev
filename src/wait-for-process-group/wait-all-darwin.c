@@ -8,6 +8,9 @@ int wait_for_process(pid_t);
 int wait_for_process_group(pid_t);
 
 // Convenience macro to abort quickly if a syscall fails with -1.
+//
+// Not great error handling, but better have some than none given that you, the
+// reader, might be copy/pasting this into real production code.
 #define CHECK_OK(call) if (call == -1) err(EXIT_FAILURE, #call);
 
 int main(int argc, char** argv) {
