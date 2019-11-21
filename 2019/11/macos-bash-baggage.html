@@ -7,20 +7,19 @@
         content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
-  <title>Framebuffer on NetBSD - jmmv.dev</title>
-  <meta content="Framebuffer on NetBSD - jmmv.dev" property="og:title">
+  <title>The /bin/bash baggage of macOS - jmmv.dev</title>
+  <meta content="The /bin/bash baggage of macOS - jmmv.dev" property="og:title">
 
   
 
   
-  <meta name="description" content="I&#39;ve got very surprised today to find that NetBSD has a framebuffer device on the i386 platform (in fact any which uses the vga(4) driver). Well, certainly, I first saw it in NetBSD/mac68k (where there is no real text mode, so it must be emulated) some weeks ago, but was stranged to not seeing it in NetBSD/i386.
-The &#34;framebuffer&#34; (or raster graphics device) can be enabled by adding options VGA_RASTERCONSOLE to your kernel config.">
+  <meta name="description" content="As you may know, macOS ships with an ancient version of the Bash shell interpreter, 3.2.57. Let&#39;s see why that is and why this is a problem.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="https://jmmv.dev/2004/07/framebuffer-on-netbsd.html" property="og:url">
+  <meta content="https://jmmv.dev/2019/11/macos-bash-baggage.html" property="og:url">
 
-  <link rel="canonical" href="https://jmmv.dev/2004/07/framebuffer-on-netbsd.html">
+  <link rel="canonical" href="https://jmmv.dev/2019/11/macos-bash-baggage.html">
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
@@ -113,10 +112,10 @@ The &#34;framebuffer&#34; (or raster graphics device) can be enabled by adding o
 
     <div class="page-header">
       <div class="container">
-        <h1>Framebuffer on NetBSD</h1>
+        <h1>The /bin/bash baggage of macOS</h1>
 
-        <p>July 29, 2004 &middot;
-        About 1 minute</p>
+        <p>November 20, 2019 &middot;
+        About 4 minutes</p>
 
         
       </div>
@@ -128,7 +127,75 @@ The &#34;framebuffer&#34; (or raster graphics device) can be enabled by adding o
           <div class="row">
             <div class="col">
               
-              <article><p>I've got very surprised today to find that NetBSD has a framebuffer device on the i386 platform (in fact any which uses the vga(4) driver). Well, certainly, I first saw it in NetBSD/mac68k (where there is no real text mode, so it must be emulated) some weeks ago, but was stranged to not seeing it in NetBSD/i386.</p>  <p>The "framebuffer" (or raster graphics device) can be enabled by adding <tt>options VGA_RASTERCONSOLE</tt> to your kernel config.  According to CVS logs, this has been available since October 2002, commited by junyoung@.</p>  <p>However, note that this is not as featureful as Linux's framebuffer device. Ours is meant to be used to display multilingual text, but nothing more (i.e., no drawing). Anyway, it surely has room for improvements, and it could be interesting to see a complete framebuffer device support (for example to get X working easily, or to get graphical programs without X).</p><p class="mobile-post"></p>
+              <article><p>As you may know, macOS ships with an ancient version of the Bash shell interpreter under <code>/bin/bash</code>. On an up-to-date Catalina installation, we get:</p>
+
+<pre><code>$ /bin/bash --version
+GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin19)
+Copyright (C) 2007 Free Software Foundation, Inc.
+</code></pre>
+
+<p>which is&hellip; <em>old</em>. Bash 3.2.57 was released on November 7th, 2014&mdash;five years ago. The most recent version is 5.0 from the beginning of this year&mdash;so it&rsquo;s not like nothing has changed since then.</p>
+
+<p>But why? Why does macOS stick to such an ancient version? Well, the reason is simple: 3.2.57 is the last Bash release that was published under the GPL v2. All subsequent versions are GPL v3-licensed, which as you can imagine, companies do not like.</p>
+
+<p>You may also have noticed that Zsh is the recommended default shell starting with Catalina. And you guessed right: Zsh is <em>not</em> GPL-licensed. Zsh is released under an MIT-like license, which is much more amenable to Apple. Which means Apple can ship a more modern shell interpreter and keep it up-to-date. And if you look further, you will also discover that Catalina ships with Dash, a standards-compliant, fast, and BSD-licensed shell interpreter first introduced by Debian to replace <code>/bin/bash</code> as the system-wide <em>scripts interpreter</em>.</p>
+
+<p>At this point we can only conjecture, but it seems clear that Apple wants to remove the ancient <code>/bin/bash</code> from the system and will do so in two ways: first, making Zsh the interpreter for interactive sessions; and second, using Dash to run any system scripts. Which makes sense, because Bash 3.2.57 is a big liability.</p>
+
+<p>Other than being old, Bash 3.2.57 lacks new features and contains bugs that cannot be dealt with. My pet peeve is <code>set -u</code> being unusable: if you try to reference <code>${@}</code> or <code>${*}</code> in a function, and the function hasn&rsquo;t been given any arguments, the program will fail. Which is unfortunate because a lot of scripts enable the <a href="/2018/03/shell-readability-strict-mode.html">shell&rsquo;s strict mode</a> without realizing that they&rsquo;ll break unexpectedly for perfectly-valid code.</p>
+
+<p>Consider this benign-looking script that prints its arguments one per line:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">set</span> -u
+
+main<span class="o">()</span> <span class="o">{</span>
+    <span class="k">for</span> arg in <span class="s2">&#34;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">;</span> <span class="k">do</span>
+        <span class="nb">echo</span> <span class="s2">&#34;Argument: </span><span class="si">${</span><span class="nv">arg</span><span class="si">}</span><span class="s2">&#34;</span>
+    <span class="k">done</span>
+<span class="o">}</span>
+
+main <span class="s2">&#34;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&#34;</span></code></pre></div>
+<p>If we try to run it with Dash, we get:</p>
+
+<pre><code>$ /bin/dash print-args.sh 1 2 3
+Argument: 1
+Argument: 2
+Argument: 3
+$ /bin/dash print-args.sh
+</code></pre>
+
+<p>And with the ancient Bash:</p>
+
+<pre><code>$ /bin/bash print-args.sh 1 2 3
+Argument: 1
+Argument: 2
+Argument: 3
+$ /bin/bash print-args.sh
+print-args.sh: line 9: @: unbound variable
+</code></pre>
+
+<p>Oops. Note how Bash failed miserably when no arguments were given&hellip; and there is nothing we can do to protect against that&mdash;not even checking <code>${#}</code> upfront. See, if we modify the program to be like this:</p>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">set</span> -u
+
+main<span class="o">()</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">&#34;</span><span class="si">${#}</span><span class="s2">&#34;</span> -gt <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+        <span class="k">for</span> arg in <span class="s2">&#34;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">;</span> <span class="k">do</span>
+            <span class="nb">echo</span> <span class="s2">&#34;Argument: </span><span class="si">${</span><span class="nv">arg</span><span class="si">}</span><span class="s2">&#34;</span>
+        <span class="k">done</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+
+main <span class="s2">&#34;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&#34;</span></code></pre></div>
+<p>we will still get the same error:</p>
+
+<pre><code>$ /bin/bash print-args.sh
+print-args.sh: line 11: @: unbound variable
+</code></pre>
+
+<p>We lose. So either we have to avoid using <code>set -u</code> to avoid this potential issue throughout our scripts, or we need to be very aware of it and surround the offending code with <code>set +u</code> and <code>set -u</code> pairs to temporarily disable this behavior&hellip; which is very fragile. And ugly.</p>
+
+<p>That&rsquo;s just one of the many examples of subtle issues you may encounter. (I&rsquo;ve hit others in the past but I cannot remember them right now.) You can skim through the <a href="http://git.savannah.gnu.org/cgit/bash.git/tree/CHANGES"><code>CHANGES</code></a> list for more details though.</p>
+
+<p>At this point, I&rsquo;m <a href="https://twitter.com/jmmv/status/1197296934920347650">starting to feel</a> that <code>/bin/bash</code> on macOS is the equivalent of what <code>/bin/sh</code> from Solaris was. Sure, Bash 3.2.57 is not <em>that</em> broken, but it&rsquo;s still broken enough to be problematic when writing shell scripts that are, in theory, perfectly valid. And unless Apple decides to yank Bash from the default installation completely&mdash;something that seems very hard to do&mdash;we&rsquo;ll be stuck with having to support this version for a long, long time.</p>
 </article>
             </div>
           </div>
@@ -137,7 +204,7 @@ The &#34;framebuffer&#34; (or raster graphics device) can be enabled by adding o
             <div class="row">
               <div class="col-md mr-auto text-left">
                 
-                <span><a href="https://jmmv.dev/2004/07/tips-to-create-good-patches.html">&laquo; Previous post</a></span>
+                <span><a href="https://jmmv.dev/2019/11/wait-for-process-group-darwin.html">&laquo; Previous post</a></span>
                 
               </div>
 
@@ -147,7 +214,7 @@ The &#34;framebuffer&#34; (or raster graphics device) can be enabled by adding o
 
               <div class="col-md ml-auto text-right">
                 
-                <span><a href="https://jmmv.dev/2004/07/changing-netbsds-console-colors.html">Next post &raquo;</a></span>
+                <span></span>
                 
               </div>
             </div>
@@ -768,8 +835,8 @@ The &#34;framebuffer&#34; (or raster graphics device) can be enabled by adding o
           <div id="disqus_thread">
             <script>
               var disqus_config = function () {
-                this.page.url = "https:\/\/jmmv.dev\/2004\/07\/framebuffer-on-netbsd.html";
-                this.page.identifier = "2004-07-29-framebuffer-on-netbsd";
+                this.page.url = "https:\/\/jmmv.dev\/2019\/11\/macos-bash-baggage.html";
+                this.page.identifier = "2019-11-20-macos-bash-baggage";
               };
               (function() { 
                 var d = document, s = d.createElement('script');
@@ -784,14 +851,6 @@ The &#34;framebuffer&#34; (or raster graphics device) can be enabled by adding o
               <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
               powered by Disqus.</a>
             </noscript>
-          </div>
-          
-          <p>Comments from the original Blogger-hosted post:</p>
-          <script src="https://apis.google.com/js/plusone.js"></script>
-          <div class="g-comments"
-              data-href="http://julipedia.meroh.net/2004/07/framebuffer-on-netbsd.html"
-              data-first_party_property="BLOGGER"
-              data-view_type="FILTERED_POSTMOD">
           </div>
           
         </div>
