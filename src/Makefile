@@ -1,14 +1,22 @@
 .PHONY: all clean
+all: inline-array-go
 all: rest-api-go
 all: rest-api-rust
 all: wait-for-process-group
+clean: clean-inline-array-go
 clean: clean-rest-api-go
 clean: clean-rest-api-rust
-clean: wait-for-process-group
+clean: clean-wait-for-process-group
+
+.PHONY: clean-inline-array-go inline-array-go
+inline-array-go:
+	( cd inline-array-go && go build )
+clean-inline-array-go:
+	( cd inline-array-go && go clean )
 
 .PHONY: clean-rest-api-go rest-api-go
 rest-api-go:
-	( cd rest-api-go && go build notes.go )
+	( cd rest-api-go && go build )
 clean-rest-api-go:
 	( cd rest-api-go && go clean )
 	rm -f rest-api-go/go.sum
