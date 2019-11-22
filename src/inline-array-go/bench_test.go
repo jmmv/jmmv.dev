@@ -5,17 +5,14 @@ import (
 	"testing"
 )
 
-func fillTree(n *node, nnodes i) {
-	if nnodes > 0 {
-
-	}
-}
-
 func BenchmarkSumTree(b *testing.B) {
-	for i := 1; i < inlineValues*2; i++ {
+	for i := 2; i < inlineValues*2; i++ {
 		b.Run(fmt.Sprintf("%d", i), func(b *testing.B) {
-			tree := makeBalancedTree(12, i)
-			sumTree(tree)
+			tree := makeBalancedTree(i, 1000000)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				sumTree(tree)
+			}
 		})
 	}
 }

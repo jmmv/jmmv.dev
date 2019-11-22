@@ -1,10 +1,5 @@
 package main
 
-import (
-	"fmt"
-	"time"
-)
-
 // inlineValues specifies how many array values will be allocated directly
 // inside the Node struct.
 const inlineValues = 4
@@ -28,16 +23,29 @@ func (n *node) AddChild(child *node) {
 	n.children = append(n.children, child)
 }
 
-// makeBalancedTree creates a tree of a given depth, with each node containing
-// as many children as given in width.
-func makeBalancedTree(depth int, width int) *node {
-	node := newNode(1)
-	if depth > 0 {
-		for i := 0; i < width; i++ {
-			node.AddChild(makeBalancedTree(depth-1, width))
+// makeBalancedTree creates a balanced tree where each node has at most width
+// children and where the whole tree has exactly nnodes nodes.
+func makeBalancedTree(width int, nnodes int) *node {
+	queue := make([]*node, 0, nnodes)
+
+	root := newNode(1)
+	queue = append(queue, root)
+	nnodes--
+
+	i := 0
+	for nnodes > 0 {
+		n := queue[i]
+		if len(n.children) < width {
+			n2 := newNode(1)
+			n.AddChild(n2)
+			queue = append(queue, n2)
+			nnodes--
+		} else {
+			i++
 		}
 	}
-	return node
+
+	return root
 }
 
 // sumTree walks a tree depth-first and sums all the values within it.
@@ -47,14 +55,4 @@ func sumTree(n *node) int {
 		total += sumTree(n)
 	}
 	return total
-}
-
-func main() {
-	before := time.Now()
-	tree := makeBalancedTree(12, 4)
-	fmt.Printf("Allocation: %v\n", time.Since(before))
-
-	before = time.Now()
-	fmt.Printf("Total: %d\n", sumTree(tree))
-	fmt.Printf("Addition: %v\n", time.Since(before))
 }
