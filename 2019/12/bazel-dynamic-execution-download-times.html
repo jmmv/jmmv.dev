@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <title>Artifact downloads and dynamic execution - jmmv.dev</title>
+  <meta content="Artifact downloads and dynamic execution - jmmv.dev" property="og:title">
+
+  
+
+  
+  <meta name="description" content="In the previous post of this series, we looked at how the now-legacy implementation of the dynamic strategy uses a per-spawn lock to guard accesses to the output tree. This lock is problematic for a variety of reasons and we are going to peek into one of those here.
+To recap, the remote strategy does the following:
+ Send spawn execution RPC to the remote service. Wait for successful execution (which can come quickly from a cache hit).">
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  <meta content="https://jmmv.dev/2019/12/bazel-dynamic-execution-download-times.html" property="og:url">
+
+  <link rel="canonical" href="https://jmmv.dev/2019/12/bazel-dynamic-execution-download-times.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="jmmv.dev" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+</head>
+
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+  <a class="navbar-brand" href="/">jmmv.dev</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/work.html" >Work</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="http://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Artifact downloads and dynamic execution</h1>
+
+        <p>December 30, 2019 &middot;
+        About 5 minutes</p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div class="row">
+            <div class="col">
+              
+              <article><p>In the <a href="/2019/12/bazel-dynamic-execution-output-locking.html">previous post</a> of this series, we looked at how the now-legacy implementation of the dynamic strategy uses a per-spawn lock to guard accesses to the output tree. This lock is problematic for a variety of reasons and we are going to peek into one of those here.</p>
+
+<p>To recap, the remote strategy does the following:</p>
+
+<ol>
+<li>Send spawn execution RPC to the remote service.</li>
+<li>Wait for successful execution (which can come quickly from a cache hit).</li>
+<li><strong>Lock the output tree</strong> (only when run within the dynamic strategy).</li>
+<li>Download the spawn&rsquo;s outputs directly into the output tree.</li>
+</ol>
+
+<p>Note how we lock the output tree <em>before</em> we have downloaded any outputs, and taking the lock means that the local branch of the same spawn cannot start or complete <em>even if there are plenty of local resources available to run it</em>.</p>
+
+<p>This is a problem because the cost of the downloads can be much higher than the cost of the actual execution&mdash;especially with a remote cache hit, because then the execution RPC is instantaneous. When this happens, our dynamic strategy does not abide by its promise of &ldquo;picking the fastest branch to complete&rdquo; because it&rsquo;s possible that running the spawn locally would finish by the time the downloads have completed.</p>
+
+<div class="frame">
+  <div class="content">
+    <img src="/images/2019-12-12-bazel-dynamic-execution-26.svg" class="with-border">
+  </div>
+  <div class="footer">
+    <p><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_44">Slide 26</a> of my talk on dynamic execution for BazelCon 2019</p>
+  </div>
+</div>
+
+<p>In the slide above, you can notice additional problems: by issuing the downloads <em>after</em> grabbing the lock, the spawn is now network-bound and subject to networking blips. The spawn could take arbitrarily long to complete and the build may get stuck if the downloads don&rsquo;t complete for any reason. Remember that these builds used to be fully-local and therefore network-agnostic, but the dynamic strategy has made them susceptible to networking problems.</p>
+
+<p>Womp. Womp.</p>
+
+<p>Luckily enough, the solution to this issue is trivial in paper: make the remote path download its outputs to a temporary location and, only once these downloads have finished, grab the lock and move the outputs to their final location. Visually:</p>
+
+<div class="frame">
+  <div class="content">
+    <img src="/images/2019-12-12-bazel-dynamic-execution-27.svg" class="with-border">
+  </div>
+  <div class="footer">
+    <p><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c2735c6a0_0_236">Slide 27</a> of my talk on dynamic execution for BazelCon 2019</p>
+  </div>
+</div>
+
+<p>In practice, however, this turned out to be quite hard to get right. Some of the issues we faced:</p>
+
+<ul>
+<li><p>The first attempt at downloading outputs as temporary files just added a <code>.tmp</code> suffix to the downloaded files. This is fine unless there are tree artifacts (actions that generate output directories, not individual files) at play and only if you pass <code>--nolegacy_spawn_scheduler</code>, which I&rsquo;ll cover later.</p></li>
+
+<li><p>The second attempt moved the temporary files to a separate directory and gave them names derived from their full relative path to the output tree. (E.g. an output file <code>a/b/c.o</code> would end up as <code>a_b_c.o.tmp</code> in the separate temporary directory.) This fixed the issue with tree artifacts&hellip; but introduced problems on macOS because the file names became too long.</p></li>
+
+<li><p>The third attempt just kept the separate temporary directory but gave all temporary files unique names using a monotonically increasing counter.</p></li>
+
+<li><p>Lastly, and more interestingly: up until this change, the remote strategy would rarely be interrupted during the download stage. The only case in which this would happen is if the user hit Ctrl+C to interrupt the build, and at that point we only cared about a best-effort cancellation of ongoing work.</p>
+
+<p>But after this change, the dynamic strategy now cancels remote actions routinely while they are downloading files. This exposed various deficiencies in the process that manifested as both stack overflows due to long chains of future listeners, and as memory thrashing.</p></li>
+</ul>
+
+<p>All these issues are now fixed and we have enabled this feature to download outputs as temporary files by default. Keep in mind, however, that the Google-internal remote strategy is different than the open-source one for historical reasons; I know the public implementation received the <a href="https://source.bazel.build/bazel/+/d75b6cf85c211fd284c302941bc5efc1b361b83a">fixes</a> to download files in a temporary location, but I&rsquo;m not sure if those have been carefully tuned to not suffer from any of the problems above.</p>
+
+<p>With these fixes in place, the dynamic strategy should live up to its promise of picking the fastest branch to complete. Furthermore, we can also claim that builds using the dynamic strategy should not be affected by networking blips. Brought to the limit when the network breaks down hard, this means that the dynamic strategy transparently falls back to local-only builds.</p>
+
+<p>Can we prove it though?</p>
+
+<div class="frame">
+  <div class="content">
+    <img src="/images/2019-12-12-bazel-dynamic-execution-28.svg" class="with-border">
+  </div>
+  <div class="footer">
+    <p><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_0">Slide 28</a> of my talk on dynamic execution for BazelCon 2019</p>
+  </div>
+</div>
+
+<p>In the graph above, you can see the median build times for a relatively large iOS app at Google. Median build times intend to capture the behavior of incremental builds&mdash;those where you want the edit/build/test cycle to be as fast as possible.</p>
+
+<p>To the left of the vertical green divider, median build times for dynamic execution (red line) are all over the place: incremental builds using dynamic scheduling can be similar to local-only builds (blue line) but also much <em>worse</em>. To the right of the vertical green divider, we get the opposite: dynamic build times are always better than local-only build times. And what does that vertical divider represent? The point in time when we rolled out the fixes described above, of course! So yes, the fixes paid off.</p>
+
+<p>Unfortunately, fixing this issue exposes another problem. By making downloads happen before taking the lock, we are decreasing the number of cache hits we benefit from: the remote path now takes longer to grab the lock, which means that the local path has more chances of winning than before.</p>
+
+<p>Fixing this is still work in progress and requires the new implementation of the dynamic scheduler, which we&rsquo;ll touch on next.</p>
+</article>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2019/12/bazel-dynamic-execution-output-locking.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span></span>
+                
+              </div>
+            </div>
+
+            <div class="row mt-4">
+              <div class="col">
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col">
+    <h2>Subscribe</h2>
+
+    <div class="row">
+      <div class="col-sm-9">
+        <p><a
+          href="https://twitter.com/jmmv"
+          class="twitter-follow-button"
+          data-show-count="false"
+          data-size="large">Follow @jmmv</a>
+          <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script></p>
+      </div>
+      <div class="col-sm-3">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <form class="feedburner form-horizontal"
+          action="https://feedburner.google.com/fb/a/mailverify"
+          method="post"
+          target="popupwindow"
+          onsubmit="window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');return true">
+      <input type="text" name="email"
+        placeholder="Enter your email and press enter"
+        class="form-control input-sm"/>
+      <input type="hidden" value="jmmv" name="uri"/>
+      <input type="hidden" name="loc" value="en_US"/>
+      <p>
+        <small>Subscription by
+        <a href="https://feedburner.google.com"
+        target="_blank">FeedBurner</a></small>
+      </p>
+    </form>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li><a href="/2019/09/rest-api-rust-go.html">Sample REST API in Rust and Go</a></li>
+      
+        <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
+      
+        <li><a href="/2019/02/sandboxfs-0-1-0.html">Hello, sandboxfs 0.1.0</a></li>
+      
+        <li><a href="/2018/07/rust-vs-go.html">Rust vs. Go</a></li>
+      
+        <li><a href="/2018/03/stick-to-projects-core-language-in-tests.html">Stick to your project&#39;s core language in your tests</a></li>
+      
+      <li><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (22)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
+</div>
+
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <div id="disqus_thread">
+            <script>
+              var disqus_config = function () {
+                this.page.url = "https:\/\/jmmv.dev\/2019\/12\/bazel-dynamic-execution-download-times.html";
+                this.page.identifier = "2019-12-30-bazel-dynamic-execution-download-times";
+              };
+              (function() { 
+                var d = document, s = d.createElement('script');
+
+                s.src = '//jmmv.disqus.com/embed.js';
+
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+              })();
+            </script>
+            <noscript>Please enable JavaScript to view the
+              <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
+              powered by Disqus.</a>
+            </noscript>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2019 Julio Merino</p>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/js/bootstrap.min.js"></script>
+
+<script>
+$('article :header').each(function() {
+  var attr = $(this).attr('id');
+  if (typeof attr !== typeof undefined && attr !== false) {
+    $(this).append('<a class="anchor" href="#' + $(this).context.id + '">' +
+      '<img src="/octicons/link.svg" aria-hidden="true">' +
+      '</a>')
+  }
+})
+</script>
+
+<script>
+$("blockquote").addClass("blockquote");
+$("pre.chroma").addClass("pre-scrollable");
+
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;
+  m.parentNode.insertBefore(a,m)})(window,document,'script',
+  '//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63557333-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+  </body>
+</html>
