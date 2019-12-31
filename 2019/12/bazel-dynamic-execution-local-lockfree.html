@@ -7,21 +7,20 @@
         content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
-  <title>Buildtool status - jmmv.dev</title>
-  <meta content="Buildtool status - jmmv.dev" property="og:title">
+  <title>Lifting the local lock for dynamic execution - jmmv.dev</title>
+  <meta content="Lifting the local lock for dynamic execution - jmmv.dev" property="og:title">
 
   
 
   
-  <meta name="description" content="Hmm, Buildtool... one of my pet projects, probably the one on which I&#39;ve spent the most time working... and it was even starting to get some (few) popularity lately
-But I must admit it. The code is, in its actual form, dead :-( It&#39;s unmanageable (shell scripting doesn&#39;t scale, you know) and breaks in many, many places. Just consider the following facts:
- Detection of C&#43;&#43; features from bt_config fails in many cases.">
+  <meta name="description" content="In the previous post, we saw how accounting for artifact download times makes the dynamic strategy live to its promise of delivering the best of local and remote build times.
+Or does it? If you think about it closely, that change made it so that builds that were purely local couldn&amp;rsquo;t be made worse by enabling the dynamic scheduler: the dynamic strategy would always favor the local branch of a spawn if the remote one took a long time.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.55.6" />
 
-  <meta content="https://jmmv.dev/2004/12/buildtool-status.html" property="og:url">
+  <meta content="https://jmmv.dev/2019/12/bazel-dynamic-execution-local-lockfree.html" property="og:url">
 
-  <link rel="canonical" href="https://jmmv.dev/2004/12/buildtool-status.html">
+  <link rel="canonical" href="https://jmmv.dev/2019/12/bazel-dynamic-execution-local-lockfree.html">
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
@@ -114,10 +113,10 @@ But I must admit it. The code is, in its actual form, dead :-( It&#39;s unmanage
 
     <div class="page-header">
       <div class="container">
-        <h1>Buildtool status</h1>
+        <h1>Lifting the local lock for dynamic execution</h1>
 
-        <p>December 1, 2004 &middot;
-        About 3 minutes</p>
+        <p>December 31, 2019 &middot;
+        About 4 minutes</p>
 
         
       </div>
@@ -129,7 +128,61 @@ But I must admit it. The code is, in its actual form, dead :-( It&#39;s unmanage
           <div class="row">
             <div class="col">
               
-              <article><p>Hmm, <a href="http://buildtool.sourceforge.net/">Buildtool</a>... one of my pet projects, probably the one on which I've spent the most time working... and it was even starting to get some (few) popularity lately</p>  <p>But I must admit it. The code is, in its actual form, dead :-( It's unmanageable (shell scripting doesn't scale, you know) and breaks in many, many places. Just consider the following facts:</p>  <ul> <li>Detection of C++ features from <tt>bt_config</tt> fails in many cases.</li> <li><tt>bt_logic</tt>'s behavior is less than acceptable, and adding functionality to it is a PITA.</li> <li>Several modules haven't been modified across versions, so they don't work properly.  For example, <tt>bt_lint</tt> is almost useless.</li> <li>Shared library handling is broken in many systems, and fixing it could be very difficult.</li> <li>The code exposes internals too much, specially in environmental variables and C/C++ defines. But cleaning that up is also complex due to the nature of shell scripts.</li> <li>I was suggested recently to make <tt>bt_dist</tt> only include in tarballs what was really needed, and not everything (just like <a href="http://www.gnu.org/software/automake/">GNU Automake</a>'s <tt>make dist</tt> does.  I like the suggestion, but implementing correctly is impossible due to the current code.</li> </ul>  <p>... plus a large etcetera. All in all, too many problems that can't be solved without doing very gross hacks or restarting the project from scratch. This is why I haven't touched the code since the beginning of the summer.</p>  <p>But... you know what? For some reason, I'm willing to rewrite it from scratch. Of course, using a real programming language. The choices I have in mind are ("obviously" ;-):</p>  <ul> <li><i>C++</i>: I really like C++, together with the STL. Yes, believe me! It simplifies programming a lot, and OOP is wonderful. But I'm a bit afraid of portability. If I use this, it must follow the ANSI standard (not doing so could be silly), which means that users will need a compiler that follows the standard, such as <a href="http://gcc.gnu.org/">GNU GCC</a>. This is not a big problem, since GCC compiles almost anywhere, but may add problems to end users. However, by the time the program is usable, the situation may have improved a lot, hehe.</li>  <li><i>C</i>: Very portable, assuming you know where the portability problems arise (not a big problem for me). But what really bothers me is that it slows down development <i>a lot</i>: I'd have to create my own classes to handle containers (hash tables, linked lists, etc.) and handle dynamic memory even for trivial tasks. I'd also loose polymorphism, inheritance, exceptions... Ok, ok, <a href="http://www.gnome.org/">GNOME</a> emulates OOP in C, but I'm not too keen on that.</li> </ul>  <p>If I can't find any strong reason not to use C++, I'll stick to it. In fact, I've already written a bit of code (program detection) and it has been easy :-)</p>  <p>Oh, I listen, "How could build scripts be?".  Well, I have XML in mind - something similar to <a href="http://ant.apache.org/">Apache Ant</a>.  Otherwise I'll have to invent and write a parser for a custom language (ew, not funny).  But that's something yet to decide.</p><p class="mobile-post"></p>
+              <article><p>In the <a href="/2019/12/bazel-dynamic-execution-download-times.html">previous post</a>, we saw how accounting for artifact download times makes the dynamic strategy live to its promise of delivering the best of local and remote build times.</p>
+
+<p>Or does it? If you think about it closely, that change made it so that builds that were purely local couldn&rsquo;t be made worse by enabling the dynamic scheduler: the dynamic strategy would always favor the local branch of a spawn if the remote one took a long time. But for builds that were better off when they were fully remote (think of a fully-cached build with great networking), this is not true: the dynamic strategy might hurt them because because we may discard some of those remote cache hits.</p>
+
+<p>Think about this scenario:</p>
+
+<ol>
+<li>Send RPC for remote execution and detect a cache hit.</li>
+<li>Start downloading outputs.</li>
+<li>Start the local <em>unsandboxed</em> spawn, which grabs the output lock <em>upfront</em>.</li>
+<li>Downloads complete, but the lock is taken so the remote branch aborts.</li>
+<li>The local unsandboxed spawn now has to run through completion, even if that takes a long time or a lot of local resources (think battery!).</li>
+</ol>
+
+<p>Which, in a picture, looks like this:</p>
+
+<div class="frame">
+  <div class="content">
+    <img src="/images/2019-12-12-bazel-dynamic-execution-29.svg" class="with-border">
+  </div>
+  <div class="footer">
+    <p><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_34">Slide 29</a> of my talk on dynamic execution for BazelCon 2019</p>
+  </div>
+</div>
+
+<p>Not great. The real problem here is the local <em>unsandboxed</em> strategy. If we were using the sandboxed strategy, all would be good because we&rsquo;d only take the <a href="/2019/12/bazel-dynamic-execution-output-locking.html">output lock</a> once the local spawn finished execution. But because we do <em>not</em> use sandboxing for performance reasons, we take the lock right away.</p>
+
+<p>What if we could <strong>remove</strong> the output lock?</p>
+
+<p>What if, instead, we could make the local strategy run free and make the remote branch actively cancel the local branch when it is ready to put the outputs in place?</p>
+
+<p>Then, we would make as much progress as possible on each branch and stop it at the last minute:</p>
+
+<div class="frame">
+  <div class="content">
+    <img src="/images/2019-12-12-bazel-dynamic-execution-30.svg" class="with-border">
+  </div>
+  <div class="footer">
+    <p><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_202">Slide 30</a> of my talk on dynamic execution for BazelCon 2019</p>
+  </div>
+</div>
+
+<p>Great, but it turns out that this &ldquo;simple&rdquo; idea has been very difficult to implement. Let&rsquo;s see why.</p>
+
+<p>The first step was to refactor the dynamic strategy to not use the output lock. What we need instead is for each branch to cancel each other right before writing to the output tree. I like calling this &ldquo;cross-cancellations&rdquo; and you can compare this to coöperative vs. preëmptive scheduling: using a lock is akin to the former while issuing cancellations is akin to the latter.</p>
+
+<p>But implementing cross-cancellations was such an intrusive change that I did not feel comfortable rolling it out without a flag. And, well, because the change was so extensive, I actually <a href="https://source.bazel.build/bazel/+/0bf5bbd90f3fd702fc838d9a144b599ad0490c4d">forked</a> the implementation because the flag would have made the majority of the code conditional. This is why we now have the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/LegacyDynamicSpawnStrategy.java;l=71;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>LegacyDynamicSpawnStrategy</code></a> and the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/DynamicSpawnStrategy.java;l=74;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>DynamicSpawnStrategy</code></a>. You can pick which one to use with the <code>--[no]legacy_spawn_strategy</code> flag, and my plan is to remove the legacy one at some point this year, of course.</p>
+
+<p>Other than intrusive, these changes were also <a href="https://source.bazel.build/bazel/+/4b1cdfc6df3d662dbc489d21e0ee8d69515e7ee1">so</a> <a href="https://source.bazel.build/bazel/+/f126b58ce5845b86bdfb40445f5b2f96c29fe935">incredibly</a> <a href="https://source.bazel.build/bazel/+/42b3be219e6f15aaf69d8de2edf925a2725151cb">hard</a> to get right due to concurrency issues. And especially, because cancelling a future and reliably waiting for its completion is difficult. <a href="https://docs.oracle.com/javase/tutorial/essential/concurrency/interrupt.html">Java&rsquo;s Interrupts</a> don&rsquo;t make it easy either. It is even more painful when you have to reliably terminate subprocesses as <a href="/2019/11/wait-for-process-group.html">we already saw</a>.</p>
+
+<p>Anyway. The second step was making the local unsandboxed strategy run without grabbing any kind of lock. A <a href="https://source.bazel.build/bazel/+/9a62ad079ddfa68daf24ecf3ce8cf15fc8326d9c">trivial change</a> really, but useless without the new dynamic scheduler. This behavior is gated behind <code>--experimental_local_lockfree_output</code>.</p>
+
+<p>For the most part, this all works now but none of this is enabled by default yet. I&rsquo;m still encountering some form of race condition where the local branch leaves some files behind after cancellation, which confuses the remote branch&hellip; and only seems to happen for tree artifacts. More on this later. And once that is done, I&rsquo;ll also have to profile and optimize the new <code>DynamicSpawnStrategy</code> as it&rsquo;s not giving better build times yet.</p>
+
+<p>The eventual side effect of these features is that they will enable us to remove or tighten the <code>--experimental_local_execution_delay</code> hack.</p>
 </article>
             </div>
           </div>
@@ -138,7 +191,7 @@ But I must admit it. The code is, in its actual form, dead :-( It&#39;s unmanage
             <div class="row">
               <div class="col-md mr-auto text-left">
                 
-                <span><a href="https://jmmv.dev/2004/11/impressions-on-monotone.html">&laquo; Previous post</a></span>
+                <span><a href="https://jmmv.dev/2019/12/bazel-dynamic-execution-download-times.html">&laquo; Previous post</a></span>
                 
               </div>
 
@@ -148,7 +201,7 @@ But I must admit it. The code is, in its actual form, dead :-( It&#39;s unmanage
 
               <div class="col-md ml-auto text-right">
                 
-                <span><a href="https://jmmv.dev/2004/12/cederrn.html">Next post &raquo;</a></span>
+                <span></span>
                 
               </div>
             </div>
@@ -772,8 +825,8 @@ But I must admit it. The code is, in its actual form, dead :-( It&#39;s unmanage
           <div id="disqus_thread">
             <script>
               var disqus_config = function () {
-                this.page.url = "https:\/\/jmmv.dev\/2004\/12\/buildtool-status.html";
-                this.page.identifier = "2004-12-01-buildtool-status";
+                this.page.url = "https:\/\/jmmv.dev\/2019\/12\/bazel-dynamic-execution-local-lockfree.html";
+                this.page.identifier = "2019-12-31-bazel-dynamic-execution-local-lockfree";
               };
               (function() { 
                 var d = document, s = d.createElement('script');
@@ -788,14 +841,6 @@ But I must admit it. The code is, in its actual form, dead :-( It&#39;s unmanage
               <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments
               powered by Disqus.</a>
             </noscript>
-          </div>
-          
-          <p>Comments from the original Blogger-hosted post:</p>
-          <script src="https://apis.google.com/js/plusone.js"></script>
-          <div class="g-comments"
-              data-href="http://julipedia.meroh.net/2004/12/buildtool-status.html"
-              data-first_party_property="BLOGGER"
-              data-view_type="FILTERED_POSTMOD">
           </div>
           
         </div>
