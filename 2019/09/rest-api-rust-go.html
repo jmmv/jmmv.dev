@@ -7,13 +7,13 @@
         content="width=device-width, initial-scale=1, shrink-to-fit=no">
   
 
-  <title>Sample REST API in Rust and Go - jmmv.dev</title>
-  <meta content="Sample REST API in Rust and Go - jmmv.dev" property="og:title">
+  <title>Sample REST interface in Rust and Go - jmmv.dev</title>
+  <meta content="Sample REST interface in Rust and Go - jmmv.dev" property="og:title">
+
+  <meta name="keywords" content="rest api documentation, rest interface, restful web services">
 
   
-
-  
-  <meta name="description" content="Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent quite a bit of time learning about REST APIs and, as part of these exercises, implemented skeletons of REST servers in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&amp;hellip; and it involved PHP, MySQL, and I think IE6?">
+  <meta name="description" content="Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent some time reading through REST API documentation pages and, as part of these exercises, implemented sample RESTful web services in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&amp;hellip; and it involved PHP, MySQL, and I think IE6?">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.55.6" />
 
@@ -118,7 +118,7 @@
 
     <div class="page-header">
       <div class="container">
-        <h1>Sample REST API in Rust and Go</h1>
+        <h1>Sample REST interface in Rust and Go</h1>
 
         <p>September 27, 2019 &middot;
         About 13 minutes
@@ -138,18 +138,19 @@
               
               <article>
 
-<p>Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent quite a bit of time learning about REST APIs and, as part of these exercises, implemented skeletons of REST servers in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&hellip; and it involved PHP, MySQL, and I think IE6? Times have changed.)</p>
+<p>Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent some time reading through REST API documentation pages and, as part of these exercises, implemented sample RESTful web services in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&hellip; and it involved PHP, MySQL, and I think IE6? Times have changed.)</p>
 
-<p>Why Go? Because the first app I wanted to build was to run on App Engine and Go was an easy choice after trying and giving up on Java. Why Rust? Because I enjoy it more and wanted to see how it would stack up to Go in this task.</p>
+<p><strong>Why Go?</strong> Because the first app I wanted to build was to run on App Engine and Go was an easy choice after trying and giving up on Java.<br />
+<strong>Why Rust?</strong> Because I enjoy it more and wanted to see how it would stack up to Go in this task.</p>
 
-<p>The app prototypes have gone nowhere but I thought of sharing the skeletons I built if only to serve as templates for myself in future work. Thus, in this post, I will cover these skeleton demos and I will compare them.</p>
+<p>The app prototypes have gone nowhere but I thought of sharing their skeletons to serve as templates for myself in future work. Thus, in this post, I will cover these skeleton RESTful web services and I will compare their implementation. Yes, I will dive a little bit more into <a href="/2018/07/rust-vs-go.html">Rust vs. Go</a>.</p>
 
 <h1 id="guiding-principles">Guiding principles</h1>
 
 <p>The basic constraints that led to these demos are:</p>
 
 <ul>
-<li><p>Decouple the REST API manipulation from the business logic. The web API is the interface with users and should not be tied to the internal business logic nor backend. I&rsquo;m new to REST, but clearly defining the boundary between the outside world and the server&rsquo;s internals is just good design practice in any paradigm, be it <a href="/2013/08/cli-design-cli-is-presentation-layer.html">command line tools</a> or protobuf-based web servers&mdash;of which I <em>do</em> have written a bunch as they are the daily bread at Google.</p></li>
+<li><p>Decoupling the REST interface from the business logic. The web API is the interface with users and should not be tied to the internal business logic nor backend. I&rsquo;m new to REST, but clearly defining the boundary between the outside world and the server&rsquo;s internals is just good design practice in any paradigm, be it <a href="/2013/08/cli-design-cli-is-presentation-layer.html">command line tools</a> or protobuf-based web servers&mdash;of which I <em>do</em> have written a bunch as they are the daily bread at Google.</p></li>
 
 <li><p>Using JSON for the requests and responses as the serialization format. You&rsquo;ll note that in some cases I&rsquo;m introducing data types that are not strictly needed for these toy demos, but the goal is to see how easy (or not) it is to define and integrate such types.</p></li>
 
@@ -160,9 +161,11 @@
 <li><p>Error handling needn&rsquo;t be very accurate. It&rsquo;s a demo after all.</p></li>
 </ul>
 
+<p>WARNING: If you go looking for REST API documentation, it will be hard to find something concrete and authoritative. Remember that REST is not a standard: instead, it&rsquo;s a collection of practices on how to design an API, and the way you actually implement them is no different than the way you implement other web services. That said, start with <a href="https://en.wikipedia.org/wiki/Representational_state_transfer">the Wikipedia article</a> and maybe even <a href="https://cloud.google.com/apis/design/">Google&rsquo;s API Design Guide</a>.</p>
+
 <h1 id="task-management-api">Task management API</h1>
 
-<p>The demos implement a To-Do manager, of course. (That&rsquo;s not what I built as a prototype but was a nicer example for this post.) The API we will implement will let us manipulate a collection of tasks where each task contains a textual description and a bit to indicate whether it is done or not.</p>
+<p>The sample RESTful web services in this post implement a To-Do manager, of course. (That&rsquo;s not what I built as a prototype but it works better as an example.) The REST interface we will implement will let us manipulate a collection of tasks where each task contains a textual description and a bit to indicate whether it is done or not.</p>
 
 <p>We will expose these methods:</p>
 
@@ -733,9 +736,9 @@ $ curl -X POST -H <span class="s2">&#34;Content-Type: application/json&#34;</spa
 <p>At which point it&rsquo;s gone:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X GET http://localhost:1234/task
 <span class="o">{</span><span class="s2">&#34;/task/0&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Publish REST post&#34;</span>,<span class="s2">&#34;done&#34;</span>:true<span class="o">}</span>,<span class="s2">&#34;/task/2&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Implement web interface&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}}</span></code></pre></div>
-<h1 id="comparison">Comparison</h1>
+<h1 id="comparing-rust-vs-go">Comparing Rust vs. Go</h1>
 
-<p>Now, let&rsquo;s get to what you were really waiting for. How do Rust and Go compare to each other in this situation? As I have <a href="/2018/07/rust-vs-go.html">said in the past</a>, this comparison is often unfounded because languages should be chosen by use case, but in this situation I think we can reasonably do a light comparison.</p>
+<p>Now, let&rsquo;s get to what you were really looking for. How do Rust and Go compare to each other in this situation? As I have <a href="/2018/07/rust-vs-go.html">said in the past</a>, this comparison is often unfounded because languages should be chosen by use case, but in this situation I think we can reasonably do a light comparison.</p>
 
 <p>Go shines in implementing network servers. If you think of the context in which it was invented, this is very much intentional. Rust, on the other hand, is a lower-level systems language, so I was somehow expecting more pain to implement this example. But nothing further from the truth: you can see that the two examples are very similar in content and line count.</p>
 
@@ -822,7 +825,7 @@ $ curl -X POST -H <span class="s2">&#34;Content-Type: application/json&#34;</spa
 
     <ul>
       
-        <li><a href="/2019/09/rest-api-rust-go.html">Sample REST API in Rust and Go</a></li>
+        <li><a href="/2019/09/rest-api-rust-go.html">Sample REST interface in Rust and Go</a></li>
       
         <li><a href="/2019/03/macos-threads-qos-and-bazel.html">Darwin&#39;s QoS service classes and performance</a></li>
       
