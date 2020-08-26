@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <meta property="og:site_name" content="jmmv.dev">
+
+  <title>pkgdb belongs in libdata, not var - jmmv.dev</title>
+  <meta property="og:title" content="pkgdb belongs in libdata, not var - jmmv.dev">
+
+  
+
+  
+  <meta name="description" content="The pkgsrc package database, which by default lives in /var/db/pkg/, should not be there. Instead, it should be under /usr/pkg/libdata/pkgdb/. The same applies to FreeBSD&#39;s and OpenBSD&#39;s ports and also Debian&#39;s dpkg, but I&#39;ll focus on pkgsrc because it&#39;s the system I know best. Let&#39;s see why the current default is suboptimal and why libdata is a good alternative.">
+  <meta property="og:description" content="The pkgsrc package database, which by default lives in /var/db/pkg/, should not be there. Instead, it should be under /usr/pkg/libdata/pkgdb/. The same applies to FreeBSD&#39;s and OpenBSD&#39;s ports and also Debian&#39;s dpkg, but I&#39;ll focus on pkgsrc because it&#39;s the system I know best. Let&#39;s see why the current default is suboptimal and why libdata is a good alternative.">
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  <meta property="og:url" content="https://jmmv.dev/2020/08/pkgdb-libdata-var.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/2020/08/pkgdb-libdata-var.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="jmmv.dev" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+</head>
+
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;jmmv.dev
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/work.html" >Work</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="http://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>pkgdb belongs in libdata, not var</h1>
+
+        <p>August 26, 2020 &middot;
+        About 7 minutes
+        &middot;
+        Tags:
+        <a class="text-reset" href="/tags/netbsd">netbsd</a>, <a class="text-reset" href="/tags/opinion">opinion</a>, <a class="text-reset" href="/tags/pkgsrc">pkgsrc</a></p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div class="row">
+            <div class="col">
+              
+              <article>
+
+<p>Right after discussing <a href="/2020/08/rcd-libexec-etc.html">where <code>rc.d</code> should live</a>, it&rsquo;s time to tackle a different but related pet peeve of mine: the location of the installed packages database. For this, I&rsquo;m going to focus on the system I know best, <a href="http://pkgsrc.org/">pkgsrc</a>, which keeps its database under <code>/var/db/pkg/</code> by default. I think this location is wrong and the database should move to <code>/usr/pkg/libdata/pkgdb/</code>.</p>
+
+<p>From a cursory look, it seems that FreeBSD&rsquo;s and OpenBSD&rsquo;s ports databases, as well as dpkg&rsquo;s and rpm&rsquo;s, are also affected by this &ldquo;problem&rdquo;&mdash;but I do not know enough about their internals to say with certainty.</p>
+
+<p>Let&rsquo;s see why placing the installed packages database under <code>/var/</code> is suboptimal and why <code>libdata</code> is a good alternative.</p>
+
+<h1 id="background-what-is-var-for">Background: What is /var for?</h1>
+
+<p>Every packaging system that you use, be it pkgsrc, ports, dpkg, rpm, or whatever, must maintain a database to track the metadata of all installed packages. What this database contains varies across systems, but in general it lists the installed packages, their textual description, the collection of files each provides and their checksums, etc.</p>
+
+<p>If we look at the I-bet-unknown-yet-super-informative <a href="https://netbsd.gw.com/cgi-bin/man-cgi?hier+7+NetBSD-9.0-STABLE"><code>hier(7)</code> manual page</a>, we find the following descriptions in NetBSD:</p>
+
+<pre><code>HIER(7)                Miscellaneous Information Manual                HIER(7)
+
+NAME
+     hier - layout of file systems
+
+DESCRIPTION
+     [...]
+
+     /var/      Multi-purpose log, temporary, transient, and spool files.
+
+                [...]
+
+                db/        Miscellaneous automatically generated system-
+                           specific database files, and persistent files used
+                           in the maintenance of third party software.
+
+                           pkg          Default location for metadata related
+                                        to third party software packages.  See
+                                        pkg_add(1) for more details of the
+                                        NetBSD Packages Collection, or pkgsrc.
+</code></pre>
+
+<p>If you ask me&hellip; just by looking at this, the singling out of <code>pkg</code> in this list feels like an ad-hoc addition to justify the decision of placing <code>pkg</code> under <code>/var/db/</code>. But that&rsquo;s just a feeling, so let&rsquo;s continue investigating.</p>
+
+<p>If we look at this same manual page in Debian:</p>
+
+<pre><code>HIER(7)                  Linux Programmer's Manual                  HIER(7)
+
+NAME
+       hier - description of the filesystem hierarchy
+
+DESCRIPTION
+       [...]
+
+       /var   This directory contains files which may change in size,  such
+              as spool and log files.
+
+       [...]
+
+       /var/lib
+              Variable state information for programs.
+
+       [...]
+
+       /var/lib/&lt;pkgtool&gt;
+              Packaging support files (optional).
+</code></pre>
+
+<p>&hellip; we find a similar call-out for the package manager&rsquo;s database under what seems to be an arbitrary location in <code>/var/</code>. Also note that the text lists <code>&lt;pkgtool&gt;</code> as a placeholder instead of explicitly mentioning the <code>dpkg</code> directory. That&rsquo;s because this manual page is generic and is not specific to Debian; such is the mess of Linux distributions&hellip; but that&rsquo;s a rant for another day. But this brings us to the <a href="https://refspecs.linuxfoundation.org/fhs.shtml"><em>Filesystem Hierarchy Standard (FHS)</em></a>, which is where this manual page comes from.</p>
+
+<p>The FHS contains more information than the <code>hier(7)</code> manual page on what each part of the file system tree is for. Quoting <a href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch05.html#purpose31">FHS 3.0 section 5.1</a>:</p>
+
+<blockquote>
+<p><code>/var</code> contains variable data files. This includes spool directories and files, administrative and logging data, and transient and temporary files.</p>
+
+<p>Some portions of <code>/var</code> are not shareable between different systems. For instance, <code>/var/log</code>, <code>/var/lock</code>, and <code>/var/run</code>. Other portions may be shared, notably <code>/var/mail</code>, <code>/var/cache/man</code>, <code>/var/cache/fonts</code>, and <code>/var/spool/news</code>.</p>
+
+<p><code>/var</code> is specified here in order to make it possible to mount <code>/usr</code> read-only. <strong>Everything that once went into <code>/usr</code> that is written to during system operation (as opposed to installation and software maintenance) must be in <code>/var</code>.</strong></p>
+</blockquote>
+
+<p>Emphasis mine. That last part is key.</p>
+
+<h1 id="why-does-pkgdb-not-belong-in-var">Why does pkgdb not belong in /var?</h1>
+
+<p>Based on the descriptions above, <code>/var/</code> is a place for files that might change during the operation of the system: transient files, logs, caches, spools, <em>databases</em>, etc.</p>
+
+<p>If you install a print server, it&rsquo;s reasonable for the server to maintain all print jobs under <code>/var/</code>: the jobs are mutable data that vary with the users&rsquo; activity on the system, and they belong to the system with the attached printer. If you install a PostgreSQL server, it&rsquo;s reasonable for the databases to be stored under <code>/var/</code>: their on-disk state depends directly on end-user activity and the files belong to the machine running the server.</p>
+
+<p>But just because the package manager maintains a database of installed files does <em>not</em> mean that such database belongs in <code>/var/</code>. And unfortunately, I think we ended up in this situation simply because someone thought of this as a &ldquo;database&rdquo; and assumed &ldquo;must be in <code>/var/</code>&rdquo; based on its name, without giving it a second thought. And then this pattern stuck and spread across systems.</p>
+
+<p>IMPORTANT: The key distinction between the packages database and an arbitrary database is that the packages database changes <strong>in unison</strong> with the files of the installed packages.</p>
+
+<p>It might be easier to visualize this argument if we go back to the idea that <code>/usr/</code> is a read-only tree that can be shared across machines and <code>/var/</code> is the writable tree that is specific to each machine. Under this scenario, if we share <code>/usr/</code>, the list of packages available on each machine is <em>exactly the same</em> among them. Ergo the database should also be shared across those machines and therefore <code>/var/</code> is the wrong location for it.</p>
+
+<p>This argument only holds if the contents of the packages database are immutable unless we are adding, removing, or updating packages&mdash;these operations require write access to <code>/usr/</code> anyway, so they might as well update the database if it were under that tree. I know that&rsquo;s true pkgsrc but cannot say for other systems, hence why I won&rsquo;t speculate much about them.</p>
+
+<p>A different argument: because the contents of <code>/var/</code> are supposed to be transient, it should be acceptable to lose almost all of them and still be left with a functional system. However, if we lose the package database, we will be left with a system that will be very difficult to operate. Yes, it&rsquo;ll keep running, but good luck trying to convince the package manager to do anything.</p>
+
+<h1 id="where-should-pkgdb-live-instead">Where should pkgdb live instead?</h1>
+
+<p>So, if <code>/var/</code> isn&rsquo;t the right place for the packages database, where is? Referring back to <a href="https://netbsd.gw.com/cgi-bin/man-cgi?hier+7+NetBSD-9.0-STABLE"><code>hier(7)</code></a>:</p>
+
+<pre><code>HIER(7)                Miscellaneous Information Manual                HIER(7)
+
+NAME
+     hier - layout of file systems
+
+DESCRIPTION
+     [...]
+
+     /usr/      Contains the majority of the system utilities and files.
+
+                [...]
+
+                libdata/  Miscellaneous utility data files.
+
+                [...]
+
+                pkg/      Installed third-party software packages.
+
+                          [...]
+
+                          libdata/  Package data files.
+
+                [...]
+
+                share/    Architecture-independent files, mostly text.
+</code></pre>
+
+<p><code>libdata</code> sounds like the right location: the database is a collection of data files but these are not necessarily plain text (so we can rule out <code>share</code>). Yes, I know: <code>libdata</code> is an oddity typically only seen in BSD systems and it&rsquo;s not documented by Debian&rsquo;s <code>hier(7)</code> nor the FHS, so <code>/usr/lib/&lt;pkgtool&gt;/</code> would also be an acceptable location on Linux systems.</p>
+
+<p>Based on this, I&rsquo;ve been using <code>/usr/pkg/libdata/pkgdb/</code> and <code>/opt/pkg/libdata/pkgdb/</code> for ages in my pkgsrc deployments (the former for NetBSD and the latter for macOS) and never experienced an issue, although going against the defaults is cumbersome.</p>
+
+<h1 id="how-can-you-make-it-happen">How can you make it happen?</h1>
+
+<p>Convincing pkgsrc to use a different location for the <code>pkgdb</code> is easy. The first thing to do is tell the <code>pkg_install(8)</code> tools where the database should be. You can do this by defining the <code>PKG_DBDIR</code> variable in <code>/etc/pkg_install.conf</code>:</p>
+
+<pre><code>netbsd:~&gt; cat /etc/pkg_install.conf
+PKG_DBDIR=/usr/pkg/libdata/pkgdb
+netbsd:~&gt;
+</code></pre>
+
+<p>But this is not enough. Some packages&mdash;particularly packaging tools in the <code>pkgtools</code> category&mdash;end up hardcoding the value of <code>PKG_DBDIR</code> during their build and they might not recognize <code>pkg_install.conf</code> at runtime. Therefore, it&rsquo;s safest for you to <em>also</em> add the same <code>PKG_DBDIR</code> setting mentioned above to <code>/etc/mk.conf</code> so that any custom-built packages pick it up. And yes, this means that using binaries built with a different <code>PKG_DBDIR</code> than the one you configure in <code>/etc/pkg_install.conf</code> can lead to subtle problems.</p>
+
+<p>If you are bootstrapping pkgsrc using the <code>bootstrap</code> script, then you can make all this happen by passing the <code>--pkgdbdir /usr/pkg/libdata/pkgdb</code> flag to the script. Obviously adjust <code>/usr/pkg/</code> to match the prefix under which you are bootstrapping.</p>
+
+<p>And if you happen to be using <a href="/2017/02/pkg_comp-2.0-tutorial-netbsd.html"><code>pkg_comp</code></a> for package compilation, then simply set <code>PKG_DBDIR</code> once in the <code>default.conf</code> configuration file and <code>pkg_comp</code> will know how to handle everything for you.</p>
+
+<p>But ideally&hellip; we would fix the default setting in pkgsrc to be more sensible. If I recall correctly, I mentioned this at some point years ago in the mailing lists and got positive feedback, so maybe this is feasible after all without a ton of pain. But I&rsquo;m not sufficiently involved in pkgsrc&rsquo;s development these days to effect this change. Want to give it a try? 😉</p>
+</article>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Want more posts like this one? Take a moment to subscribe!</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 text-center">
+                <form class="feedburner form-horizontal"
+                      action="https://feedburner.google.com/fb/a/mailverify"
+                      method="post"
+                      target="popupwindow"
+                      onsubmit="feedburnerSubmit()"> 
+                  <input type="text" name="email"
+                         placeholder="Type email, press enter"
+                        class="form-control input-sm"/>
+                  <input type="hidden" value="jmmv" name="uri"/>
+                  <input type="hidden" name="loc" value="en_US"/>
+                </form>
+              </div>
+              <div class="col-md-3 text-center">
+                <p>
+                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+                    <img src="/images/badges/Twitter_logo_blue_32.png" alt="Follow @jmmv on Twitter">
+                  </a>
+                </p>
+              </div>
+              <div class="col-md-3 text-center">
+                <p><a href="/feed.xml"><img
+                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Enjoyed this article? Spread the word or join the ongoing discussion!</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=pkgdb&#43;belongs&#43;in&#43;libdata%2C&#43;not&#43;var&amp;url=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fpkgdb-libdata-var.html">
+                  <img src="/images/badges/reddit.png"
+                       alt="Reddit logo"
+                       width="64" height="64">
+                  <br>
+                  <strong>Share on Reddit</strong>
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=pkgdb&#43;belongs&#43;in&#43;libdata%2C&#43;not&#43;var&amp;u=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fpkgdb-libdata-var.html">
+                  <img src="/images/badges/ycombinator.png"
+                       alt="Hacker News logo"
+                       width="64" height="64">
+                  <br>
+                  <strong>Share on Hacker News</strong>
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=pkgdb&#43;belongs&#43;in&#43;libdata%2C&#43;not&#43;var&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fpkgdb-libdata-var.html&#43;%E2%80%94&#43;cc&#43;%40jmmv">
+                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
+                       alt="Twitter logo"
+                       width="64" height="64">
+                  <br>
+                  <strong>Share on Twitter</strong>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2020/08/rcd-libexec-etc.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span></span>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col">
+    <h2>Subscribe</h2>
+
+    <div class="row">
+      <div class="col-sm-6 text-center">
+        <p>
+          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+            <img src="/images/badges/Twitter_logo_blue_32.png" alt="Follow @jmmv on Twitter">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-6 text-center">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <script>
+      function feedburnerSubmit() {
+        window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');
+        gtag('event', 'sign_up', {'event_category': 'engagement', 'event_label': 'feedburner', 'value': 1 });
+        return true;
+      }
+    </script>
+
+    <form class="feedburner form-horizontal"
+          action="https://feedburner.google.com/fb/a/mailverify"
+          method="post"
+          target="popupwindow"
+          onsubmit="feedburnerSubmit()">
+      <input type="text" name="email"
+        placeholder="Type email, press enter"
+        class="form-control input-sm"/>
+      <input type="hidden" value="jmmv" name="uri"/>
+      <input type="hidden" name="loc" value="en_US"/>
+      <p>
+        <small>Subscription by
+        <a href="https://feedburner.google.com"
+        target="_blank">FeedBurner</a></small>
+      </p>
+    </form>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
+      
+        <li><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
+      
+        <li><a href="/2020/04/hello-endbasic.html">Hello, EndBASIC!</a></li>
+      
+        <li><a href="/2020/01/system-rewrites-and-tuning.html">Ensuring system rewrites are truly necessary</a></li>
+      
+        <li><a href="/2019/09/rest-api-rust-go.html">Sample REST interface in Rust and Go</a></li>
+      
+      <li><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (20)
+        <ul id="archive-year-2020" class="collapse">
+        
+          
+          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
+</div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2020 Julio Merino</p>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/js/bootstrap.min.js"></script>
+
+<script>
+$('article :header').each(function() {
+  var attr = $(this).attr('id');
+  if (typeof attr !== typeof undefined && attr !== false) {
+    $(this).append('<a class="anchor" href="#' + $(this).context.id + '">' +
+      '<img src="/octicons/link.svg" aria-hidden="true">' +
+      '</a>')
+  }
+})
+</script>
+
+<script>
+$("blockquote").addClass("blockquote");
+$("pre.chroma").addClass("pre-scrollable");
+
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-63557333-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-63557333-1');
+</script>
+
+  </body>
+</html>
