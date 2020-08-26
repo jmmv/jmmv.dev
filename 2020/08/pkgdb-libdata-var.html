@@ -164,6 +164,8 @@
 
 <p>Let&rsquo;s see why placing the installed packages database under <code>/var/</code> is suboptimal and why <code>libdata</code> is a good alternative.</p>
 
+<p><strong>UPDATE (11:30 EDT):</strong> As <a href="https://twitter.com/jperkin/status/1298634490252853248">Jonathan Perkin points out</a>, the pkgdb already moved under the installation prefix <a href="https://github.com/NetBSD/pkgsrc/commit/b45529408b9f7b7f4f7c580bc12d1bac623913af">four years ago</a> for all <code>bootstrap</code> builds. I never noticed because I had been overriding the default value all along 🤦‍♂️. That said, the &ldquo;problem&rdquo; still remains for native, non-bootstrapped NetBSD builds, so this article is still valid 😉</p>
+
 <h1 id="background-what-is-var-for">Background: What is /var for?</h1>
 
 <p>Every packaging system that you use, be it pkgsrc, ports, dpkg, rpm, or whatever, must maintain a database to track the metadata of all installed packages. What this database contains varies across systems, but in general it lists the installed packages, their textual description, the collection of files each provides and their checksums, etc.</p>
@@ -294,11 +296,11 @@ netbsd:~&gt;
 
 <p>But this is not enough. Some packages&mdash;particularly packaging tools in the <code>pkgtools</code> category&mdash;end up hardcoding the value of <code>PKG_DBDIR</code> during their build and they might not recognize <code>pkg_install.conf</code> at runtime. Therefore, it&rsquo;s safest for you to <em>also</em> add the same <code>PKG_DBDIR</code> setting mentioned above to <code>/etc/mk.conf</code> so that any custom-built packages pick it up. And yes, this means that using binaries built with a different <code>PKG_DBDIR</code> than the one you configure in <code>/etc/pkg_install.conf</code> can lead to subtle problems.</p>
 
-<p>If you are bootstrapping pkgsrc using the <code>bootstrap</code> script, then you can make all this happen by passing the <code>--pkgdbdir /usr/pkg/libdata/pkgdb</code> flag to the script. Obviously adjust <code>/usr/pkg/</code> to match the prefix under which you are bootstrapping.</p>
+<p>If you are bootstrapping pkgsrc using the <code>bootstrap</code> script, know that the script already defaults to putting the packages database somewhere under the prefix (but not under <code>libdata</code>). If you still want to change the location, pass the <code>--pkgdbdir /usr/pkg/libdata/pkgdb</code> flag to the script. Obviously adjust <code>/usr/pkg/</code> to match the prefix under which you are bootstrapping.</p>
 
 <p>And if you happen to be using <a href="/2017/02/pkg_comp-2.0-tutorial-netbsd.html"><code>pkg_comp</code></a> for package compilation, then simply set <code>PKG_DBDIR</code> once in the <code>default.conf</code> configuration file and <code>pkg_comp</code> will know how to handle everything for you.</p>
 
-<p>But ideally&hellip; we would fix the default setting in pkgsrc to be more sensible. If I recall correctly, I mentioned this at some point years ago in the mailing lists and got positive feedback, so maybe this is feasible after all without a ton of pain. But I&rsquo;m not sufficiently involved in pkgsrc&rsquo;s development these days to effect this change. Want to give it a try? 😉</p>
+<p>But ideally&hellip; we would fix the default setting in pkgsrc to be more sensible, like it was done in <code>boostrap</code>. If I recall correctly, I mentioned this at some point years ago in the mailing lists and got positive feedback, so maybe this is feasible after all without a ton of pain. But I&rsquo;m not sufficiently involved in pkgsrc&rsquo;s development these days to effect this change. Want to give it a try? 😉</p>
 </article>
             </div>
           </div>
@@ -344,12 +346,12 @@ netbsd:~&gt;
               </div>
             </div>
             <div class="row">
-              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=pkgdb&#43;belongs&#43;in&#43;libdata%2C&#43;not&#43;var&amp;url=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fpkgdb-libdata-var.html">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/r/pkgsrc/comments/igze8w/pkgdb_belongs_in_libdata_not_var/">
                   <img src="/images/badges/reddit.png"
                        alt="Reddit logo"
                        width="64" height="64">
                   <br>
-                  <strong>Share on Reddit</strong>
+                  <strong>Go to Reddit thread</strong>
                 </a>
               </div>
               <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=pkgdb&#43;belongs&#43;in&#43;libdata%2C&#43;not&#43;var&amp;u=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fpkgdb-libdata-var.html">
@@ -360,12 +362,12 @@ netbsd:~&gt;
                   <strong>Share on Hacker News</strong>
                 </a>
               </div>
-              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=pkgdb&#43;belongs&#43;in&#43;libdata%2C&#43;not&#43;var&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fpkgdb-libdata-var.html&#43;%E2%80%94&#43;cc&#43;%40jmmv">
+              <div class="col-md-4 text-center"><a href="https://twitter.com/jmmv/status/1298621408516419586">
                   <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
                        alt="Twitter logo"
                        width="64" height="64">
                   <br>
-                  <strong>Share on Twitter</strong>
+                  <strong>Go to Twitter thread</strong>
                 </a>
               </div>
             </div>
@@ -1070,6 +1072,7 @@ $("pre.chroma").addClass("pre-scrollable");
 $("p:contains('NOTE: ')").addClass("callout callout-info");
 $("p:contains('IMPORTANT: ')").addClass("callout callout-info");
 $("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('UPDATE (')").addClass("callout callout-warning");
 $("p:contains('DANGER: ')").addClass("callout callout-danger");
 </script>
 
