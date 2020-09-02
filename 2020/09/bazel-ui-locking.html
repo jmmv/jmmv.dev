@@ -274,7 +274,7 @@
 
 <p>Enter another abstraction layer: the <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/events/Reporter.java;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>Reporter</code></a>, which is used to communicate user-visible events across modules. The <code>Reporter</code> has a method called <code>handle</code> that runs arbitrary code and does so synchronously. Each Skyframe thread calls this method to report the stdout and stderr of an action on completion via <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/skyframe/SkyframeActionExecutor.java;l=1646;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>SkyframeActionExecutor#dumpRecordedOutErr</code></a>.</p>
 
-<p>And finally we reach the true problem. The <code>Reporter</code> is just an interface so the caller has no idea about the implementation it uses. As it turns out&hellip; the <code>UiEventHandler</code> class we&rsquo;ve been talking about <em>is</em> a <code>Reporter</code> implementation, and its synchronous <code>handle</code> method has calls that huge critical section that reads stdout/stderr from within, potentially faulting remote files in via FUSE.</p>
+<p>And finally we reach the true problem. The <code>Reporter</code> is just an interface so the caller has no idea about the implementation it uses. As it turns out&hellip; the <code>UiEventHandler</code> class we&rsquo;ve been talking about <em>is</em> a <code>Reporter</code> and its synchronous <code>handle</code> method calls that huge critical section that reads stdout/stderr from within, potentially faulting remote files in via FUSE.</p>
 
 <h1 id="reproduction-scenario">Reproduction scenario</h1>
 
