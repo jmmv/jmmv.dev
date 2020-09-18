@@ -21,7 +21,7 @@ You can enable the shell&amp;rsquo;s strict mode by doing one of the following:"
   <meta property="og:description" content="Some programming languages have a feature known as strict mode: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell also has something akin to this feature. The &amp;ldquo;strict mode&amp;rdquo; name, however, is unofficial, so you won&amp;rsquo;t find many references to it online.
 You can enable the shell&amp;rsquo;s strict mode by doing one of the following:">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.55.6" />
+  <meta name="generator" content="Hugo 0.54.0" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/03/shell-readability-strict-mode.html">
 
@@ -198,8 +198,8 @@ Shell readability</b> series</a>.</i></p>
 <p>Some programming languages have a feature known as <strong>strict mode</strong>: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell <em>also</em> has something akin to this feature. The &ldquo;strict mode&rdquo; <em>name</em>, however, is unofficial, so you won&rsquo;t find many references to it online.</p>
 
 <p>You can enable the shell&rsquo;s strict mode by doing one of the following:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">set</span> -eu            <span class="c1"># For POSIX-compliant shell scripts.
-</span><span class="c1"></span><span class="nb">set</span> -euo pipefail  # For scripts that already depend on Bash.</code></pre></div>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">set</span> -eu            <span class="c1"># For POSIX-compliant shell scripts.</span>
+<span class="nb">set</span> -euo pipefail  <span class="c1"># For scripts that already depend on Bash.</span></code></pre></div>
 <p>In the majority of the cases, prefer the former. The reasons to depend on Bash are few and rare, and I will be skeptical if you claim they apply to you&hellip; but that&rsquo;s something I should cover another day.</p>
 
 <p>The commands above enable three independent options: <code>set -e</code>, <code>set -u</code>, and <code>set -o pipefail</code>. I will cover each in detail in this post, including their downsides. I will also glance over <code>set -x</code> which, while not related to strict mode, is handy to troubleshoot strict mode-related problems. For your convenience:</p>
@@ -226,29 +226,29 @@ Shell readability</b> series</a>.</i></p>
 <p><strong><code>set -e</code> causes the shell to exit when an unguarded statement evaluates to a false value.</strong> In other words: the script terminates as soon as a command returns a non-zero exit code that was not expected. You can equate this to the way languages with exceptions work: if you throw an exception and don&rsquo;t catch it, the exception bubbles up and the program crashes.</p>
 
 <p>The tricky thing is to define what an <em>unexpected</em> non-zero exit code is. Consider these as some non-exhaustive examples:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># Bare commands terminate execution if they return non-zero.
-</span><span class="c1"></span><span class="nb">false</span>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># Bare commands terminate execution if they return non-zero.</span>
+<span class="nb">false</span>
 cp /missing-file /tmp
 
-<span class="c1"># Commands protected by a conditional do not terminate execution.
-</span><span class="c1"></span><span class="k">if</span> false<span class="p">;</span> <span class="k">then</span>
+<span class="c1"># Commands protected by a conditional do not terminate execution.</span>
+<span class="k">if</span> false<span class="p">;</span> <span class="k">then</span>
     <span class="nb">echo</span> <span class="s2">&#34;False&#34;</span>
 <span class="k">else</span>
     <span class="nb">echo</span> <span class="s2">&#34;True&#34;</span>
 <span class="k">fi</span>
 
-<span class="c1"># Guarded commands do not terminate execution if they evaluate to true.
-</span><span class="c1"></span>cp /this-will-fail /tmp <span class="o">||</span> <span class="nb">echo</span> <span class="s2">&#34;cp failed but continuing anyway...&#34;</span>
+<span class="c1"># Guarded commands do not terminate execution if they evaluate to true.</span>
+cp /this-will-fail /tmp <span class="o">||</span> <span class="nb">echo</span> <span class="s2">&#34;cp failed but continuing anyway...&#34;</span>
 
-<span class="c1"># But guarded commands terminate execution if they evaluate to false.
-</span><span class="c1"></span>cp /this-will-fail /tmp <span class="o">||</span> cp /this-fails-too /tmp</code></pre></div>
+<span class="c1"># But guarded commands terminate execution if they evaluate to false.</span>
+cp /this-will-fail /tmp <span class="o">||</span> cp /this-fails-too /tmp</code></pre></div>
 <p>The problem is that the set of rules governing the behavior of <code>set -e</code> are obscure, and different shells (even different versions!) handle these rules differently. Here are a few examples of things that might seem fine but that are actually buggy:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># The default arguments are never set because short-circuit evaluation evaluates
-</span><span class="c1"># this to false.
-</span><span class="c1"></span><span class="o">[</span> <span class="nv">$#</span> -eq <span class="m">0</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="nb">set</span> -- <span class="s2">&#34;default&#34;</span> <span class="s2">&#34;arguments&#34;</span>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># The default arguments are never set because short-circuit evaluation evaluates</span>
+<span class="c1"># this to false.</span>
+<span class="o">[</span> <span class="nv">$#</span> -eq <span class="m">0</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="nb">set</span> -- <span class="s2">&#34;default&#34;</span> <span class="s2">&#34;arguments&#34;</span>
 
-<span class="c1"># The rm call is always run; local clobbers the subshell&#39;s exit code.
-</span><span class="c1"></span><span class="nb">local</span> <span class="nv">prefix</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>get_config_value PREFIX<span class="k">)</span><span class="s2">&#34;</span>
+<span class="c1"># The rm call is always run; local clobbers the subshell&#39;s exit code.</span>
+<span class="nb">local</span> <span class="nv">prefix</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>get_config_value PREFIX<span class="k">)</span><span class="s2">&#34;</span>
 rm -rf <span class="s2">&#34;</span><span class="si">${</span><span class="nv">prefix</span><span class="si">}</span><span class="s2">/bin&#34;</span></code></pre></div>
 <p>There are many more cases as described in <a href="http://mywiki.wooledge.org/BashFAQ/105">BashFAQ 105</a>, some of which are pretty hard to reason about.</p>
 
@@ -263,9 +263,9 @@ rm -rf <span class="s2">&#34;</span><span class="si">${</span><span class="nv">p
 <h1 id="set-o-pipefail-bash-only">set -o pipefail (Bash only)</h1>
 
 <p>Pipelines evaluate to the exit code of the <em>last</em> command in the pipeline no matter what happened to any of the previous commands in the same pipeline. This is a problem. Consider something like this:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">grep -v <span class="s2">&#34;</span><span class="si">${</span><span class="nv">user_to_remove</span><span class="si">}</span><span class="s2">&#34;</span> users <span class="se">\ </span>           <span class="c1"># Remove the given user.
-</span><span class="c1"></span>    <span class="p">|</span> sed -e <span class="s2">&#34;/last edit/s/: .*/: </span><span class="si">${</span><span class="nv">date</span><span class="si">}</span><span class="s2">/&#34;</span> <span class="se">\ </span> <span class="c1"># Update timestamp.
-</span><span class="c1"></span>    &gt;users.new <span class="o">||</span> fail <span class="s2">&#34;Failed to remove user&#34;</span>
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">grep -v <span class="s2">&#34;</span><span class="si">${</span><span class="nv">user_to_remove</span><span class="si">}</span><span class="s2">&#34;</span> users <span class="se">\ </span>           <span class="c1"># Remove the given user.</span>
+    <span class="p">|</span> sed -e <span class="s2">&#34;/last edit/s/: .*/: </span><span class="si">${</span><span class="nv">date</span><span class="si">}</span><span class="s2">/&#34;</span> <span class="se">\ </span> <span class="c1"># Update timestamp.</span>
+    &gt;users.new <span class="o">||</span> fail <span class="s2">&#34;Failed to remove user&#34;</span>
 mv users.new users</code></pre></div>
 <p>This <em>seems</em> good: we modify some input file and save the output to a new file, and only if we don&rsquo;t fail, we update the original. The problem is&hellip; what if <code>grep</code> fails because it cannot open <code>users</code>? <code>grep</code> will print nothing and <code>sed</code> will happily run along with that, reporting success at the end. That&rsquo;s not what we expected, right?</p>
 

@@ -21,7 +21,7 @@ One of the ways the functional aspects show up is via expressions and how pretty
   <meta property="og:description" content="Rust resembles a functional language in many ways although it does not claim to be one. In fact, I have been thinking of Rust as a &amp;ldquo;pragmatic Haskell&amp;rdquo; or as a &amp;ldquo;well-balanced mixture between C&#43;&#43; and Haskell&amp;ldquo;.
 One of the ways the functional aspects show up is via expressions and how pretty much any construct in Rust can be treated as an expression. But before we begin, a little warning: the examples below are, by no means, idiomatic Rust—I just hope they are simple enough to illustrate what I want to show.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.55.6" />
+  <meta name="generator" content="Hugo 0.54.0" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/06/rust-review-expressions.html">
 
@@ -234,7 +234,7 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>In a previous post titled &ldquo;<a href="/2013/07/readability-conditionals-as-functions.html">Readability: Conditionals as functions</a>&rdquo;, I argued that you should structure your function by thinking of it as a set of cases, each with an explicit return value. To apply that idea here, we expand the conditional to make all of its branches explicit:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">get_color_with_default</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">default_color</span>: <span class="nc">Color</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Color</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">None</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -243,7 +243,7 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">();</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>And once we have this, we can transform the code by dropping the <code>return</code> keywords and the trailing semicolons, thus allowing the conditional statement to yield the function&rsquo;s return value:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">get_color_with_default</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">default_color</span>: <span class="nc">Color</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Color</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">None</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -252,7 +252,7 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>When written this way, the function becomes just an expression. You can imagine more elaborate versions of the above with nested conditionals and auxiliary variable definitions, but in the end, most functions can be expressed as just that: complex expressions that transform input values into output values.</p>
 
 <p>But let&rsquo;s take a closer look to the last example: note that we have <em>two</em> &ldquo;final&rdquo; statements, one per conditional branch. This leads me to the second place where we can tell that everything is really an expression, and this includes conditional statements, loops, and even inner blocks. All of these constructions can &ldquo;return&rdquo; a value which can be assigned to a variable. For example, we can take the conditional statement from the example above and turn it into the value assigned to a variable:</p>
@@ -261,7 +261,7 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w"></span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="n">color</span><span class="p">.</span><span class="n">unwrap</span><span class="p">()</span><span class="w">
 </span><span class="w"></span><span class="p">};</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>This feature helps in writing clean code because it lets you abide by the principle of only assigning variables once even if their value is derived from a complex computation, which I previously presented in &ldquo;<a href="/2013/07/readability-don-modify-variables.html">Readability: Don&rsquo;t modify variables</a>&rdquo;. And this also helps in narrowing the scope of each variable definition to the smallest piece of code in which it is relevant.</p>
 
 <p>There are many more details of the language that make this a reality and which remind me of Haskell. The final one I&rsquo;d like to mention is the collection of functional types that plague the standard library, like <code>Option</code> and <code>Some</code>, and the many places where high-order functions such as maps and filters show up. These are all designed to ensure that the computation of a value can be expressed as a single expression, without intermediate statements and without having to worry about how exactly the computation is executed.</p>

@@ -25,7 +25,7 @@ A value-to-value conversion that consumes the input value. The opposite of From.
 A value-to-value conversion that consumes the input value. The opposite of From. [&amp;hellip;]
  Yay, very useful. This text tells me what this trait does, which is fine for a reference manual, but not when I could find it useful.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.55.6" />
+  <meta name="generator" content="Hugo 0.54.0" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/04/rust-into-trait.html">
 
@@ -183,7 +183,7 @@ A value-to-value conversion that consumes the input value. The opposite of From.
 </span><span class="w">        </span><span class="n">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">ref_type</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p><code>VarRef</code> represents a reference to a variable, and this representation owns the contents of the <code>name</code> field (i.e. the storage for the <code>name</code> string belongs exclusively to this type).</p>
 
 <p>This object is typically constructed while parsing the input source file, which means that the <code>name</code> comes from a string that was already built during the parsing process.  Now, the interesting thing about parsing is that a parser goes through the input <em>once</em> and constructs a tree (an AST) to represent that input.  The AST typically has a 1:1 mapping to the input, so any string that is constructed during the parsing process should be reused to construct that tree&mdash;in theory without duplicating it.</p>
@@ -196,19 +196,19 @@ A value-to-value conversion that consumes the input value. The opposite of From.
 </span><span class="w">    </span><span class="p">...</span><span class="w">
 </span><span class="w">    </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">Token</span>::<span class="n">Symbol</span><span class="p">(</span><span class="n">VarRef</span>::<span class="n">new</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">VarType</span>::<span class="n">Auto</span><span class="p">)),</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>In this code snippet, we start by reading a word out of the source file via the <code>next_word()</code> call and storing it into an owned string.  Then we check if the string happens to be a keyword: if it is, we transform it into its AST representation and throw away the string.  But if we are left with a variable reference, we have to construct its <code>VarRef</code> representation, which requires the name of the variable.  Because we don&rsquo;t need that name any longer in the context of the parser, we can move it into the AST (the <code>VarRef</code>) and thus avoid memory copies.  (Memory copies can be expensive in aggregate!)</p>
 
 <p>Problems arose when writing tests because the ergonomics were very poor.  All of my test code had stuff of the form <code>&quot;some_literal&quot;.to_owned()</code> everywhere (last I counted, about 50 instances), which made lines long and subject to auto-wrapping by <code>rustfmt</code>:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="w">
 </span><span class="w">    </span><span class="n">VarRef</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;some_name&#34;</span><span class="p">.</span><span class="n">to_owned</span><span class="p">(),</span><span class="w"> </span><span class="n">VarType</span>::<span class="n">Auto</span><span class="p">),</span><span class="w">
 </span><span class="w">    </span><span class="p">...);</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>I was tempted to change the signature of the <code>VarRef::new</code> to take a <code>&amp;str</code> instead of an owned <code>String</code> and then make the function itself call <code>.to_owned()</code>, like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">name</span>: <span class="kp">&amp;</span><span class="kt">str</span><span class="p">,</span><span class="w"> </span><span class="n">ref_type</span>: <span class="nc">VarType</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="n">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span>: <span class="nc">name</span><span class="p">.</span><span class="n">to_owned</span><span class="p">(),</span><span class="w"> </span><span class="n">ref_type</span>: <span class="nc">ref_type</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>However&hellip; that seemed very wrong: such a change would make the code simpler to read, sure, but it would result in <em>all</em> calls to this function to duplicate the input string, penalizing the &ldquo;production&rdquo; version of this code.  The tradeoff was not correct: you should definitely improve the testability of your production code, but you should rarely make it less efficient because of it.</p>
 
 <p><strong>The reality is that we need two versions of this function: one that takes ownership of the string and is used for production code, and one that provides syntactic sugar to simplify the test code.  And this is where <code>Into</code> rescues us.</strong></p>
@@ -217,14 +217,14 @@ A value-to-value conversion that consumes the input value. The opposite of From.
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">fn</span> <span class="nf">new</span><span class="o">&lt;</span><span class="n">T</span>: <span class="nb">Into</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">(</span><span class="n">name</span>: <span class="nc">T</span><span class="p">,</span><span class="w"> </span><span class="n">ref_type</span>: <span class="nc">VarType</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="n">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span>: <span class="nc">name</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span><span class="w"> </span><span class="n">ref_type</span>: <span class="nc">ref_type</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w"></span></code></pre></div>
+</span></code></pre></div>
 <p>Which means: <code>name</code> is now of an owned type (it is not a reference, so it <em>will</em> be moved) that can be transformed into a <code>String</code>, and thus these two call syntaxes become possible:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">owned_string_from_parsing</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span>::<span class="n">from</span><span class="p">(</span><span class="s">&#34;something&#34;</span><span class="p">);</span><span class="w">
 </span><span class="w"></span><span class="n">VarRef</span>::<span class="n">new</span><span class="p">(</span><span class="n">owned_string_from_parsing</span><span class="p">,</span><span class="w"> </span><span class="n">VarType</span>::<span class="n">Auto</span><span class="p">);</span><span class="w">  </span><span class="c1">// Zero copies!
 </span><span class="c1">// owned_string_from_parsing moved and cannot be referenced here any longer.
 </span><span class="c1"></span><span class="w">
 </span><span class="w"></span><span class="n">VarRef</span>::<span class="n">new</span><span class="p">(</span><span class="s">&#34;some_literal_in_tests&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">VarType</span>::<span class="n">Auto</span><span class="p">);</span><span class="w">  </span><span class="c1">// One copy.
-</span><span class="c1"></span></code></pre></div>
+</span></code></pre></div>
 <p>In the production code version, because the values we give to this function are <em>already</em> <code>String</code>s, the <code>into()</code> call <a href="https://doc.rust-lang.org/src/core/convert/mod.rs.html#551-560">does</a> <a href="https://doc.rust-lang.org/src/core/convert/mod.rs.html#562-568">nothing</a> and is elided at compilation time.  We are left with the original (zero-cost) move semantics that we had.  But in tests, because we supply <code>&amp;str</code>, and because <code>Into&lt;String&gt;</code> is implemented for them, the <code>.into()</code> call ends up allocating a copy of the string (just as we had before with the explicit <code>.to_owned()</code> calls, so it&rsquo;s not worse).</p>
 
 <p>Hope this makes this one trait clearer in case you came here looking for answers.  And once you understand how they play in practice, you start seeing their applicability everywhere!  If your only tool is a hammer&hellip;</p>

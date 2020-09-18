@@ -21,7 +21,7 @@ C&#43;&#43;, with its complex and complete syntax, is a very versatile language.
   <meta property="og:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
 C&#43;&#43;, with its complex and complete syntax, is a very versatile language.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.55.6" />
+  <meta name="generator" content="Hugo 0.54.0" />
 
   <meta property="og:url" content="https://jmmv.dev/2006/05/smart-pointers-in-cxx.html">
 
@@ -241,18 +241,19 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 </code></pre></div>
 <p>This code might look harmless, but it has a potential memory leak&mdash;the error path is not visible, but it certainly exists. If either helper&rsquo;s constructor or its fill method throws an exception, the function will exit without releasing buffer&rsquo;s memory, thus causing a leak. This kind of bug is difficult to discover. Solving it increases the code&rsquo;s complexity because you need extra <code>try</code>/<code>catch</code> constructions. Note that I am not implying that you shouldn&rsquo;t use exceptions, just saying that using them appropriately is hard.</p>
 
-<p>I recommend you read the article <a href="https://devblogs.microsoft.com/oldnewthing/20050114-00/?p=36693">Cleaner, More Elegant, and Harder to Recognize</a>, posted at <a href="https://devblogs.microsoft.com/oldnewthing/">The Old New Thing</a> weblog. It illustrates this point quite well.</p></li>
-</ul>
+<p>I recommend you read the article <a href="https://devblogs.microsoft.com/oldnewthing/20050114-00/?p=36693">Cleaner, More Elegant, and Harder to Recognize</a>, posted at <a href="https://devblogs.microsoft.com/oldnewthing/">The Old New Thing</a> weblog. It illustrates this point quite well.</p>
 
 <p>Of course, if you opt to manage memory manually, you can work around these problems by being extremely careful during development. (Note, though, that this extra care means more development time.) In some situations this is the only way to go, because you need full control over what the program is doing (for example, when writing low-level code).</p>
 
 <p>Then there is the complete opposite solution, very well known to Java and C# developers: using a (third party) garbage collector for C++. To my knowledge, these are seldom used in C++ even when writing very high-level applications, no matter what advantages they bring. This brings up another question: why aren&rsquo;t garbage collectors used more often in C++ code?</p>
 
 <ul>
-<li><p>Garbage collectors make the program&rsquo;s execution flow unpredictable; it depends on their implementation, though this is generally the case. Unpredictability makes the RAII model inapplicable because the developer cannot know when a class&rsquo;s destructor will be called&mdash;if it ever is called at all. This is a model heavily used in C++ designs.</p>
+<li>Garbage collectors make the program&rsquo;s execution flow unpredictable; it depends on their implementation, though this is generally the case. Unpredictability makes the RAII model inapplicable because the developer cannot know when a class&rsquo;s destructor will be called&mdash;if it ever is called at all. This is a model heavily used in C++ designs.</li>
+</ul>
 
-<p>Just think about Java: classes can have a <code>finalize</code> method to do their cleanup; this method is rarely used because of its much-delayed execution. In addition to the destructor, those classes provide the developer some methods (such as <code>close</code>) to shut them down explicitly.</p></li>
+<p>Just think about Java: classes can have a <code>finalize</code> method to do their cleanup; this method is rarely used because of its much-delayed execution. In addition to the destructor, those classes provide the developer some methods (such as <code>close</code>) to shut them down explicitly.</p>
 
+<ul>
 <li><p>C++ garbage collectors are typically platform dependent. They need to be, because they deal with memory. Therefore they may reduce an application&rsquo;s portability.</p></li>
 
 <li><p>Garbage collectors introduce a performance penalty. This is not a big deal (except in some notable instances) with today&rsquo;s computer performance. Also, this penalty might be forgiven considering the reduction in overall programming time and the easier maintenance of the code.</p></li>
@@ -286,24 +287,26 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="kt">int</span>
 <span class="nf">read_something</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
-    <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
 
-    <span class="n">std</span><span class="o">::</span><span class="n">ifstream</span> <span class="n">f</span><span class="p">(</span><span class="s">&#34;test.tmp&#34;</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">f</span><span class="p">)</span> <span class="p">{</span>
-        <span class="c1">// First exit point
-</span><span class="c1"></span>        <span class="k">throw</span> <span class="n">no_such_file_exception</span><span class="p">(</span><span class="s">&#34;The file test.tmp does not exist&#34;</span><span class="p">);</span>
-    <span class="p">}</span>
-
-    <span class="n">f</span> <span class="o">&gt;&gt;</span> <span class="n">value</span><span class="p">;</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-        <span class="c1">// Second exit point
-</span><span class="c1"></span>        <span class="k">throw</span> <span class="n">invalid_format_exception</span><span class="p">(</span><span class="s">&#34;The file test.tmp is corrupt&#34;</span><span class="p">);</span>
-    <span class="p">}</span>
-
-    <span class="c1">// Third exit point
-</span><span class="c1"></span>    <span class="k">return</span> <span class="n">value</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">ifstream</span> <span class="n">f</span><span class="p">(</span><span class="s">&#34;test.tmp&#34;</span><span class="p">);</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">f</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// First exit point
+</span><span class="c1"></span>    <span class="k">throw</span> <span class="n">no_such_file_exception</span><span class="p">(</span><span class="s">&#34;The file test.tmp does not exist&#34;</span><span class="p">);</span>
 <span class="p">}</span>
-</code></pre></div>
+
+<span class="n">f</span> <span class="o">&gt;&gt;</span> <span class="n">value</span><span class="p">;</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// Second exit point
+</span><span class="c1"></span>    <span class="k">throw</span> <span class="n">invalid_format_exception</span><span class="p">(</span><span class="s">&#34;The file test.tmp is corrupt&#34;</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="c1">// Third exit point
+</span><span class="c1"></span><span class="k">return</span> <span class="n">value</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></li>
+</ul>
+
 <p>The read_something function has at least three exit points, clearly marked in the code using comments. Now notice that there is no difference in f&rsquo;s handling in them. It does not matter whether the object was initialized, or if the code exited prematurely or successfully. The code simply ignores that the object exists, which is possible because <code>std::ifstream</code>&rsquo;s destructor closes the file. Otherwise, the code shown could leak an open file each time it took the second exit point.</p>
 
 <p>For more information on the RAII programming idiom, I suggest you read <a href="https://www.hackcraft.net/raii/">The RAII Programming Idiom</a> by Jon Hanna; it explains what RAII is in great detail and shows examples in both C++ and VB6.</p>
