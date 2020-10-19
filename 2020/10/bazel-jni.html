@@ -31,7 +31,7 @@ Let me tell you the story of this final boss.">
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.574c66aa845709ed29c2126b6017e0843aea03eb7386d243d4e8238afe96269b.css">
+  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -187,14 +187,10 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 
 <p>Now, you might think: that should be fine. If the two shared libraries we have above, <code>libvfs.dylib</code> and <code>libnetwork.dylib</code>, call into another common one, Abseil, the dynamic linker will not load the common library twice. And you&rsquo;d be right&hellip; except&hellip; Bazel and Google love building static binaries. There is no <code>libabsl.dylib</code> in there: the <code>absl</code> symbols are <strong>duplicated</strong> across the two shared libraries. Visually, here is what we had in the executable:</p>
 
-<div class="frame">
-  <div class="content">
-    <img src="/images/2020-10-09-blaze-on-mac-jni-before.svg">
-  </div>
-  <div class="footer">
-    <p>Interaction between Blaze's Java code and the JNI libraries it pulls in on a macOS system. Note how the three separate JNI libraries that we load from Java are all able to reuse the foundational libraries provided by macOS because they are dynamically linked in... but Abseil shows up twice because it was statically linked into two separate shared libraries.</p>
-  </div>
-</div>
+<figure>
+  <img src="/images/2020-10-09-blaze-on-mac-jni-before.svg">
+  <figcaption>Interaction between Blaze's Java code and the JNI libraries it pulls in on a macOS system. Note how the three separate JNI libraries that we load from Java are all able to reuse the foundational libraries provided by macOS because they are dynamically linked in... but Abseil shows up twice because it was statically linked into two separate shared libraries.</figcaption>
+</figure>
 
 <p>And thereby lies the problem: Blaze on Mac was pulling in three separate <code>dylib</code>s, two of which bundled Abseil and conflicted at runtime. This, in turn, was blocking the submission of the optimization to Abseil I mentioned, which was supposed to bring significant improvements Google-wide. Time was of essence to fix this issue. (Except it wasn&rsquo;t because the author of the change found a different way to write their code and avoid the issue, but the issue had already gotten my interest.)</p>
 
@@ -280,14 +276,10 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 
 <p>Simply put, the design I envisioned is depicted in the following diagram:</p>
 
-<div class="frame">
-  <div class="content">
-    <img src="/images/2020-10-09-blaze-on-mac-jni-after.svg">
-  </div>
-  <div class="footer">
-    <p>Interaction between Blaze's Java code and the single JNI library after my changes in a macOS system. Note that what we want is a single `dylib` that embeds all separate libraries at build time so that the compiler can weed out duplicate symbols. It is OK if this `dylib` still depends on other shared libraries, as the dynamic linker knows how to handle those.</p>
-  </div>
-</div>
+<figure>
+  <img src="/images/2020-10-09-blaze-on-mac-jni-after.svg">
+  <figcaption>Interaction between Blaze's Java code and the single JNI library after my changes in a macOS system. Note that what we want is a single `dylib` that embeds all separate libraries at build time so that the compiler can weed out duplicate symbols. It is OK if this `dylib` still depends on other shared libraries, as the dynamic linker knows how to handle those.</figcaption>
+</figure>
 
 <p>Simple, huh? We want a single shared library that bundles all individual native libraries at build time to remove duplicate symbols. We want to load that single library at runtime. And we want the contents of this library to support Google-internal extensions when building Blaze inside of Google, and to remain Google-agnostic when building Bazel outside.</p>
 
@@ -410,7 +402,7 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 
               <div class="col-md ml-auto text-right">
                 
-                <span></span>
+                <span><a href="https://jmmv.dev/2020/10/bye-google-hi-microsoft.html">Next post &raquo;</a></span>
                 
               </div>
             </div>
@@ -469,6 +461,8 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 
     <ul>
       
+        <li><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
+      
         <li><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
       
         <li><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
@@ -476,8 +470,6 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
         <li><a href="/2020/04/hello-endbasic.html">Hello, EndBASIC!</a></li>
       
         <li><a href="/2020/01/system-rewrites-and-tuning.html">Ensuring system rewrites are truly necessary</a></li>
-      
-        <li><a href="/2019/09/rest-api-rust-go.html">Sample REST interface in Rust and Go</a></li>
       
       <li><a href="/essays.html#featured">More...</a></li>
     </ul>
@@ -492,11 +484,11 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (23)
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (24)
         <ul id="archive-year-2020" class="collapse">
         
           
-          <li><a href="/archive.html#2020-10">October 2020</a> (1)</li>
+          <li><a href="/archive.html#2020-10">October 2020</a> (2)</li>
         
           
           <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
