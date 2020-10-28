@@ -2,10 +2,12 @@
 all: inline-array-go
 all: rest-api-go
 all: rest-api-rust
+all: powershell-cmdlet-params
 all: wait-for-process-group
 clean: clean-inline-array-go
 clean: clean-rest-api-go
 clean: clean-rest-api-rust
+clean: clean-powershell-cmdlet-params
 clean: clean-wait-for-process-group
 
 .PHONY: clean-inline-array-go inline-array-go
@@ -27,6 +29,12 @@ rest-api-rust:
 clean-rest-api-rust:
 	( cd rest-api-rust && cargo clean )
 	rm -f rest-api-rust/Cargo.lock
+
+.PHONY: clean-powershell-cmdlet-params powershell-cmdlet-params
+powershell-cmdlet-params:
+	( cd powershell-cmdlet-params && make all )
+clean-powershell-cmdlet-params:
+	( cd powershell-cmdlet-params && make clean )
 
 .PHONY: clean-wait-for-process-group wait-for-process-group
 wait-for-process-group:
