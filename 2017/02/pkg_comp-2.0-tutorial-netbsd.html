@@ -23,7 +23,7 @@ Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you 
 Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your NetBSD system up-to-date and secure.
 ">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2017/02/pkg_comp-2.0-tutorial-netbsd.html">
 
@@ -33,7 +33,7 @@ Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -161,43 +161,33 @@ Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you 
             <div class="col">
               
               <article><p>This is a tutorial to guide you through the <a href="/2017/02/introducing-pkg_comp-2.0.html">shiny new pkg_comp 2.0</a> on NetBSD.</p>
-
 <p><strong>Goals:</strong> to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your NetBSD system up-to-date and secure.</p>
-
 <p>This tutorial is specifically targeted at NetBSD but should work on other platforms with some small changes.  Expect, at the very least, a macOS-specific tutorial as soon as I create a pkg_comp standalone installer for that platform.</p>
-
 <h1 id="getting-started">Getting started</h1>
-
 <p>First install the <code>sysutils/sysbuild-user</code> package and trigger a full build of NetBSD so that you get usable release sets for pkg_comp.  See <code>sysbuild(1)</code> and <code>pkg_info sysbuild-user</code> for details on how to do so.  Alternatively, <a href="https://ftp.netbsd.org/pub/NetBSD/">download release sets from the FTP site</a> and later tell pkg_comp where they are.</p>
-
 <p>Then install the <code>pkgtools/pkg_comp-cron</code> package.  The rest of this tutorial assumes you have done so.</p>
-
 <h1 id="adjusting-the-configuration">Adjusting the configuration</h1>
-
 <p>To use pkg_comp for periodic builds, you&rsquo;ll need to do some minimal edits to the default configuration files.  The files can be found directly under <code>/var/pkg_comp/</code>, which is <code>pkg_comp-cron</code>&rsquo;s &ldquo;home&rdquo;:</p>
-
 <ul>
-<li><p><code>/var/pkg_comp/pkg_comp.conf</code>: This is pkg_comp&rsquo;s own configuration file and the defaults installed by <code>pkg_comp-cron</code> should be good to go.</p>
-
+<li>
+<p><code>/var/pkg_comp/pkg_comp.conf</code>: This is pkg_comp&rsquo;s own configuration file and the defaults installed by <code>pkg_comp-cron</code> should be good to go.</p>
 <p>The contents here are divided in three major sections: declaration on how to download pkgsrc, definition of the file system layout on the host machine, and definition of the file system layout for the built packages.</p>
-
-<p>You may want to customize the target system paths, such as <code>LOCALBASE</code> or <code>SYSCONFDIR</code>, but you should not have to customize the host system paths.</p></li>
-
-<li><p><code>/var/pkg_comp/sandbox.conf</code>: This is the configuration file for sandboxctl.  The default settings installed by <code>pkg_comp-cron</code> <em>should</em> suffice if you used the <code>sysutils/sysbuild-user</code> package as recommended; otherwise tweak the <code>NETBSD_NATIVE_RELEASEDIR</code> and <code>NETBSD_SETS_RELEASEDIR</code> variables to point to where the downloaded release sets are.</p></li>
-
-<li><p><code>/var/pkg_comp/extra.mk.conf</code>: This is pkgsrc&rsquo;s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you&rsquo;d like to set.  You should <em>not</em> configure the layout of the installed files (e.g. <code>LOCALBASE</code>) because that&rsquo;s handled internally by pkg_comp as specified in <code>pkg_comp.conf</code>.</p></li>
-
-<li><p><code>/var/pkg_comp/list.txt</code>: This determines the set of packages you want to build in your periodic cron job.  The builds will fail unless you list at least one package.</p>
-
-<p>WARNING: Make sure to include <code>pkg_comp-cron</code> and <code>pkgin</code> in this list so that your binary kit includes these essential package management tools.  Otherwise you&rsquo;ll have to deal with some minor annoyances after rebootstrapping your system.</p></li>
+<p>You may want to customize the target system paths, such as <code>LOCALBASE</code> or <code>SYSCONFDIR</code>, but you should not have to customize the host system paths.</p>
+</li>
+<li>
+<p><code>/var/pkg_comp/sandbox.conf</code>: This is the configuration file for sandboxctl.  The default settings installed by <code>pkg_comp-cron</code> <em>should</em> suffice if you used the <code>sysutils/sysbuild-user</code> package as recommended; otherwise tweak the <code>NETBSD_NATIVE_RELEASEDIR</code> and <code>NETBSD_SETS_RELEASEDIR</code> variables to point to where the downloaded release sets are.</p>
+</li>
+<li>
+<p><code>/var/pkg_comp/extra.mk.conf</code>: This is pkgsrc&rsquo;s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you&rsquo;d like to set.  You should <em>not</em> configure the layout of the installed files (e.g. <code>LOCALBASE</code>) because that&rsquo;s handled internally by pkg_comp as specified in <code>pkg_comp.conf</code>.</p>
+</li>
+<li>
+<p><code>/var/pkg_comp/list.txt</code>: This determines the set of packages you want to build in your periodic cron job.  The builds will fail unless you list at least one package.</p>
+<p>WARNING: Make sure to include <code>pkg_comp-cron</code> and <code>pkgin</code> in this list so that your binary kit includes these essential package management tools.  Otherwise you&rsquo;ll have to deal with some minor annoyances after rebootstrapping your system.</p>
+</li>
 </ul>
-
 <p>Lastly, review root&rsquo;s <code>crontab</code> to ensure the job specification for pkg_comp is sane.  On slow machines, or if you are building many packages, you will probably want to decrease the build frequency from <code>@daily</code> to <code>@weekly</code>.</p>
-
 <h1 id="sample-configuration">Sample configuration</h1>
-
 <p>Here is what the configuration looks like on my NetBSD development machine as dumped by the <code>config</code> subcommand.  Use this output to get an idea of what to expect.  I&rsquo;ll be using the values shown here in the rest of the tutorial:</p>
-
 <pre><code># pkg_comp -c /var/pkg_comp/pkg_comp.conf config
 AUTO_PACKAGES = autoconf automake bash colordiff dash emacs-nox11 git-base git-docs gmake gnuls lua52 mozilla-rootcerts pdksh pkg_comp-cron pkg_developer pkgin sqlite3 sudo sysbuild sysbuild-user sysupgrade tmux vim zsh
 CVS_ROOT = :ext:anoncvs@anoncvs.NetBSD.org:/cvsroot
@@ -223,19 +213,12 @@ NETBSD_RELEASE_RELEASEDIR = /home/sysbuild/release/amd64
 NETBSD_RELEASE_SETS is undefined
 SANDBOX_ROOT = /var/pkg_comp/sandbox
 SANDBOX_TYPE = netbsd-release
-</code></pre>
-
-<h1 id="building-your-own-packages-by-hand">Building your own packages by hand</h1>
-
+</code></pre><h1 id="building-your-own-packages-by-hand">Building your own packages by hand</h1>
 <p>Now that you are fully installed and configured, you&rsquo;ll build some stuff by hand to ensure the setup works before the cron job comes in.</p>
-
 <p>The simplest usage form, which involves full automation, is something like this:</p>
-
 <pre><code># pkg_comp -c /var/pkg_comp/pkg_comp.conf auto
 </code></pre>
-
 <p>This trivially-looking command will:</p>
-
 <ol>
 <li>checkout or update your copy of pkgsrc;</li>
 <li>create the sandbox;</li>
@@ -243,40 +226,27 @@ SANDBOX_TYPE = netbsd-release
 <li>use pbulk to build the given packages; and</li>
 <li>destroy the sandbox.</li>
 </ol>
-
 <p>After a successful invocation, you&rsquo;ll be left with a collection of packages in the directory you set in <code>PACKAGES</code>, which in the default <code>pkg_comp-cron</code> installation is <code>/var/pkg_comp/packages/</code>.</p>
-
 <p>If you&rsquo;d like to restrict the set of packages to build during a manually-triggered build, provide those as arguments to <code>auto</code>.  This will override the contents of <code>AUTO_PACKAGES</code> (which was derived from your <code>list.txt</code> file).</p>
-
 <p>But what if you wanted to invoke all stages separately, bypassing <code>auto</code>?  The command above would be equivalent to:</p>
-
 <pre><code># pkg_comp -c /var/pkg_comp/pkg_comp.conf fetch
 # pkg_comp -c /var/pkg_comp/pkg_comp.conf sandbox-create
 # pkg_comp -c /var/pkg_comp/pkg_comp.conf bootstrap
 # pkg_comp -c /var/pkg_comp/pkg_comp.conf build &lt;package names here&gt;
 # pkg_comp -c /var/pkg_comp/pkg_comp.conf sandbox-destroy
 </code></pre>
-
 <p>Go ahead and play with these.  You can also use the <code>sandbox-shell</code> command to interactively enter the sandbox.  See <code>pkg_comp(8)</code> for more details.</p>
-
 <p>Lastly note that the root user will receive email messages if the periodic pkg_comp cron job fails, but only if it fails.  That said, you can find the full logs for all builds, successful or not, under <code>/var/pkg_comp/log/</code>.</p>
-
 <h1 id="installing-the-resulting-packages">Installing the resulting packages</h1>
-
 <p>Now that you have built your first set of packages, you will want to install them.  On NetBSD, the default <code>pkg_comp-cron</code> configuration produces a set of packages for <code>/usr/pkg</code> so you have to wipe your existing packages first to avoid build mismatches.</p>
-
 <p>WARNING: Yes, you really have to wipe your packages.  pkg_comp currently does not recognize the package tools that ship with the NetBSD base system (i.e. it bootstraps pkgsrc unconditionally, including <code>bmake</code>), which means that the newly-built packages won&rsquo;t be compatible with the ones you already have.  Avoid any trouble by starting afresh.</p>
-
 <p>To clean your system, do something like this:</p>
-
 <pre><code># ... ensure your login shell lives in /bin! ...
 # pkg_delete -r -R &quot;*&quot;
 # mv /usr/pkg/etc /root/etc.old  # Backup any modified files.
 # rm -rf /usr/pkg /var/db/pkg*
 </code></pre>
-
 <p>Now, rebootstrap pkgsrc and reinstall any packages you previously had:</p>
-
 <pre><code># cd /
 # tar xzvpf /var/pkg_comp/packages/bootstrap.tgz
 # echo &quot;pkg_admin=/usr/pkg/sbin/pkg_admin&quot; &gt;&gt;/etc/pkgpath.conf
@@ -285,26 +255,17 @@ SANDBOX_TYPE = netbsd-release
 # export PKG_PATH=file:///var/pkg_comp/packages/All
 # pkg_add pkgin pkg_comp-cron &lt;other package names&gt;
 </code></pre>
-
 <p>Finally, reconfigure any packages where you had have previously made custom edits.  Use the backup in <code>/root/etc.old</code> to properly update the corresponding files in <code>/etc</code>.  I doubt you made a ton of edits so this should be easy.</p>
-
 <p>IMPORTANT: Note that the last command in this example includes <code>pkgin</code> and <code>pkg_comp-cron</code>.  You should install these first to ensure you can continue with the next steps in this tutorial.</p>
-
 <h1 id="keeping-your-system-up-to-date">Keeping your system up-to-date</h1>
-
 <p>If you paid attention when you installed the <code>pkg_comp-cron</code> package, you should have noticed that this configured a cron job to run pkg_comp daily.  This means that your packages repository under <code>/var/pkg_comp/packages/</code> will always be up-to-date so you can use that to quickly upgrade your system with minimal downtime.</p>
-
 <p>Assuming you are going to use <code>pkgtools/pkgin</code> (and why not?), configure your local repository:</p>
-
 <pre><code># echo 'file:///var/pkg_comp/packages/All' &gt;&gt;/etc/pkgin/repositories.conf
 </code></pre>
-
 <p>And, from now on, all it takes to upgrade your system is:</p>
-
 <pre><code># pkgin update
 # pkgin upgrade
 </code></pre>
-
 <p>Enjoy!</p></article>
             </div>
           </div>

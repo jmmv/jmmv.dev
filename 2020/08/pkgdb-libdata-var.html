@@ -19,7 +19,7 @@
   <meta name="description" content="The pkgsrc package database, which by default lives in /var/db/pkg/, should not be there. Instead, it should be under /usr/pkg/libdata/pkgdb/. The same applies to FreeBSD&#39;s and OpenBSD&#39;s ports and also Debian&#39;s dpkg, but I&#39;ll focus on pkgsrc because it&#39;s the system I know best. Let&#39;s see why the current default is suboptimal and why libdata is a good alternative.">
   <meta property="og:description" content="The pkgsrc package database, which by default lives in /var/db/pkg/, should not be there. Instead, it should be under /usr/pkg/libdata/pkgdb/. The same applies to FreeBSD&#39;s and OpenBSD&#39;s ports and also Debian&#39;s dpkg, but I&#39;ll focus on pkgsrc because it&#39;s the system I know best. Let&#39;s see why the current default is suboptimal and why libdata is a good alternative.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/08/pkgdb-libdata-var.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -156,22 +156,13 @@
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>Right after discussing <a href="/2020/08/rcd-libexec-etc.html">where <code>rc.d</code> should live</a>, it&rsquo;s time to tackle a different but related pet peeve of mine: the location of the installed packages database. For this, I&rsquo;m going to focus on the system I know best, <a href="http://pkgsrc.org/">pkgsrc</a>, which keeps its database under <code>/var/db/pkg/</code> by default. I think this location is wrong and the database should move to <code>/usr/pkg/libdata/pkgdb/</code>.</p>
-
+              <article><p>Right after discussing <a href="/2020/08/rcd-libexec-etc.html">where <code>rc.d</code> should live</a>, it&rsquo;s time to tackle a different but related pet peeve of mine: the location of the installed packages database. For this, I&rsquo;m going to focus on the system I know best, <a href="http://pkgsrc.org/">pkgsrc</a>, which keeps its database under <code>/var/db/pkg/</code> by default. I think this location is wrong and the database should move to <code>/usr/pkg/libdata/pkgdb/</code>.</p>
 <p>From a cursory look, it seems that FreeBSD&rsquo;s and OpenBSD&rsquo;s ports databases, as well as dpkg&rsquo;s and rpm&rsquo;s, are also affected by this &ldquo;problem&rdquo;&mdash;but I do not know enough about their internals to say with certainty.</p>
-
 <p>Let&rsquo;s see why placing the installed packages database under <code>/var/</code> is suboptimal and why <code>libdata</code> is a good alternative.</p>
-
 <p><strong>UPDATE (11:30 EDT):</strong> As <a href="https://twitter.com/jperkin/status/1298634490252853248">Jonathan Perkin points out</a>, the pkgdb already moved under the installation prefix <a href="https://github.com/NetBSD/pkgsrc/commit/b45529408b9f7b7f4f7c580bc12d1bac623913af">four years ago</a> for all <code>bootstrap</code> builds. I never noticed because I had been overriding the default value all along 🤦‍♂️. That said, the &ldquo;problem&rdquo; still remains for native, non-bootstrapped NetBSD builds, so this article is still valid 😉</p>
-
 <h1 id="background-what-is-var-for">Background: What is /var for?</h1>
-
 <p>Every packaging system that you use, be it pkgsrc, ports, dpkg, rpm, or whatever, must maintain a database to track the metadata of all installed packages. What this database contains varies across systems, but in general it lists the installed packages, their textual description, the collection of files each provides and their checksums, etc.</p>
-
 <p>If we look at the I-bet-unknown-yet-super-informative <a href="https://netbsd.gw.com/cgi-bin/man-cgi?hier+7+NetBSD-9.0-STABLE"><code>hier(7)</code> manual page</a>, we find the following descriptions in NetBSD:</p>
-
 <pre><code>HIER(7)                Miscellaneous Information Manual                HIER(7)
 
 NAME
@@ -192,12 +183,8 @@ DESCRIPTION
                                         to third party software packages.  See
                                         pkg_add(1) for more details of the
                                         NetBSD Packages Collection, or pkgsrc.
-</code></pre>
-
-<p>If you ask me&hellip; just by looking at this, the singling out of <code>pkg</code> in this list feels like an ad-hoc addition to justify the decision of placing <code>pkg</code> under <code>/var/db/</code>. But that&rsquo;s just a feeling, so let&rsquo;s continue investigating.</p>
-
+</code></pre><p>If you ask me&hellip; just by looking at this, the singling out of <code>pkg</code> in this list feels like an ad-hoc addition to justify the decision of placing <code>pkg</code> under <code>/var/db/</code>. But that&rsquo;s just a feeling, so let&rsquo;s continue investigating.</p>
 <p>If we look at this same manual page in Debian:</p>
-
 <pre><code>HIER(7)                  Linux Programmer's Manual                  HIER(7)
 
 NAME
@@ -218,42 +205,24 @@ DESCRIPTION
 
        /var/lib/&lt;pkgtool&gt;
               Packaging support files (optional).
-</code></pre>
-
-<p>&hellip; we find a similar call-out for the package manager&rsquo;s database under what seems to be an arbitrary location in <code>/var/</code>. Also note that the text lists <code>&lt;pkgtool&gt;</code> as a placeholder instead of explicitly mentioning the <code>dpkg</code> directory. That&rsquo;s because this manual page is generic and is not specific to Debian; such is the mess of Linux distributions&hellip; but that&rsquo;s a rant for another day. But this brings us to the <a href="https://refspecs.linuxfoundation.org/fhs.shtml"><em>Filesystem Hierarchy Standard (FHS)</em></a>, which is where this manual page comes from.</p>
-
+</code></pre><p>&hellip; we find a similar call-out for the package manager&rsquo;s database under what seems to be an arbitrary location in <code>/var/</code>. Also note that the text lists <code>&lt;pkgtool&gt;</code> as a placeholder instead of explicitly mentioning the <code>dpkg</code> directory. That&rsquo;s because this manual page is generic and is not specific to Debian; such is the mess of Linux distributions&hellip; but that&rsquo;s a rant for another day. But this brings us to the <a href="https://refspecs.linuxfoundation.org/fhs.shtml"><em>Filesystem Hierarchy Standard (FHS)</em></a>, which is where this manual page comes from.</p>
 <p>The FHS contains more information than the <code>hier(7)</code> manual page on what each part of the file system tree is for. Quoting <a href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch05.html#purpose31">FHS 3.0 section 5.1</a>:</p>
-
 <blockquote>
 <p><code>/var</code> contains variable data files. This includes spool directories and files, administrative and logging data, and transient and temporary files.</p>
-
 <p>Some portions of <code>/var</code> are not shareable between different systems. For instance, <code>/var/log</code>, <code>/var/lock</code>, and <code>/var/run</code>. Other portions may be shared, notably <code>/var/mail</code>, <code>/var/cache/man</code>, <code>/var/cache/fonts</code>, and <code>/var/spool/news</code>.</p>
-
 <p><code>/var</code> is specified here in order to make it possible to mount <code>/usr</code> read-only. <strong>Everything that once went into <code>/usr</code> that is written to during system operation (as opposed to installation and software maintenance) must be in <code>/var</code>.</strong></p>
 </blockquote>
-
 <p>Emphasis mine. That last part is key.</p>
-
 <h1 id="why-does-pkgdb-not-belong-in-var">Why does pkgdb not belong in /var?</h1>
-
 <p>Based on the descriptions above, <code>/var/</code> is a place for files that might change during the operation of the system: transient files, logs, caches, spools, <em>databases</em>, etc.</p>
-
-<p>If you install a print server, it&rsquo;s reasonable for the server to maintain all print jobs under <code>/var/</code>: the jobs are mutable data that vary with the users&rsquo; activity on the system, and they belong to the system with the attached printer. If you install a PostgreSQL server, it&rsquo;s reasonable for the databases to be stored under <code>/var/</code>: their on-disk state depends directly on end-user activity and the files belong to the machine running the server.</p>
-
+<p>If you install a print server, it&rsquo;s reasonable for the server to maintain all print jobs under <code>/var/</code>: the jobs are mutable data that vary with the users' activity on the system, and they belong to the system with the attached printer. If you install a PostgreSQL server, it&rsquo;s reasonable for the databases to be stored under <code>/var/</code>: their on-disk state depends directly on end-user activity and the files belong to the machine running the server.</p>
 <p>But just because the package manager maintains a database of installed files does <em>not</em> mean that such database belongs in <code>/var/</code>. And unfortunately, I think we ended up in this situation simply because someone thought of this as a &ldquo;database&rdquo; and assumed &ldquo;must be in <code>/var/</code>&rdquo; based on its name, without giving it a second thought. And then this pattern stuck and spread across systems.</p>
-
 <p>IMPORTANT: The key distinction between the packages database and an arbitrary database is that the packages database changes <strong>in unison</strong> with the files of the installed packages.</p>
-
 <p>It might be easier to visualize this argument if we go back to the idea that <code>/usr/</code> is a read-only tree that can be shared across machines and <code>/var/</code> is the writable tree that is specific to each machine. Under this scenario, if we share <code>/usr/</code>, the list of packages available on each machine is <em>exactly the same</em> among them. Ergo the database should also be shared across those machines and therefore <code>/var/</code> is the wrong location for it.</p>
-
 <p>This argument only holds if the contents of the packages database are immutable unless we are adding, removing, or updating packages&mdash;these operations require write access to <code>/usr/</code> anyway, so they might as well update the database if it were under that tree. I know that&rsquo;s true pkgsrc but cannot say for other systems, hence why I won&rsquo;t speculate much about them.</p>
-
 <p>A different argument: because the contents of <code>/var/</code> are supposed to be transient, it should be acceptable to lose almost all of them and still be left with a functional system. However, if we lose the package database, we will be left with a system that will be very difficult to operate. Yes, it&rsquo;ll keep running, but good luck trying to convince the package manager to do anything.</p>
-
 <h1 id="where-should-pkgdb-live-instead">Where should pkgdb live instead?</h1>
-
 <p>So, if <code>/var/</code> isn&rsquo;t the right place for the packages database, where is? Referring back to <a href="https://netbsd.gw.com/cgi-bin/man-cgi?hier+7+NetBSD-9.0-STABLE"><code>hier(7)</code></a>:</p>
-
 <pre><code>HIER(7)                Miscellaneous Information Manual                HIER(7)
 
 NAME
@@ -279,27 +248,16 @@ DESCRIPTION
                 [...]
 
                 share/    Architecture-independent files, mostly text.
-</code></pre>
-
-<p><code>libdata</code> sounds like the right location: the database is a collection of data files but these are not necessarily plain text (so we can rule out <code>share</code>). Yes, I know: <code>libdata</code> is an oddity typically only seen in BSD systems and it&rsquo;s not documented by Debian&rsquo;s <code>hier(7)</code> nor the FHS, so <code>/usr/lib/&lt;pkgtool&gt;/</code> would also be an acceptable location on Linux systems.</p>
-
+</code></pre><p><code>libdata</code> sounds like the right location: the database is a collection of data files but these are not necessarily plain text (so we can rule out <code>share</code>). Yes, I know: <code>libdata</code> is an oddity typically only seen in BSD systems and it&rsquo;s not documented by Debian&rsquo;s <code>hier(7)</code> nor the FHS, so <code>/usr/lib/&lt;pkgtool&gt;/</code> would also be an acceptable location on Linux systems.</p>
 <p>Based on this, I&rsquo;ve been using <code>/usr/pkg/libdata/pkgdb/</code> and <code>/opt/pkg/libdata/pkgdb/</code> for ages in my pkgsrc deployments (the former for NetBSD and the latter for macOS) and never experienced an issue, although going against the defaults is cumbersome.</p>
-
 <h1 id="how-can-you-make-it-happen">How can you make it happen?</h1>
-
 <p>Convincing pkgsrc to use a different location for the <code>pkgdb</code> is easy. The first thing to do is tell the <code>pkg_install(8)</code> tools where the database should be. You can do this by defining the <code>PKG_DBDIR</code> variable in <code>/etc/pkg_install.conf</code>:</p>
-
 <pre><code>netbsd:~&gt; cat /etc/pkg_install.conf
 PKG_DBDIR=/usr/pkg/libdata/pkgdb
 netbsd:~&gt;
-</code></pre>
-
-<p>But this is not enough. Some packages&mdash;particularly packaging tools in the <code>pkgtools</code> category&mdash;end up hardcoding the value of <code>PKG_DBDIR</code> during their build and they might not recognize <code>pkg_install.conf</code> at runtime. Therefore, it&rsquo;s safest for you to <em>also</em> add the same <code>PKG_DBDIR</code> setting mentioned above to <code>/etc/mk.conf</code> so that any custom-built packages pick it up. And yes, this means that using binaries built with a different <code>PKG_DBDIR</code> than the one you configure in <code>/etc/pkg_install.conf</code> can lead to subtle problems.</p>
-
+</code></pre><p>But this is not enough. Some packages&mdash;particularly packaging tools in the <code>pkgtools</code> category&mdash;end up hardcoding the value of <code>PKG_DBDIR</code> during their build and they might not recognize <code>pkg_install.conf</code> at runtime. Therefore, it&rsquo;s safest for you to <em>also</em> add the same <code>PKG_DBDIR</code> setting mentioned above to <code>/etc/mk.conf</code> so that any custom-built packages pick it up. And yes, this means that using binaries built with a different <code>PKG_DBDIR</code> than the one you configure in <code>/etc/pkg_install.conf</code> can lead to subtle problems.</p>
 <p>If you are bootstrapping pkgsrc using the <code>bootstrap</code> script, know that the script already defaults to putting the packages database somewhere under the prefix (but not under <code>libdata</code>). If you still want to change the location, pass the <code>--pkgdbdir /usr/pkg/libdata/pkgdb</code> flag to the script. Obviously adjust <code>/usr/pkg/</code> to match the prefix under which you are bootstrapping.</p>
-
 <p>And if you happen to be using <a href="/2017/02/pkg_comp-2.0-tutorial-netbsd.html"><code>pkg_comp</code></a> for package compilation, then simply set <code>PKG_DBDIR</code> once in the <code>default.conf</code> configuration file and <code>pkg_comp</code> will know how to handle everything for you.</p>
-
 <p>But ideally&hellip; we would fix the default setting in pkgsrc to be more sensible, like it was done in <code>boostrap</code>. If I recall correctly, I mentioned this at some point years ago in the mailing lists and got positive feedback, so maybe this is feasible after all without a ton of pain. But I&rsquo;m not sufficiently involved in pkgsrc&rsquo;s development these days to effect this change. Want to give it a try? 😉</p>
 </article>
             </div>

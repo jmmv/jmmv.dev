@@ -23,7 +23,7 @@ The reason dynamic execution makes builds faster is two-fold:
 The reason dynamic execution makes builds faster is two-fold:
  first, because we can hide hiccups in the connectivity to the remote build service; and, second, because we can take advantage of things like persistent workers, which are designed to offer super-fast edit/build/test cycles.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/12/bazel-dynamic-execution-introduction.html">
 
@@ -33,7 +33,7 @@ The reason dynamic execution makes builds faster is two-fold:
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -206,81 +206,30 @@ Bazel dynamic execution</b> series</a>.</i></p>
 
               
               <article><p>Bazel&rsquo;s <strong>dynamic execution</strong> is a feature that makes your builds faster by using remote <em>and</em> local resources, transparently and at the same time. We launched this feature in Bazel 0.21 back in February 2019 along an <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">introductory blog post</a> and have been hard at work since then to improve it.</p>
-
 <p>The reason dynamic execution makes builds faster is two-fold:</p>
-
 <ul>
 <li>first, because we can hide hiccups in the connectivity to the remote build service; and,</li>
 <li>second, because we can take advantage of things like <a href="https://blog.bazel.build/2015/12/10/java-workers.html">persistent workers</a>, which are designed to offer super-fast edit/build/test cycles.</li>
 </ul>
-
 <p>Put in numbers, here is what dynamic execution looks like for a relatively large iOS build I measured at Google a few months ago:</p>
-
-<table style="margin-left: auto; margin-right: auto; width: 80%">
-    <thead>
-        <tr>
-            <th></th>
-            <th></th>
-            <th align="right">Local</th>
-            <th align="right">Remote</th>
-            <th align="right">Dynamic</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <th rowspan="2" style="vertical-align:middle">MacBook Pro 2015<br>4 cores</th>
-            <th>Clean</th>
-            <td align="right" style="color: firebrick">2895s</td>
-            <td align="right" style="color: goldenrod">487s</td>
-            <td align="right" style="color: green">454s</td>
-        </tr>
-        <tr>
-            <th>Incremental</th>
-            <td align="right" style="color: green">23s</td>
-            <td align="right" style="color: firebrick">143s</td>
-            <td align="right" style="color: green">22s</td>
-        </tr>
-        <tr>
-            <th rowspan="2" style="vertical-align:middle">iMac Pro 2017<br>18 cores</th>
-            <th>Clean</th>
-            <td align="right" style="color: firebrick">1045s</td>
-            <td align="right" style="color: goldenrod">283s</td>
-            <td align="right" style="color: green">229s</td>
-        </tr>
-        <tr>
-            <th>Incremental</th>
-            <td align="right" style="color: green">17s</td>
-            <td align="right" style="color: firebrick">118s</td>
-            <td align="right" style="color: green">17s</td>
-        </tr>
-    </tbody>
-</table>
-
+<!-- raw HTML omitted -->
 <p>Notice how the <strong>Dynamic</strong> column has the best numbers of each row. Essentially, dynamic execution has the potential to match (and improve) the <strong>Remote</strong> timing for clean builds and the <strong>Local</strong> timing for incremental builds.</p>
-
 <p>Unfortunately, the table above shows best-case metrics obtained from a controlled benchmark with an idle machine and good network connectivity. In real-world deployments, we observed <em>worse</em> incremental build times with dynamic scheduling&mdash;and we traced these down to the way the dynamic scheduler was originally written.</p>
-
 <p>But how did we find these issues, you ask? By reasoning about the inner mechanics of dynamic execution and making informed guesses about where the problems might lie. When the dynamic scheduler was first introduced, it was written with Google-internal builds in mind. That is:</p>
-
 <ul>
 <li>very (really) large builds,</li>
 <li>always executed remotely,</li>
 <li>from very powerful workstations,</li>
 <li>but which want to take advantage of persistent workers to improve the edit/build/test cycle.</li>
 </ul>
-
 <p>In particular, the dynamic scheduler was written to support languages designed for quick iteration like Dart and TypeScript. Or to put it another way: dynamic execution took builds that had been fully remote and added the ability to execute a subset of them locally for increased incremental build performance.</p>
-
 <p>But the constraints of the Bazel ecosystem, as well as iOS builds within Google, are very different. These builds have:</p>
-
 <ul>
 <li>traditionally been local-only (thus are much smaller and have good incremental build performance),</li>
 <li>have had annoyingly-long clean build times,</li>
 <li>and want to use remote execution to improve the clean build case.</li>
 </ul>
-
 <p>This different scenario invalidated some of the assumptions in the implementation of the now-legacy spawn scheduler. To correct them, we have pretty much rewritten this feature from the ground up.</p>
-
 <p>In this post series, I will tell you how the dynamic scheduler works internally, where the problems laid, and how we fixed or are fixing them in the new scheduler implementation. If you attended <a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/view">my BazelCon 2019 talk</a>, these posts build upon what I presented there.</p>
 </article>
             </div>

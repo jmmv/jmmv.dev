@@ -19,7 +19,7 @@
   <meta name="description" content="The current working directory, or CWD for short, is a process-wide property. It is good practice to treat the CWD as read-only because it is essentially global state: if you change the CWD of your process at any point, any relative paths you might have stored in memory1 will stop working. I learned this first many years ago when using the Boost.Filesystem library: I could not find a function to change the CWD and that was very much intentional for this reason.">
   <meta property="og:description" content="The current working directory, or CWD for short, is a process-wide property. It is good practice to treat the CWD as read-only because it is essentially global state: if you change the CWD of your process at any point, any relative paths you might have stored in memory1 will stop working. I learned this first many years ago when using the Boost.Filesystem library: I could not find a function to change the CWD and that was very much intentional for this reason.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/09/safe-chdir-to-previous.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -156,10 +156,8 @@
           <div class="row">
             <div class="col">
               
-              <article><p>The <strong>current working directory</strong>, or CWD for short, is a process-wide property. It is good practice to treat the CWD as read-only because it is essentially global state: if you change the CWD of your process at any point, any relative paths you might have stored in memory<sup class="footnote-ref" id="fnref:abspaths"><a href="#fn:abspaths">1</a></sup> will stop working. I learned this first many years ago when using the Boost.Filesystem library: I could not find a function to change the CWD and that was very much intentional for this reason.</p>
-
+              <article><p>The <strong>current working directory</strong>, or CWD for short, is a process-wide property. It is good practice to treat the CWD as read-only because it is essentially global state: if you change the CWD of your process at any point, any relative paths you might have stored in memory<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup> will stop working. I learned this first many years ago when using the Boost.Filesystem library: I could not find a function to change the CWD and that was very much intentional for this reason.</p>
 <p>The good thing is that, in the vast majority of the cases, you do <em>not</em> have to change the CWD of your process. For example, when you spawn a subprocess, you can change the CWD of that subprocess only, not your own. So think twice before you call into <code>chdir</code>: there is almost certainly another way to do what you intend without using <code>chdir</code>.</p>
-
 <p>Unfortunately, there might still be cases where you are forced to change the CWD of your process. And in those cases, you must be prepared to restore the previous directory to minimize the scope of your global state changes. The common thing you will see people do is:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">os</span>
 
@@ -170,15 +168,13 @@
     <span class="c1"># Do some time-consuming operation.</span>
 <span class="k">finally</span><span class="p">:</span>
     <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">previous</span><span class="p">)</span>
-    <span class="k">print</span><span class="p">(</span><span class="s2">&#34;Restored&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span></code></pre></div>
-<p>Which looks OK, right? Except&hellip; the file system is a system-wide multi-threaded beast. What happens if the previous directory moved or disappeared between the <code>os.getcwd</code> call and the <code>os.chdir</code> call? The second call will fail, you won&rsquo;t be able to go back to the previous directory, and you will leave the process in an inconsistent state because there is no way for you to recover from the error.</p>
-
+    <span class="k">print</span><span class="p">(</span><span class="s2">&#34;Restored&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span>
+</code></pre></div><p>Which looks OK, right? Except&hellip; the file system is a system-wide multi-threaded beast. What happens if the previous directory moved or disappeared between the <code>os.getcwd</code> call and the <code>os.chdir</code> call? The second call will fail, you won&rsquo;t be able to go back to the previous directory, and you will leave the process in an inconsistent state because there is no way for you to recover from the error.</p>
 <p>To resolve this, <strong>think about file descriptors, not paths</strong>.</p>
-
 <p>The idea is to open a file descriptor for the CWD <em>before</em> you change it. If this operation fails, you fail early before you get to do any state-mutating operations (the <code>chdir</code>). And if this operation succeeds, then you hold a reference to the previous directory so, no matter what happens to the file system, you will be able to restore access to the previous CWD. Then, when you are done with your operations, you restore the CWD by using the <code>fchdir</code> system call instead. The above code would look like:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">os</span>
 
-<span class="n">previous</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="nb">open</span><span class="p">(</span><span class="s2">&#34;.&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">O_RDONLY</span><span class="p">)</span>
+<span class="n">previous</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&#34;.&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">O_RDONLY</span><span class="p">)</span>
 <span class="k">try</span><span class="p">:</span>
     <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="s2">&#34;/bin&#34;</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
@@ -188,19 +184,17 @@
         <span class="n">os</span><span class="o">.</span><span class="n">fchdir</span><span class="p">(</span><span class="n">previous</span><span class="p">)</span>
         <span class="k">print</span><span class="p">(</span><span class="s2">&#34;Restored&#34;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span>
 <span class="k">finally</span><span class="p">:</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">previous</span><span class="p">)</span></code></pre></div>
-<p>That&rsquo;s it. This is a very simple change that will make your code more robust in the face of file system modifications.</p>
-
+    <span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">previous</span><span class="p">)</span>
+</code></pre></div><p>That&rsquo;s it. This is a very simple change that will make your code more robust in the face of file system modifications.</p>
 <p>You might want to try to see what happens if you do actually move or delete the previous directory while &ldquo;Do some time-consuming operation&rdquo; runs. Replace that line with a <code>time.sleep(10)</code> and mess around with the previous directory from the console. Note that you might get errors coming from the <code>os.getcwd</code> calls in log messages, but the <code>os.fchdir</code> call will succeed.</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:abspaths">There are plenty of programs around that turn any paths given to them to their absolute form to workaround issues with changes to the CWD. Doing so, however, carries its own problems: users typically provide relative paths to programs and if the program modifies them in any way, users get confused because what they typed doesn&rsquo;t match what the program printed back in e.g. error messages.
- <a class="footnote-return" href="#fnref:abspaths"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>There are plenty of programs around that turn any paths given to them to their absolute form to workaround issues with changes to the CWD. Doing so, however, carries its own problems: users typically provide relative paths to programs and if the program modifies them in any way, users get confused because what they typed doesn&rsquo;t match what the program printed back in e.g. error messages. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

@@ -21,7 +21,7 @@
   <meta property="og:description" content="About a month ago, I was benchmarking the impact of a new Bazel feature and I noticed that a test build that should have taken only a few seconds took almost 10 minutes. My Internet connection was flaking out indeed, but something else didn&amp;rsquo;t seem right. So I looked and found that Bazel was doing network calls within a critical section, and these were the root cause behind the massive slowdown. But how did we get such an obvious no-no into the codebase? Read on to see how this happened and how gnarly it was to fix!
 ">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/09/bazel-ui-locking.html">
 
@@ -31,7 +31,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,21 +159,13 @@
             <div class="col">
               
               <article><p>About a month ago, I was benchmarking the impact of a new Bazel feature and I noticed that a test build that should have taken only a few seconds took almost 10 minutes. My Internet connection was flaking out indeed, but something else didn&rsquo;t seem right. So I looked and found that Bazel was doing network calls within a critical section, and these were the root cause behind the massive slowdown. But how did we get such an obvious no-no into the codebase? Read on to see how this happened and how gnarly it was to fix!</p>
-
-<hr />
-
+<hr>
 <p>If you are a Bazel user, you know that we at Google use remote build services for pretty much all of our builds. (And by the way: <a href="https://docs.bazel.build/versions/master/remote-execution.html">you can&mdash;and should&mdash;do too</a>!)</p>
-
 <p>Remote-based builds work great when the client machine is attached to a high speed/low latency network&mdash;which was the common scenario for us in the office, pre-COVID-19. But with an increasing <em>working from home (WFH)</em> scenario&hellip; we now face less-than-deal Internet connections, and these are surfacing subtle long-standing issues throughout.</p>
-
 <p>One of these issues became visible about a month ago when I was benchmarking the behavior of a new feature. To measure that feature&rsquo;s impact, I was running a build at home and noticed that the build progressed at a glacial pace. I guessed my network connection was misbehaving&mdash;and it was. But things didn&rsquo;t add up. Even under those conditions, the build seemed much slower than it should have been. In particular, all build actions appeared to complete sequentially despite the large number of <code>--jobs</code> (hundreds) we use for remote builds.</p>
-
 <h1 id="first-analysis">First analysis</h1>
-
 <p>Seeing actions print messages to the terminal in slow succession made me go <em>&ldquo;huh, that&rsquo;s interesting&rdquo;</em>&mdash;which, you know, is how many <del>horror movies</del> troubleshooting scenarios and great discoveries start.</p>
-
 <p>My instinctive reaction was to grab a thread dump from the slow Bazel instance with <code>jstack</code> while it was still running. The dump was insightful because all Skyframe threads look identical in it:</p>
-
 <pre><code>&quot;skyframe-evaluator-23&quot; #1425 daemon prio=5 os_prio=0 cpu=9.67ms elapsed=6.10s tid=0x0000073ef9a2c000 nid=0xd1ad1 waiting for monitor entry  [0x00007f7673746000]
    java.lang.Thread.State: BLOCKED (on object monitor)
         at com.google.devtools.build.lib.runtime.UiEventHandler.actuallyHandle(UiEventHandler.java:286)
@@ -202,16 +194,10 @@
         at java.util.concurrent.ForkJoinWorkerThread.run(java.base@11/ForkJoinWorkerThread.java:177)
 
 ... and hundreds more &quot;skyframe-evaluator N&quot; entries like this ...
-</code></pre>
-
-<p>In other words: all Skyframe threads are waiting on a lock to enter the gigantic critical section in <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/runtime/UiEventHandler.java;l=285;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>UiEventHandler#actuallyHandle</code> (rev <code>5bb3bec</code>)</a>.</p>
-
+</code></pre><p>In other words: all Skyframe threads are waiting on a lock to enter the gigantic critical section in <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/runtime/UiEventHandler.java;l=285;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>UiEventHandler#actuallyHandle</code> (rev <code>5bb3bec</code>)</a>.</p>
 <p>IMPORTANT: What&rsquo;s critical to know at this point is that <em>there is one Skyframe thread for every concurrent <code>--jobs</code></em>: in other words, these are the threads executing actions, so if they are all waiting on the same lock, parallel execution is worthless.</p>
-
 <p>The lock all these threads are waiting on belongs in the UI. Wait, what? That sounds dumb. Why are the Skyframe threads locking <em>in the UI</em>? Sure, this is not a graphical application, but <a href="/2013/08/cli-design-cli-is-presentation-layer.html">it still has a UI</a>&mdash;and haven&rsquo;t we learn by now, in this day and age, that the UI must be decoupled from actual processing?</p>
-
 <p>Alright, alright, so they are all blocked in the same way. But blocked <em>on what</em>? As it turns out, they are all waiting for <em>one other</em> Skyframe thread to complete:</p>
-
 <pre><code>&quot;skyframe-evaluator-178&quot; #1612 daemon prio=5 os_prio=0 cpu=7.42ms elapsed=5.94s tid=0x0000073ef973c000 nid=0xd1bda runnable  [0x00007f766c984000]
    java.lang.Thread.State: RUNNABLE
         at java.io.FileInputStream.readBytes(java.base@11/Native Method)
@@ -244,95 +230,60 @@
         at java.util.concurrent.ForkJoinPool.scan(java.base@11/ForkJoinPool.java:1656)
         at java.util.concurrent.ForkJoinPool.runWorker(java.base@11/ForkJoinPool.java:1594)
         at java.util.concurrent.ForkJoinWorkerThread.run(java.base@11/ForkJoinWorkerThread.java:177)
-</code></pre>
-
-<p>&hellip; and this thread that holds the lock is doing I/O as we can see from the top of the stacktrace. The thread is busy reading from a stream, and it all happens deep inside <code>UiEventHandler#actuallyHandle</code>. Sounds like a pretty obvious problem: I/O inside a critical section.</p>
-
+</code></pre><p>&hellip; and this thread that holds the lock is doing I/O as we can see from the top of the stacktrace. The thread is busy reading from a stream, and it all happens deep inside <code>UiEventHandler#actuallyHandle</code>. Sounds like a pretty obvious problem: I/O inside a critical section.</p>
 <p>But if this was such an &ldquo;obvious&rdquo; performance problem, how come I was the first one to notice?</p>
-
 <p>There are a couple of reasons. First, I&rsquo;m in the team that supports builds from home, so I get to run a lot of these on a suboptimal network link. And, second, this problematic build I encountered spews tons of warning messages from the Objective C compiler. Comparing the behavior of this build to any other well-behaved build (one that <em>doesn&rsquo;t</em> generate thousands of warnings) didn&rsquo;t show the problem.</p>
-
 <h1 id="remote-execution-fuse-and-outputs">Remote execution, FUSE, and outputs</h1>
-
 <p>So far we have diagnosed the potential problem: we have a critical section that does some I/O and all Skyframe threads have to go through it. Why is this specific I/O problematic and why are all threads trying to enter it?</p>
-
 <p>To reach an answer, we must first understand how Bazel runs actions&mdash;and, in particular, how Bazel prints the output of an action to the local console when the action has run on a different, remote machine.</p>
-
 <p>When an action runs remotely, the stdout/stderr streams of the action are generated remotely, obviously. If Bazel wants to show them to the user, it has to explicitly download them from the remote service. Users typically expect a build system to print the stdout/stderr streams of any actions it runs because they typically contain warnings and errors, so Bazel does download these files at all times.</p>
-
 <p>Typically, network calls look very obvious in code because they look different than everything else. If you are writing a network call, you are very aware that you are doing it. And if you are reading code, network calls are painfully visible because they aren&rsquo;t simple function calls (as much as gRPC and the like want to make you believe).</p>
-
 <p>WARNING: If you are writing or reviewing code and you notice a network call inside a critical section (<code>synchronized</code> block in Java), all alarms should go off.</p>
-
 <p>But things are more subtle in our stack at Google. As you may know, we have a FUSE file system to lazily fetch outputs from the remote execution service: Bazel can simply assume that such files are on disk and thus can access them via regular POSIX calls. The stdout/stderr outputs of remote actions are no exception: these are exposed via this FUSE file system too and Bazel can read them as necessary with regular file system operations.</p>
-
 <p>To make things more obscure, Bazel has high-level abstractions on top of these streams (the <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/util/io/OutErr.java;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>OutErr</code></a> and <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/util/io/FileOutErr.java;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>FileOutErr</code></a> classes). I say obscure because, the more abstractions you have between the code and its side-effects, the harder it is to spot what is happening under the hood.</p>
-
 <p>By this point you should start piecing things together: the critical section in <code>UiEventHandler#actuallyHandle</code> was hiding both file I/O via <code>OutErr</code> and network calls via FUSE. These two became pathological under specific conditions.</p>
-
 <p>That&rsquo;s a problem, but it still doesn&rsquo;t explain why the Skyframe threads would choke on <em>the UI</em> code. Yes, we need to print the stdout and stderr of any action we run, but why weren&rsquo;t the individual Skyframe threads downloading those files without holding a lock? After all, they do precisely this for regular file outputs, so they might as well download the stdout/stderr first and then feed them to the UI, right?</p>
-
 <p>Enter another abstraction layer: the <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/events/Reporter.java;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>Reporter</code></a>, which is used to communicate user-visible events across modules. The <code>Reporter</code> has a method called <code>handle</code> that runs arbitrary code and does so synchronously. Each Skyframe thread calls this method to report the stdout and stderr of an action on completion via <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/skyframe/SkyframeActionExecutor.java;l=1646;drc=5bb3becc09ef535276576a31d98d8686b248bbea"><code>SkyframeActionExecutor#dumpRecordedOutErr</code></a>.</p>
-
 <p>And finally we reach the true problem. The <code>Reporter</code> is just an interface so the caller has no idea about the implementation it uses. As it turns out&hellip; the <code>UiEventHandler</code> class we&rsquo;ve been talking about <em>is</em> a <code>Reporter</code> and its synchronous <code>handle</code> method calls that huge critical section that reads stdout/stderr from within, potentially faulting remote files in via FUSE.</p>
-
 <h1 id="reproduction-scenario">Reproduction scenario</h1>
-
 <p>To verify this theory and quantify the seriousness of the bug, I wrote a trivial <code>BUILD</code> rule like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">TSID</span> <span class="o">=</span> <span class="s2">&#34;1234567909&#34;</span>
 <span class="p">[</span><span class="n">genrule</span><span class="p">(</span>
     <span class="n">name</span> <span class="o">=</span> <span class="s2">&#34;foo-</span><span class="si">%d</span><span class="s2">&#34;</span> <span class="o">%</span> <span class="n">i</span><span class="p">,</span>
     <span class="n">outs</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">&#34;foo-</span><span class="si">%d</span><span class="s2">.txt&#34;</span><span class="p">)</span> <span class="o">%</span> <span class="n">i</span><span class="p">],</span>
     <span class="n">cmd</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&#34;echo </span><span class="si">%s</span><span class="s2"> - </span><span class="si">%d</span><span class="s2">; echo </span><span class="si">%d</span><span class="s2"> &gt;$@&#34;</span><span class="p">)</span> <span class="o">%</span> <span class="p">(</span><span class="n">TSID</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span>
-<span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10000</span><span class="p">)]</span></code></pre></div>
-<p>&hellip; and I ran it like this, where I used the <code>TSID</code> trick to generate unique actions (which are important to reproduce this scenario!) in each attempt:</p>
+<span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10000</span><span class="p">)]</span>
+</code></pre></div><p>&hellip; and I ran it like this, where I used the <code>TSID</code> trick to generate unique actions (which are important to reproduce this scenario!) in each attempt:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">sed -itmp -e <span class="s2">&#34;/^TSID =/s/\&#34;.*</span>$<span class="s2">/\&#34;</span><span class="k">$(</span>date +%s<span class="k">)</span><span class="s2">\&#34;/&#34;</span> pkg/BUILD
 bazel clean
-bazel build //pkg/...</code></pre></div>
-<p>The goal of this test is to see what happens when we have thousands of uncached and independent actions, each writing a novel and unique message to its stdout. Under these conditions, we expect Bazel to run as many actions concurrently as allowed by <code>--jobs</code> given that they do not depend on each other. We also expect Bazel to print the outputs of each action in no particular order. And because we are generating novel outputs on each run thanks to the <code>TSID</code> changes, we know that those outputs will not be cached in any layer: not in the local page cache, not in the remote build system&rsquo;s cache, and not in the local FUSE daemon.</p>
-
+bazel build //pkg/...
+</code></pre></div><p>The goal of this test is to see what happens when we have thousands of uncached and independent actions, each writing a novel and unique message to its stdout. Under these conditions, we expect Bazel to run as many actions concurrently as allowed by <code>--jobs</code> given that they do not depend on each other. We also expect Bazel to print the outputs of each action in no particular order. And because we are generating novel outputs on each run thanks to the <code>TSID</code> changes, we know that those outputs will not be cached in any layer: not in the local page cache, not in the remote build system&rsquo;s cache, and not in the local FUSE daemon.</p>
 <p>Voilà. Running this test took almost 10 minutes! Yes&hellip; 10 minutes to run a build that creates 10,000 different files with one line of text each. For comparison, my 2013 Mac Pro can create these files in 4 seconds with a parallelism of 12. How can Bazel behave so poorly then? Essentially because every stdout read blocks on a network call via the lazy FUSE file system. If we count, this translates to about 60ms per file, which isn&rsquo;t terrible, but 60ms times 10,000 is 10 minutes.</p>
-
 <h1 id="coming-up-with-a-fix">Coming up with a fix</h1>
-
 <p>When I found this bug over a month ago, I was very excited because I was convinced that this was a contributing factor to our still-ugly build tail latency, especially on WFH environments. But fixing the problem has proven to be much more complicated&mdash;and frustrating&mdash;than I had hoped.</p>
-
 <p>At first, I toyed with the idea of delivering events to the UI asynchronously so as to not block the Skyframe threads. In other words, make <code>Reporter#handle()</code> queue events instead of blocking. Fancy, right? This quickly turned into a pretty complex solution and stabilizing it would have required a ton of effort. Sure, this would have looked <em>cool</em> from a coding perspective, but the increasing complexity wasn&rsquo;t warranted.</p>
-
 <p>As a second approach, I added code to prefetch the stdout/stderr of actions outside of the synchronized block by doing dummy reads of the files. The intent was to cause our FUSE daemon to do the downloads first, so that the I/O calls within the critical section didn&rsquo;t have to touch the network. This worked but, as you can imagine, <a href="https://github.com/janakdr/">janakdr@</a> pointed out that removing the I/O from within the critical section would be the right thing to do. Of course, I thought&hellip; but this comes with a trade off.</p>
-
 <p>You might be wondering why the I/O happened inside the critical section in the first place. There were two reasons:</p>
-
 <ol>
-<li><p>The UI tried to dynamically limit the amount of data printed to the console based on a concept of &ldquo;remaining capacity&rdquo;. And because of this, we couldn&rsquo;t know how much data to read from the output files before grabbing the state lock.</p>
-
-<p><a href="https://github.com/michajlo">michajlo@</a>, who reviewed my code, raised the very good point that the current design of the UI looked overly complicated and that some features were getting in the way of fixing the issue described here. So we teamed up and simplified things, first by <a href="https://github.com/bazelbuild/bazel/commit/a6935cd0857a2008f7957b663ba1c7364ee9c0dc">removing message deduplication</a> and then by <a href="https://github.com/bazelbuild/bazel/commit/5bb3becc09ef535276576a31d98d8686b248bbea">removing the dynamic capacity limiting logic</a>.</p></li>
-
-<li><p>The UI doesn&rsquo;t want to mess its own console state tracking, which is super complicated, with the printing of a file. Printing the file should not interfere with the multi-line status display, and the outputs of different actions shouldn&rsquo;t be intermixed. By doing the I/O in the critical section, then, we know we are the only writer to the console so we know dumping a large file won&rsquo;t corrupt any other state. This is a property we have chosen to maintain for now.</p></li>
+<li>
+<p>The UI tried to dynamically limit the amount of data printed to the console based on a concept of &ldquo;remaining capacity&rdquo;. And because of this, we couldn&rsquo;t know how much data to read from the output files before grabbing the state lock.</p>
+<p><a href="https://github.com/michajlo">michajlo@</a>, who reviewed my code, raised the very good point that the current design of the UI looked overly complicated and that some features were getting in the way of fixing the issue described here. So we teamed up and simplified things, first by <a href="https://github.com/bazelbuild/bazel/commit/a6935cd0857a2008f7957b663ba1c7364ee9c0dc">removing message deduplication</a> and then by <a href="https://github.com/bazelbuild/bazel/commit/5bb3becc09ef535276576a31d98d8686b248bbea">removing the dynamic capacity limiting logic</a>.</p>
+</li>
+<li>
+<p>The UI doesn&rsquo;t want to mess its own console state tracking, which is super complicated, with the printing of a file. Printing the file should not interfere with the multi-line status display, and the outputs of different actions shouldn&rsquo;t be intermixed. By doing the I/O in the critical section, then, we know we are the only writer to the console so we know dumping a large file won&rsquo;t corrupt any other state. This is a property we have chosen to maintain for now.</p>
+</li>
 </ol>
-
 <p>As a consequence of these two, we can move all I/O outside of the critical section, but we still need to do the console writes <em>inside</em> the critical section to respect the properties mentioned above. The downside of doing this is that we need to buffer more data in memory (because we need to read the outputs before grabbing the lock, which means we might have <code>--jobs</code> concurrent threads doing that).</p>
-
 <h1 id="imposing-sensible-limits">Imposing sensible limits</h1>
-
 <p>Buffering the output of hundreds of concurrent actions could increase our high watermark memory usage. We had to add a limit to prevent memory blowups given that we know there are misbehaved actions out there generating MiBs of useless output.</p>
-
 <p>The first suggestion was to add a flag to cap the maximum memory usage by the UI and use a semaphore to track usage. Think of each semaphore permit as a &ldquo;used byte&rdquo;. Neat design, but implementing this still required dealing with files larger than the configured flag, and printing only part of their contents was still deemed as too complex.</p>
-
 <p>The second suggestion was to be more aggressive: cap how much a given action can print and not worry about tracking aggregate usage. After all, if an action is printing more than, say, a few hundred KiBs of data to the console, it&rsquo;s already &ldquo;misbehaving&rdquo; in the sense that nobody will possibly want to read such data. By setting this flag to a more conservative value, like 1 MiB, we know we are limiting aggregate memory usage too, and we also have a straightforward implementation.</p>
-
 <p>So in the end, we chose to go this second route in <a href="https://cs.opensource.google/bazel/bazel/+/ca2f946e1cd259903ea29ba2fe0adc6619ac39e0">rev <code>ca2f946</code></a>.</p>
-
 <p>The new flag <code>--experimental_ui_max_stdouterr_memory_bytes</code> caps the size of the stdout/stderr Bazel will print for any given action.</p>
-
 <h1 id="results">Results</h1>
-
 <p>How does our fix perform?</p>
-
 <p>For the pathological build described above, the fix reduces execution time from 6 minutes to 27 seconds on a machine I have in the office (great Internet connection).  On my home machine with a more modest connection, the execution time goes from 12 minutes to 60 seconds. These numbers do not match the 10 minutes I mentioned earlier, but these timings are pretty variable and different across runs.</p>
-
 <p>The more interesting result will be to see how this improves overall build time latencies. As mentioned in the opening, I&rsquo;m certain this bug is slowing down some of our interactive builds&mdash;and those are where you want to have the fastest possible edit/build/test cycle. Unfortunately, the fix has just been submitted today so it&rsquo;ll still take a few weeks for me to have that kind of proof!</p>
-
 <p>Wow, this turned out to be much longer than anticipated. Hope you enjoyed the tour.</p></article>
             </div>
           </div>

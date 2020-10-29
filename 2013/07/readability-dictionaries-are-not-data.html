@@ -21,7 +21,7 @@ What do I mean by this? In Python and other similar dynamic languages, dictionar
   <meta property="og:description" content="Yes: a dictionary is a data type. No: a dictionary is not a way to implement abstract data types; doing so is lazy programming and is asking for trouble later on.
 What do I mean by this? In Python and other similar dynamic languages, dictionaries are a mapping of keys to values that have no typing restrictions: the dictionary is heterogeneous, and a single dictionary can contain elements of different types both as its keys and its values.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/07/readability-dictionaries-are-not-data.html">
 
@@ -31,7 +31,7 @@ What do I mean by this? In Python and other similar dynamic languages, dictionar
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -249,9 +249,7 @@ Readability</b> series</a>.</i></p>
 
               
               <article><p>Yes: a dictionary is a data type. No: a dictionary is not a way to implement abstract data types; doing so is lazy programming and is asking for trouble later on.</p>
-
 <p>What do I mean by this? In Python and other similar dynamic languages, dictionaries are a mapping of keys to values that have no typing restrictions: the dictionary is heterogeneous, and a single dictionary can contain elements of different types both as its keys and its values. To make things worse, the syntax of the language makes it incredibly easy to create and populate dictionaries (unlike, say, in C++). Combine these two facts together and the temptation to abuse a dictionary to implement a structured data type is high.</p>
-
 <p>Let&rsquo;s look at a fictitious function to check if a given process is within its current resource limits:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">process_within_limits</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">limits</span><span class="p">,</span> <span class="n">usages</span><span class="p">):</span>
     <span class="s2">&#34;&#34;&#34;Checks if a process is within its limits.
@@ -282,9 +280,8 @@ Readability</b> series</a>.</i></p>
     <span class="n">cpu_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="p">[</span><span class="s1">&#39;cpu&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;cpu&#39;</span><span class="p">]</span>
     <span class="k">assert</span> <span class="s1">&#39;ram&#39;</span> <span class="ow">in</span> <span class="n">usage</span> <span class="ow">and</span> <span class="s1">&#39;ram&#39;</span> <span class="ow">in</span> <span class="n">limit</span>
     <span class="n">ram_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="p">[</span><span class="s1">&#39;ram&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;ram&#39;</span><span class="p">]</span>
-    <span class="k">return</span> <span class="n">cpu_in_quota</span> <span class="ow">and</span> <span class="n">ram_in_quota</span></code></pre></div>
-<p>This code is nesting two dictionaries in the <code>limits</code> and <code>usages</code> arguments, and is using each level in a different semantical manner. In the first level we have a mapping of process identifiers to either the process&rsquo; limits or current usage counts; in other words, a perfectly valid use case for a dictionary. In the second level, however, we have a collection of resource names mapped to values; needless to say, this is bad practice (with very few exceptions).</p>
-
+    <span class="k">return</span> <span class="n">cpu_in_quota</span> <span class="ow">and</span> <span class="n">ram_in_quota</span>
+</code></pre></div><p>This code is nesting two dictionaries in the <code>limits</code> and <code>usages</code> arguments, and is using each level in a different semantical manner. In the first level we have a mapping of process identifiers to either the process' limits or current usage counts; in other words, a perfectly valid use case for a dictionary. In the second level, however, we have a collection of resource names mapped to values; needless to say, this is bad practice (with very few exceptions).</p>
 <p>The way to improve this code is by defining an actual data type so that the various attributes are properly represented by member fields. In Python, we can use the standard <code>collections.namedtuple</code> class to simplify this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">collections</span>
 
@@ -320,14 +317,12 @@ Readability</b> series</a>.</i></p>
 
     <span class="n">cpu_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="o">.</span><span class="n">cpu</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="o">.</span><span class="n">cpu</span>
     <span class="n">ram_in_quota</span> <span class="o">=</span> <span class="n">usage</span><span class="o">.</span><span class="n">ram</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="o">.</span><span class="n">ram</span>
-    <span class="k">return</span> <span class="n">cpu_in_quota</span> <span class="ow">and</span> <span class="n">ram_in_quota</span></code></pre></div>
-<p>This is already quite an improvement. There are two things that I want to highlight here:</p>
-
+    <span class="k">return</span> <span class="n">cpu_in_quota</span> <span class="ow">and</span> <span class="n">ram_in_quota</span>
+</code></pre></div><p>This is already quite an improvement. There are two things that I want to highlight here:</p>
 <ul>
 <li>The explanation of the function arguments no longer describes what the contents of the resources dictionary should be. Doing so is now unnecessary because we have an actual type with documentation to do so.</li>
 <li>Access to the member fields is done via a field instead of dynamically via a map query. This allows the validation of the accesses at build type (not in the case of Python, of course) and also the enforcement of types and/or data invariants if any.</li>
 </ul>
-
 <p>There is one more twist to all this. By having extracted the dictionary as a data type, we can now clearly see that some functionality belongs in the data type itself for encapsulation purposes: invariant checking, operator overload, auxiliary methods&hellip; In this specific example, just imagine if you ever wanted to add a new resource dimension to the <code>Resources</code> class: you wouldn&rsquo;t like to have to hunt down all callers to ensure they know about the new field! So we move the necessary functionality into the type:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">collections</span>
 
@@ -365,8 +360,8 @@ Readability</b> series</a>.</i></p>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Missing process usage&#39;</span><span class="p">)</span>
     <span class="n">usage</span> <span class="o">=</span> <span class="n">usages</span><span class="p">[</span><span class="n">pid</span><span class="p">]</span>
 
-    <span class="k">return</span> <span class="n">usage</span> <span class="o">&lt;=</span> <span class="n">limit</span></code></pre></div>
-<p>Let me conclude by saying that this is all inspired by actual production code I&rsquo;ve had to deal with&hellip; so the example and its simplicity are not that contrived.</p>
+    <span class="k">return</span> <span class="n">usage</span> <span class="o">&lt;=</span> <span class="n">limit</span>
+</code></pre></div><p>Let me conclude by saying that this is all inspired by actual production code I&rsquo;ve had to deal with&hellip; so the example and its simplicity are not that contrived.</p>
 </article>
             </div>
           </div>

@@ -21,7 +21,7 @@ The jobs number, given by the --jobs flag, configures the number of concurrent S
   <meta property="og:description" content="How does Bazel avoid melting your workstation with concurrent subprocesses? Or&amp;hellip; tries to, because I know it still does that sometimes? There are two mechanisms as play: the jobs number and the local resources tracker. Let&amp;rsquo;s dive into them.
 The jobs number, given by the --jobs flag, configures the number of concurrent Skyframe evaluators during the execution phase1. What a mouthful. What this essentially means is that jobs indicates the number of threads used to walk the graph looking for actions to execute&amp;mdash;and also executing them.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/12/bazel-local-resources.html">
 
@@ -31,7 +31,7 @@ The jobs number, given by the --jobs flag, configures the number of concurrent S
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,61 +159,59 @@ The jobs number, given by the --jobs flag, configures the number of concurrent S
             <div class="col">
               
               <article><p>How does Bazel avoid melting your workstation with concurrent subprocesses? Or&hellip; tries to, because I know it still does that sometimes? There are two mechanisms as play: the jobs number and the local resources tracker. Let&rsquo;s dive into them.</p>
-
-<p>The <strong>jobs number</strong>, given by the <code>--jobs</code> flag, configures the number of concurrent Skyframe evaluators during the execution phase<sup class="footnote-ref" id="fnref:loading-phase"><a href="#fn:loading-phase">1</a></sup>. What a mouthful. What this essentially means is that <code>jobs</code> indicates the number of threads used to walk the graph looking for actions to execute&mdash;and also executing them. So if we have <code>N</code> threads, each of which processes one node of the graph at a time, and we know that the most nodes trigger process executions, we have at most <code>N</code> concurrent spawns.</p>
-
+<p>The <strong>jobs number</strong>, given by the <code>--jobs</code> flag, configures the number of concurrent Skyframe evaluators during the execution phase<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>. What a mouthful. What this essentially means is that <code>jobs</code> indicates the number of threads used to walk the graph looking for actions to execute&mdash;and also executing them. So if we have <code>N</code> threads, each of which processes one node of the graph at a time, and we know that the most nodes trigger process executions, we have at most <code>N</code> concurrent spawns.</p>
 <p>Which works well, but it&rsquo;s not sufficient. Not all actions are equally costly: some may require more than one CPU and this model doesn&rsquo;t account for RAM usage at all. Also, with remote execution, the number of jobs has to be increased to the hundreds to reap its benefits, so if you have set <code>--jobs=300</code> and configured all actions to run remotely except for a few mnemonics, the latter could still run en masse.</p>
-
 <p>To control this, Bazel has another mechanism known as the <strong>local resources</strong> tracker. To summarize what this does, know that Bazel has its own idea of the resources available on the machine and each spawn has an associated cost. Whenever Bazel has to run a spawn, Bazel subtracts the spawn&rsquo;s cost from the tracker if resources are available or waits until they are, and then returns the resources once the spawn completes.</p>
-
 <p>The key concepts and code references to navigate how this works are:</p>
-
 <ul>
-<li><p>The amount of resources, be them the total available resources of the machine or the cost attached to an action, are modeled by the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/ResourceSet.java;l=33;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>ResourceSet</code> class</a>, which essentially is a value class that specifies a CPU and RAM quantity.</p></li>
-
-<li><p>The resource tracker is implemented by the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/ResourceManager.java;l=62;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>ResourceManager</code> class</a> class, which provides convenient methods like <code>acquireResources</code> to either deduct or wait for resources. The tracker is <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/buildtool/ExecutionTool.java;l=679;drc=dc71d401efe8c227dbb84e3101255086d70d5a92">initialized</a> at the beginning of the build with the values of <code>--local_cpu_resources</code> and <code>--local_ram_resources</code> if provided. The default value of these flags is <code>auto</code>, which means to use a quantity derived from the machine running Bazel as exposed via the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/LocalHostCapacity.java;l=25;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>LocalHostCapacity</code> class</a>.</p></li>
-
-<li><p>Each action (or, really, each spawn) carries a resource cost with it, which is assigned at creation time by the rule creating the action. Such resources are available via the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/Spawn.java;l=107;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>getResources()</code> method</a>.</p></li>
-
-<li><p>And finally, each spawn runner (see <a href="/2019/12/bazel-strategies.html">What are Bazel strategies?</a> for details) that executes things locally ends up requesting the necessary resources from the <code>ResourceManager</code> <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/exec/local/LocalSpawnRunner.java;l=168;drc=dc71d401efe8c227dbb84e3101255086d70d5a92">right at <code>exec()</code> time</a> to gate the execution of a spawn.</p></li>
+<li>
+<p>The amount of resources, be them the total available resources of the machine or the cost attached to an action, are modeled by the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/ResourceSet.java;l=33;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>ResourceSet</code> class</a>, which essentially is a value class that specifies a CPU and RAM quantity.</p>
+</li>
+<li>
+<p>The resource tracker is implemented by the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/ResourceManager.java;l=62;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>ResourceManager</code> class</a> class, which provides convenient methods like <code>acquireResources</code> to either deduct or wait for resources. The tracker is <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/buildtool/ExecutionTool.java;l=679;drc=dc71d401efe8c227dbb84e3101255086d70d5a92">initialized</a> at the beginning of the build with the values of <code>--local_cpu_resources</code> and <code>--local_ram_resources</code> if provided. The default value of these flags is <code>auto</code>, which means to use a quantity derived from the machine running Bazel as exposed via the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/LocalHostCapacity.java;l=25;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>LocalHostCapacity</code> class</a>.</p>
+</li>
+<li>
+<p>Each action (or, really, each spawn) carries a resource cost with it, which is assigned at creation time by the rule creating the action. Such resources are available via the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/Spawn.java;l=107;drc=dc71d401efe8c227dbb84e3101255086d70d5a92"><code>getResources()</code> method</a>.</p>
+</li>
+<li>
+<p>And finally, each spawn runner (see <a href="/2019/12/bazel-strategies.html">What are Bazel strategies?</a> for details) that executes things locally ends up requesting the necessary resources from the <code>ResourceManager</code> <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/exec/local/LocalSpawnRunner.java;l=168;drc=dc71d401efe8c227dbb84e3101255086d70d5a92">right at <code>exec()</code> time</a> to gate the execution of a spawn.</p>
+</li>
 </ul>
-
 <p>That&rsquo;s it. Those are all the pieces you need to know to puzzle together how local resource tracking works.</p>
-
 <p>So now let&rsquo;s analyze why this local resource tracking mechanism is&hellip; very rudimentary:</p>
-
 <ul>
-<li><p>First of all, Bazel is not the only process running in the machine&mdash;yet the <code>ResourceManager</code> assumes it has all machine resources available to itself by default. This works as long as you don&rsquo;t do anything else on the machine, like using <em>cough</em> Chrome <em>cough</em>, or if your build is primarily remote-only, but breaks badly on busy machines.</p></li>
-
-<li><p>Resource modeling for actions is&hellip; inaccurate. Most actions have a requirement of a single CPU and an almost-arbitrary RAM reservation. Some others, like C++ linking, attempt to model RAM consumption <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/rules/cpp/CppLinkAction.java;l=138;drc=dc71d401efe8c227dbb84e3101255086d70d5a92">based on the number of inputs</a>&hellip; which I guess &ldquo;works&rdquo; but is so tied to the behavior of a specific linker that encoding this in the Java code is plain wrong.</p></li>
-
-<li><p>And this is hard to reason about. Most people are used to the <code>--jobs=N</code> model as they have almost-certainly played with <code>make -jN</code> at some point, but understanding what&rsquo;s happening in Bazel is hard.</p></li>
+<li>
+<p>First of all, Bazel is not the only process running in the machine&mdash;yet the <code>ResourceManager</code> assumes it has all machine resources available to itself by default. This works as long as you don&rsquo;t do anything else on the machine, like using <em>cough</em> Chrome <em>cough</em>, or if your build is primarily remote-only, but breaks badly on busy machines.</p>
+</li>
+<li>
+<p>Resource modeling for actions is&hellip; inaccurate. Most actions have a requirement of a single CPU and an almost-arbitrary RAM reservation. Some others, like C++ linking, attempt to model RAM consumption <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/rules/cpp/CppLinkAction.java;l=138;drc=dc71d401efe8c227dbb84e3101255086d70d5a92">based on the number of inputs</a>&hellip; which I guess &ldquo;works&rdquo; but is so tied to the behavior of a specific linker that encoding this in the Java code is plain wrong.</p>
+</li>
+<li>
+<p>And this is hard to reason about. Most people are used to the <code>--jobs=N</code> model as they have almost-certainly played with <code>make -jN</code> at some point, but understanding what&rsquo;s happening in Bazel is hard.</p>
+</li>
 </ul>
-
 <p>That said, after a couple of refinements we made (like removing completely-broken I/O tracking and forcing all actions to request at <em>least</em> 1 CPU), this model works pretty well. In fact, because of the latter:</p>
-
 <blockquote>
 <p><strong><code>--local_cpu_resources</code> essentially acts as <code>--jobs</code> to control the number of concurrent local processes</strong>, with only a few exceptions.</p>
 </blockquote>
-
 <p>But of course there is room for improvement. Here are a couple of ideas that would make all of this better:</p>
-
 <ul>
-<li><p><a href="https://github.com/bazelbuild/bazel/issues/6477">bazelbuild/bazel #6477</a>: Allow rules defined in Starlark to specify action costs.  At the moment this is only possible from rules defined in Java or via undocumented tags in some cases, yet this would be very useful for rule maintainers.</p></li>
-
-<li><p><a href="https://github.com/bazelbuild/bazel/issues/10443">bazelbuild/bazel #10443</a>: Allow Bazel to dynamically determine the resources given to a spawn, not the other way around. Suppose you have a multithreaded compiler like <code>swiftc</code> or are wrapping another build system like <code>cargo</code>. At the moment, you are forced to configure these tools with a fixed number of threads, and this number should match the resource cost attached to the action. This is fine when your dependency graph is broad enough to fill all cores with work. But what happens if you reach a choke point in the dependency graph and all you can do is issue that one <code>swiftc</code> or <code>cargo</code> invocation before anything else can run? In this case, you&rsquo;d want Bazel to configure the invocation to use all available resources, and only Bazel knows what those are based on current machine usage and available Skyframe parallelism.</p></li>
+<li>
+<p><a href="https://github.com/bazelbuild/bazel/issues/6477">bazelbuild/bazel #6477</a>: Allow rules defined in Starlark to specify action costs.  At the moment this is only possible from rules defined in Java or via undocumented tags in some cases, yet this would be very useful for rule maintainers.</p>
+</li>
+<li>
+<p><a href="https://github.com/bazelbuild/bazel/issues/10443">bazelbuild/bazel #10443</a>: Allow Bazel to dynamically determine the resources given to a spawn, not the other way around. Suppose you have a multithreaded compiler like <code>swiftc</code> or are wrapping another build system like <code>cargo</code>. At the moment, you are forced to configure these tools with a fixed number of threads, and this number should match the resource cost attached to the action. This is fine when your dependency graph is broad enough to fill all cores with work. But what happens if you reach a choke point in the dependency graph and all you can do is issue that one <code>swiftc</code> or <code>cargo</code> invocation before anything else can run? In this case, you&rsquo;d want Bazel to configure the invocation to use all available resources, and only Bazel knows what those are based on current machine usage and available Skyframe parallelism.</p>
+</li>
 </ul>
-
 <p>Do these ideas sound interesting? I&rsquo;d really appreciate help in addressing these, so drop me a note!</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:loading-phase">If you are extra curious, <code>--loading_phase_threads</code> is essentially the same as <code>--jobs</code>. The small difference is that the former controls the number of Skyframe evaluators during the combined loading/analysis phase while the latter does that for the execution phase. If we can get to interleaving all phases one day, we could possibly remove the former.
- <a class="footnote-return" href="#fnref:loading-phase"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>If you are extra curious, <code>--loading_phase_threads</code> is essentially the same as <code>--jobs</code>. The small difference is that the former controls the number of Skyframe evaluators during the combined loading/analysis phase while the latter does that for the execution phase. If we can get to interleaving all phases one day, we could possibly remove the former. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

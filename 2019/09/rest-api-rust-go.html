@@ -19,7 +19,7 @@
   <meta name="description" content="Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent some time reading through REST API documentation pages and, as part of these exercises, implemented sample RESTful web services in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&amp;hellip; and it involved PHP, MySQL, and I think IE6?">
   <meta property="og:description" content="Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent some time reading through REST API documentation pages and, as part of these exercises, implemented sample RESTful web services in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&amp;hellip; and it involved PHP, MySQL, and I think IE6?">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/09/rest-api-rust-go.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -156,76 +156,67 @@
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent some time reading through REST API documentation pages and, as part of these exercises, implemented sample RESTful web services in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&hellip; and it involved PHP, MySQL, and I think IE6? Times have changed.)</p>
-
-<p><strong>Why Go?</strong> Because the first app I wanted to build was to run on App Engine and Go was an easy choice after trying and giving up on Java.<br />
+              <article><p>Over the summer, I prototyped a bunch of web apps whose ideas had been floating in my mind for a long time. I spent some time reading through REST API documentation pages and, as part of these exercises, implemented sample RESTful web services in both Go and Rust. (Just for context, the last time I wrote a web app was in high school&hellip; and it involved PHP, MySQL, and I think IE6? Times have changed.)</p>
+<p><strong>Why Go?</strong> Because the first app I wanted to build was to run on App Engine and Go was an easy choice after trying and giving up on Java.<br>
 <strong>Why Rust?</strong> Because I enjoy it more and wanted to see how it would stack up to Go in this task.</p>
-
 <p>The app prototypes have gone nowhere but I thought of sharing their skeletons to serve as templates for myself in future work. Thus, in this post, I will cover these skeleton RESTful web services and I will compare their implementation. Yes, I will dive a little bit more into <a href="/2018/07/rust-vs-go.html">Rust vs. Go</a>.</p>
-
 <h1 id="guiding-principles">Guiding principles</h1>
-
 <p>The basic constraints that led to these demos are:</p>
-
 <ul>
-<li><p>Decoupling the REST interface from the business logic. The web API is the interface with users and should not be tied to the internal business logic nor backend. I&rsquo;m new to REST, but clearly defining the boundary between the outside world and the server&rsquo;s internals is just good design practice in any paradigm, be it <a href="/2013/08/cli-design-cli-is-presentation-layer.html">command line tools</a> or protobuf-based web servers&mdash;of which I <em>do</em> have written a bunch as they are the daily bread at Google.</p></li>
-
-<li><p>Using JSON for the requests and responses as the serialization format. You&rsquo;ll note that in some cases I&rsquo;m introducing data types that are not strictly needed for these toy demos, but the goal is to see how easy (or not) it is to define and integrate such types.</p></li>
-
-<li><p>Storing state in-memory only. We don&rsquo;t need persistence for this demo code and keeping everything in memory is sufficient.</p></li>
-
-<li><p>Staying away from high-level do-it-all frameworks. It may be convenient to use those, but I wanted to see how things work under the covers. I&rsquo;ll be using HTTP routing APIs but that&rsquo;s about it.</p></li>
-
-<li><p>Error handling needn&rsquo;t be very accurate. It&rsquo;s a demo after all.</p></li>
+<li>
+<p>Decoupling the REST interface from the business logic. The web API is the interface with users and should not be tied to the internal business logic nor backend. I&rsquo;m new to REST, but clearly defining the boundary between the outside world and the server&rsquo;s internals is just good design practice in any paradigm, be it <a href="/2013/08/cli-design-cli-is-presentation-layer.html">command line tools</a> or protobuf-based web servers&mdash;of which I <em>do</em> have written a bunch as they are the daily bread at Google.</p>
+</li>
+<li>
+<p>Using JSON for the requests and responses as the serialization format. You&rsquo;ll note that in some cases I&rsquo;m introducing data types that are not strictly needed for these toy demos, but the goal is to see how easy (or not) it is to define and integrate such types.</p>
+</li>
+<li>
+<p>Storing state in-memory only. We don&rsquo;t need persistence for this demo code and keeping everything in memory is sufficient.</p>
+</li>
+<li>
+<p>Staying away from high-level do-it-all frameworks. It may be convenient to use those, but I wanted to see how things work under the covers. I&rsquo;ll be using HTTP routing APIs but that&rsquo;s about it.</p>
+</li>
+<li>
+<p>Error handling needn&rsquo;t be very accurate. It&rsquo;s a demo after all.</p>
+</li>
 </ul>
-
 <p>WARNING: If you go looking for REST API documentation, it will be hard to find something concrete and authoritative. Remember that REST is not a standard: instead, it&rsquo;s a collection of practices on how to design an API, and the way you actually implement them is no different than the way you implement other web services. That said, start with <a href="https://en.wikipedia.org/wiki/Representational_state_transfer">the Wikipedia article</a> and maybe even <a href="https://cloud.google.com/apis/design/">Google&rsquo;s API Design Guide</a>.</p>
-
 <h1 id="task-management-api">Task management API</h1>
-
 <p>The sample RESTful web services in this post implement a To-Do manager, of course. (That&rsquo;s not what I built as a prototype but it works better as an example.) The REST interface we will implement will let us manipulate a collection of tasks where each task contains a textual description and a bit to indicate whether it is done or not.</p>
-
 <p>We will expose these methods:</p>
-
 <ul>
 <li><code>GET /task</code>: Gets a list of all tasks.
-
 <ul>
 <li><strong>Input:</strong> empty.</li>
 <li><strong>Output:</strong> a map of task resource locators to a map of task definitions. The task definition is the same as returned by the <code>GET /task/{id}</code> described below.</li>
-</ul></li>
+</ul>
+</li>
 <li><code>POST /task</code>: Creates a new note and returns the path to the created note. Given that task IDs are assigned internally, there is no <code>PUT /task/{id}</code> to create a new task with a specific ID.
-
 <ul>
 <li><strong>Input:</strong> empty.</li>
 <li><strong>Output:</strong> a string with the task resource locator on success, or an error message on failure.</li>
-</ul></li>
+</ul>
+</li>
 <li><code>GET /task/{id}</code>: Gets the given task.
-
 <ul>
 <li><strong>Input:</strong> empty.</li>
 <li><strong>Output:</strong> a map with the following keys on success: <code>text</code> containing the description of the task as a string, and <code>done</code> representing whether the task is completed as a boolean; or an error message on failure.</li>
-</ul></li>
+</ul>
+</li>
 <li><code>UPDATE /task/{id}</code>: Modifies fields of the given task.
-
 <ul>
 <li><strong>Input:</strong> a map with the following optional keys to represent the fields that need updating: <code>text</code> with the new description of the task as a string, and <code>done</code> with the new representation of the task&rsquo;s completion as a boolean.</li>
 <li><strong>Output:</strong> empty on success, or an error message on failure.</li>
-</ul></li>
+</ul>
+</li>
 <li><code>DELETE /task/{id}</code>: Deletes the given note.
-
 <ul>
 <li><strong>Input:</strong> empty.</li>
 <li><strong>Output:</strong> empty on success, or an error message on failure.</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <h1 id="rust-version">Rust version</h1>
-
 <p>In the Rust version, we&rsquo;ll use the <a href="https://github.com/tomaka/rouille">Rouille web micro-framework</a>. This is not the most advanced framework nor the fastest, but its simplicity lets us see the inner workings of the system. We&rsquo;ll also use the popular <a href="https://serde.rs/">Serde framework</a> for JSON (de)serialization. Put in a package manifest:</p>
-
 <div class="src">
   
   
@@ -246,9 +237,7 @@
     </div>
   </div>
 
-
 <p>First off, let&rsquo;s start by looking into the business logic and data store:</p>
-
 <div class="src">
   
   
@@ -338,13 +327,9 @@
     </div>
   </div>
 
-
 <p>The <code>TaskManager</code> is the in-memory container for all the tasks we want to manage. Note that nothing in this type knows about our public-facing API: in particular, there is absolutely no (de)serialization code in here. All methods in this  structure deal with primitive data types. This is intentional to ensure changes to the backend do not intentionally cause subtle differences in the publicly exposed API, and to enforce this restriction, the code lives in a separate file to tightly control the dependencies it pulls in.</p>
-
 <p>Notably, the <code>Task</code> type is <em>not</em> serializable. It is extremely tempting to make it so because it would be very convenient later on, but past experience says that this is a bad idea. It&rsquo;s too easy for internal data types to evolve fields that are only necessary inside the server and should never be visible outside, but coupling them with the public data type makes this hard to enforce. And before you realize it, your public API is poisoned with fields that were never meant to exist and cleaning them up is a gargantuan effort. So. Refrain from this temptation unless you must give in due to justified performance reasons.</p>
-
 <p>With the backend defined, let&rsquo;s look at the web server:</p>
-
 <div class="src">
   
   
@@ -443,13 +428,9 @@
     </div>
   </div>
 
-
 <p>The web server layer is where we define exactly what URLs we expose to the world, what messages they accept, what messages they return, and what error conditions they react to. Here is where we map internal data structures to public JSON data structures. There is no business logic here.</p>
-
 <h1 id="go-version">Go version</h1>
-
 <p>In the Go version, we&rsquo;ll use the <a href="https://github.com/gorilla/mux">gorilla/mux</a> HTTP router and URL matcher for simplicity. We could roll our own URL method handling pretty easily, but the code is already verbose enough as it is, and doing this kind of parsing by hand is fragile and boring. So the modules definition:</p>
-
 <div class="src">
   
   
@@ -466,9 +447,7 @@
     </div>
   </div>
 
-
 <p>Similarly to the Rust version, the business logic lives in a separate module to ensure it remains completely agnostic to the external world. And in that same spirit, note that none of the code here contains JSON annotations:</p>
-
 <div class="src">
   
   
@@ -561,9 +540,7 @@
     </div>
   </div>
 
-
 <p>With the backend defined, and with the same logic behind the Rust version, here comes the web server:</p>
-
 <div class="src">
   
   
@@ -728,46 +705,37 @@
     </div>
   </div>
 
-
 <h1 id="testing-the-apis">Testing the APIs</h1>
-
 <p>All done. You can copy/paste the files above, build them, and test our shiny-new server using the <code>curl</code> command line tool. Because JSON is all text, it&rsquo;s easy to hand-craft the requests and to read the responses. You can also use some of these fancier clients that exist for Firefox or Chrome, but no need to.</p>
-
 <p>Let&rsquo;s start by creating a bunch of tasks:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X POST -H <span class="s2">&#34;Content-Type: application/json&#34;</span> -d <span class="s1">&#39;&#34;Publish REST post&#34;&#39;</span> http://localhost:1234/task
 <span class="s2">&#34;/task/0&#34;</span>
 $ curl -X POST -H <span class="s2">&#34;Content-Type: application/json&#34;</span> -d <span class="s1">&#39;&#34;Pay rent&#34;&#39;</span> http://localhost:1234/task
 <span class="s2">&#34;/task/1&#34;</span>
 $ curl -X POST -H <span class="s2">&#34;Content-Type: application/json&#34;</span> -d <span class="s1">&#39;&#34;Implement web interface&#34;&#39;</span> http://localhost:1234/task
-<span class="s2">&#34;/task/2&#34;</span></code></pre></div>
-<p>The server now knows about them, of course:</p>
+<span class="s2">&#34;/task/2&#34;</span>
+</code></pre></div><p>The server now knows about them, of course:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X GET http://localhost:1234/task
-<span class="o">{</span><span class="s2">&#34;/task/0&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Publish REST post&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span>,<span class="s2">&#34;/task/1&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Pay rent&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span>,<span class="s2">&#34;/task/2&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Implement web interface&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}}</span></code></pre></div>
-<p>And as I&rsquo;m done with this post, let&rsquo;s mark its task as done:</p>
-<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X UPDATE -H <span class="s2">&#34;Content-Type: application/json&#34;</span> -d <span class="s1">&#39;{&#34;done&#34;: true}&#39;</span> http://localhost:1234/task/0</code></pre></div>
-<p>Which, as expected, will update the state of that note:</p>
+<span class="o">{</span><span class="s2">&#34;/task/0&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Publish REST post&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span>,<span class="s2">&#34;/task/1&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Pay rent&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span>,<span class="s2">&#34;/task/2&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Implement web interface&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}}</span>
+</code></pre></div><p>And as I&rsquo;m done with this post, let&rsquo;s mark its task as done:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X UPDATE -H <span class="s2">&#34;Content-Type: application/json&#34;</span> -d <span class="s1">&#39;{&#34;done&#34;: true}&#39;</span> http://localhost:1234/task/0
+</code></pre></div><p>Which, as expected, will update the state of that note:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X GET http://localhost:1234/task
-<span class="o">{</span><span class="s2">&#34;/task/0&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Publish REST post&#34;</span>,<span class="s2">&#34;done&#34;</span>:true<span class="o">}</span>,<span class="s2">&#34;/task/1&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Pay rent&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span>,<span class="s2">&#34;/task/2&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Implement web interface&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}}</span></code></pre></div>
-<p>We can also query a single note:</p>
+<span class="o">{</span><span class="s2">&#34;/task/0&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Publish REST post&#34;</span>,<span class="s2">&#34;done&#34;</span>:true<span class="o">}</span>,<span class="s2">&#34;/task/1&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Pay rent&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span>,<span class="s2">&#34;/task/2&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Implement web interface&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}}</span>
+</code></pre></div><p>We can also query a single note:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X GET http://localhost:1234/task/1
-<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Pay rent&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span></code></pre></div>
-<p>And say we don&rsquo;t want to do it any longer:</p>
-<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X DELETE http://localhost:1234/task/1</code></pre></div>
-<p>At which point it&rsquo;s gone:</p>
+<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Pay rent&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}</span>
+</code></pre></div><p>And say we don&rsquo;t want to do it any longer:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X DELETE http://localhost:1234/task/1
+</code></pre></div><p>At which point it&rsquo;s gone:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ curl -X GET http://localhost:1234/task
-<span class="o">{</span><span class="s2">&#34;/task/0&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Publish REST post&#34;</span>,<span class="s2">&#34;done&#34;</span>:true<span class="o">}</span>,<span class="s2">&#34;/task/2&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Implement web interface&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}}</span></code></pre></div>
-<h1 id="comparing-rust-vs-go">Comparing Rust vs. Go</h1>
-
+<span class="o">{</span><span class="s2">&#34;/task/0&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Publish REST post&#34;</span>,<span class="s2">&#34;done&#34;</span>:true<span class="o">}</span>,<span class="s2">&#34;/task/2&#34;</span>:<span class="o">{</span><span class="s2">&#34;text&#34;</span>:<span class="s2">&#34;Implement web interface&#34;</span>,<span class="s2">&#34;done&#34;</span>:false<span class="o">}}</span>
+</code></pre></div><h1 id="comparing-rust-vs-go">Comparing Rust vs. Go</h1>
 <p>Now, let&rsquo;s get to what you were really looking for. How do Rust and Go compare to each other in this situation? As I have <a href="/2018/07/rust-vs-go.html">said in the past</a>, this comparison is often unfounded because languages should be chosen by use case, but in this situation I think we can reasonably do a light comparison.</p>
-
 <p>Go shines in implementing network servers. If you think of the context in which it was invented, this is very much intentional. Rust, on the other hand, is a lower-level systems language, so I was somehow expecting more pain to implement this example. But nothing further from the truth: you can see that the two examples are very similar in content and line count.</p>
-
 <p>The Go variant is slightly more verbose than the Rust one, which is expected given the intent of Go code to be easy to read. I find this very limiting though as I have mentioned in the past: it&rsquo;s impossible to encode certain constraints in the Go code without writing comments, whereas in Rust you have the tools to do so. This little detail brings more reliability and security to your code, which is something pretty important for a publicly-facing web server I&rsquo;d say&hellip;</p>
-
 <p>Regarding performance, I&rsquo;m not going to touch much on it given that these are demo apps where I put no thought into performance. The comparison would be unfair as well because of the use of Rouille, which it itself acknowledges its own limitations in this area. That said, one little detail is that the Go code has to do some more memory copies than the Rust code. In Rust I was able to expose the internal <code>Task</code>s to the caller as references without fear that they&rsquo;d be modified, but in Go this is impossible to represent: exposing pointers allows the caller to modify the contents.</p>
-
 <p>Anyway, not a very satisfying comparison, right? I agree. That&rsquo;s because both choices seem equally good to me, and I&rsquo;d be picking one or the other based on the specific use case at hand.</p>
-
 <p>Enjoy and let me know if you found this useful!</p>
 </article>
             </div>

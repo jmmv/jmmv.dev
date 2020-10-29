@@ -21,7 +21,7 @@ Designing the interface of these applications is quite straightforward once you 
   <meta property="og:description" content="Subcommand-based interfaces are common: the majority of the CLI tools that provide more than one operation within them expose their features in this manner. Examples of such interfaces include svn, git, ifconfig, yum, apt-get and many, many more.
 Designing the interface of these applications is quite straightforward once you have the concepts clear, but there are quite a few common pitfalls that you need to be aware of to prevent falling into them.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/09/cli-design-subcommand-based-interfaces.html">
 
@@ -31,7 +31,7 @@ Designing the interface of these applications is quite straightforward once you 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -233,97 +233,52 @@ CLI design</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p>Subcommand-based interfaces are common: the majority of the CLI tools that provide more than one operation within them expose their features in this manner. Examples of such interfaces include <code>svn</code>, <code>git</code>, <code>ifconfig</code>, <code>yum</code>, <code>apt-get</code> and many, many more.</p>
-
+              <article><p>Subcommand-based interfaces are common: the majority of the CLI tools that provide more than one operation within them expose their features in this manner. Examples of such interfaces include <code>svn</code>, <code>git</code>, <code>ifconfig</code>, <code>yum</code>, <code>apt-get</code> and many, many more.</p>
 <p>Designing the interface of these applications is quite straightforward once you have the concepts clear, but there are quite a few common pitfalls that you need to be aware of to prevent falling into them. In this post, I will guide you through what the general design of such interfaces is and I will cover a bunch of the common problems. Let&rsquo;s get started.</p>
-
 <h1 id="general-syntax">General syntax</h1>
-
 <p>The general syntax of a subcommand-based interface is simple:</p>
-
 <pre><code>tool [general options] command [command options] [command arguments]
-</code></pre>
-
-<p>where square brackets denote optionality as usual.</p>
-
+</code></pre><p>where square brackets denote optionality as usual.</p>
 <p>There are two extremely important takeaways from this definition:</p>
-
 <ul>
 <li>Anything that comes <em>before</em> <code>command</code> must be applicable to <em>all</em> the commands and cannot change the behavior of any individual command without also changing the others.</li>
 <li>Anything that comes <em>after</em> <code>command</code> is specific to that command and that command only.</li>
 </ul>
-
 <p>It is your responsibility to make this distinction explicit in the implementation of your interface. In general, this is easy as <a href="/2013/08/cli-design-do-not-reinvent-option.html">most command-line parsing libraries</a> will let you chunk your command-line parsing in the two distinct blocks.</p>
-
 <p>However, I must call your attention to GNU Getopt&rsquo;s odd behavior in that, by default, it does not stop searching for options once it encounters the first non-option argument. This makes the chunking of generic options vs. command-specific options trickier, but not impossible. To get GNU Getopt to behave as expected, you need to select POSIX-compliant behavior as described in the <a href="http://www.gnu.org/software/libc/manual/html_node/Getopt.html">GNU Getopt manual</a>. Unfortunately, doing so causes incompatibilities with other implementations so you may need a <a href="https://code.google.com/p/kyua/source/browse/m4/getopt.m4?spec=svn.testers.1b82d0fe146031526b73454cc64bca7ee1f5b87a&amp;repo=testers&amp;r=97d47392460ad5c820f0b316a7012104b5cd6168#30">nasty Autoconf check to detect this situation</a> if you want to remain portable.</p>
-
 <h1 id="repetition-is-ok">Repetition is OK</h1>
-
 <p>In a subcommand-based application, it is common for a group of—but not all!—subcommands to require similar pieces of information. In this situation, it is perfectly fine the implement the same option as a command-specific option in all the subcommands that take it.</p>
-
 <p>Let&rsquo;s consider the interface of Kyua as an example. In this interface, we have generic commands like <code>help</code> and <code>config</code> that do not access the test database, and commands like <code>test</code> and <code>report</code> that do access it. All of the subcommands that read from or write to the tests database need a path to the database, and because this path has a reasonable default, it makes sense to <a href="/2013/08/cli-design-putting-flags-to-good-use.html">let the user tune the path via a flag</a>.</p>
-
 <p>A common temptation would be to offer the interface just described as:</p>
-
 <pre><code>kyua [--store=file] config|debug|help|test
-</code></pre>
-
-<p>but that would be a really poor choice. This interface definition implies that the <code>--store</code> flag applies to <em>all</em> of the subcommands, which is not true. <code>help</code> and <code>config</code> wouldn&rsquo;t care less about the path to the database file and, effectively, providing that flag to these commands would have no visible effect.</p>
-
+</code></pre><p>but that would be a really poor choice. This interface definition implies that the <code>--store</code> flag applies to <em>all</em> of the subcommands, which is not true. <code>help</code> and <code>config</code> wouldn&rsquo;t care less about the path to the database file and, effectively, providing that flag to these commands would have no visible effect.</p>
 <p>A better definition would be the following:</p>
-
 <pre><code>kyua config|help
 kyua debug|test [--store=file]
-</code></pre>
-
-<p>which very clearly denotes what each subcommand is affected by. It is therefore OK to expose a subset of flags across various subcommands as long as those flags are specific to the subcommands.</p>
-
+</code></pre><p>which very clearly denotes what each subcommand is affected by. It is therefore OK to expose a subset of flags across various subcommands as long as those flags are specific to the subcommands.</p>
 <p>So why do you often see invalid interfaces like the former? Because it is much easier to implement them: <a href="https://code.google.com/p/kyua/source/browse/cli.c?spec=svn.testers.1b82d0fe146031526b73454cc64bca7ee1f5b87a&amp;repo=testers&amp;r=41b14d0f2d6fe084ba0ece7b5609bdf7559f5e67#109">calling getopt twice is not as easy as it may seem</a>.</p>
-
 <p>Lastly, there are two additional details to keep in mind: first, make sure that the behavior of such options is exactly the same in all of the commands in which it exists; and, second, reuse the parsing code as much as possible.</p>
-
 <h1 id="requesting-help">Requesting help</h1>
-
 <p>In a previous post, we learned that <a href="/2013/08/cli-design-requesting-and-offering-help.html">the user should only be shown help when he explicitly requests it</a>. So how do we expose this in a subcommand-based interface?</p>
-
 <p>Easy: asking the program to show help is a <em>completely different behavior</em> than that of any other command. For this reason, the only reasonable approach to fit the request for help in the design of a subcommand-based interface is to offer the help as a <em>separate</em> subcommand which you can appropriately call <code>help</code>.</p>
-
 <p>Following this rationale, the simplistic form of the help request would be:</p>
-
 <pre><code>tool help
-</code></pre>
-
-<p>It is easy to imagine that we could extend this syntax to support additional functionality and thus offer a more complex builtin help system. For example:</p>
-
+</code></pre><p>It is easy to imagine that we could extend this syntax to support additional functionality and thus offer a more complex builtin help system. For example:</p>
 <pre><code>tool help [command name]
-</code></pre>
-
-<p>With this syntax, we could allow the user to request help on any individual subcommand.</p>
-
+</code></pre><p>With this syntax, we could allow the user to request help on any individual subcommand.</p>
 <p>Be aware, however, that all of the following are <strong>bad choices</strong> yet they are quite widespread:</p>
-
 <pre><code>tool --help  # Abuses flags.
 tool command --help  # Abuses flags.
 tool --help command  # Abuses flags and their ordering.
 tool command help  # help is not a subcommand of the command!
-</code></pre>
-
-<h1 id="requesting-the-version-number">Requesting the version number</h1>
-
+</code></pre><h1 id="requesting-the-version-number">Requesting the version number</h1>
 <p>Similarly to the previous point on how to request help, requesting the version number of the application is also a completely different behavior than anything else. Consequently, this feature must be implemented as a separate subcommand.</p>
-
 <p>The only way you can fit the request for the version number in your subcommand-based application without break consistency is by implementing a syntax like this:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">tool version</code></pre></div>
-<p>Or, if you want to generalize this, you could expose the version and other useful information (like license text, authors, etc.) in an <code>about</code> subcommand <a href="https://github.com/jmmv/kyua/blob/master/cli/cmd_about.cpp">just like Kyua does</a>.</p>
-
+<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">tool version
+</code></pre></div><p>Or, if you want to generalize this, you could expose the version and other useful information (like license text, authors, etc.) in an <code>about</code> subcommand <a href="https://github.com/jmmv/kyua/blob/master/cli/cmd_about.cpp">just like Kyua does</a>.</p>
 <p>But yes: exposing the request of the version number via a <code>--version</code> flag is wrong <em>in this type of interfaces</em>.</p>
-
-<hr />
-
+<hr>
 <p>Subcommand-based interfaces are the most complex of CLI styles given that, conceptually, they bundle many tools under a single roof. However, due to the flexibility in their design, it is possible to achieve a very straightforward and orthogonal interface with which users are already familiar with.</p>
-
 <p>In the next post, I will cover the simpler style of a CLI in which the tool only exposes a single command. Things get slightly trickier there due to the additional implementation constraints.</p>
 </article>
             </div>

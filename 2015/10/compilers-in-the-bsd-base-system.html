@@ -21,7 +21,7 @@ But why is that? What makes &amp;ldquo;having a compiler in base&amp;rdquo; a BS
   <meta property="og:description" content="A commonly held axiom in the BSD community is that the C compiler belongs in the base system. &amp;ldquo;This is how things have been since the beginning of time and they define the way BSD systems are&amp;rdquo;, the proposition goes.
 But why is that? What makes &amp;ldquo;having a compiler in base&amp;rdquo; a BSD system? Why is the compiler a necessary part of the base system? Hold on, is it? Could we take it out?">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2015/10/compilers-in-the-bsd-base-system.html">
 
@@ -31,7 +31,7 @@ But why is that? What makes &amp;ldquo;having a compiler in base&amp;rdquo; a BS
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,60 +158,30 @@ But why is that? What makes &amp;ldquo;having a compiler in base&amp;rdquo; a BS
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>A commonly held axiom in the BSD community is that the C compiler belongs in the base system. &ldquo;This is how things have been since the beginning of time and they define the way BSD systems are&rdquo;, the proposition goes.</p>
-
+              <article><p>A commonly held axiom in the BSD community is that the C compiler belongs in the base system. &ldquo;This is how things have been since the beginning of time and they define the way BSD systems are&rdquo;, the proposition goes.</p>
 <p>But why is that? What makes &ldquo;having a compiler in base&rdquo; a BSD system? Why is the compiler a necessary part of the base system? Hold on, is it? Could we take it out?</p>
-
 <p>In this post, which is an extension to a reply I wrote in the <a href="https://lists.freebsd.org/pipermail/freebsd-arch/2015-October/017394.html">&ldquo;Retiring in- tree GDB&rdquo; mailing list thread on freebsd- arch</a>, I would like to examine possible answers to those questions.</p>
-
 <h1 id="why-is-the-compiler-in-the-base-system">Why is the compiler in the base system?</h1>
-
 <p>Traditionally, BSD systems always required a compiler to be present because building from source was the only way to <strong>keep the OS up-to-date</strong>, to <strong>tune the features of the kernel</strong>, and to <strong>install third-party software</strong> from ports or pkgsrc.</p>
-
 <p>There didn&rsquo;t exist any decent binary-only upgrade mechanisms for the base OS, the kernel was not modular nor did not have sufficient <code>sysctl(8)</code> tweaks, and the tools and repositories to install binary packages were very rudimentary and inflexible.</p>
-
 <h1 id="the-case-for-freebsd">The case for FreeBSD</h1>
-
 <p>Things have significantly changed over the last few years, especially for <a href="https://www.freebsd.org/doc/en/articles/committers-guide/archs.html">FreeBSD Tier 1 platforms</a>: it&rsquo;s now possible to run a fully-functional, up-to-date system, appropriately tuned for the machine at hand, with all kinds of third- party packages installed, without ever needing to compile anything.</p>
-
 <blockquote>
 <p>Having a compiler available at all times is not a necessity any longer. One
 can get by with binaries just fine, which is a more convenient scenario.</p>
 </blockquote>
-
 <p>These days, FreeBSD would not <em>need</em> to ship a compiler by default any longer.  (Whether that <em>should</em> be done is a different story though.)</p>
-
 <p>In fact, as a long-time NetBSD user, I was a bit surprised when I came to FreeBSD because I found that the compiler tools were not optional. In NetBSD, the compiler tools have always been part of a comp.tgz set separate from base.tgz. Both are built from the source tree in unison, but when installing a new machine, you can easily choose not to have comp.tgz unpacked. I have run lean servers without compiler tools for a long time (by <a href="https://wiki.netbsd.org/tutorials/pkgsrc/pkg_comp_pkg_chk/">building my packages elsewhere using pkg_comp</a>), and it was just fine.</p>
-
-<h1 id="let-s-keep-the-compiler-in-base">Let&rsquo;s keep the compiler in base</h1>
-
+<h1 id="lets-keep-the-compiler-in-base">Let&rsquo;s keep the compiler in base</h1>
 <p>Regardless of the above, I do agree that the compiler should stay in the base system for a variety of reasons.</p>
-
 <p>Without going into much detail, those reasons include: having a system that can build itself out-of-the-box in a consistent manner, having a system that can be trivially cross-compiled, and having a trustworthy compiler maintained by the same people that maintain the rest of the operating system.</p>
-
 <p>Given the above, as a developer of the system, I do not want to have to care about the tricky integration points of a compiler with the complex source tree of an OS. These are details best left to a small team of compiler experts, who can and will do the right thing for the OS as a whole. You only need to witness NetBSD&rsquo;s super-simple cross-compilation features offered by build.sh to truly appreciate what I mean.</p>
-
 <p>On that topic, I suggest watching the following presentation, which argues for a monolithic source tree in which the toolchain is managed by a small team of passionate experts:</p>
-
-<div class="frame">
-  <div class="content">
-    <iframe width="640" height="360" src="https://www.youtube.com/embed/zW-i9eVGU_k" frameborder="0" allowfullscreen></iframe>
-  </div>
-  <div class="footer">
-    <p>Lessons in Sustainability, by Titus Winters. A key point of this talk is the justification for having a single "compiler team" within your infrastructure so that all the experts on the topic can work together and handle the tricky bits for you.</p>
-  </div>
-</div>
-
+<!-- raw HTML omitted -->
 <p>What should probably be done is make the installation of the compiler tools optional: when installing FreeBSD from a binary distribution, the user should have the choice to not install any of the compiler tools. I wonder what the implications of that would be though, because FreeBSD has shipped with built- in compiler tools for years and there might be subtle hidden dependencies on them.</p>
-
 <h1 id="building-from-source-considered-harmful">Building from source considered harmful</h1>
-
 <p>To conclude, I&rsquo;ll go on a bit of a tangent: making it a <em>standard practice</em> for the user to compile anything at all is, for the majority of the cases, a horrible experience.</p>
-
 <p>That said, there are a bunch of legitimate cases for building from source.  Namely:</p>
-
 <ul>
 <li>to apply code changes (duh),</li>
 <li>to tune compiler optimization settings,</li>
@@ -219,11 +189,8 @@ can get by with binaries just fine, which is a more convenient scenario.</p>
 <li>to disable features that have a measurable impact on performance&mdash;for whose run-time kill-switch is not sufficient to kill those implications, and</li>
 <li>to target a new platform.</li>
 </ul>
-
 <p>If the cases above do <em>not</em> apply, then compiling from source should not be <em>necessary</em>: alternatives exist, and they can be implemented. If building from source is necessary, either <strong>you have done a poor job as a developer</strong>&mdash;e.g. by not allowing sufficient run-time configuration&mdash;or <strong>you do not have sufficient resources to run the project</strong>&mdash;e.g. by being unable to provide binary packages for common platforms.</p>
-
 <p>A pet peeve of mine are software packages whose functionality depends on the libraries chosen at build-time by means of configure switches. These kind of software packages are really problematic when the time to offer binary packages comes: &ldquo;what options should you enable?&rdquo; or &ldquo;how will the user be able to choose a leaner installation?&rdquo;. There are mechanisms to allow the modification of dependencies at run time (think of dynamically-loadable plugins), but they often are <em>much</em> more complex to implement than just configure switches.</p>
-
 <p>The next time you tell a user of your software to &ldquo;go and build from source&rdquo;, think if you could do something else to avoid that same situation in the future.</p>
 </article>
             </div>

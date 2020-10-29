@@ -21,7 +21,7 @@ You might think, however, that because we assume that both strategies are equiva
   <meta property="og:description" content="When the dynamic scheduler is active, Bazel runs the same spawn (aka command line) remotely and locally at the same time via two separate strategies. These two strategies want to write to the same output files (e.g. object files, archives, or final binaries) on the local disk. In computing, two things trying to affect the same thing require some kind of coördination.
 You might think, however, that because we assume that both strategies are equivalent and will write the same contents to disk1, this is not problematic.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/12/bazel-dynamic-execution-output-locking.html">
 
@@ -31,7 +31,7 @@ You might think, however, that because we assume that both strategies are equiva
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -143,7 +143,7 @@ You might think, however, that because we assume that both strategies are equiva
         <h1>Output conflicts and dynamic execution</h1>
 
         <p>December 27, 2019 &middot;
-        About 4 minutes
+        About 3 minutes
         &middot;
         Tags:
         <a class="text-reset" href="/tags/bazel">bazel</a></p>
@@ -204,53 +204,35 @@ Bazel dynamic execution</b> series</a>.</i></p>
 
               
               <article><p>When the dynamic scheduler is active, Bazel runs the same <em>spawn</em> (aka command line) remotely and locally at the same time via <a href="/2019/12/bazel-dynamic-execution-strategy.html">two separate strategies</a>. These two strategies want to write to the same output files (e.g. object files, archives, or final binaries) on the local disk. In computing, two things trying to affect the same thing require some kind of coördination.</p>
-
-<p>You might think, however, that because we assume that both strategies are equivalent and will write the same contents to disk<sup class="footnote-ref" id="fnref:same"><a href="#fn:same">1</a></sup>, this is not problematic. But, in fact, it <em>can</em> be, because file creations/writes are not atomic. So we need some form of mutual exclusion in place to avoid races.</p>
-
+<p>You might think, however, that because we assume that both strategies are equivalent and will write the same contents to disk<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>, this is not problematic. But, in fact, it <em>can</em> be, because file creations/writes are not atomic. So we need some form of mutual exclusion in place to avoid races.</p>
 <p>As you can imagine, the simplest form of mutual exclusion is a lock. So&hellip; drumroll&hellip; that&rsquo;s precisely what the now-legacy dynamic scheduler implements: <strong>a lock per spawn on the output tree</strong>. Concurrent branches of the same spawn must grab a lock immediately before writing to the output tree. You can see this in practice in <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/LegacyDynamicSpawnStrategy.java;l=397;drc=fefb9d29c047e23cb81d739f229eb12fdd466342"><code>LegacyDynamicSpawnStrategy#lockOutputFiles</code></a>, which is a lambda that gets passed to the delegate strategies to grab the lock when they are ready to mutate the output tree.</p>
-
 <p>Conceptually, this looks like the following (note the red boxes):</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-22.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_117">Slide 22</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>Let&rsquo;s look at each branch separately:</p>
-
 <ul>
-<li><p>Handling remote actions (top branch in the figure) is easy: whatever the action does remotely cannot possibly affect the contents of the local output tree. It isn&rsquo;t until Bazel downloads any generated outputs that we have to lock the output tree. An important detail here is that remote cache hits/misses are known <em>before</em> taking the lock.</p></li>
-
-<li><p>Handling local sandboxed actions (bottom branch in the figure) is similarly easy: as actions run in a sandbox, they write their outputs to a separate tree. We only need to grab the lock once the action has successfully completed in order to move the files to their destination.</p></li>
+<li>
+<p>Handling remote actions (top branch in the figure) is easy: whatever the action does remotely cannot possibly affect the contents of the local output tree. It isn&rsquo;t until Bazel downloads any generated outputs that we have to lock the output tree. An important detail here is that remote cache hits/misses are known <em>before</em> taking the lock.</p>
+</li>
+<li>
+<p>Handling local sandboxed actions (bottom branch in the figure) is similarly easy: as actions run in a sandbox, they write their outputs to a separate tree. We only need to grab the lock once the action has successfully completed in order to move the files to their destination.</p>
+</li>
 </ul>
-
 <p>Ta-da! Problem solved.</p>
-
 <p>But&hellip; as you may remember, sandboxing can be <em>very</em> slow, like <a href="https://blog.bazel.build/2018/04/13/preliminary-sandboxfs-support.html">3x slow on macOS</a>&mdash;and for our Google-internal iOS builds, sandboxing very much exposes such slowdowns. Hence we &ldquo;temporarily&rdquo; disabled sandboxing years ago for <em>interactive</em> builds (and hence my personal interest in <a href="https://github.com/bazelbuild/sandboxfs/">sandboxfs</a>).</p>
-
 <p>Consequently, we had to make dynamic execution work with local unsandboxed actions. These are trickier: the local strategy runs subprocesses directly on the output tree. And as subprocesses go, there is &ldquo;nothing&rdquo; you can do to tell when and where they end up writing. Therefore, for any local unsandboxed action, Bazel must grab the lock <em>upfront</em> before executing anything.</p>
-
 <p>We end up with a model like the following (note the new branch at the bottom compared to the earlier figure):</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-24.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_87">Slide 24</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>Which works reasonably well in the sense that dynamic execution delivers good performance&hellip; when networking conditions are perfect. Mind you, this is precisely the environment for which the dynamic strategy <a href="/2019/12/bazel-dynamic-execution-introduction.html">was originally written</a>: Google-internal builds that have traditionally been remote-only and that run from high-end workstations with super-fast local networking.</p>
-
 <p>But that&rsquo;s not always the case, and thus tweaking the dynamic strategy to support standalone execution uncovered other deficiencies that we had to address.</p>
-
 <p>We will look at the two major flaws behind this implementation in upcoming posts. To get your brain started: what happens if we get stuck fetching outputs from the remote side? And what happens if we are unusually slow to notice remote cache hits?</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:same">Assuming that the two strategies generate the exact same output, bit by bit, for the same inputs and command line is a leap of faith. But if you are willing to use dynamic execution, you must accept this and make any possible effort to ensure it is true, like using the same toolchains and environment on your remote machines and local machines, and ensuring your build actions are deterministic.
- <a class="footnote-return" href="#fnref:same"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>Assuming that the two strategies generate the exact same output, bit by bit, for the same inputs and command line is a leap of faith. But if you are willing to use dynamic execution, you must accept this and make any possible effort to ensure it is true, like using the same toolchains and environment on your remote machines and local machines, and ensuring your build actions are deterministic. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

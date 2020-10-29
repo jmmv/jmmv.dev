@@ -21,7 +21,7 @@ Because assertions are only validated in debug builds, you can abuse them to mak
   <meta property="og:description" content="Assertions are statements to ensure that a particular condition or state holds true at a certain point in the execution of a program. These checks are usually only performed in debug builds, which means that you must ensure that the expressions in the assertions are side-effect free.
 Because assertions are only validated in debug builds, you can abuse them to make your code more readable without impacting performance and without having to write a comment.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/07/readability-abuse-assertions.html">
 
@@ -31,7 +31,7 @@ Because assertions are only validated in debug builds, you can abuse them to mak
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -249,56 +249,48 @@ Readability</b> series</a>.</i></p>
 
               
               <article><p>Assertions are statements to ensure that a particular condition or state holds true at a certain point in the execution of a program. These checks are usually only performed in debug builds, which means that you must ensure that the expressions in the assertions are side-effect free.</p>
-
 <p>Because assertions are only validated in debug builds, you can abuse them to make your code more readable without impacting performance and <a href="/2013/06/readability-avoid-comments.html">without having to write a comment</a>. Every time you write a line in which you assume a particular machine state that is not clearly implied by the code immediately preceding the new line, write an assertion.</p>
-
 <p>Let&rsquo;s look at a real world example derived from Kyua&rsquo;s code. Consider the following extremely-simplified function which implements the <code>help</code> command:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">help_command</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">show_general_help</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">show_command_help</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></code></pre></div>
-<p>With this code alone, try to answer these questions: <em>&ldquo;What happens if <code>args</code>, which apparently is a subset of the arguments to the program, has more than 1 item? Are the additional arguments ignored and thus we have a bug in the code, or has the <code>args</code> vector been pre-sanitized by the caller to not have extra arguments?&rdquo;</em> Well, you can&rsquo;t answer this question because there is nothing in the code to tell you what the case is.</p>
-
+        <span class="n">show_command_help</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</code></pre></div><p>With this code alone, try to answer these questions: <em>&ldquo;What happens if <code>args</code>, which apparently is a subset of the arguments to the program, has more than 1 item? Are the additional arguments ignored and thus we have a bug in the code, or has the <code>args</code> vector been pre-sanitized by the caller to not have extra arguments?&quot;</em> Well, you can&rsquo;t answer this question because there is nothing in the code to tell you what the case is.</p>
 <p>If I now show you the caller to the function, you can get an idea of what the expectation is:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
     <span class="n">commands</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="n">commands</span><span class="p">[</span><span class="s1">&#39;help&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cli</span><span class="o">.</span><span class="n">Command</span><span class="p">(</span><span class="n">min_args</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_args</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
                                    <span class="n">hook</span><span class="o">=</span><span class="n">help_command</span><span class="p">)</span>
     <span class="o">...</span>
-    <span class="n">cli</span><span class="o">.</span><span class="n">dispatch</span><span class="p">(</span><span class="n">commands</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span></code></pre></div>
-<p>Aha! There happens to be an auxiliary library that processes the command line and dispatches calls to the various subcommands based on a declarative interface. This declarative interface specifies what the maximum number of arguments to the command can be, so our function above for <code>help_command</code> was correct: it was handling all possible lengths of the input <code>args</code> vector.</p>
-
+    <span class="n">cli</span><span class="o">.</span><span class="n">dispatch</span><span class="p">(</span><span class="n">commands</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</code></pre></div><p>Aha! There happens to be an auxiliary library that processes the command line and dispatches calls to the various subcommands based on a declarative interface. This declarative interface specifies what the maximum number of arguments to the command can be, so our function above for <code>help_command</code> was correct: it was handling all possible lengths of the input <code>args</code> vector.</p>
 <p>But that&rsquo;s just too much work to figure out a relative simple piece of code. A piece of code needs to be self-explanatory with as little external context as possible. We can do this with assertions.</p>
-
 <p>The first thing you can do is state the precondition to the function as an assertion:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">help_command</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
     <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">show_general_help</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">show_command_help</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></code></pre></div>
-<p>This does the trick: now, without any external context, you can tell that the <code>args</code> vector is supposed to be empty or have a single element, and the code below clearly handles both cases.</p>
-
+        <span class="n">show_command_help</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</code></pre></div><p>This does the trick: now, without any external context, you can tell that the <code>args</code> vector is supposed to be empty or have a single element, and the code below clearly handles both cases.</p>
 <p>However, I argue that this is still suboptimal. What is the complementary condition of <code>len(args) == 0</code>? Easy: <code>len(args) &gt; 0</code>. Then, if that&rsquo;s the case, how can the <code>else</code> path be looking at the first argument only and not the rest? Didn&rsquo;t someone overlook the rest of the arguments, possibly implying that the input data is not fully validated? This would be a legitimate question if the function was much longer than it is and reading it all was hard. Therefore, we would do this instead:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">help_command</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">show_general_help</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
-        <span class="n">show_command_help</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></code></pre></div>
-<p>Or this:</p>
+        <span class="n">show_command_help</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</code></pre></div><p>Or this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">help_command</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">show_general_help</span><span class="p">()</span>
     <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
         <span class="n">show_command_help</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="bp">False</span><span class="p">,</span> <span class="s1">&#39;args not properly sanitized by caller&#39;</span></code></pre></div>
-<p>Both of these alternatives clearly enumerate all branches of a conditional, which makes the function easier to reason about. We will get to this in a future post.</p>
-
+        <span class="k">assert</span> <span class="bp">False</span><span class="p">,</span> <span class="s1">&#39;args not properly sanitized by caller&#39;</span>
+</code></pre></div><p>Both of these alternatives clearly enumerate all branches of a conditional, which makes the function easier to reason about. We will get to this in a future post.</p>
 <p>Before concluding, let&rsquo;s outline some cases in which you should really be writing assertions:</p>
-
 <ul>
 <li>Preconditions and postconditions.</li>
 <li>Assumptions about state that has been validated elsewhere in the code, possibly far away from the current code.</li>

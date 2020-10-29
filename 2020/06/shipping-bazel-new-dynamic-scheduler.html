@@ -21,7 +21,7 @@ The first fix was making the downloads of the remote artifacts happen without ho
   <meta property="og:description" content="Back in September 2019, I embarked into the task of rewriting Bazel&amp;rsquo;s dynamic scheduler to deal with slow and flaky networks. Initial testing had shown that dynamic builds might become slower, and it was all due to this feature having been designed for a different use case (in-office, high-speed network). We had to fix two different issues in the scheduler.
 The first fix was making the downloads of the remote artifacts happen without holding the output lock.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/06/shipping-bazel-new-dynamic-scheduler.html">
 
@@ -31,7 +31,7 @@ The first fix was making the downloads of the remote artifacts happen without ho
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,82 +158,43 @@ The first fix was making the downloads of the remote artifacts happen without ho
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>Back in September 2019, I embarked into the task of rewriting <a href="/2019/12/bazel-dynamic-execution-introduction.html">Bazel&rsquo;s dynamic scheduler</a> to deal with slow and flaky networks. Initial testing had shown that dynamic builds might become slower, and it was all due to this feature having been designed for a different use case (in-office, high-speed network). We had to fix two different issues in the scheduler.</p>
-
+              <article><p>Back in September 2019, I embarked into the task of rewriting <a href="/2019/12/bazel-dynamic-execution-introduction.html">Bazel&rsquo;s dynamic scheduler</a> to deal with slow and flaky networks. Initial testing had shown that dynamic builds might become slower, and it was all due to this feature having been designed for a different use case (in-office, high-speed network). We had to fix two different issues in the scheduler.</p>
 <p>The first fix was making the downloads of the remote artifacts happen without holding the output lock. In this way, a local action would be allowed to execute while the remote action was still fetching outputs (possibly never terminating if the connection was flaky). This took several attempts to get to a stable fix, but I could eventually ship this by November which in turn unblocked us to roll out the real feature we wanted to deliver to our iOS user base.</p>
-
 <p>The second fix was allowing remote actions to preempt their local counterparts once they finished downloading all artifacts, <em>even if the local processes had already started running</em>. This required large changes to the scheduler and also many tricky fixes to ensure local process trees were terminated properly. Back then (November 2019), I spent a ton of time trying to stabilize these changes&hellip; and eventually put them on hold because, at that point, this was a nice-but-not-critical optimization.</p>
-
 <p>Until recently. As it turns out, a generalized WFH policy means everyone is building from home, and the average internet connection at home is worse than in the office: higher latency variability and lower speeds&hellip; meaning that getting this feature deployed would get us performance gains (up to 50% in some cases) and the ability to remove of technical debt (the old scheduler, still protected by <code>--legacy_spawn_scheduler</code>).</p>
-
 <p>To achieve this, I spent last week doing one final troubleshooting attempt and reached the root cause behind build instability. Along the way, I uncovered existing bugs in the <code>process-wrapper</code> when terminating processes; existing bugs in the local strategies when handling interrupts; and the critical bug&hellip; somewhere unexpected. You&rsquo;ll have to keep reading to know why.</p>
-
 <h1 id="concurrency-bugs">Concurrency bugs</h1>
-
 <p>The dynamic scheduler is a strategy that wraps two other strategies: one local and one remote. The idea is to let both race, assuming they are equivalent, picking the outputs of the strategy that completes first and cancelling the other one. This sounds simple in theory, almost trivial. But&hellip; the devil is in the details, as usual.</p>
-
 <p>You see: the previous dynamic scheduler was cooperative: each of the wrapped strategies would reach a point where it would decide it needed to write files to the output tree and, at that time, it would try to grab a lock. If this succeeded, then the operation continued. If this failed, then the operation gave up. Simple enough and worked great&hellip; except that this didn&rsquo;t apply the optimization I mentioned above: if we want to allow a local strategy to start running while allowing the remote one to stop it once it has completed downloads, then we need a preemption mechanism and not a cooperative lock.</p>
-
 <p>And this means we need to expect cancellations in the strategy as part of the common case, not just upon receipt of Ctrl+C. Which, in Java, translates to cancelling a future, which translates to dealing with Java&rsquo;s interrupted thread status and the <code>InterruptedException</code> exception in a controlled manner.</p>
-
 <p>Unit testing helped quite a bit in this area, but in many cases, the unit tests had to be written <em>after</em> I tried a real build, seeing it get stuck or misbehave, diagnosing the problem, and then adding the corresponding test case.</p>
-
 <h1 id="process-management-bugs">Process management bugs</h1>
-
 <p>Alright. So now we have established that the dynamic scheduler has to cancel ongoing local processes on a routine basis. This means that the scheduler must ensure those cancelled processes are fully stopped and that their on-disk status is cleaned up before the remote action is allowed to complete.</p>
-
 <p>This is&hellip; hard. And it is made even harder when you are dealing with some code that was never designed to expect such cancellation requests under normal operation. Yes, Bazel handled cancellations mostly OK, in particular to respond to Ctrl+C, but that&rsquo;s not sufficient when dealing with cancellations that come in multiple times per second and possibly very quickly after processes have started (thus racing process construction with termination requests).</p>
-
 <p>I uncovered a bunch of bugs in the local spawn runner, but also in the <code>process-wrapper</code>.</p>
-
 <p>In particular, one thing that I discovered here and that made me go OMG NOES was: <code>InterruptedIOException</code>. Yes, most interrupts are reported via <code>InterruptedException</code>, but some are reported via <code>InterruptedIOException</code>. And why is that a problem? Because this latter exception extends <code>IOException</code>, <em>not</em> <code>InterruptedException</code>. As it turns out, the dynamic scheduler must catch and be aware of interrupts, so masking some of those inside I/O errors was causing very subtle issues. We are talking about hitting the case where we interrupt a very specific syscall among possibly-millions during a build.</p>
-
 <h1 id="crashes">Crashes</h1>
-
 <p>But no amount of code auditing and subtle fixing would let me get rid of random build failures. These build failures would manifest themselves as tools crashing with <code>SIGBUS</code> and the like. What was causing these?</p>
-
 <p>My theory was that killing a still-under-construction process at the wrong time could cause some kind of unexpected exit. I spent a long time looking for invalid process status propagation: &ldquo;what if we are stopping the process but Bazel doesn&rsquo;t remember that fact and propagates the error code as valid instead of recognizing it as self-induced?&rdquo;. Finding nothing, I added tons more logging to see when each remote action was cancelling its local counterpart, when these cancellations and their cleanups occurred, and which branch won.</p>
-
 <p>Inspecting these logs by hand was also very tedious, as they include lots of messages for every action. And because parallelism is high (<code>--jobs</code> in the hundreds), everything is intermixed. I think I spent, cumulatively, various hours just skimming through logs from different failed builds.</p>
-
 <p>And I found nothing.</p>
-
 <p>Nothing in these logs indicated that Bazel was doing things in the wrong order. Whenever the remote branch of an action decided to stop the local branch, it would send the request, the <code>process-wrapper</code> would fully shut down the subprocess tree, the local spawn runner would revert all on-disk changes, and the remote branch would gain control back.</p>
-
 <p>Interestingly, and surprisingly, the crashing actions didn&rsquo;t show any cancellation. All they showed was that they started the subprocesses, the subprocesses <em>completed</em> (either with an exit code or due to a signal but <em>not</em> due to an interrupt), and the build then failed (stopping the remote action).</p>
-
 <p>How was that possible? Many of these subprocesses were claiming to have exited due to <code>SIGUSR1</code>, which led me down the path of figuring out where that signal would be coming from. In the end, I found that OpenJDK 8 uses it for&hellip; wait for it&hellip; handling interrupts, but apparently that&rsquo;s not the case any more with 11 (and we are on 11 right now). So a lot of time went down the drain chasing this invalid path.</p>
-
 <p>And I was lost (and frustrated) for a while. Until&hellip; in one of these failing builds, I saw a <code>clang</code> invocation reporting garbage for a <em>source</em> file. Wait, wait. What? I then looked at the file and it was valid. Huh? Did the interrupt cause <code>clang</code> to enter an invalid state? Very unlikely, and as &ldquo;expected&rdquo;, the logs showed that <code>clang</code> had not been interrupted at all.</p>
-
 <p>Luckily, after some more build tests, I got one that failed in the same way. This time around, I was quick enough to look at the failing source file&hellip; and, ta-da! it did appear as corrupted in Vim too. But a few seconds later it was not corrupted any more.</p>
-
 <p>What. The. Hell.</p>
-
 <p>One thing you probably know is that we use FUSE to expose our gigantic source tree in an efficient manner, and all these local processes are reading from FUSE. So you might start piecing things together. And so did I. With this new bit of information, I looked at the FUSE daemon&rsquo;s log and saw complaints about failing to fetch process information (with &ldquo;process not found&rdquo; as the error). Ah. Hah.</p>
-
 <p>You see, the new dynamic scheduler, combined with lockless local execution, introduces a ton of process churn, which causes processes to be created and killed in very quick succession. And the theory now is that this is tickling some subtle bug in either OSXFUSE or our own daemon, which then causes OSXFUSE to return bad data in a subsequent completely unrelated action. That&rsquo;s why the faulty processes didn&rsquo;t show up as interrupted in the logs: indeed, they weren&rsquo;t being interrupted; they just crashed on their own due to things that happened in their vicinity. And that explains why this bug was so hard to trigger and diagnose.</p>
-
 <h1 id="dealing-with-the-crashes">Dealing with the crashes</h1>
-
 <p>So. What do we do? Well, first: you don&rsquo;t have to worry about this unless you have OSXFUSE in the mix: the dynamic scheduler in Bazel is not impacted. Second, we should fix the bug, but the maintainers of our FUSE daemon tell me that this is likely extremely hard to diagnose and fix (and in fact, any attempts to reproduce it by introducing artificial delays have failed so far). So, third: we are left with either not shipping this feature and dropping performance on the table (remember, up to 50% gains!), or finding an ugly workaround that gets us most of the way there.</p>
-
 <p>And I&rsquo;m the master of workarounds, so that&rsquo;s what I&rsquo;ve done for now by adding a couple of features in Bazel to <em>try</em> to paper over this problem. One of them is extending the <code>process-wrapper</code> so that it can terminate processes gracefully, using <code>SIGTERM</code> first and <code>SIGKILL</code> after a few seconds. Another one is making the local spawn runner retry processes that have crashed.</p>
-
 <p>None of these workarounds are sufficient though: the first <em>seems</em> to make the bug less likely to appear, and the latter tries to hide it once it does. But the problem is that we can only hide it if a program crashes (the common case). However, if a program like <code>clang</code> sees invalid input, we can&rsquo;t know whether that&rsquo;s because of the bug or because a legitimate user mistake. The most common case for build failures is invalid user input (think a syntax error during iterative development), so we cannot penalize that case with a very visible delay.</p>
-
 <p>Meh.</p>
-
 <p>What are we doing then? First, I&rsquo;m running some more benchmarks to prove that this new version of the dynamic scheduler can be extremely beneficial performance-wise, especially under WFH conditions. Second, I&rsquo;ll start deploying the new feature and watching for increased build failure rates. And third, if the latter turn out to be unacceptable (some users will prefer faster builds at the expense of a random failure in a blue moon, while others will claim this is not tolerable), then I&rsquo;ll have enough data to go back to the team maintaining the FUSE daemon and maybe justify spending some extra time in fixing the issue.</p>
-
 <h1 id="parting-words">Parting words</h1>
-
 <p>To be honest, stabilizing this feature has been one of the hardest things I&rsquo;ve had to deal with in my time in the Bazel team. Or, rather, the most frustrating thing. Remember that these bugs only show up in rare occasions, so I had to leave my desktop and laptop doing back-to-back rebuilds of the same app and capturing logs for each, hoping that the bug would be triggered. And it was especially painful to see that all tentative fixes I tested would come back with new failures, and that any extra logging I added would not pinpoint the problem.</p>
-
 <p>I&rsquo;m actually pretty happy to discover that the root cause of the problems lie somewhere outside Bazel, because at least I can be more confident that the new dynamic scheduler works and that it can be used if necessary.</p>
-
 <p>Have a good weekend!</p>
 </article>
             </div>

@@ -19,7 +19,7 @@
   <meta name="description" content="The scripts that live under /etc/rc.d/ in FreeBSD, NetBSD, and OpenBSD are in the wrong place. They all should live in /libexec/rc.d/ because they are code, not configuration. Let&#39;s look at the history of these systems to see how we got here, why this is problematic, and how things would look like in a better world.">
   <meta property="og:description" content="The scripts that live under /etc/rc.d/ in FreeBSD, NetBSD, and OpenBSD are in the wrong place. They all should live in /libexec/rc.d/ because they are code, not configuration. Let&#39;s look at the history of these systems to see how we got here, why this is problematic, and how things would look like in a better world.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/08/rcd-libexec-etc.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -156,48 +156,26 @@
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>Let&rsquo;s open with the controversy: the scripts that live under <code>/etc/rc.d/</code> in FreeBSD, NetBSD, and OpenBSD are in the wrong place. They all should live in <code>/libexec/rc.d/</code> because they are code, <em>not</em> configuration.</p>
-
+              <article><p>Let&rsquo;s open with the controversy: the scripts that live under <code>/etc/rc.d/</code> in FreeBSD, NetBSD, and OpenBSD are in the wrong place. They all should live in <code>/libexec/rc.d/</code> because they are code, <em>not</em> configuration.</p>
 <p>This misplacement is something that has bugged me for ages but I never had the energy to open this can of worms back when I was very involved in NetBSD. I suspect it would have been a draining discussion and a very difficult thing to change.</p>
-
 <p>But&hellip; what am I talking about anyway?</p>
-
 <p>If you have administered a BSD system, you have certainly encountered the <code>/etc/rc.d/</code> directory; and if you have administered pre-systemd Linux systems, you have dealt with <code>/etc/init.d/</code>. These directories contain startup scripts to configure the system at boot time and are immutable. Their code is parameterized to allow changing their behavior via configuration files, not via code edits. And that&rsquo;s the base of my critique.</p>
-
 <p>But before getting into why the current state is problematic and how things should look like, let&rsquo;s first dig into how we got here. And, for that, we need to go back in history.</p>
-
 <h1 id="history-the-bsd-approach">History: The BSD approach</h1>
-
 <p>4.4BSD&rsquo;s (1993) boot process was rather simple: the kernel started <code>init</code> which in turn ran the <code>/etc/rc</code> script before starting <code>getty</code> on each console. The <code>/etc/rc</code> monolith was in charge of configuring the machine&rsquo;s file systems and processes, and delegated to two other scripts: <code>/etc/netstart</code> for network configuration and <code>/etc/rc.local</code> for locally-added services. Current BSD systems are more advanced in this area as we shall see later, but the core boot process remains the same: <code>/etc/rc</code> is the primary entry point and bootstraps a collection of shell scripts.</p>
-
-<p>In the early days, package management and file provenance tracking, like we are used to having in popular Linux distributions, was not a thing. You were expected to tune the systems&rsquo; behavior by <em>editing</em> files which might or might not have been designed to support edits. If you had to edit <code>/etc/rc</code>, which was a script shipped by the system, that was alright.</p>
-
+<p>In the early days, package management and file provenance tracking, like we are used to having in popular Linux distributions, was not a thing. You were expected to tune the systems' behavior by <em>editing</em> files which might or might not have been designed to support edits. If you had to edit <code>/etc/rc</code>, which was a script shipped by the system, that was alright.</p>
 <p><code>/etc/rc.local</code>, on the other hard, was <em>not</em> shipped by the system, and it was up to you to create it if you wanted to add custom startup commands without modifying <code>/etc/rc</code>. And this is where things get interesting. <code>/etc/rc.local</code> didn&rsquo;t need to be supported: if you were expected and able to edit <code>/etc/rc</code> anyway, why would you deal with a separate file? The reason is, most likely, to simplify system upgrades: during an upgrade, you want to benefit from any upstream changes made to <code>/etc/rc</code> (some of which might actually be <em>necessary</em> for proper system operation). Applying updates to a manually-modified file is tricky, so putting as many of your manual overrides into <code>/etc/rc.local</code> helped minimize this problem.</p>
-
 <h1 id="history-the-system-v-approach">History: The System V approach</h1>
-
 <p>System V 4 (SVR4, 1988) also came with its own, and very different, boot process. The key difference was that System V had the concept of runlevels. As a result, configuring the boot process was a more convoluted endeavour because it was possible to select different services per runlevel.</p>
-
 <p>To accomplish per-runlevel tuning, the system used <a href="/2020/08/config-files-vs-directories.html">configuration directories rather than files</a>: there was a separate <code>/etc/rcX.d/</code> directory for each runlevel (where <code>X</code> was the number of the runlevel), and these directories contained one file per action to take at startup time. To avoid duplicates, these files were just symlinks to common files under <code>/etc/init.d/</code>&mdash;and the symlinks, not their targets, were named so that their lexicographical order determined startup execution order.</p>
-
 <p>Once again, we can already observe issues here: the symlinks under <code>/etc/rcX.d/</code> <em>are</em> configuration because their presence indicates what to start and their names determine their startup order. But the files under <code>/etc/init.d/</code> are <em>not</em>: they are shell scripts shipped with the system and should not be manually modified.</p>
-
 <h1 id="history-the-netbsd-modernization">History: The NetBSD modernization</h1>
-
 <p>NetBSD <a href="http://www.mewburn.net/luke/papers/rc.d.pdf">modernized the boot process</a> in its 1.5 release (2000), and it did so in two ways: first, it introduced <code>/etc/rc.d/</code> as a directory to contain separate scripts per action and service; and, second, it introduced <a href="https://netbsd.gw.com/cgi-bin/man-cgi?rcorder+8+NetBSD-9.0-STABLE">the <code>rcorder(8)</code> tool</a> to determine the order in which these services run. <code>rcorder(8)</code> uses dependency information encoded in the scripts as comments&mdash;not lexicographical ordering as System V did. FreeBSD <a href="https://www.freebsd.org/cgi/man.cgi?query=rc&amp;apropos=0&amp;sektion=8&amp;manpath=FreeBSD+12.1-RELEASE&amp;arch=default&amp;format=html">inherited this design</a> in its 5.0 release (2003) and OpenBSD reimplemented something similar in its 4.9 release (2011).</p>
-
 <p>With these two pieces in place, the <code>/etc/rc</code> script in NetBSD and FreeBSD changed to execute all files from <code>/etc/rc.d/</code> based on the output of <code>rcorder(8)</code>. Among these scripts is <a href="https://github.com/NetBSD/src/blob/8f8c6d6b2a8778b653d9630f3f18e057b477a012/etc/rc.d/local"><code>/etc/rc.d/local</code></a>, whose purpose is to run <code>/etc/rc.local</code> if it exists. And that&rsquo;s all, really. The <code>/etc/rc</code> script thus became <a href="https://github.com/NetBSD/src/blob/8f8c6d6b2a8778b653d9630f3f18e057b477a012/etc/rc">trivial</a>.</p>
-
 <p>The key thing to notice here is that the scripts shipped in <code>/etc/rc.d/</code> are <em>highly configurable</em> via the user-controlled <a href="https://github.com/NetBSD/src/blob/8f8c6d6b2a8778b653d9630f3f18e057b477a012/etc/rc.conf"><code>/etc/rc.conf</code></a> file. This essentially makes the scripts read-only, as it shifts local customizations to the configuration file. <em>System administrators are not supposed to edit the scripts.</em> Instead, they are supposed to: modify <code>/etc/rc.conf</code> to customize what gets run and how; add new scripts under <code>/etc/rc.d/</code> if they so choose; and edit <code>/etc/rc.local</code> to easily run arbitrary commands.</p>
-
-<h1 id="why-does-rc-d-not-belong-in-etc">Why does rc.d not belong in /etc?</h1>
-
+<h1 id="why-does-rcd-not-belong-in-etc">Why does rc.d not belong in /etc?</h1>
 <p>My main gripe is that the files under <code>/etc/rc.d/</code> are immutable scripts. They do not belong in <code>/etc/</code> and their presence there makes system upgrades harder for no good reason.</p>
-
 <p>You see: in NetBSD and FreeBSD, system upgrades happen by unpacking new distribution sets in the root directory and then running a script to incorporate configuration updates. This script is interactive and helps highlight how new system-provided updates to configuration files conflict with previous manual edits. (This process might seem rudimentary to you, but it&rsquo;s actually pretty robust and easy to understand&mdash;and you can use tooling like <a href="https://github.com/jmmv/sysupgrade/">sysupgrade</a> to make it trivial.)</p>
-
 <p>So why is that a problem? Because you will <em>always</em> face merges like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gd">--- /etc/rc.d/npf               2019-08-09 19:09:42.800758233 -0400
 </span><span class="gd"></span><span class="gi">+++ /tmp/temproot/etc/rc.d/npf  2019-11-16 10:39:27.000000000 -0500
@@ -238,23 +216,14 @@ Please select one of the following operations:
   v  Show the new file
 
 What do you want to do? [Leave it for later]
-</code></pre></div>
-<p>And, really, who cares? Why are you being distracted to review a <em>code</em> change when what you are trying to do is assess <em>configuration</em> conflicts? How many times have you actually objected to these merges?</p>
-
+</code></pre></div><p>And, really, who cares? Why are you being distracted to review a <em>code</em> change when what you are trying to do is assess <em>configuration</em> conflicts? How many times have you actually objected to these merges?</p>
 <p>You might say: well, I want to know <em>exactly</em> how the boot process of my machine changes during an upgrade. Sure, that&rsquo;s a fine goal, but then this procedure is flawed and completely insufficient to achieve such goal. In the example above, whatever <code>/etc/rc.d/npf</code> does can also be done from within the <code>/sbin/npfctl</code> binary it invokes&hellip; and you were never asked to review changes to the latter during an upgrade, were you? And <em>of course</em> you could review the binary&rsquo;s code as part of your own system build, but if you did that, then you could have reviewed the startup script as well, right?</p>
-
-<h1 id="where-should-rc-d-live-instead">Where should rc.d live instead?</h1>
-
+<h1 id="where-should-rcd-live-instead">Where should rc.d live instead?</h1>
 <p>Startup scripts provided by the system need to live in a location that can contain executables&mdash;but we don&rsquo;t want those executables to show up in the <code>PATH</code>. These requirements discard <code>bin</code> and <code>sbin</code>, and points us towards <code>libexec</code> on BSD systems and somewhere under <code>lib</code> on Linux.</p>
-
 <p>Therefore, the read-only startup scripts should move from <code>/etc/rc.d/</code> to <code>/libexec/rc.d/</code> (which, by the way, also applies to <code>/etc/rc</code>, <code>/etc/rc.subr</code>, and <code>/etc/rc.shutdown</code>). And that&rsquo;s it. <del><code>/etc/rc</code></del> <code>/libexec/rc</code> should continue to use <code>rcorder(8)</code> to check what&rsquo;s needed to run, but it should read files from <code>/libexec/rc.d/</code>. You might even want to support a separate location for user-created services, which might still be <code>/etc/rc.d/</code> or, better yet, a more fitting location like <code>/usr/pkg/libexec/rc.d/</code> (though that quickly runs into problems if you have multiple file systems).</p>
-
 <p>With this design, system upgrades would be much saner because the configuration merge process would focus, purely, on actual configuration changes and not on irrelevant code changes. All updates to <code>/libexec/rc.d/</code> would be applied by unpacking the new distribution sets (<code>base.txz</code> in this case) without disturbing you about how exactly they changed.</p>
-
 <p>Does this relate to Linux distributions at all? I briefly mentioned <code>/etc/init.d/</code> at the beginning, and the problem there is similar. But it&rsquo;s also an obsolete problem given that Linux distributions have moved onto systemd by now. That said, systemd still has to manage individual services and, like it or not, has gotten this right. If we look at the <a href="https://www.freedesktop.org/software/systemd/man/systemd.unit.html"><code>systemd.unit(5)</code></a> manual page, which describes where units are loaded from, the system first looks into various <code>/etc/</code> and <code>/run/</code> directories, but then also looks at <code>/usr/lib/systemd/system/</code> (a read-only location correctly controlled by the package manager)&mdash;and the vast majority of the scripts live inside the latter.</p>
-
 <h1 id="want-to-help">Want to help?</h1>
-
 <p>I currently don&rsquo;t run BSD systems any more so my incentives to make this happen are low&hellip; but if this all makes sense and is something you&rsquo;d like to pursue, by all means please do! I&rsquo;m happy to help but I&rsquo;m not looking forward to the discussions needed to push this through 🙄.</p>
 </article>
             </div>

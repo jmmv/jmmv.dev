@@ -25,7 +25,7 @@ As you write and read Rust, you will notice that this keyword is used everywhere
 For example:
 matchnode.get_parent(){// node is an Option&amp;lt;Something&amp;gt;. Some(parent)=&amp;gt;{// Do something with &amp;#34;parent&amp;#34;, which we know points to a node.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/06/rust-review-match-keyword.html">
 
@@ -35,7 +35,7 @@ matchnode.get_parent(){// node is an Option&amp;lt;Something&amp;gt;. Some(paren
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -228,9 +228,7 @@ Rust review</b> series</a>.</i></p>
 
               
               <article><p>A commonly-acclaimed feature of Rust is its <strong><code>match</code> keyword: a &ldquo;conditional on steroids&rdquo;</strong>. <code>match</code> lets you take the value of an expression and compare it against a bunch of values—or, more generally, <em>patterns</em>.</p>
-
 <p>As you write and read Rust, you will notice that this keyword is used everywhere because it&rsquo;s <em>the</em> way to access certain types, like <code>Option</code> values or error codes.</p>
-
 <p>For example:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">match</span><span class="w"> </span><span class="n">node</span><span class="p">.</span><span class="n">get_parent</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">  </span><span class="c1">// node is an Option&lt;Something&gt;.
 </span><span class="c1"></span><span class="w">    </span><span class="nb">Some</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -240,17 +238,14 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">        </span><span class="c1">// There is no parent so do something else.
 </span><span class="c1"></span><span class="w">    </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>In the snippet above, we have a <code>match</code> statement with two <em>arms</em>. One key detail to observe is how the <code>parent</code> variable, which was used as a pattern to peek inside the <code>Some</code> value, is only available in the first arm. The <code>None</code> arm has no access to the <code>parent</code> variable, which is obvious because there is no parent in this case.</p>
-
+</span></code></pre></div><p>In the snippet above, we have a <code>match</code> statement with two <em>arms</em>. One key detail to observe is how the <code>parent</code> variable, which was used as a pattern to peek inside the <code>Some</code> value, is only available in the first arm. The <code>None</code> arm has no access to the <code>parent</code> variable, which is obvious because there is no parent in this case.</p>
 <p>OK so&hellip; I just said statement. But as we saw in <a href="/2018/06/rust-review-expressions.html">the previous post</a>, everything in Rust is an expression—and you guessed right, <code>match</code> is no exception. A <code>match</code> can be assigned to a variable:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="kd">let</span><span class="w"> </span><span class="n">parent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">match</span><span class="w"> </span><span class="n">node</span><span class="p">.</span><span class="n">get_parent</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span><span class="w">    </span><span class="nb">Some</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">parent</span><span class="p">,</span><span class="w">
 </span><span class="w">    </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="s">&#34;ROOT&#34;</span><span class="p">,</span><span class="w">
 </span><span class="w"></span><span class="p">};</span><span class="w">
 </span><span class="w"></span><span class="c1">// Do something with &#34;parent&#34;, which we know points to a node.
-</span></code></pre></div>
-<p>The most attractive feature of <code>match</code>, however, and the primary reason I am writing about it in its own post, is that <strong>the <em>arms</em> are evaluated in order and <em>must</em> be exhaustive</strong>: any expression fed to <code>match</code> must have a case where it&rsquo;s accepted. For example, this results in a build <em>error</em>:</p>
+</span></code></pre></div><p>The most attractive feature of <code>match</code>, however, and the primary reason I am writing about it in its own post, is that <strong>the <em>arms</em> are evaluated in order and <em>must</em> be exhaustive</strong>: any expression fed to <code>match</code> must have a case where it&rsquo;s accepted. For example, this results in a build <em>error</em>:</p>
 <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="k">enum</span> <span class="nc">Shape</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Circle</span><span class="p">,</span><span class="w"> </span><span class="n">Triangle</span><span class="p">,</span><span class="w"> </span><span class="n">Square</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="k">fn</span> <span class="nf">shape_name</span><span class="p">(</span><span class="n">shape</span>: <span class="kp">&amp;</span><span class="nc">Shape</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kp">&amp;</span><span class="nb">&#39;static</span><span class="w"> </span><span class="kt">str</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -260,9 +255,7 @@ Rust review</b> series</a>.</i></p>
 </span><span class="w">    </span><span class="c1">// ERROR: We forgot the Shape::Square case.
 </span><span class="c1"></span><span class="w">  </span><span class="p">}</span><span class="w">
 </span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div>
-<p>This is an <strong>extremely useful feature to deliver safe and future-proof code</strong>: by using <code>match</code>, there is no way you can forget to handle a case <em>even if the code later changes to cover more cases</em>. E.g. if you ever decided to add a new shape to the <code>enum</code> above, the compiler would refuse to build your code, so you would be forced to add the missing arms. (Yes, I know, other languages like C++ will warn you if <code>switch</code> statements miss cases on enumerations&hellip; but will only do so under these specific circumstances; <code>match</code> is useful outside of <code>enum</code>s.)</p>
-
+</span></code></pre></div><p>This is an <strong>extremely useful feature to deliver safe and future-proof code</strong>: by using <code>match</code>, there is no way you can forget to handle a case <em>even if the code later changes to cover more cases</em>. E.g. if you ever decided to add a new shape to the <code>enum</code> above, the compiler would refuse to build your code, so you would be forced to add the missing arms. (Yes, I know, other languages like C++ will warn you if <code>switch</code> statements miss cases on enumerations&hellip; but will only do so under these specific circumstances; <code>match</code> is useful outside of <code>enum</code>s.)</p>
 <p>To conclude: the reason I find this interesting is because this feature aligns perfectly well with my <a href="/2013/07/readability-explicitly-state.html">Readability: Explicitly state complementary conditions</a> post.</p>
 </article>
             </div>

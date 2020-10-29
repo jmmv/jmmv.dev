@@ -21,7 +21,7 @@ The form this manifests in code is by having a particular class method (not nece
   <meta property="og:description" content="You know that passing state around different functions by using global variables is bad: it results in spaghetti code, it introduces side-effects to your functions and, well, is just bad practice. Then: don&amp;rsquo;t make the same mistake when using classes.
 The form this manifests in code is by having a particular class method (not necessarily the constructor!) initializing a member field and later having other unrelated methods querying the attribute &amp;ldquo;out of the blue&amp;rdquo;.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/07/readability-do-not-abuse-classes-as.html">
 
@@ -31,7 +31,7 @@ The form this manifests in code is by having a particular class method (not nece
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -249,9 +249,7 @@ Readability</b> series</a>.</i></p>
 
               
               <article><p>You know that passing state around different functions by using global variables is bad: it results in spaghetti code, it introduces side-effects to your functions and, well, is just bad practice. Then: don&rsquo;t make the same mistake when using classes.</p>
-
 <p>The form this manifests in code is by having a particular class method (not necessarily the constructor!) initializing a member field and later having other unrelated methods querying the attribute &ldquo;out of the blue&rdquo;.</p>
-
 <p>Consider the following code in which we have the definition of a class to represent a real-world object and a caller test method:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">class</span> <span class="nc">Table</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
@@ -276,20 +274,17 @@ Readability</b> series</a>.</i></p>
     <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span><span class="s1">&#39;foo&#39;</span><span class="p">,</span> <span class="n">Database</span><span class="o">.</span><span class="n">connect</span><span class="p">())</span>
     <span class="n">table</span><span class="o">.</span><span class="n">query_dimensions</span><span class="p">()</span>
     <span class="k">print</span> <span class="n">table</span><span class="o">.</span><span class="n">depth</span><span class="p">,</span> <span class="n">table</span><span class="o">.</span><span class="n">height</span><span class="p">,</span> <span class="n">table</span><span class="o">.</span><span class="n">width</span>
-    <span class="k">print</span> <span class="n">table</span><span class="o">.</span><span class="n">volume</span><span class="p">()</span></code></pre></div>
-<p>Yes, I&rsquo;ve seen something similar in production. No, this is not good. There are many problems with this design, but let&rsquo;s focus on the one that is the point of this article.</p>
-
+    <span class="k">print</span> <span class="n">table</span><span class="o">.</span><span class="n">volume</span><span class="p">()</span>
+</code></pre></div><p>Yes, I&rsquo;ve seen something similar in production. No, this is not good. There are many problems with this design, but let&rsquo;s focus on the one that is the point of this article.</p>
 <p>The specific problem I want to highlight is in the <code>query_dimensions()</code> method: such method is abusing the local attributes as input parameters and is also storing its various return values into attributes. The fact that this method is public is even worse, as illustrated by the need to call it before being able to access public attributes.</p>
-
 <p>Conceptually, a function to retrieve values from a database should be receiving the database and the object identifier as parameters, and return the results of the query. We want the function to not use global state and instead look like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="nd">@staticmethod</span>
 <span class="k">def</span> <span class="nf">query_dimensions</span><span class="p">(</span><span class="n">database</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
     <span class="n">depth</span> <span class="o">=</span> <span class="n">database</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="s1">&#39;depth&#39;</span><span class="p">)</span>
     <span class="n">height</span> <span class="o">=</span> <span class="n">database</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="s1">&#39;height&#39;</span><span class="p">)</span>
     <span class="n">width</span> <span class="o">=</span> <span class="n">database</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="s1">&#39;width&#39;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">depth</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span></code></pre></div>
-<p>Note that this function has no hidden dependencies: all data read or written is accessed via input parameters or returned via return values.</p>
-
+    <span class="k">return</span> <span class="n">depth</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span>
+</code></pre></div><p>Note that this function has no hidden dependencies: all data read or written is accessed via input parameters or returned via return values.</p>
 <p>Now, plugging this into our previous class allows us to &ldquo;fix&rdquo; the <code>volume()</code> method to not rely on updating the local variables in a magic manner. However, having changed the function this way exposes that the various public attributes cannot now be accessed from outside. We need to rewrite the code quite heavily:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">class</span> <span class="nc">Table</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
@@ -332,9 +327,8 @@ Readability</b> series</a>.</i></p>
 <span class="k">def</span> <span class="nf">test</span><span class="p">():</span>
     <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span><span class="s1">&#39;foo&#39;</span><span class="p">,</span> <span class="n">Database</span><span class="o">.</span><span class="n">connect</span><span class="p">())</span>
     <span class="k">print</span> <span class="n">table</span><span class="o">.</span><span class="n">depth</span><span class="p">(),</span> <span class="n">table</span><span class="o">.</span><span class="n">height</span><span class="p">(),</span> <span class="n">table</span><span class="o">.</span><span class="n">width</span><span class="p">()</span>
-    <span class="k">print</span> <span class="n">table</span><span class="o">.</span><span class="n">volume</span><span class="p">()</span></code></pre></div>
-<p>This new code is certainly much longer than the original code. However, this updated version is easier to follow because the points at which attributes get updated have been made explicit. Also, this offers better encapsulation by avoiding the caller to know how to recompute internal values. And this variant highlights that, maybe, we ought to have a <code>Dimensions</code> type to group the depth, height and width of an object.</p>
-
+    <span class="k">print</span> <span class="n">table</span><span class="o">.</span><span class="n">volume</span><span class="p">()</span>
+</code></pre></div><p>This new code is certainly much longer than the original code. However, this updated version is easier to follow because the points at which attributes get updated have been made explicit. Also, this offers better encapsulation by avoiding the caller to know how to recompute internal values. And this variant highlights that, maybe, we ought to have a <code>Dimensions</code> type to group the depth, height and width of an object.</p>
 <p>To summarize: don&rsquo;t use attributes for data that only need to be passed around methods. Attempt to make your methods independent from the instance, or at least think about them this way so that you realize what dependencies they have.</p>
 </article>
             </div>

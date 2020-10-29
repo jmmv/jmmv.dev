@@ -19,7 +19,7 @@
   <meta name="description" content="You probably know that software rewrites, while very tempting, are expensive and can be the mistake that kills a project or a company. Yet they are routinely proposed as the solution to all problems. Is there anything you can do to minimize the risk? In this post, I propose that you actively improve the old system to ensure the new system cannot make progress in a haphazard way. This forces the new system to be designed in such a way that delivers breakthrough improvements and not just incremental improvements.">
   <meta property="og:description" content="You probably know that software rewrites, while very tempting, are expensive and can be the mistake that kills a project or a company. Yet they are routinely proposed as the solution to all problems. Is there anything you can do to minimize the risk? In this post, I propose that you actively improve the old system to ensure the new system cannot make progress in a haphazard way. This forces the new system to be designed in such a way that delivers breakthrough improvements and not just incremental improvements.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/01/system-rewrites-and-tuning.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -156,95 +156,39 @@
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>I think it&rsquo;s safe to say that software engineers&mdash;hey, I&rsquo;m one one myself!&mdash;often dream about what the rewrite of a system would look like if they had the chance to start over. Oh so much more usable. Oh so much better structured. Oh so much <em>faster</em>! We are architects after all.</p>
-
+              <article><p>I think it&rsquo;s safe to say that software engineers&mdash;hey, I&rsquo;m one one myself!&mdash;often dream about what the rewrite of a system would look like if they had the chance to start over. Oh so much more usable. Oh so much better structured. Oh so much <em>faster</em>! We are architects after all.</p>
 <p>And it <em>might</em> be true that a rewrite <em>can</em> deliver those benefits. But often enough, we are too quick to let our minds wander into that territory.</p>
-
 <p>As you may already know, <strong>rewrites are expensive</strong> and <strong>can be <em>the</em> mistake that kills a project or a company</strong>. It is easy to understand that a rewrite is costly&mdash;but what&rsquo;s harder to notice is that, while the rewrite happens, the original version often cannot stop improving. As a result, the rewrite becomes harder over time and grows the same kind of warts that the original version had. This was all very well-covered by Joel Spolsky in his <a href="https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/">20-year old (!!) post about software rewrites</a> so I&rsquo;m not going to dive deeper into these reasons.</p>
-
 <p>What I want to do in this post, however, is take a different perspective <em>against</em> software rewrites. A perspective that <strong>forces a rewrite, should it happen, to deliver breakthrough change and not just incremental change</strong>.</p>
-
 <h1 id="the-thesis">The thesis</h1>
-
 <p>Let&rsquo;s say you have a legacy system with some well-known problems. Your whole team is aware that the system has grown architectural issues, and they are also well-aware that the problems the users experience are real. Looking at the system, you realize that you can mitigate some of the problems with boring incremental change, but other problems truly necessitate a redesign. What do you do?</p>
-
 <p>On the one hand, you can take the fun and exciting route: design a new system that hopefully provides room for the pipe dreams, but focus first on fixing the burning issues. Once designed, your company&rsquo;s organizational complexity may make it easy to justify the rewrite given these promised immediate gains and to abandon the old system while it&rsquo;s still in use.</p>
-
 <p>On the other hand, you can take the boring route and incrementally fix the previous system. The thinking goes: &ldquo;if the current system weren&rsquo;t as bad as it&rsquo;s perceived today, a future rewritten system would need to focus on dramatic improvements and not be allowed to regress the improvements we have already delivered&rdquo;.</p>
-
 <p>The regression aspect of this second approach key. During a rewrite, it&rsquo;s easy to design for the current burning issues and neglect others. And by neglecting others, you may reach a dead end and not be able to improve on those.</p>
-
 <p>Confused so far? Yes, I know. Let&rsquo;s illustrate this idea with an example before we look at two real-world case studies.</p>
-
 <h1 id="thesis-exemplified-p50-and-p99-latencies">Thesis exemplified: p50 and p99 latencies</h1>
-
 <p>Say you own a backend system that currently offers <code>p50 = 100ms</code> and <code>p99 = 500ms</code> latencies. Both of these are problematic and your users have been asking you for improvements, <em>especially</em> on the <code>p50</code> front. You know that you can design a new version of this system that delivers <code>p50 = 30ms</code> (an impressive 70% cut) but your new design does nothing for the <code>p99</code>&mdash;in fact, the new design will makes it harder to address the <code>p99</code> in the future.</p>
-
 <p>So what if someone came around and iteratively tuned the old system to its absolute best, lowering the latencies to <code>p50 = 70ms</code> and <code>p99 = 300ms</code>? Sure, the gains on <code>p50</code> are nowhere as impressive as with your new design&mdash;they are a mere 30% vs. the proposed 70%&mdash;but the gains on the <code>p99</code> are very tangible. If this happened, your proposed redesign would be doomed: proceeding with that design would indeed cut the <code>p50</code>s further, but it would also harm the new baseline <code>p99</code>s&mdash;something that would not be acceptable once users got used to them.</p>
-
-<table style="margin-left: auto; margin-right: auto; width: 80%">
-    <thead>
-        <tr>
-            <th></th>
-            <th align="right">Legacy system</th>
-            <th align="right">Tuned legacy system</th>
-            <th align="right">Proposed system</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <th>p50</th>
-            <td align="right">100ms</td>
-            <td align="right" style="color: goldenrod">70ms</td>
-            <td align="right" style="color: green">30ms</td>
-        </tr>
-        <tr>
-            <th>p99</th>
-            <td align="right">500ms</td>
-            <td align="right" style="color: green">300ms</td>
-            <td align="right" style="color: firebrick">500ms</td>
-        </tr>
-    </tbody>
-</table>
-
+<!-- raw HTML omitted -->
 <p>The table summarizes what I mentioned above. Note how the tuned legacy system, while not impressive on the <code>p50</code>s front, may be an overall best answer than the proposed system. The main takeaway thus is:</p>
-
 <blockquote>
 <p>By improving the old system in <em>dimensions that the redesign didn&rsquo;t think about</em>, we have made the work of the redesign much harder. And that is <em>good</em>, because then the redesign won&rsquo;t corner us in a position that is hard go get out of.</p>
 </blockquote>
-
 <p>Let&rsquo;s look at two real-world examples of this taking place.</p>
-
 <h1 id="case-study-1-storage-system">Case study 1: storage system</h1>
-
 <p>This story dates back to my days in Storage SRE, which are long gone. The systems involved have evolved a lot since then and none of this applies any more. But the story still serves as the foundation for what I&rsquo;m presenting here.</p>
-
 <p>One of the shared storage systems at Google at the time was not initially designed to support interactive workloads: it was designed mostly to support batch workloads very well. As time passed, however, people started relying on it for their interactive needs&mdash;and the obvious problems arose: high tail latencies. High tail latencies in a distributed system are very bad because your front-end apps typically compound their effects: they don&rsquo;t issue a single RPC towards your backend system: they issue hundreds of them, so the probability that they hit your p99 metric is <em>very</em> likely.</p>
-
 <p>As you can imagine, the original developers of such system envisioned a replacement. The replacement would magically fix all these issues and be so much better, architecturally-wise, that it would allow us to <em>also</em> implement other future features.</p>
-
 <p>But&hellip; while supporting <em>new</em> use cases was very important and unfeasible in v1 of the product, the improvements to tail latency in v2 didn&rsquo;t seem revolutionary and weren&rsquo;t the primary focus in the design. Why <em>couldn&rsquo;t</em> v1 behave better?</p>
-
-<p>In fact, it could. A peer of mine pushed for this idea: &ldquo;let&rsquo;s make v1 so good that it&rsquo;s hard to <em>prematurely</em> replace it with v2&rdquo;. And he did. He established SLIs and SLOs, and then iteratively tightened them with targeted improvements throughout the software stack until v1 satisfied the customers&rsquo; immediate needs. The case for v2 was then focused on adding support for the new use cases that weren&rsquo;t possible with v1 and without a rush to mitigate the current fires.</p>
-
+<p>In fact, it could. A peer of mine pushed for this idea: &ldquo;let&rsquo;s make v1 so good that it&rsquo;s hard to <em>prematurely</em> replace it with v2&rdquo;. And he did. He established SLIs and SLOs, and then iteratively tightened them with targeted improvements throughout the software stack until v1 satisfied the customers' immediate needs. The case for v2 was then focused on adding support for the new use cases that weren&rsquo;t possible with v1 and without a rush to mitigate the current fires.</p>
 <h1 id="case-study-2-from-local-to-remote-builds">Case study 2: from local to remote builds</h1>
-
 <p>Let&rsquo;s look now at another story: one in which I&rsquo;ve been directly implicated as the primary engineer doing the work.</p>
-
 <p>iOS builds at Google had traditionally run locally and our engineers were requesting faster build times. The obvious solution to this problem, based on all of our other builds, was to bring remote/distributed execution to these builds. So we did.</p>
-
 <p>When rolling this feature out, we noticed that clean build times improved by more than 50% but incremental build times worsened and increased by 10x. To make things worse for <em>us</em>, teams were hard at work tuning their local-only builds, improving their clean build times and thus minimizing the gains remote execution provided in this case.</p>
-
-<p>Deploying this feature was therefore not an option, so we had to go back to the drawing board to find an alternative. In the end, we had to come up with a vastly different answer to the problem and combine both local and remote resources during a build. You can read more on this in my <a href="/2019/12/bazel-dynamic-execution-introduction.html">Bazel dynamic execution</a> posts.</p>
-
+<p>Deploying this feature was therefore not an option, so we had to go back to the drawing board to find an alternative. In the end, we had to come up with a vastly different answer to the problem and combine both local and remote resources during a build. You can read more on this in my <!-- raw HTML omitted -->Bazel dynamic execution<!-- raw HTML omitted --> posts.</p>
 <p>This situation is slightly different than the others as it did not involve redesigning a system. However, the situation is similar enough because the baseline performance targets of our iOS builds were inherently different than those in other builds&mdash;and thus the cargoculted solution was insufficient. If we had started &ldquo;from scratch&rdquo; with remote builds only (and never had those local-only builds), we would have been blind to the potential higher targets we could achieve by leveraging local resources.</p>
-
 <h1 id="parting-words">Parting words</h1>
-
 <p>Be very skeptical every time someone proposes to rewrite a piece of software. Often enough, the cheaper and safer answer is to perform iterative improvement to solve most problems.</p>
-
 <p>Save rewrites for the cases where the current system&rsquo;s architecture truly cannot fulfill new requirements. And if you end up going for a rewrite, try to deliver it iteratively by replacing the previous system in chunks, and not all at once.</p>
 </article>
             </div>

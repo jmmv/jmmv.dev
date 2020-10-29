@@ -21,7 +21,7 @@ Depending on the language you are using, doing this will mean significant more w
   <meta property="og:description" content="In part 1 of this series, I made the case that you should run away from the shell when writing integration tests for your software and that you should embrace the primary language of your project to write those.
 Depending on the language you are using, doing this will mean significant more work upfront to lay out the foundations for your tests, but this work will pay off. You may also feel that the tests could be more verbose than if they were in shell, though that&amp;rsquo;s not necessarily the case.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/03/bazel-tests-in-java-part-2.html">
 
@@ -31,7 +31,7 @@ Depending on the language you are using, doing this will mean significant more w
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,126 +158,72 @@ Depending on the language you are using, doing this will mean significant more w
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>In <a href="/2018/03/bazel-tests-in-java-part-1.html">part 1 of this series</a>, I made the case that you should <strong>run away from the shell when writing integration tests</strong> for your software and that you should <strong>embrace the primary language of your project</strong> to write those.</p>
-
+              <article><p>In <a href="/2018/03/bazel-tests-in-java-part-1.html">part 1 of this series</a>, I made the case that you should <strong>run away from the shell when writing integration tests</strong> for your software and that you should <strong>embrace the primary language of your project</strong> to write those.</p>
 <p>Depending on the language you are using, doing this will mean significant more work upfront to lay out the foundations for your tests, but this work will pay off. You may also <em>feel</em> that the tests could be more verbose than if they were in shell, though that&rsquo;s not necessarily the case.</p>
-
 <p>In this second part, I&rsquo;ll assume I have already convinced you that using the shell is a horrible idea, and that using another interpreted language is equally bad <em>unless</em> your project is already using that language. Given those, I&rsquo;ll guide you through a case study using the <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a> project, present some key design ideas that you should consider, propose a very rudimentary API, and finally cover what the roadmap for Bazel could look like.</p>
-
-<hr />
-
-<p><strong>A case for writing integration tests in Java: practical aspects</strong><br/>
+<hr>
+<p><strong>A case for writing integration tests in Java: practical aspects</strong><!-- raw HTML omitted -->
 <em>Fixing Bazel&rsquo;s reliability by treating tests as production-grade code</em></p>
-
 <nav id="TableOfContents">
-<ul>
-<li><a href="#case-study-sandboxfs">Case study: sandboxfs</a>
-<ul>
-<li><a href="#initial-integration-tests-were-in-shell">Initial integration tests were in shell</a></li>
-<li><a href="#the-tests-could-not-be-open-sourced">The tests could not be open-sourced</a></li>
-<li><a href="#initial-steps-in-the-rewrite-in-go">Initial steps in the rewrite in Go</a></li>
-<li><a href="#gained-benefits">Gained benefits</a></li>
-</ul></li>
-<li><a href="#design-ideas">Design ideas</a>
-<ul>
-<li><a href="#process-execution-and-validation">Process execution and validation</a></li>
-<li><a href="#posix-like-file-and-text-manipulation">POSIX-like file and text manipulation</a></li>
-<li><a href="#work-directory-and-process-isolation">Work directory and process isolation</a></li>
-</ul></li>
-<li><a href="#proof-of-concept">Proof of concept</a></li>
-<li><a href="#how-do-we-get-there">How do we get there?</a></li>
-</ul>
+  <ul>
+    <li><a href="#initial-integration-tests-were-in-shell">Initial integration tests were in shell</a></li>
+    <li><a href="#the-tests-could-not-be-open-sourced">The tests could not be open-sourced</a></li>
+    <li><a href="#initial-steps-in-the-rewrite-in-go">Initial steps in the rewrite in Go</a></li>
+    <li><a href="#gained-benefits">Gained benefits</a></li>
+  </ul>
+
+  <ul>
+    <li><a href="#process-execution-and-validation">Process execution and validation</a></li>
+    <li><a href="#posix-like-file-and-text-manipulation">POSIX-like file and text manipulation</a></li>
+    <li><a href="#work-directory-and-process-isolation">Work directory and process isolation</a></li>
+  </ul>
 </nav>
 
-
-<hr />
-
+<hr>
 <h1 id="case-study-sandboxfs">Case study: sandboxfs</h1>
-
 <p>Before diving into a proof of concept, let&rsquo;s look at a project that just went through this process: <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a>.</p>
-
 <h2 id="initial-integration-tests-were-in-shell">Initial integration tests were in shell</h2>
-
 <p>In sandboxfs, we started with integration tests written in shell because of the same fallacy: it was easier to get them running upfront, and the execution of sandboxfs and interaction with the file system would closely resemble what a user would run by hand.</p>
-
 <p>Unfortunately, in a matter of months, the integration tests became hard to read and hard to maintain. The very simple cases that we first conceived were not sufficient to assess the more difficult corner cases of sandboxfs, and writing such more difficult tests (e.g. testing for race conditions, testing for signal interaction) quickly became cumbersome and just impossible in some cases.</p>
-
 <h2 id="the-tests-could-not-be-open-sourced">The tests could not be open-sourced</h2>
-
 <p>Another problem was that those tests relied on a Google-internal shell testing library. This prevented open-sourcing the tests verbatim.</p>
-
 <p>A solution to this problem was to rewrite the tests using some other shell testing library. The obvious one was to repurpose what Bazel has (the <code>unittest.bash</code> &ldquo;infrastructure&rdquo;) but the quality of the Bazel shell integration framework is &ldquo;not great&rdquo;. We could have jumped to other shell integration libraries—such as my own <a href="https://github.com/jmmv/shtk">shtk</a>—, but given the unpopularity of shell in general for large-scale coding, such libraries are not actively maintained nor used.</p>
-
 <h2 id="initial-steps-in-the-rewrite-in-go">Initial steps in the rewrite in Go</h2>
-
 <p>In the end, I chose to rewrite the integration tests in Go, which is the same exact language the rest of the project is written in. So how did it go?</p>
-
 <p>Well&hellip; at first, writing the initial tests was painful. I had to come up with a lot of infrastructure to start the <code>sandboxfs</code> binary under different test conditions, shut it down cleanly, provide helper methods to test for common conditions, etc.</p>
-
 <p>The CLs that added the few first tests usually came with necessary changes to the testing infrastructure to tweak abstractions and to add missing features. A few CLs later, however, the infrastructure solidified. Further CLs added tests and did so exclusively. And further on, we now have pretty sophisticated integration tests because a first-class language like Go has direct access to all operating system facilities.</p>
-
 <p>You can take a look at the <a href="https://github.com/bazelbuild/sandboxfs/tree/master/integration">sandboxfs/integration directory</a> if you are curious. I personally am not a fan of Go&rsquo;s &ldquo;best practices&rdquo; regarding the structure of tests, but I believe that sticking to the same language as the project&rsquo;s core and sticking to the community-acknowledged best practices is what&rsquo;s best for the project.</p>
-
 <h2 id="gained-benefits">Gained benefits</h2>
-
 <p>The resulting integration tests are very reliable. Because the tests look pretty-much identical to production code, code reviewers treat them as such and catch the same kind of mistakes you&rsquo;d catch when reviewing the actual project&rsquo;s code. We do not experience test flakiness. We have sophisticated tests that spawn the binary under test after recreating a complex environment around it and abuse the binary in many ways that could be impossible from shell.</p>
-
 <p>And&hellip; the tests are not more difficult to write than the shell ones. In fact, it is <em>easier</em> to write them because there is no context switch in changing languages. Furthermore, at this point we have a large-enough collection of integration tests that writing a new one is often a matter of finding an existing test that resembles what we have to do and copying it.</p>
-
 <p>Finally, because we use the same language, things like the project&rsquo;s build infrastructure and IDE interaction are the same for both the project&rsquo;s core and the tests.</p>
-
 <h1 id="design-ideas">Design ideas</h1>
-
 <p>To make this proposal feasible, we must provide a bunch of process- and file-management primitives that make the test&rsquo;s code concise. These primitives differ from the ones commonly used in unit tests so we need to supply extra ones.</p>
-
 <h2 id="process-execution-and-validation">Process execution and validation</h2>
-
 <p>The key primitive that we need is a process runner that takes a command in the form that most resembles what the user would type, executes it, and validates a bunch of properties from the execution.</p>
-
 <p>In particular, we are interested in checking:</p>
-
 <ul>
 <li>The <strong>exit code</strong> of the process. This can be whether the process exited with a specific code or whether it did not exit with a specific code. It can also be whether the process exited successfully or exited with a signal.</li>
 <li>The expected <strong>behavior of the process&rsquo;s stdout</strong>. Should the output be silent? Should it match a golden file or string? Should it match a pattern? Any combination of the previous?</li>
 <li>The expected <strong>behavior of the process&rsquo;s stderr</strong>. Same as for the stdout.</li>
 </ul>
-
 <p>All these checks should be expressible in a single statement. On a failure, the framework has to dump detailed status to the test log: the actual and expected error codes, the actual outputs and how they didn&rsquo;t match the expectations, the work directory contents, etc. Even more: if we want to check the output of a command against a golden file, the framework should print a <em>diff</em> of the output, not just the verbatim copy.</p>
-
 <p>The oldest prior art that in this area is the <a href="https://www.gnu.org/software/autoconf/manual/autoconf-2.68/html_node/Writing-Testsuites.html#Writing-Testsuites">AT_CHECK macro shipped in GNU Autotest</a>, which offers this functionality via m4 scripts (ugh). This idea was repurposed by myself later on within <a href="https://github.com/jmmv/atf/blob/master/atf-sh/atf-check.cpp">the ATF libraries in 2008</a> and again within the <a href="https://github.com/jmmv/shtk/tree/master/unittest">shtk libraries in 2014</a>.</p>
-
 <p>Nowadays, <strong>this primitive is widely used in the FreeBSD and NetBSD integration test suites, which verify most of the command line tools that ship with these operating systems.</strong> These account for hundreds of integration tests.</p>
-
 <h2 id="posix-like-file-and-text-manipulation">POSIX-like file and text manipulation</h2>
-
 <p>The second class of primitives that we need in our integration test framework are a bunch of calls that make it easy to replicate command-line operations. It&rsquo;s common for integration tests to have to move or copy files around, to change their permissions, to check for text matches, etc. so these operations should be trivial and concise.</p>
-
 <p>We already have a lot of this functionality in our codebase, but such functionality is buried layers deep due to the common abstraction patterns used in Java. We need to unbury these helper tools by providing thin layers that mimic the standard command-line tools. You can think of this as having a parent <code>IntegrationTest</code> class that offers trivial convenience methods like <code>cp</code>, <code>rmR</code>, <code>mkdirP</code> that, under the hood, delegate to full-blown implementations. Or you can think of using static imports for these helper methods.</p>
-
 <h2 id="work-directory-and-process-isolation">Work directory and process isolation</h2>
-
 <p>The last primitive or concept we need is test case isolation. This is two-fold:</p>
-
 <p>First, at the file system level. <strong>Each test has to start in a clean empty directory and should be free to modify that directory at will</strong> (which is very common to do while preparing a workspace). This directory ought to be cleaned up automatically upon test termination. (Here you can imagine having a test flag that tells the framework to leave these work directories behind on exit so that the developer can interactively investigate a failed test after-the-fact.)</p>
-
 <p>There are difficulties in achieving this in Java though, given that one cannot change the current directory of the JVM. It is certainly feasible via JNI and some other magic, but Java might have cached the value of the current working directory and use that for other path manipulation operations (think converting a relative path to absolute). We could hack this. We could encapsulate the concept of the current directory in <code>IntegrationTest</code> and make sure all helper methods respect it. Or we could have a custom test runner that spawns each test case as a subprocess in its own directory (see below).</p>
-
 <p>And second, at the process level. Integration tests spawn Bazel instances. <strong>To avoid cross-test pollution, we should ensure that all Bazel instances are terminated at the test boundary.</strong></p>
-
 <p>There is the question on what to do with the test case itself. It&rsquo;s possible to spawn a subprocess for each test case, which has the benefit of transparently having a custom work directory for each and a reliable out-of-bound way to clean that up. This is a different model than most tests and could confuse users because each test will effectively have its own memory space and global variables stop working as one thinks they do&hellip; but sharding effectively already does that, so the concern is minor.</p>
-
 <h1 id="proof-of-concept">Proof of concept</h1>
-
 <p>To show that integration tests written in Java don&rsquo;t have to be painful to write or maintain (which is a concern I&rsquo;ve heard before), I&rsquo;ve taken a couple of integration tests and converted them to Java using the key primitives outlined above. The goal of this exercise is to <strong>show that Java-based integration tests needn&rsquo;t suffer from the typical verbosity of Java</strong>, not that these are the specific APIs we should use.</p>
-
 <p>WARNING: The APIs shown here are very rudimentary and just an example of what we could achieve. Since the publication of this document, we have been discussing better mechanisms to implement these concepts but I decided to leave the document &ldquo;as is&rdquo; for publication. The design and implementation of the infrastructure will come separately from this motivational document.</p>
-
 <p>You can find the proof of concept on my <a href="https://github.com/jmmv/bazel/tree/java-inttests/"><code>jmmv/bazel/java-inttests</code></a> branch in GitHub. In there, you will find a new <a href="https://github.com/jmmv/bazel/blob/java-inttests/src/test/java/com/google/devtools/build/lib/integration/PreludeTest.java"><code>PreludeTest.java</code></a> file that you can compare line-by-line against <a href="https://github.com/jmmv/bazel/blob/java-inttests/src/test/shell/integration/prelude_test.sh"><code>prelude_test.sh</code></a>. You may notice that the Java version is actually 10 lines shorter than the shell one. And under <a href="https://github.com/jmmv/bazel/tree/java-inttests/src/test/java/com/google/devtools/build/lib/integration/util"><code>src/test/java/com/google/devtools/build/lib/integration/util/</code></a> you can find a super-simplistic implementation of the APIs proposed above.</p>
-
 <p>Some things to highlight below.</p>
-
 <p>The process checking API permits expressing calls to Bazel like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-java" data-lang="java"><span class="c1">// Check that Bazel exits with 0 and that stdout and stderr were empty:
 </span><span class="c1"></span><span class="n">run</span><span class="o">(</span><span class="s">&#34;bazel&#34;</span><span class="o">,</span> <span class="s">&#34;build&#34;</span><span class="o">,</span> <span class="s">&#34;//package:foo&#34;</span><span class="o">).</span><span class="na">check</span><span class="o">();</span>
@@ -299,9 +245,8 @@ Depending on the language you are using, doing this will mean significant more w
     <span class="o">.</span><span class="na">saveStdout</span><span class="o">(</span><span class="s">&#34;stdout.txt&#34;</span><span class="o">)</span>
     <span class="o">.</span><span class="na">saveStderr</span><span class="o">(</span><span class="s">&#34;stderr.txt&#34;</span><span class="o">)</span>
     <span class="o">.</span><span class="na">check</span><span class="o">();</span>
-<span class="o">...</span> <span class="n">now</span> <span class="n">inspect</span> <span class="n">the</span> <span class="n">contents</span> <span class="n">of</span> <span class="n">stdout</span><span class="o">.</span><span class="na">txt</span> <span class="n">and</span> <span class="n">stderr</span><span class="o">.</span><span class="na">txt</span> <span class="o">...</span></code></pre></div>
-<p>This API should be generic and decoupled from Bazel, but note that our tests should ever only invoke Bazel: running other external tools should be discouraged unless we own them because <strong>any external tool that is invoked is a portability liability</strong>. (Think: the simple act of running, say, an external <code>grep</code> makes the test not easily runnable on Windows.)</p>
-
+<span class="o">...</span> <span class="n">now</span> <span class="n">inspect</span> <span class="n">the</span> <span class="n">contents</span> <span class="n">of</span> <span class="n">stdout</span><span class="o">.</span><span class="na">txt</span> <span class="n">and</span> <span class="n">stderr</span><span class="o">.</span><span class="na">txt</span> <span class="o">...</span>
+</code></pre></div><p>This API should be generic and decoupled from Bazel, but note that our tests should ever only invoke Bazel: running other external tools should be discouraged unless we own them because <strong>any external tool that is invoked is a portability liability</strong>. (Think: the simple act of running, say, an external <code>grep</code> makes the test not easily runnable on Windows.)</p>
 <p>Similarly, tests end up looking like the following:</p>
 <div class="highlight"><pre class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RunWith</span><span class="o">(</span><span class="n">JUnit4</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
 <span class="kd">public</span> <span class="kd">class</span> <span class="nc">ConceptTest</span> <span class="kd">extends</span> <span class="n">IntegrationTest</span> <span class="o">{</span>
@@ -321,55 +266,64 @@ Depending on the language you are using, doing this will mean significant more w
         <span class="n">assertThat</span><span class="o">(</span>
             <span class="n">grep</span><span class="o">(</span><span class="s">&#34;the test data&#34;</span><span class="o">,</span> <span class="s">&#34;bazel-genfiles/test.txt&#34;</span><span class="o">)).</span><span class="na">isTrue</span><span class="o">();</span>
     <span class="o">}</span>
-<span class="o">}</span></code></pre></div>
-<p>Note how the <code>IntegrationTest</code> base class exposes a bunch of helper functions to simplify the interaction between our test and the file system. Also note how these calls are all &ldquo;loosely typed&rdquo;: while the internals use <code>Path</code>s and <code>File</code>s and whatnot, the thin wrappers in <code>IntegrationTest</code> just deal with <code>String</code>s to make the caller sites succinct. (These bare interfaces are <em>an example</em> and are probably a bad idea in the long run though. They need more design work.)</p>
-
+<span class="o">}</span>
+</code></pre></div><p>Note how the <code>IntegrationTest</code> base class exposes a bunch of helper functions to simplify the interaction between our test and the file system. Also note how these calls are all &ldquo;loosely typed&rdquo;: while the internals use <code>Path</code>s and <code>File</code>s and whatnot, the thin wrappers in <code>IntegrationTest</code> just deal with <code>String</code>s to make the caller sites succinct. (These bare interfaces are <em>an example</em> and are probably a bad idea in the long run though. They need more design work.)</p>
 <h1 id="how-do-we-get-there">How do we get there?</h1>
-
 <p><strong>Rewriting our tests from scratch, in one go, is unfeasible</strong>: we have too many of them and spending time rewriting the code for rewrite&rsquo;s sake is a waste of time. We&rsquo;d better spend our time doing work on Bazel itself.</p>
-
 <p>We can <strong>only do this incrementally and opportunistically</strong>, at least until we achieve critical mass and introducing new Java-based tests is as easy, if not easier, than adding shell-based tests. At that point, we will naturally prefer using the Java APIs to write the tests and the shell tests will quiesce. Only then we can consider rewriting whatever is left.</p>
-
 <p>Here is a possible plan with no explicit timeline:</p>
-
 <ol>
-<li><p>Implement the foundations of the testing APIs and and convert a few representative test cases to use it.</p>
-
+<li>
+<p>Implement the foundations of the testing APIs and and convert a few representative test cases to use it.</p>
 <ul>
-<li><p>Make sure to cover both existing Bazel and Blaze test cases (and maybe even Exoblaze).</p></li>
-
-<li><p>This is to ensure we get the right level of abstraction regarding mock workspace creation.</p></li>
-</ul></li>
-
-<li><p>Rewrite all existing Python-based tests en masse.</p>
-
+<li>
+<p>Make sure to cover both existing Bazel and Blaze test cases (and maybe even Exoblaze).</p>
+</li>
+<li>
+<p>This is to ensure we get the right level of abstraction regarding mock workspace creation.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Rewrite all existing Python-based tests en masse.</p>
 <ul>
-<li><p>Kinda contradicts my statement above but&hellip; there are only 11 test programs in the Bazel case, so this is feasible.</p></li>
-
-<li><p>Getting rid of these allows us to eliminate one of the testing infrastructure variants, thus prevents making the current project structure worse.</p></li>
-</ul></li>
-
-<li><p>Enable strict mode in our existing shell tests, discover anything that&rsquo;s broken, and try to address those failures either by minor fixes or by rewriting them in Java.</p></li>
-
-<li><p>Discourage the practice of open-sourcing shell tests unless they are rewritten in Java.</p>
-
+<li>
+<p>Kinda contradicts my statement above but&hellip; there are only 11 test programs in the Bazel case, so this is feasible.</p>
+</li>
+<li>
+<p>Getting rid of these allows us to eliminate one of the testing infrastructure variants, thus prevents making the current project structure worse.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Enable strict mode in our existing shell tests, discover anything that&rsquo;s broken, and try to address those failures either by minor fixes or by rewriting them in Java.</p>
+</li>
+<li>
+<p>Discourage the practice of open-sourcing shell tests unless they are rewritten in Java.</p>
 <ul>
-<li><p>Publishing shell tests is rarely on the critical path, so if this happens, the change should come with a justification as to why the test was not rewritten in Java.</p></li>
-
-<li><p>The reason is likely to be &ldquo;insufficient framework support&rdquo; or &ldquo;insufficient sample tests from which to borrow code&rdquo;. Both of these issues should be addressed separately to not block CL authors. The hope is that the increased framework coverage will prevent this practice from recurring.</p></li>
-</ul></li>
-
-<li><p>Discourage the addition of new shell tests. Any new tests ought to be written in Java using the new foundations.</p>
-
+<li>
+<p>Publishing shell tests is rarely on the critical path, so if this happens, the change should come with a justification as to why the test was not rewritten in Java.</p>
+</li>
+<li>
+<p>The reason is likely to be &ldquo;insufficient framework support&rdquo; or &ldquo;insufficient sample tests from which to borrow code&rdquo;. Both of these issues should be addressed separately to not block CL authors. The hope is that the increased framework coverage will prevent this practice from recurring.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Discourage the addition of new shell tests. Any new tests ought to be written in Java using the new foundations.</p>
 <ul>
-<li><p>This is the best moment to ensure that any new tests are open-sourceable either immediately or in the long term.</p></li>
-
-<li><p>Same considerations as in the previous point regarding justification.</p></li>
-</ul></li>
-
-<li><p>Disallow the modification of existing shell tests. Any need to modify those tests should be accompanied with a proper rewrite.</p></li>
+<li>
+<p>This is the best moment to ensure that any new tests are open-sourceable either immediately or in the long term.</p>
+</li>
+<li>
+<p>Same considerations as in the previous point regarding justification.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Disallow the modification of existing shell tests. Any need to modify those tests should be accompanied with a proper rewrite.</p>
+</li>
 </ol>
-
 <p>So, what do you say? Shall we make this happen?</p>
 </article>
             </div>

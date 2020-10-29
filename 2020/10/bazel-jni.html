@@ -21,7 +21,7 @@ Let me tell you the story of this final boss.">
   <meta property="og:description" content="As you might have read elsewhere, I&amp;rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&amp;hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.
 Let me tell you the story of this final boss.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/10/bazel-jni.html">
 
@@ -31,7 +31,7 @@ Let me tell you the story of this final boss.">
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -143,7 +143,7 @@ Let me tell you the story of this final boss.">
         <h1>The final boss: Bazel&#39;s own JNI code</h1>
 
         <p>October 9, 2020 &middot;
-        About 13 minutes
+        About 12 minutes
         &middot;
         Tags:
         <a class="text-reset" href="/tags/bazel">bazel</a>, <a class="text-reset" href="/tags/bug">bug</a></p>
@@ -158,16 +158,10 @@ Let me tell you the story of this final boss.">
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>As you might have <a href="https://twitter.com/jmmv/status/1313196763524689920">read elsewhere</a>, I&rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.</p>
-
+              <article><p>As you might have <a href="https://twitter.com/jmmv/status/1313196763524689920">read elsewhere</a>, I&rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.</p>
 <p>Let me tell you the story of this final boss.</p>
-
 <h1 id="the-problem">The problem</h1>
-
 <p>A few weeks ago, an engineer in the <a href="https://abseil.io/">Abseil team</a> approached me because they were trying to do an optimization to their C++ library (<code>absl</code>). Their problem was that <em>all</em> of the tests at Google passed&hellip; except for the tests that verify Blaze (not Bazel) on macOS, which crashed in an obscure way. I didn&rsquo;t have a lot of time to look into the problem myself; but, thankfully, <a href="https://github.com/trybka">trybka@</a>&mdash;one of our C++ experts&mdash;did and noticed what was wrong by paying close attention to a failing stack trace:</p>
-
 <pre><code>C  [libvfs.dylib+0x1beb24]  absl::DeadlockCheck(absl::Mutex*)+0x114
 C  [libvfs.dylib+0x1b9b22]  absl::DebugOnlyDeadlockCheck(absl::Mutex*)+0x32
 C  [libvfs.dylib+0x1b9a4c]  absl::Mutex::Lock()+0x1c
@@ -181,140 +175,112 @@ C  [network.dylib+0x54ea74]  absl::flags_internal::FlagRegistrar&lt;int, true&gt
 **** JUMPING BACK TO ABSL IN THE ORIGINAL DYLIB ****
 C  [libvfs.dylib+0x136cd0]  __cxx_global_var_init+0x30
 C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
-</code></pre>
-
-<p>In the stack trace above, you can see how control flow jumps back and forth between two different shared libraries (<code>dylib</code>s in this post, as I&rsquo;m focusing on macOS), and how the calls that cross the boundaries are all within Abseil.</p>
-
+</code></pre><p>In the stack trace above, you can see how control flow jumps back and forth between two different shared libraries (<code>dylib</code>s in this post, as I&rsquo;m focusing on macOS), and how the calls that cross the boundaries are all within Abseil.</p>
 <p>Now, you might think: that should be fine. If the two shared libraries we have above, <code>libvfs.dylib</code> and <code>libnetwork.dylib</code>, call into another common one, Abseil, the dynamic linker will not load the common library twice. And you&rsquo;d be right&hellip; except&hellip; Bazel and Google love building static binaries. There is no <code>libabsl.dylib</code> in there: the <code>absl</code> symbols are <strong>duplicated</strong> across the two shared libraries. Visually, here is what we had in the executable:</p>
-
-<figure>
-  <img src="/images/2020-10-09-blaze-on-mac-jni-before.svg">
-  <figcaption>Interaction between Blaze's Java code and the JNI libraries it pulls in on a macOS system. Note how the three separate JNI libraries that we load from Java are all able to reuse the foundational libraries provided by macOS because they are dynamically linked in... but Abseil shows up twice because it was statically linked into two separate shared libraries.</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>And thereby lies the problem: Blaze on Mac was pulling in three separate <code>dylib</code>s, two of which bundled Abseil and conflicted at runtime. This, in turn, was blocking the submission of the optimization to Abseil I mentioned, which was supposed to bring significant improvements Google-wide. Time was of essence to fix this issue. (Except it wasn&rsquo;t because the author of the change found a different way to write their code and avoid the issue, but the issue had already gotten my interest.)</p>
-
 <h1 id="the-basics-behind-jni">The basics behind JNI</h1>
-
 <p>Before getting into how to resolve this issue, let&rsquo;s pause for a second to understand what&rsquo;s involved in getting JNI code to work with Bazel.</p>
-
 <p>JNI is nothing magical: when you declare a Java function as <code>native</code>, the JVM will transform calls to that function as calls to a C function whose name is derived from the class that contains the <code>native</code> method plus the method&rsquo;s name. For example, if we have <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/unix/NativePosixFiles.java;l=62;drc=50adefb987351eb3612b2e28240cf0d0697fdf5a">a Java function definition</a> like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-java" data-lang="java"><span class="kn">package</span> <span class="nn">com.google.devtools.build.lib.unix</span><span class="o">;</span>
 
 <span class="kd">public</span> <span class="kd">class</span> <span class="nc">NativePosixFiles</span> <span class="o">{</span>
     <span class="kd">public</span> <span class="kd">static</span> <span class="kd">native</span> <span class="n">String</span> <span class="nf">readlink</span><span class="o">(</span><span class="n">String</span> <span class="n">path</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">IOException</span><span class="o">;</span>
-<span class="o">}</span></code></pre></div>
-<p>The JVM will look for <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/native/unix_jni.cc;l=163;drc=b3f5306a2f403192e03e97fdcd008d7c3afaa98f">a matching C symbol</a> with the following definition. Note how the symbol name encodes the Java package name, the class name, and the method name in a straightforward way (unlike C++&rsquo;s name mangling):</p>
+<span class="o">}</span>
+</code></pre></div><p>The JVM will look for <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/native/unix_jni.cc;l=163;drc=b3f5306a2f403192e03e97fdcd008d7c3afaa98f">a matching C symbol</a> with the following definition. Note how the symbol name encodes the Java package name, the class name, and the method name in a straightforward way (unlike C++&rsquo;s name mangling):</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="k">extern</span> <span class="s">&#34;C&#34;</span> <span class="n">JNIEXPORT</span> <span class="n">jstring</span> <span class="n">JNICALL</span>
 <span class="n">Java_com_google_devtools_build_lib_unix_NativePosixFiles_readlink</span><span class="p">(</span>
     <span class="n">JNIEnv</span> <span class="o">*</span><span class="n">env</span><span class="p">,</span> <span class="n">jclass</span> <span class="n">clazz</span><span class="p">,</span> <span class="n">jstring</span> <span class="n">path</span><span class="p">)</span>
 <span class="p">{</span>
     <span class="c1">// Native implementation for the NativePosixFiles#readlink(String) method.
 </span><span class="c1"></span><span class="p">}</span>
-</code></pre></div>
-<p>The way the native function is invoked is irrelevant, but it probably happens via <code>dlsym(3)</code>. The important thing, however, is that the JVM must have access to these symbols in one way or another, and that the lookup must happen at run time.</p>
-
+</code></pre></div><p>The way the native function is invoked is irrelevant, but it probably happens via <code>dlsym(3)</code>. The important thing, however, is that the JVM must have access to these symbols in one way or another, and that the lookup must happen at run time.</p>
 <p>In standard Java, the way you do this is by calling <code>System.loadLibrary()</code> or <code>System.load()</code> on the native libraries. The former call searches for a library, using operating system-specific naming schemes, in the directories specified by the <code>java.library.path</code> property. The latter call simply loads the given file, although, surprisingly, the file&rsquo;s base name must also follow the operating system&rsquo;s conventions.</p>
-
 <p>But Bazel offers another mechanism in the Java rules. By using <a href="https://docs.bazel.build/versions/3.6.0/be/java.html#java_binary.launcher">a custom <strong>Java launcher</strong></a>, you can handle native libraries in a different way, and that&rsquo;s what we do inside Google. We have a launcher that bundles all native libraries of the Java target into a single object, then links that object <em>into</em> the JRE binary, and then attaches the JRE to the JAR to form a &ldquo;self-executable&rdquo; JAR. This final executable does not need to do any <code>System.loadLibrary()</code> calls to manually pull in JNI dependencies: they are all already in the JVM&rsquo;s address space because they were put there at binary link time.</p>
-
 <p>Very nice&hellip; except we only do that for Blaze on Linux, which means neither Blaze on Mac nor Bazel&mdash;on any platform&mdash;benefit from this. And this is where things get nasty: our internal-only &ldquo;common case&rdquo; is magical, but everything else has grown workarounds to deal with JNI&hellip; and they all have problems.</p>
-
 <h1 id="initial-assessment-snafu">Initial assessment: SNAFU</h1>
-
 <p>Here are the many ways we had in Bazel to load the JNI code before any of my changes took place (that is, at or before <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093">commit <code>e36e9da</code></a>), and the many little details that got in the way of cleaning things up:</p>
-
 <ul>
-<li><p>The Google-internal Java launcher for Blaze on Linux. Blaze on Linux needn&rsquo;t worry about JNI at all as its native code is transparently loaded.</p></li>
-
-<li><p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/unix/jni/UnixJniLoader.java"><code>UnixJniLoader</code> class</a>, which was explicitly called in Bazel from non-Windows platforms and in the Blaze on Mac case.</p></li>
-
-<li><p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/windows/jni/WindowsJniLoader.java"><code>WindowsJniLoader</code> class</a>, which was explicitly called in Bazel from the Windows platform.</p></li>
-
-<li><p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/platform/JniLoader.java"><code>JniLoader</code> abstract class</a>, which was a more recent attempt at making JNI code loading more transparent but was only used in a bunch of new classes.</p></li>
-
-<li><p>Some arbitrary <code>System.loadLibrary</code> calls throughout the code in places where it was known that JNI was unconditionally required. I&rsquo;m not sure if any of these were in Bazel itself, but the Google-internal modules that required JNI indeed did this&mdash;and they did so, especially, to load the non-public <code>libnetwork.dylib</code> and <code>libvfs.dylib</code>.</p></li>
-
-<li><p>Checks for an <code>io.bazel.enableJni</code> JVM property to determine whether to load the JNI code or not. This property was added to aid the few use cases that could run without JNI (e.g. the bootstrapping process), although it was not correctly recognized throughout the codebase. In particular, Windows unconditionally needed JNI, whereas Unix platforms could work without it.</p></li>
-
-<li><p><a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/native/BUILD;l=87">Weird hacks</a> to transform <code>.so</code> libraries into <code>.dylib</code>s for macOS&rsquo;s consumption.</p></li>
-
-<li><p>A futile attempt at simplifying JNI usage throughout the codebase by adding the <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/native/BUILD;l=97"><code>target-os-unix-native-lib</code></a> and the <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/native/windows/BUILD;l=75"><code>target-os-native-lib</code></a> targets, which in retrospect made things even more confusing.</p></li>
-
-<li><p><a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/BUILD;l=340">Knowledge in the top-level Bazel binary packaging rules</a> of the JNI libraries to bundle them into the final self-extracting executable, with extra logic to tell the JVM where they are via the <code>java.library.path</code> property.</p></li>
+<li>
+<p>The Google-internal Java launcher for Blaze on Linux. Blaze on Linux needn&rsquo;t worry about JNI at all as its native code is transparently loaded.</p>
+</li>
+<li>
+<p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/unix/jni/UnixJniLoader.java"><code>UnixJniLoader</code> class</a>, which was explicitly called in Bazel from non-Windows platforms and in the Blaze on Mac case.</p>
+</li>
+<li>
+<p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/windows/jni/WindowsJniLoader.java"><code>WindowsJniLoader</code> class</a>, which was explicitly called in Bazel from the Windows platform.</p>
+</li>
+<li>
+<p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/platform/JniLoader.java"><code>JniLoader</code> abstract class</a>, which was a more recent attempt at making JNI code loading more transparent but was only used in a bunch of new classes.</p>
+</li>
+<li>
+<p>Some arbitrary <code>System.loadLibrary</code> calls throughout the code in places where it was known that JNI was unconditionally required. I&rsquo;m not sure if any of these were in Bazel itself, but the Google-internal modules that required JNI indeed did this&mdash;and they did so, especially, to load the non-public <code>libnetwork.dylib</code> and <code>libvfs.dylib</code>.</p>
+</li>
+<li>
+<p>Checks for an <code>io.bazel.enableJni</code> JVM property to determine whether to load the JNI code or not. This property was added to aid the few use cases that could run without JNI (e.g. the bootstrapping process), although it was not correctly recognized throughout the codebase. In particular, Windows unconditionally needed JNI, whereas Unix platforms could work without it.</p>
+</li>
+<li>
+<p><a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/native/BUILD;l=87">Weird hacks</a> to transform <code>.so</code> libraries into <code>.dylib</code>s for macOS&rsquo;s consumption.</p>
+</li>
+<li>
+<p>A futile attempt at simplifying JNI usage throughout the codebase by adding the <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/native/BUILD;l=97"><code>target-os-unix-native-lib</code></a> and the <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/native/windows/BUILD;l=75"><code>target-os-native-lib</code></a> targets, which in retrospect made things even more confusing.</p>
+</li>
+<li>
+<p><a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/BUILD;l=340">Knowledge in the top-level Bazel binary packaging rules</a> of the JNI libraries to bundle them into the final self-extracting executable, with extra logic to tell the JVM where they are via the <code>java.library.path</code> property.</p>
+</li>
 </ul>
-
 <p>I&rsquo;m sure I&rsquo;m forgetting some interesting details, but you can see from this list that there are a ton of &ldquo;corner cases&rdquo; to consider in order to clean things up. I mean&hellip; things were really messed up.</p>
-
 <p>There is <em>one</em> thing that did work reasonably well in this design though, and that was the fact that unit tests didn&rsquo;t have to worry about whether their dependencies needed JNI or not. This wasn&rsquo;t bullet-proof though: some tests and build rules <em>did</em> have to know about JNI and had to either disable it with <code>io.bazel.enableJni=0</code> or put the shared libraries in the right place. A very fragile scenario, indeed.</p>
-
 <h1 id="first-cleanup-attempt">First cleanup attempt</h1>
-
 <p>Armed with this knowledge, which was more or less present in my mind before I started but which wasn&rsquo;t complete until I finished, I started trying to tackle the problem.</p>
-
 <p>IMPORTANT: The key observation to resolve this problem is that, <strong>at build time</strong>, there is zero coupling between building the Java code that defines <code>native</code> methods and building the native C code that supports them. This is bad because neither you nor the compiler can&rsquo;t know if things will work until you run them. This, however, is good because it gives us the freedom to build the native code separately from the Java code, and allows us to glue them together <strong>at run time</strong>.</p>
-
 <p>My first thought was: let&rsquo;s remove all dependencies from the Java rules to the native libraries. Then, let&rsquo;s add a single <code>cc_library</code> target that generates a single native library by pulling all individual bits as <code>deps</code>. And, finally, let&rsquo;s add a trivial <code>System.loadLibrary</code> statement to Bazel&rsquo;s and Blaze&rsquo;s <code>main</code> function to load their own single artifact.</p>
-
 <p>I prototyped this solution and was excited by the huge amount of garbage I could remove. The final solution was elegant, very easy to understand, and both Blaze and Bazel both worked&hellip; except&hellip; tests failed left and right. You see: tests don&rsquo;t invoke Bazel&rsquo;s <code>main</code> entry point so they didn&rsquo;t get a chance to load the needed JNI library in this design. I could have littered the test build graph with explicit dependencies on the JNI library and explicit calls to <code>System.loadLibrary</code>, but that would have been awful. I was trying to simplify things, not make them worse!</p>
-
 <p>So I had to scrap this idea and go back to the drawing board.</p>
-
 <h1 id="a-better-approach">A better approach</h1>
-
 <p>The two constraints driving my search for a solution were simple:</p>
-
 <ul>
-<li><p><strong>Ensure we load a single shared library at run time to avoid name clashes.</strong></p>
-
-<p>I had to loosen this restriction a little bit because our build ends up pulling another shared library that&rsquo;s out of our control: Netty&rsquo;s <code>kqueue</code> and <code>epoll</code> native bindings. Upon careful examination, I saw that this library is trivial and doesn&rsquo;t have any dependencies, so we can ignore it for our purposes. But this highlights that the solution I came up with is not generic enough to work for arbitrary projects.</p></li>
-
-<li><p><strong>Ensure that any Java target that depends on another target that needs JNI can do so without having to care, at all, that there is a JNI dependency anywhere.</strong></p>
-
-<p>In my opinion, this was an unnegotiable property of the solution. If you have a piece of code depending on something else, you should give zero effs on how that happens: the dependency should <em>just work</em> for you. If the dependency wants to pull in native code, so be it, but you ought not to know.</p></li>
+<li>
+<p><strong>Ensure we load a single shared library at run time to avoid name clashes.</strong></p>
+<p>I had to loosen this restriction a little bit because our build ends up pulling another shared library that&rsquo;s out of our control: Netty&rsquo;s <code>kqueue</code> and <code>epoll</code> native bindings. Upon careful examination, I saw that this library is trivial and doesn&rsquo;t have any dependencies, so we can ignore it for our purposes. But this highlights that the solution I came up with is not generic enough to work for arbitrary projects.</p>
+</li>
+<li>
+<p><strong>Ensure that any Java target that depends on another target that needs JNI can do so without having to care, at all, that there is a JNI dependency anywhere.</strong></p>
+<p>In my opinion, this was an unnegotiable property of the solution. If you have a piece of code depending on something else, you should give zero effs on how that happens: the dependency should <em>just work</em> for you. If the dependency wants to pull in native code, so be it, but you ought not to know.</p>
+</li>
 </ul>
-
 <p>Simply put, the design I envisioned is depicted in the following diagram:</p>
-
-<figure>
-  <img src="/images/2020-10-09-blaze-on-mac-jni-after.svg">
-  <figcaption>Interaction between Blaze's Java code and the single JNI library after my changes in a macOS system. Note that what we want is a single `dylib` that embeds all separate libraries at build time so that the compiler can weed out duplicate symbols. It is OK if this `dylib` still depends on other shared libraries, as the dynamic linker knows how to handle those.</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>Simple, huh? We want a single shared library that bundles all individual native libraries at build time to remove duplicate symbols. We want to load that single library at runtime. And we want the contents of this library to support Google-internal extensions when building Blaze inside of Google, and to remain Google-agnostic when building Bazel outside.</p>
-
 <p>Now, the question was: how do we get here, given all the many corner cases we have to deal with?</p>
-
 <h1 id="steps-towards-the-solution">Steps towards the solution</h1>
-
 <p>The general thought process was: let&rsquo;s try to isolate all JNI loading logic into a single Java package. Once we have that, we can try to make all other Java code depend on it and not have to worry about native dependencies. And to make that possible, we have to rely on extracting the JNI code from a Java resource instead of relying on the caller correctly preparing the <code>java.library.path</code> property on entry.</p>
-
 <p>More specifically, here are the steps I took:</p>
-
 <ol>
-<li><p>Bring clarity into the situation by forcing all JNI load requests to happen via a common code path. The end goal for this was to isolate all JNI code in a single place, making it easier to see how to change it. See <a href="https://cs.opensource.google/bazel/bazel/+/50adefb987351eb3612b2e28240cf0d0697fdf5a">commit <code>50adefb</code></a>.</p></li>
-
-<li><p>Simplify the way the Windows code paths loaded JNI. This wasn&rsquo;t a necessity as part of this project, but was raised as a suggestion during a code review&hellip; and I like simplicity, so I did it. See <a href="https://cs.opensource.google/bazel/bazel/+/9ce90880ed44885b090304c49098efb51843eae6">commit <code>9ce9088</code></a>.</p></li>
-
-<li><p>Now that we had all callers funneling their JNI requests via the <code>JniLoader</code>, there was no reason to keep the separate <code>UnixJniLoader</code> and <code>WindowsJniLoader</code> classes, so they could be merged. This highlighted some important differences between the two: namely, that Windows relies on the runfiles library clutch to load the JNI code, and that this was only done for testing purposes. Ugly. This had to go, but not yet. See <a href="https://cs.opensource.google/bazel/bazel/+/7128580b1b0f48b8bd1a1f609970b690d9687945">commit <code>7128580</code></a>.</p></li>
-
-<li><p>With the <code>WindowsJniLoader</code> gone, there was no reason to keep the separate <code>windows/jni</code> subpackage in the source tree&hellip; so I merged it into its parent. Again, unnecessary simplification as part of this project, but it was easy enough, so why not? See <a href="https://cs.opensource.google/bazel/bazel/+/d69744dca68f8258762d53a01d8dca3afb7ed2ac">commit <code>d69744d</code></a>.</p></li>
-
-<li><p>The key piece of this puzzle was replacing the way we actually look for and find the JNI library. Instead of relying on external actors such as the Bazel client, the bootstrap script, or unit tests to put the JNI library in <code>java.library.path</code>, we should be able to put the library inside a JAR resource and extract it at runtime. And it was possible. With this, all madness was gone and, finally, once and for all, the <code>JniLoader</code> could work by trivially pulling it in as a dependency. See <a href="https://cs.opensource.google/bazel/bazel/+/a2a2f9d5f6befe40f4f1a01931473dc99000de0e">commit <code>a2a2f9d</code></a>.</p></li>
-
-<li><p>Modify the Google-internal fork of <code>src/main/native:unix_jni</code> to link in the previous <code>network</code> and <code>vfs</code> targets so that the <code>libunix.dylib</code> becomes the only JNI library we have to load at run time. This change was <em>trivial</em> at this point: just a matter of changing <code>BUILD</code> dependencies and replacing ad-hoc <code>System.loadLibrary()</code> calls with calls to our improved <code>JniLoader.loadJni()</code>. I cannot link to this change because it has no correspondence in Bazel though, given that Bazel hasn&rsquo;t yet suffered from this issue (but it could!).</p></li>
+<li>
+<p>Bring clarity into the situation by forcing all JNI load requests to happen via a common code path. The end goal for this was to isolate all JNI code in a single place, making it easier to see how to change it. See <a href="https://cs.opensource.google/bazel/bazel/+/50adefb987351eb3612b2e28240cf0d0697fdf5a">commit <code>50adefb</code></a>.</p>
+</li>
+<li>
+<p>Simplify the way the Windows code paths loaded JNI. This wasn&rsquo;t a necessity as part of this project, but was raised as a suggestion during a code review&hellip; and I like simplicity, so I did it. See <a href="https://cs.opensource.google/bazel/bazel/+/9ce90880ed44885b090304c49098efb51843eae6">commit <code>9ce9088</code></a>.</p>
+</li>
+<li>
+<p>Now that we had all callers funneling their JNI requests via the <code>JniLoader</code>, there was no reason to keep the separate <code>UnixJniLoader</code> and <code>WindowsJniLoader</code> classes, so they could be merged. This highlighted some important differences between the two: namely, that Windows relies on the runfiles library clutch to load the JNI code, and that this was only done for testing purposes. Ugly. This had to go, but not yet. See <a href="https://cs.opensource.google/bazel/bazel/+/7128580b1b0f48b8bd1a1f609970b690d9687945">commit <code>7128580</code></a>.</p>
+</li>
+<li>
+<p>With the <code>WindowsJniLoader</code> gone, there was no reason to keep the separate <code>windows/jni</code> subpackage in the source tree&hellip; so I merged it into its parent. Again, unnecessary simplification as part of this project, but it was easy enough, so why not? See <a href="https://cs.opensource.google/bazel/bazel/+/d69744dca68f8258762d53a01d8dca3afb7ed2ac">commit <code>d69744d</code></a>.</p>
+</li>
+<li>
+<p>The key piece of this puzzle was replacing the way we actually look for and find the JNI library. Instead of relying on external actors such as the Bazel client, the bootstrap script, or unit tests to put the JNI library in <code>java.library.path</code>, we should be able to put the library inside a JAR resource and extract it at runtime. And it was possible. With this, all madness was gone and, finally, once and for all, the <code>JniLoader</code> could work by trivially pulling it in as a dependency. See <a href="https://cs.opensource.google/bazel/bazel/+/a2a2f9d5f6befe40f4f1a01931473dc99000de0e">commit <code>a2a2f9d</code></a>.</p>
+</li>
+<li>
+<p>Modify the Google-internal fork of <code>src/main/native:unix_jni</code> to link in the previous <code>network</code> and <code>vfs</code> targets so that the <code>libunix.dylib</code> becomes the only JNI library we have to load at run time. This change was <em>trivial</em> at this point: just a matter of changing <code>BUILD</code> dependencies and replacing ad-hoc <code>System.loadLibrary()</code> calls with calls to our improved <code>JniLoader.loadJni()</code>. I cannot link to this change because it has no correspondence in Bazel though, given that Bazel hasn&rsquo;t yet suffered from this issue (but it could!).</p>
+</li>
 </ol>
-
 <p>I like how this sequence highlights the importance of decoupling refactoring and cleanup work from the actual fixes. All of the steps in this list except for the last one were essentially no-ops and only laid the ground work to make the last step simple. And simple it was. Doing the work this way made it much easier for my reviewer to see what was going on and to assess that each step worked correctly. (Mind you, I actually broke the build somewhere in between two steps&hellip; and it was &ldquo;easy&rdquo; enough to fix it because the delta between changes was small.)</p>
-
 <p>And with that, the original bug is now fixed!</p>
-
 <h1 id="parting-words">Parting words</h1>
-
 <p>Executing this cleanup has been very frustrating as I briefly mentioned in the opening. Part of the reason is because of the many corner cases that had to be dealt with and how these were not clear upfront. But the other and major part of this came from the fact that Blaze and Bazel have divergent <code>BUILD</code> files in some areas, and ensuring they are all consistent with each other is painful. Throw in long BazelCI turnaround times and the need to get things to work on three different platforms&hellip; and you are in for pain.</p>
-
 <p>Anyhow. The bug is now fixed. But is what I outlined above the final solution? No, not really. What I&rsquo;ve done is still an ad-hoc solution to Bazel&rsquo;s own build process and use of JNI. Anyone writing and building Java code with Bazel also needs to interact with JNI at some point, and those developers are subject to the same issues I&rsquo;ve described here. I don&rsquo;t think we have a great answer for them yet. In other words: help welcome.</p>
-
 <p>So long, and thanks for all the fish!</p>
 </article>
             </div>

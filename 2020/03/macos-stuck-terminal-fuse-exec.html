@@ -21,7 +21,7 @@ For over a year, my team and I have been working on allowing our mobile engineer
   <meta property="og:description" content="Here I am, confined to my apartment due to the COVID-19 pandemic and without having posted anything for almost two months. Fortunately, my family and I are still are in good condition, and I&amp;rsquo;m even more fortunate to have a job that can employ me remotely without problems. Or can they?
 For over a year, my team and I have been working on allowing our mobile engineers to work from their laptops (as opposed to from their powerful workstations).">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/03/macos-stuck-terminal-fuse-exec.html">
 
@@ -31,7 +31,7 @@ For over a year, my team and I have been working on allowing our mobile engineer
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,25 +159,15 @@ For over a year, my team and I have been working on allowing our mobile engineer
             <div class="col">
               
               <article><p>Here I am, confined to my apartment due to the COVID-19 pandemic and without having posted anything for almost two months. Fortunately, my family and I are still are in good condition, and I&rsquo;m even more fortunate to have a job that can employ me remotely without problems. Or can they?</p>
-
 <p>For over a year, my team and I have been working on allowing our mobile engineers to work from their laptops (as opposed to from their powerful workstations). And guess what: now, more than ever, this has become super-important: making our engineering workforce productive when working remotely is a challenge, sure, but is also an amazing opportunity for the feature we&rsquo;ve been developing for over a year.</p>
-
 <p>Not everything is great though. We have been offering a workflow that can be used from laptops for a while, but we have traditionally not cared much about things like &ldquo;bad&rdquo; network connections. We have been focusing on supporting engineers that work on Mac laptops while in the office (maybe from one of our fancy cafes), but not from really from home where the network may be slow.</p>
-
 <p>Except&hellip; today, working from home, the possibility of having a &ldquo;bad&rdquo; network connection is the common case, not the exception. All these little issues that show up when your network has high latency or low bandwidth? They are not subtle problems any more: they are the key differentiator between having a productive day and a miserable day.</p>
-
 <p>Where am I going with all of this? I just want to tell you the tale of a bug fix, as usual.</p>
-
-<hr />
-
+<hr>
 <p>One of the issues we encountered revolved around the simple act of starting the Bazel binary. A few users reported that, upon typing <code>bazel build ...</code>, the macOS terminal (and sometimes even the browser!) would freeze for so long that they would get annoyed and reboot their computer. Incidentally, that wouldn&rsquo;t fix the problem, and once you understand all the pieces involved in the process, that&rsquo;s not surprising.</p>
-
 <p>As you may know, here at Google we store all of our codebase under a monorepo&mdash;and that includes all the binary tools that are needed to bootstrap a build. One of these tools is the Bazel binary itself, which we put under a path like <code>tools/bazel</code>.</p>
-
 <p>As you may also know, our source tree is so big that you cannot simply &ldquo;clone&rdquo; it onto your computer: we have a FUSE file system that exposes a lazy view of this tree. Whenever you access a source file (or a build tool) exposed by this system, the FUSE daemon lazily fetches the file from the network, stores it in a local cache, and then behaves as if the file had always been there.</p>
-
 <p>With these pieces of information, you can start piecing together was was going on:</p>
-
 <ol>
 <li>The user types <code>bazel build ...</code>.</li>
 <li>The shell runs an <code>exec(2)</code> system call on <code>tools/bazel</code>, which transfers control to the kernel. This is game over.</li>
@@ -187,19 +177,12 @@ For over a year, my team and I have been working on allowing our mobile engineer
 <li>The kernel waits for the FUSE daemon to respond. In the meantime, the terminal application queries the name of the running process to update its title bar and gets stuck because the kernel is waiting for the <code>exec(2)</code> system call to start the process.</li>
 <li>Eventually, the FUSE daemon finishes the download and unblocks the <code>exec(2)</code> system call, which in turn unblocks the terminal and whichever other applications got stuck. That is, if the user didn&rsquo;t give up earlier than that and started taking drastic measures.</li>
 </ol>
-
 <p>Yikes. This sounds like a nasty problem because, as soon as we do <code>exec(2)</code> on a binary that was not cached, we are at the mercy of the network connection. If the network is slow, that operation can take forever and we may leave the system in an unusable state.</p>
-
 <p>How do we fix this? At a first glance, it doesn&rsquo;t seem possible&mdash;but we can try to prevent <em>entering</em> this situation in the first place. What if we don&rsquo;t allow <code>exec(2)</code> to get stuck on a network call? If we can ensure that the binary is always in the FUSE daemon&rsquo;s cache before we attempt the <code>exec(2)</code>, the execution should not stall.</p>
-
 <p>Easy in theory, but how do we make this happen? We need an intermediate step between the user command invocation and the binary execution in order to intercept the call and do additional operations.</p>
-
 <p>Fortunately, in the sequence of steps above, I omitted one important detail. You may have noticed that I said: the user types <code>bazel build ...</code> and then we get stuck running <code>tools/bazel</code>. Wait, how did that happen? Do we have <code>./tools</code> in the <code>PATH</code>? No, of course not!</p>
-
 <p>What we have is a little wrapper that we install under <code>/usr/local/bin/bazel</code> outside of FUSE. This wrapper&rsquo;s sole purpose is to verify that we are under a Google source tree, to check that <code>tools/bazel</code> exists, and to then delegate execution to the checked-in binary. This wrapper is the perfect place to put our fix: we can change the wrapper to cause a prefetch of the binary without executing it.</p>
-
 <p>The fixed workflow looks like this:</p>
-
 <ol>
 <li>The user types <code>bazel build ...</code>.</li>
 <li>The shell executes <code>/usr/local/bin/bazel build ...</code>.</li>
@@ -207,13 +190,9 @@ For over a year, my team and I have been working on allowing our mobile engineer
 <li>Once we finish reading the whole file, we know that the file is in the FUSE daemon&rsquo;s cache <em>and</em> in the kernel page cache.</li>
 <li>The wrapper runs an <code>exec(2)</code> of <code>tools/bazel</code> which now can complete without blocking.</li>
 </ol>
-
 <p>Voila. By trading the <code>exec</code> call for a controlled read of the file, we avoid losing control to the kernel. This prevents the terminal from getting stuck, allows us to note slow connections, and recognizes Ctrl+C requests from the user.</p>
-
 <p>On the other had, these reads might sound like wasted work. In practice, however, they are not a big problem. When the local cache is cold, this prefetching operation is actually doing useful work because it&rsquo;s bringing the remote data onto the machine and it&rsquo;s warming up the kernel&rsquo;s page cache. When the local cache is warm, all reads complete in a very short amount of time: maybe they do actual work in bringing the binary into memory, but once it&rsquo;s in the page cache, the subsequent execution will run faster.</p>
-
 <p>But yes, it&rsquo;s somewhat wasted work. In an ideal world, we&rsquo;d have a side channel to contact the FUSE daemon and ask it to prefetch the file in one go, returning quickly if the file is in its local cache. If we had that feature, we wouldn&rsquo;t need to read the whole file through the FUSE layer. This would be a pretty reasonable and simple feature to implement, but the downside is that this would increase the coupling between our trivial wrapper and the FUSE file system. We may look into this if the prefetching turns out to be a problem in any case, but I doubt it.</p>
-
 <p>To conclude: remember that a very subtle problem that was never a big deal turned out to be problematic when the situation changed. And what sounded like an unfixable bug was actually tractable after understanding all the pieces involved.</p>
 </article>
             </div>

@@ -18,12 +18,12 @@
   
   <meta name="description" content="Are you looking for a method to merge multiple Git repositories into a single one? If so, you have reached the right tutorial!
 Please bear with me for a second while I provide you with background information and introduce the subject of our experiments. We&amp;rsquo;ll get to the actual procedure soon and you will be able to apply it to any repository of your choice.
-In the Kyua project, and with the introduction of the kyua-atf-compat component in the Summer of 2012, I decided to create independent Git repositories for each component.">
+ In the Kyua project, and with the introduction of the kyua-atf-compat component in the Summer of 2012, I decided to create independent Git repositories for each component.">
   <meta property="og:description" content="Are you looking for a method to merge multiple Git repositories into a single one? If so, you have reached the right tutorial!
 Please bear with me for a second while I provide you with background information and introduce the subject of our experiments. We&amp;rsquo;ll get to the actual procedure soon and you will be able to apply it to any repository of your choice.
-In the Kyua project, and with the introduction of the kyua-atf-compat component in the Summer of 2012, I decided to create independent Git repositories for each component.">
+ In the Kyua project, and with the introduction of the kyua-atf-compat component in the Summer of 2012, I decided to create independent Git repositories for each component.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2014/02/how-to-merge-multiple-git-repositories.html">
 
@@ -33,7 +33,7 @@ In the Kyua project, and with the introduction of the kyua-atf-compat component 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -160,53 +160,40 @@ In the Kyua project, and with the introduction of the kyua-atf-compat component 
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>Are you looking for a method to merge multiple Git repositories into a
+              <article><p>Are you looking for a method to merge multiple Git repositories into a
 single one? If so, you have reached the right tutorial!</p>
-
 <p>Please bear with me for a second while I provide you with background
 information and introduce the subject of our experiments. We&rsquo;ll get to
 the actual procedure soon and you will be able to apply it to any
 repository of your choice.</p>
-
-<hr />
-
+<hr>
 <p>In the <a href="http://code.google.com/p/kyua/">Kyua project</a>, and with the
 introduction of the <code>kyua-atf-compat</code> component in the Summer of 2012, I
 decided to create independent Git repositories for each component. The
 rationale was that, because each component would be shipped as a
 standalone distfile, they ought to live in their own repositories.</p>
-
 <p>Unfortunately, this approach is turning out to be a bit of an
 inconvenience: it is annoying to manage various repositories when the
 code of them all is supposed to be used in unison; it is hard to apply
 changes that cross component boundaries; and it is &ldquo;impossible&rdquo; to reuse
 code among the various components (e.g. share autoconf macros) in a
-clean manner &mdash; much less attempt to share the version number between
+clean manner — much less attempt to share the version number between
 them all.</p>
-
 <p>So what if all components lived in the same repository a la BSD but were
 still shipped as individual, fine-grained tarballs for packaging&rsquo;s sake?
 Let&rsquo;s investigate.</p>
-
 <h1 id="the-goal">The goal</h1>
-
 <p>Obviously, the goal is to get two or more Git repositories and merge
 them together. It&rsquo;s particularly important to not mangle any existing
 commit IDs nor tags so that history is preserved intact.</p>
-
 <p>For the specifics of our example, Kyua has three repositories: one for
 <code>kyua-cli</code> (which is the default, unqualified repository in Google
 Code), one for <code>kyua-atf-compat</code> and one for <code>kyua-testers</code>. The idea is
 to end up with a single repository that contains three top-level
 directories, one for each component, and all independent of each other
 (at least initially).</p>
-
 <h1 id="process-outline">Process outline</h1>
-
 <p>The key idea to merge Git repositories is the following:</p>
-
 <ol>
 <li>Select a repository to act as pivot. This is the one into which you
 will merge all others.</li>
@@ -220,63 +207,46 @@ top-level directory.</li>
 <li>Merge the branch for the secondary repository.</li>
 <li>Repeat from 3 for any additional repository to be merged.</li>
 </ol>
-
-<h1 id="sounds-good-let-s-get-down-to-the-surgery">Sounds good? Let&rsquo;s get down to the surgery!</h1>
-
+<h1 id="sounds-good-lets-get-down-to-the-surgery">Sounds good? Let&rsquo;s get down to the surgery!</h1>
 <p>We need to select a pivot. For Kyua, this will be the default Google
 Code repository in <a href="https://code.google.com/p/kyua">https://code.google.com/p/kyua</a>. Let&rsquo;s start by
 checking it out and moving all of its contents into a subdirectory:</p>
-
 <pre><code>$ git clone https://code.google.com/p/kyua
 $ cd kyua
 $ mkdir kyua-cli
 $ git mv * kyua-cli
 $ git commit -a -m &quot;Move.&quot;
 </code></pre>
-
 <p>We are ready to start tackling the merge of a secondary repository. I
 will use <a href="https://code.google.com/p/kyua.testers">https://code.google.com/p/kyua.testers</a> in this example.</p>
-
 <p>The first step is to pull in that secondary repository into our pivot:</p>
-
 <pre><code>$ git remote add origin-testers https://code.google.com/p/kyua.testers
 $ git fetch origin-testers
 </code></pre>
-
 <p>And now, check it out into a temporary branch and move all of its
 contents into a subdirectory:</p>
-
 <pre><code>$ git branch merge-testers origin-testers/master
 $ mkdir kyua-testers
 $ git mv * kyua-testers
 $ git commit -a -m &quot;Move.&quot;
 </code></pre>
-
 <p>Done? It&rsquo;s the time to merge the two repositories into one!</p>
-
 <pre><code>$ git checkout master
 $ git merge merge-testers
 </code></pre>
-
 <p>And clean some stuff up.</p>
-
 <pre><code>$ git branch -d merge-testers
 $ git remote remove origin-testers
 </code></pre>
-
-<p>Voil&agrave;. It wasn&rsquo;t that hard, was it? Just repeat the steps above for any
+<p>Voilà. It wasn&rsquo;t that hard, was it? Just repeat the steps above for any
 other secondary repository you would like to merge.</p>
-
 <h1 id="parting-words">Parting words</h1>
-
 <p>Note that this procedure achieves the goal of preserving the history of
 all individual repositories, the revision numbers and the tags. In other
 words: all previous history is left intact and all commit logs remain
 valid after the merge.</p>
-
 <p>Do you know if there is any easier way of doing this? Would it have any
 differences in the actual results?</p>
-
 <p>What do you think about doing the merge for Kyua? I see this as a
 prerequisite for the migration to GitHub.</p>
 </article>

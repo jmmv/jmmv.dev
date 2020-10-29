@@ -17,11 +17,11 @@
 
   
   <meta name="description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
-My previous article, Making Packager-Friendly Software (part 1), explains why software packaging is sometimes problematic due to real problems in the mainstream sources.">
+ My previous article, Making Packager-Friendly Software (part 1), explains why software packaging is sometimes problematic due to real problems in the mainstream sources.">
   <meta property="og:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
-My previous article, Making Packager-Friendly Software (part 1), explains why software packaging is sometimes problematic due to real problems in the mainstream sources.">
+ My previous article, Making Packager-Friendly Software (part 1), explains why software packaging is sometimes problematic due to real problems in the mainstream sources.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2005/04/making-packager-friendly-software-2.html">
 
@@ -31,7 +31,7 @@ My previous article, Making Packager-Friendly Software (part 1), explains why so
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -198,47 +198,27 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p><em>This article first appeared on this date in O&rsquo;Reilly&rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to <a href="https://web.archive.org/web/20150910045605/http://www.linuxdevcenter.com/pub/a/onlamp/2005/04/28/packaging2.html">find a copy</a> in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.</em></p>
-
-<hr />
-
+              <article><p><em>This article first appeared on this date in O&rsquo;Reilly&rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to <a href="https://web.archive.org/web/20150910045605/http://www.linuxdevcenter.com/pub/a/onlamp/2005/04/28/packaging2.html">find a copy</a> in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.</em></p>
+<hr>
 <p>My previous article, <a href="/2005/03/making-packager-friendly-software-1.html">Making Packager-Friendly Software (part 1)</a>, explains why software packaging is sometimes problematic due to real problems in the mainstream sources. It also discusses many issues that affect the distribution files and the configuration scripts (the most visible items when trying out a new program). This part explores the problems found in the build infrastructure and the code itself.</p>
-
 <p>If you haven&rsquo;t yet read Part 1, it may be a good idea to do so now. It introduces many concepts that you need to know to understand completely the following explanations.</p>
-
 <h1 id="recursive-dependencies">Recursive Dependencies</h1>
-
 <p>If your program has any runtime dependency, such as a shared library or a helper utility, be careful not to introduce other direct dependencies involuntarily. If you do, your program will end up depending on more packages than you expected. That will make it more difficult to issue an update of an installed package.</p>
-
 <p>To get an idea of the real problem, consider a situation I faced a while ago. GNOME VFS can use optional <a href="http://www.openssl.org/">OpenSSL</a> support. When building it with this feature enabled, the linker flags stored in the pkgconfig file receive an extra <code>-lssl</code> argument. When any other program requests the flags it needs to link against GNOME VFS, it will see something like <code>-lgnomevfs-2 -lssl</code>. What happens here? The program that requested GNOME VFS support now directly depends on SSL too, although it shouldn&rsquo;t (because it does not care about the internal behavior of GNOME VFS). This has introduced a hidden dependency.</p>
-
 <p>&ldquo;Yeah, well, what&rsquo;s the problem with that?&rdquo; you may ask. &ldquo;Everything you&rsquo;ve said seems harmless.&rdquo; Suppose that the GNOME VFS package has a future modification to use <a href="http://www.gnu.org/software/gnutls/">GnuTLS</a> instead of OpenSSL. (This happened in pkgsrc a while ago.) You build the new version of the GNOME VFS package and update the one installed on your system, doing an in-place update, without removing any package using it. Assuming nothing else depends on OpenSSL after replacing the old GNOME VFS package, you remove it. Oops! All those programs that previously used GNOME VFS with OpenSSL support are now broken, because you&rsquo;ve removed one of their dependencies. (Remember? They linked against OpenSSL by using the <code>-lssl</code> flag). The removal was possible because the packaging system did not record that dependency (and it shouldn&rsquo;t); this is another example of the hidden dependencies explained earlier.</p>
-
 <p>You may argue that the packages that use GNOME VFS need the <code>-lssl</code> flag because some platforms do not support the recursive loading of shared libraries. OK, fine, but this is something (as far as I know) that GNU Libtool handles through the <code>dependency_libs</code> variable in <code>.la</code> files. Leave that job to a tool that really knows what&rsquo;s going on.</p>
-
 <h1 id="handling-configuration-files">Handling Configuration Files</h1>
-
 <p>Installing configuration files isn&rsquo;t easy, especially if you want to please all packaging systems and users. Some of them don&rsquo;t care at all about how you install these files, while others want to do the entire task for themselves to control what happens.</p>
-
 <p>Before continuing, let me explain how pkgsrc handles them, so that you can see the big picture from a different perspective. I&rsquo;ll simplify and omit some details to make the explanation easier.</p>
-
 <p>Pkgsrc installs the configuration files provided by a package in an examples directory, namely <code>${PREFIX}/share/examples/package-name/</code>. Every installation of the respective package always updates these files. The administrator never modifies them. They are just examples.</p>
-
 <p>When the package is finally installed, pkgsrc looks in the <code>examples/</code> directory. Each time it finds a file there, it checks whether that file exists in the system configuration directory (usually but not always <code>/usr/pkg/etc</code>). If it doesn&rsquo;t exist, pkgsrc copies it verbatim. However, if it does exist, pkgsrc checks it for local modifications and overrides it with the new version only if there are no changes. Finally, the administrator may choose to install the configuration files for a specific package in a separate directory, out of the generic system configuration directory.</p>
-
 <p>As you can see, this particular packaging system wants to do all the installation by itself. The advantage of this is that a generic and consistent framework handles all configuration files. It also works perfectly with binary packages. The disadvantage is that unfortunately, almost all third-party utilities need patches to make them work within this framework. I am sure that other packaging systems also have their own structure to manage configuration files, and that they need to patch programs to work according to their rules.</p>
-
 <p>&ldquo;Why do these programs need patching?&rdquo; you ask. Some of the reasons:</p>
-
 <ul>
 <li>Some packages install configuration files directly into the system configuration directory (known as <code>sysconfdir</code> in GNU Autoconf terminology). This is the most common problem. It&rsquo;s a problem because the package system won&rsquo;t know about those files and won&rsquo;t be able to perform its sanity checks nor handling of configuration files.</li>
 <li>Some packages don&rsquo;t honor the <code>--sysconfdir</code> flag given to the configuration script properly, or they don&rsquo;t have such a flag nor a similar one. That means you can&rsquo;t change where the programs should look for configuration files at runtime during configuration. The sources need patching to remove the <code>/etc</code> string or similar hard-coded paths.</li>
 </ul>
-
 <p>Here are some better ways to handle configuration files, in case you need them. I know that some people will disagree with the last ones; in that case, consider following these rules only in <code>--enable-packager-mode</code>.</p>
-
 <ul>
 <li>Provide a <code>--sysconfdir</code> flag (or a similarly named one) in your configuration script that takes an absolute path to where to place the configuration files. GNU Autoconf already does this.</li>
 <li>If your program installs a lot of configuration files, consider using a directory under <code>sysconfdir</code>. However, if you do that, add a <code>--sysconfsubdir</code> flag (or a similarly named one) to specify the name of this subdirectory; this should be a path relative to <code>sysconfdir</code>, as determined by the previous point.</li>
@@ -246,63 +226,53 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 <li>Never touch the contents of the configuration directory by yourself. Instead, install your sample configuration files, if any, under <code>PREFIX/share/examples/package-name/</code> (or a similar directory of your choice).</li>
 <li>Optionally, add a flag to the configuration script, say <code>--install-cfg-files</code>, that copies example files from the examples directory to <code>sysconfdir</code>, following whichever method you think is more appropriate. However, try to keep this defaulting to no; or, if you still want to set it to yes, add a big note somewhere saying so.</li>
 </ul>
-
 <h1 id="unprivileged-builds">Unprivileged Builds</h1>
-
 <p>Many packaging systems (including pkgsrc) let you build packages as a regular user and require only superuser privileges to install them (to have the right permissions, ownerships, setuid flags, and so on). Therefore, you should make sure that your program builds correctly without superuser privileges to ease the packaging task. I can&rsquo;t think of an example in which a program requires full privileges to build.</p>
-
 <p>Furthermore, the installation stage should not trigger any rebuild rule (causing the creation of new files) and must not leave temporary files in the source tree.</p>
-
 <p>The rationale behind this is the following: the only stage that happens as a privileged user is the installation. Other stages, such as the build or the cleaning, happen as a regular user. The one most affected by incorrect permissions is the cleaning that happens after an installation, because the regular user will not be able to remove some of the files owned by the superuser (especially if he owns a directory in the source tree).</p>
-
 <h1 id="the-make-utility">The Make Utility</h1>
-
 <p>It is very common to find makefiles that are <a href="http://www.gnu.org/software/make/">GNU Make</a>-specific and fail to build with other tools. This can manifest in two ways: either the other make utility produces a syntax error and aborts, or it shows strange errors such as missing rules. The former is easy to diagnose and fix; the latter can lead to headaches, especially if you&rsquo;re a novice packager.</p>
-
 <p>When developing your program, you should try to build it with at least GNU Make and BSD&rsquo;s make. If it builds only with GNU&rsquo;s, you can:</p>
-
 <ul>
-<li><p>Try to fix your makefiles. That can be impossible, depending on where the incompatibilities come from. If a third-party utility introduced them or they are because you have to use a GNU Make-specific feature, you won&rsquo;t be able to fix them.</p>
-
-<p>However, in multiple situations you can overcome the lack of special functions by using the substitution features of configuration scripts, thus generating portable makefiles. This may not be a trivial task, but the portability gain is worth it.</p></li>
-
-<li><p>Clearly document that your program requires GNU Make to build. For example, add a note in the readme file.</p></li>
-
-<li><p>Make your configuration script check whether the make utility is available (you should always do this), check whether it is GNU Make, and fail if it isn&rsquo;t. For example, if you use GNU Autoconf to generate your configuration script, you could do something like this:</p>
+<li>
+<p>Try to fix your makefiles. That can be impossible, depending on where the incompatibilities come from. If a third-party utility introduced them or they are because you have to use a GNU Make-specific feature, you won&rsquo;t be able to fix them.</p>
+<p>However, in multiple situations you can overcome the lack of special functions by using the substitution features of configuration scripts, thus generating portable makefiles. This may not be a trivial task, but the portability gain is worth it.</p>
+</li>
+<li>
+<p>Clearly document that your program requires GNU Make to build. For example, add a note in the readme file.</p>
+</li>
+<li>
+<p>Make your configuration script check whether the make utility is available (you should always do this), check whether it is GNU Make, and fail if it isn&rsquo;t. For example, if you use GNU Autoconf to generate your configuration script, you could do something like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">AC_CHECK_PROGS<span class="o">(</span>MAKE, <span class="o">[</span>gmake make<span class="o">])</span>
 <span class="k">if</span> <span class="nb">test</span> x<span class="s2">&#34;</span><span class="si">${</span><span class="nv">MAKE</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">=</span> x<span class="p">;</span> <span class="k">then</span>
     AC_MSG_ERROR<span class="o">([</span>cannot find a make utility<span class="o">])</span>
 <span class="k">else</span>
     AC_MSG_CHECKING<span class="o">([</span>whether <span class="si">${</span><span class="nv">MAKE</span><span class="si">}</span> is GNU Make<span class="o">])</span>
-    <span class="k">if</span> <span class="si">${</span><span class="nv">MAKE</span><span class="si">}</span> --version <span class="m">2</span>&gt;/dev/null <span class="p">|</span> head -n <span class="m">1</span> <span class="p">|</span> grep <span class="s2">&#34;GNU Make&#34;</span> &gt;/dev/null<span class="p">;</span> <span class="k">then</span>
+    <span class="k">if</span> <span class="si">${</span><span class="nv">MAKE</span><span class="si">}</span> --version 2&gt;/dev/null <span class="p">|</span> head -n <span class="m">1</span> <span class="p">|</span> grep <span class="s2">&#34;GNU Make&#34;</span> &gt;/dev/null<span class="p">;</span> <span class="k">then</span>
         AC_MSG_RESULT<span class="o">([</span>yes<span class="o">])</span>
     <span class="k">else</span>
         AC_MSG_RESULT<span class="o">([</span>no<span class="o">])</span>
         AC_MSG_ERROR<span class="o">([</span>GNU Make is required, but <span class="si">${</span><span class="nv">MAKE</span><span class="si">}</span> is different<span class="o">])</span>
     <span class="k">fi</span>
-<span class="k">fi</span></code></pre></div>
-<p>This does a good job at automatic detection (which is acceptable here) and, most importantly, lets the user override the check by setting the <code>MAKE</code> variable in the environment prior to calling configure.</p>
-
-<p>In my opinion you should try to fix your makefiles first, because many times the incompatibilities come from minor details. If that&rsquo;s impossible, go for the configure check&mdash;really. Please note that depending on GNU Make by itself is not a problem, because good packaging systems can use it when needed. The annoyance comes from having to check manually whether the package will build with another tool, because some packaging systems don&rsquo;t use GNU Make by default. Can you imagine building an enormous program such as <a href="http://www.mozilla.org/">Mozilla</a>, only to realize after hours of compilation that it failed because it requires GNU Make?</p>
-
-<p>Another problem related to the make utility is that it may be present with a name other than make; common names are <code>gmake</code> for GNU Make, and <code>bmake</code> and <code>pmake</code> for BSD&rsquo;s make. If you call the make utility within your makefiles using the make name, it may pick up a different version than the one you need, causing further problems. To solve this issue, simply avoid hard-coding make in makefiles; use <code>${MAKE}</code> instead.</p>
-
-<p>Still, be aware that some old make utilities do not set the <code>${MAKE}</code> variable while running. In such cases, you can use GNU Autoconf&rsquo;s <code>@SET_MAKE@</code> macro to define it.</p>
-
-<h1 id="build-infrastructure-oddities">Build Infrastructure Oddities</h1>
-
-<p>The way your program is built also affects the packaging process. The following list describes the most important issues, most of which are related to your makefiles or the configuration script:</p>
-
-<ul>
-<li><p>Avoid attempts to autodetect how to create shared libraries. This has diverged on Unix-like operating systems, so much as to render any package unportable when hard-coding any particular type of shared object handling. GNU Libtool may be ugly and imperfect, but it often gets things right with little pain.</p></li>
-
-<li><p>Forget about linking shared libraries against static archives. Many platforms do not support this, for very good reasons. Consider two different shared libraries linked to the same static archive and a binary program that requires both of them. When they are loaded, they could provide overriding symbols, thus causing future problems.</p></li>
-
-<li><p>Do not directly hard-code custom build flags in variables the compiler reads, such as <code>CFLAGS</code>, <code>CXXFLAGS</code>, <code>CPPFLAGS</code>, or <code>LDFLAGS</code>, unless you check whether the compiler supports them. If you do that, you will break the build on compilers different than yours.</p></li>
+<span class="k">fi</span>
+</code></pre></div><p>This does a good job at automatic detection (which is acceptable here) and, most importantly, lets the user override the check by setting the <code>MAKE</code> variable in the environment prior to calling configure.</p>
+</li>
 </ul>
-
+<p>In my opinion you should try to fix your makefiles first, because many times the incompatibilities come from minor details. If that&rsquo;s impossible, go for the configure check&mdash;really. Please note that depending on GNU Make by itself is not a problem, because good packaging systems can use it when needed. The annoyance comes from having to check manually whether the package will build with another tool, because some packaging systems don&rsquo;t use GNU Make by default. Can you imagine building an enormous program such as <a href="http://www.mozilla.org/">Mozilla</a>, only to realize after hours of compilation that it failed because it requires GNU Make?</p>
+<p>Another problem related to the make utility is that it may be present with a name other than make; common names are <code>gmake</code> for GNU Make, and <code>bmake</code> and <code>pmake</code> for BSD&rsquo;s make. If you call the make utility within your makefiles using the make name, it may pick up a different version than the one you need, causing further problems. To solve this issue, simply avoid hard-coding make in makefiles; use <code>${MAKE}</code> instead.</p>
+<p>Still, be aware that some old make utilities do not set the <code>${MAKE}</code> variable while running. In such cases, you can use GNU Autoconf&rsquo;s <code>@SET_MAKE@</code> macro to define it.</p>
+<h1 id="build-infrastructure-oddities">Build Infrastructure Oddities</h1>
+<p>The way your program is built also affects the packaging process. The following list describes the most important issues, most of which are related to your makefiles or the configuration script:</p>
+<ul>
+<li>
+<p>Avoid attempts to autodetect how to create shared libraries. This has diverged on Unix-like operating systems, so much as to render any package unportable when hard-coding any particular type of shared object handling. GNU Libtool may be ugly and imperfect, but it often gets things right with little pain.</p>
+</li>
+<li>
+<p>Forget about linking shared libraries against static archives. Many platforms do not support this, for very good reasons. Consider two different shared libraries linked to the same static archive and a binary program that requires both of them. When they are loaded, they could provide overriding symbols, thus causing future problems.</p>
+</li>
+<li>
+<p>Do not directly hard-code custom build flags in variables the compiler reads, such as <code>CFLAGS</code>, <code>CXXFLAGS</code>, <code>CPPFLAGS</code>, or <code>LDFLAGS</code>, unless you check whether the compiler supports them. If you do that, you will break the build on compilers different than yours.</p>
 <p>Furthermore, even if you check whether the compiler supports the options you want, let the user override them. Adding an option may seem an excellent choice, but somebody, somewhere won&rsquo;t like it.</p>
-
 <p>The following code illustrates how a configuration script could pass multiple debugging flags to the compiler following the two rules just described:</p>
 <div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">AC_ARG_ENABLE<span class="o">(</span>
     developer,
@@ -316,58 +286,44 @@ ONLamp.com guest posts</b> series</a>.</i></p>
         AC_MSG_CHECKING<span class="o">(</span>whether <span class="si">${</span><span class="nv">CC</span><span class="si">}</span> supports <span class="si">${</span><span class="nv">f</span><span class="si">}</span><span class="o">)</span>
         <span class="nv">saved_cflags</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">CFLAGS</span><span class="si">}</span><span class="s2">&#34;</span>
         <span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">CFLAGS</span><span class="si">}</span><span class="s2"> </span><span class="si">${</span><span class="nv">f</span><span class="si">}</span><span class="s2">&#34;</span>
-        AC_COMPILE_IFELSE<span class="o">([</span>int main<span class="o">(</span>void<span class="o">)</span> <span class="o">{</span> <span class="k">return</span> <span class="m">0</span><span class="p">;</span> <span class="o">}]</span>,
+        AC_COMPILE_IFELSE<span class="o">([</span>int main<span class="o">(</span>void<span class="o">)</span> <span class="o">{</span> <span class="k">return</span> 0<span class="p">;</span> <span class="o">}]</span>,
                           AC_MSG_RESULT<span class="o">(</span>yes<span class="o">)</span>,
                           AC_MSG_RESULT<span class="o">(</span>no<span class="o">)</span>
                           <span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">saved_cflags</span><span class="si">}</span><span class="s2">&#34;</span><span class="o">)</span>
     <span class="k">done</span>
 <span class="k">else</span>
     <span class="nv">CPPFLAGS</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">CPPFLAGS</span><span class="si">}</span><span class="s2"> -DNDEBUG&#34;</span>
-<span class="k">fi</span></code></pre></div></li>
-
-<li><p>If your software uses automatically generated files or documentation, please include the generated files in the distribution tarball, so that not every user has to generate the files again for themselves. This will simplify the build process by reducing the build-time dependency tree.</p>
-
+<span class="k">fi</span>
+</code></pre></div></li>
+<li>
+<p>If your software uses automatically generated files or documentation, please include the generated files in the distribution tarball, so that not every user has to generate the files again for themselves. This will simplify the build process by reducing the build-time dependency tree.</p>
 <p>For example, if you use <a href="http://www.gtk.org/gtk-doc/">GTK-Doc</a>, your must make sure that your distfile includes all the generated HTML files. As a simpler example (although you generally don&rsquo;t have to care about it), when using GNU Autoconf, your distfile must include the configure script, or, when using GNU Automake, it has to include all the Makefile.in files.</p>
-
-<p>This is related to the build infrastructure of your package in the sense that it has to keep control of the generated files and be careful to include them in the distfile (usually when issuing a make dist in the source package.</p></li>
+<p>This is related to the build infrastructure of your package in the sense that it has to keep control of the generated files and be careful to include them in the distfile (usually when issuing a make dist in the source package.</p>
+</li>
 </ul>
-
 <h1 id="code-portability">Code Portability</h1>
-
 <p>Writing portable code is a difficult quest. Nowadays, the most popular Unix-like system is Linux; thus almost all software development happens under it. This drives to several portability issues for less than careful code. The most common ones are:</p>
-
 <ul>
-<li>Use of <a href="http://www.gnu.org/software/libc/">GNU libc</a> extensions. Many non-Linux systems, like the BSDs or <a href="http://www.sun.com/solaris/">Solaris</a>, use their own version of the C library, which is not made by GNU. It often lacks all the extensions introduced in GNU libc. Usually, the functions&rsquo; manual pages specify whether they conform to an existing specification (such as POSIX); this can help you decide which are safe to use and which are not.</li>
+<li>Use of <a href="http://www.gnu.org/software/libc/">GNU libc</a> extensions. Many non-Linux systems, like the BSDs or <a href="http://www.sun.com/solaris/">Solaris</a>, use their own version of the C library, which is not made by GNU. It often lacks all the extensions introduced in GNU libc. Usually, the functions' manual pages specify whether they conform to an existing specification (such as POSIX); this can help you decide which are safe to use and which are not.</li>
 <li>Direct device access. Each system has its own set of devices under <code>/dev</code>. A few of them use common names, but the vast majority are different. Furthermore, even for the same device, ioctls may differ.</li>
 <li>Access to <code>/proc</code>: Linux uses the <code>/proc</code> tree to hold not only processes but also a lot of information about the current system. On other systems (the BSDs, for example), this directory may not exist at all. Relying exclusively on it is not portable.</li>
 </ul>
-
 <p>There is much, much more. Analyzing portability issues in detail could be worth another (very long) article.</p>
-
 <p>How does this affect the packaging process? While writing your code, you may realize that a part of it will not be portable, especially if it has to deal with system intrinsics or hardware devices. You can either try to fix it, which may be difficult if you do not have other systems around, or you can clearly mark such code as not portable. The latter is possible by using independent source files for each system (for example, <code>cdrom-linux.c</code> and <code>cdrom-netbsd.c</code>) or with conditional compilation.</p>
-
 <p>For instance, suppose you have a chunk of code that builds only if Linux&rsquo;s CD access interface is available; you aren&rsquo;t aware of how to do the same thing on non-Linux systems. The only right way to fix this is to detect the presence of the required feature from the configuration script (but avoid testing macros such as <code>__linux__</code> whenever possible; see below). Once you&rsquo;ve checked for it, you should do something like the following in your code:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#ifdef HAVE_LINUX_CD_INTERFACE
 </span><span class="cp"></span>    <span class="cm">/* Code that only works under Linux systems... */</span>
 <span class="cp">#else
 </span><span class="cp">#   error Sorry, this part of the code is not yet ported to non-Linux systems.
-</span><span class="cp">#endif</span></code></pre></div>
-<p>First of all, there is a clear separation of the code in OS-specific chunks, which eases the porting process. However, note the <code>#error</code> line in the <code>#else</code> clause, which is important. This is to make the compilation fail on non-Linux systems with an appropriate error message. The packager will quickly see where the error is, and he may attempt to patch your code to support another platform. (If he&rsquo;s able to do that, you will receive a patch to improve your program!) The rule to remember is that it&rsquo;s better to keep errors controlled than to let your code fail in unexpected places.</p>
-
+</span><span class="cp">#endif
+</span></code></pre></div><p>First of all, there is a clear separation of the code in OS-specific chunks, which eases the porting process. However, note the <code>#error</code> line in the <code>#else</code> clause, which is important. This is to make the compilation fail on non-Linux systems with an appropriate error message. The packager will quickly see where the error is, and he may attempt to patch your code to support another platform. (If he&rsquo;s able to do that, you will receive a patch to improve your program!) The rule to remember is that it&rsquo;s better to keep errors controlled than to let your code fail in unexpected places.</p>
 <p>As I said two paragraphs ago, you shouldn&rsquo;t use macros like <code>__linux__</code> or <code>__i386__</code> and friends. Why not? These macros fail to detect changes across versions of the same OS. For example, you may be using a Linux-specific feature, but unfortunately it is available only with a 2.6 kernel (and you are not aware of this fact). Therefore, you use <code>__linux__</code> to separate your code, but then it will mysteriously fail in older versions.</p>
-
 <p>OSes have evolved so much, as has their support for different architectures, that relying on these definitions is bad. Check for the specific feature you need from the configuration script, and use the results. This means that your code will be not only more portable, but also easier to maintain. Examples of programs that rely on these definitions are <a href="http://www.perl.org/">Perl</a>, <a href="http://www.openssl.org/">OpenSSL</a>, and <a href="http://www.cryptopp.com/">Crypto++</a>; they are a real nightmare to port and maintain.</p>
-
 <p>As we are talking about conditional compilation definitions, let me mention some standards. Don&rsquo;t expect <code>_XOPEN_SOURCE</code> or <code>_POSIX_SOURCE</code> (and similar macros) to do anything useful across multiple platforms. Don&rsquo;t define them unless absolutely necessary; they likely will restrict the namespace further rather than provide portability. If you need to use a specific function, first verify whether it is available in the most common systems, and then add a check in your configuration script.</p>
-
 <p>Another solution, which may be better in some situations, is to use hardware or system abstraction libraries. These often deal with portability details and remove that burden from you. Furthermore, they have wide testing and already have packages for other operating systems, so you have a better chance that your program will work properly. Examples include <a href="http://www.gtk.org/">Glib</a>, libgtop, and <a href="http://www.trolltech.com/">Qt</a>.</p>
-
 <h1 id="the-end">The End</h1>
-
 <p>I have tried to describe many of the problems that have bothered packagers over time as well as possible; let me know if something is hard to understand and I will try to explain further.</p>
-
 <p>I also may have left out other important problems. I can&rsquo;t be aware of them all, especially because something that another developer sees as a problem may look harmless to me.</p>
-
 <p>Anyway, I (I think I can safely say we) hope you have found this interesting and that you will try to make your developments more packager friendly. Thanks in advance!</p>
 </article>
             </div>

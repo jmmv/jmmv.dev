@@ -19,7 +19,7 @@
   <meta name="description" content="Bazel&amp;rsquo;s original raison d&amp;rsquo;etre was to support Google&amp;rsquo;s monorepo. A consequence of using a monorepo is that some builds will become very large. And large builds can be very resource hungry, especially when using a tool like Bazel that tries to parallelize as many actions as possible for efficiency reasons. There are many resource types in a system, but today I&amp;rsquo;d like to focus on the number of open files at any given time (nofiles).">
   <meta property="og:description" content="Bazel&amp;rsquo;s original raison d&amp;rsquo;etre was to support Google&amp;rsquo;s monorepo. A consequence of using a monorepo is that some builds will become very large. And large builds can be very resource hungry, especially when using a tool like Bazel that tries to parallelize as many actions as possible for efficiency reasons. There are many resource types in a system, but today I&amp;rsquo;d like to focus on the number of open files at any given time (nofiles).">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/01/open-files-limit-macos-and-jvm.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -157,17 +157,11 @@
             <div class="col">
               
               <article><p>Bazel&rsquo;s original <a href="https://www.dictionary.com/browse/raison-d-etre">raison d&rsquo;etre</a> was to support Google&rsquo;s monorepo. A consequence of using a monorepo is that some builds will become very large. And large builds can be very resource hungry, especially when using a tool like Bazel that tries to parallelize as many actions as possible for efficiency reasons. There are many resource types in a system, but today I&rsquo;d like to focus on the number of open files at any given time (<code>nofiles</code>).</p>
-
 <p>macOS&rsquo;s default <em>soft limit</em> for <code>nofiles</code> is pretty low: on all the systems I&rsquo;ve checked, this is set to 256. Fortunately, the default <em>hard limit</em> is <code>unlimited</code> so unprivileged users can bump their own limits to support large builds. Having to tweak limits by hand is ugly, so in July 2017 I made Bazel raise its own soft limit to the hard limit in <a href="https://github.com/bazelbuild/bazel/commit/a96369c1c66df624bbee0d9e1c7ad38fea55cd26">commit a96369c</a>.</p>
-
 <p>This automatic unlimiting wasn&rsquo;t trivial because of another cap in macOS: the  the <code>kern.maxfilesperproc</code> system property. Neither the soft nor the hard limit can exceed this cap. More specifically, the soft and hard limits cannot be <em>set</em> to a value higher than the kernel&rsquo;s cap&hellip; but it&rsquo;s possible for them to <em>already</em> exceed the cap (which is strange and maybe a bug in Darwin). To support this, I made Bazel restrict its upping of the soft limit to the minimum of the hard limit and the kernel cap.</p>
-
 <p>Things seemed fine for a while (more than a year!): common build failures vanished after this fix and I assumed this issue was fixed for real. Except&hellip; this came back to bite us again recently. Under some adversary conditions, some subprocesses were failing with errors indicating that they had exceeded their <code>nofiles</code> limit. And this was strange because the kernel cap is a pretty high value.</p>
-
 <p>When I got this bug report, I quickly wrote a <code>genrule</code> (a custom build action in Bazel) to print its own view of <code>ulimit -a -H</code>&hellip; and found that the <code>nofiles</code> limit was set to 10240. But the kernel cap was 24576 and the hard limit before starting Bazel was <code>unlimited</code>. Where was this number coming from? There were no matches of it in the Bazel source tree&hellip;</p>
-
 <p>A bit of digging (which I can&rsquo;t remember right now how I pursued) soon surfaced something pretty interesting: the JVM&rsquo;s HotSpot <em>also</em> has similar logic during its startup process. This logic is enabled by default and is controlled via the <a href="https://www.oracle.com/technetwork/articles/java/vmoptions-jsp-140102.html"><code>-XX:+MaxFDLimit</code></a> option. And guess what, <a href="https://hg.openjdk.java.net/jdk10/jdk10/hotspot/file/5ab7a67bc155/src/os/bsd/vm/os_bsd.cpp#l3435">on Darwin <em>only</em></a> and because the <code>setrlimit(2)</code> manpage says so, this logic restricts the <code>nofiles</code> soft limit to the <code>OPEN_MAX</code> constant, which, drumroll, happens to be 10240.</p>
-
 <p>With this knowledge in mind, the solution was easy: pass the opposite option, <code>-XX:-MaxFDLimit</code>, to the JVM so that our own higher limited was left untouched.  See <a href="https://github.com/bazelbuild/bazel/commit/30dd8715847e4c797cd28da13e14eab7721b518d">commit 30dd871</a>. And of course, the hardest part of the solution involved adding an integration test to ensure that what subprocesses see is actually what we wanted.</p>
 </article>
             </div>

@@ -21,7 +21,7 @@ Why may unused parameters appear? You would think that unused parameters should 
   <meta property="og:description" content="Today I would like to dive into the topic of unused parameters in C and C&#43;&#43;: why they may happen and how to properly deal with them—because smart compilers will warn you about their presence should you enable -Wunused-parameter or -Wextra, and even error out if you are brave enough to use -Werror.
 Why may unused parameters appear? You would think that unused parameters should never exist: if the parameter is not necessary as an input, it should not be there in the first place!">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2015/02/unused-parameters-in-c-and-c.html">
 
@@ -31,7 +31,7 @@ Why may unused parameters appear? You would think that unused parameters should 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,80 +158,52 @@ Why may unused parameters appear? You would think that unused parameters should 
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>Today I would like to dive into the topic of <em>unused parameters</em> in C and C++: why they may happen and how to properly deal with them—because smart compilers will warn you about their presence should you enable <code>-Wunused-parameter</code> or <code>-Wextra</code>, and even error out if you are brave enough to use <code>-Werror</code>.</p>
-
+              <article><p>Today I would like to dive into the topic of <em>unused parameters</em> in C and C++: why they may happen and how to properly deal with them—because smart compilers will warn you about their presence should you enable <code>-Wunused-parameter</code> or <code>-Wextra</code>, and even error out if you are brave enough to use <code>-Werror</code>.</p>
 <h1 id="why-may-unused-parameters-appear">Why may unused parameters appear?</h1>
-
 <p>You would think that unused parameters should never exist: if the parameter is not necessary as an input, it should not be there in the first place! That&rsquo;s a pretty good argument, but it does not hold when polymorphism enters the picture: if you want to have different implementations of a single API, such API will have to provide, on input, a superset of all the data required by all the possible implementations.</p>
-
 <p>The obvious case of the above is having an abstract method implemented by more than one subclass (which you can think of as a function pointer within a <code>struct</code> in the case of C). In this scenario, the caller of this abstract method may be handling a generic condition but the various specific implementations may or may not use all the input data.</p>
-
 <h1 id="our-example">Our example</h1>
-
 <p>An example taken straight from Kyua is the <code>compute_result</code> method, whose purpose is <em>to determine the status of a test case after termination based on the outputs of the test program</em>, including: the program&rsquo;s exit code, its standard output, its standard error, and files that may be left in the transient work directory. The signature of this abstract method looks like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="k">virtual</span> <span class="n">model</span><span class="o">::</span><span class="n">test_result</span> <span class="n">compute_result</span><span class="p">(</span>
     <span class="k">const</span> <span class="n">optional</span><span class="o">&lt;</span> <span class="n">process</span><span class="o">::</span><span class="n">status</span> <span class="o">&gt;&amp;</span> <span class="n">status</span><span class="p">,</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">work_directory</span><span class="p">,</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">stdout_path</span><span class="p">,</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">stderr_path</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-</code></pre></div>
-<p>Kyua implements this interface three times: one for plain test programs, one for ATF-based test programs, and one for TAP-compliant test programs. This interface receives all test-related post-termination data as inputs so that the different implementations can examine <em>any</em> parts (possibly not all) they require to compute the result.</p>
-
+</code></pre></div><p>Kyua implements this interface three times: one for plain test programs, one for ATF-based test programs, and one for TAP-compliant test programs. This interface receives all test-related post-termination data as inputs so that the different implementations can examine <em>any</em> parts (possibly not all) they require to compute the result.</p>
 <p>In concrete terms: the plain interface only looks at the exit status; the ATF interface looks both at the exit status and at a file that is left in the work directory; and the TAP interface looks both at the exit status and the standard output of the program.</p>
-
 <p>When you face an scenario like this where you have a generic method, it is clear that your code will end up with functions that receive some parameters that they do not <em>need to</em> use. This is alright. However, as obvious as it may be to you, the compiler does not know that and therefore assumes a coding error, warning you along the way. Not helpful.</p>
-
 <h1 id="two-simple-but-unsuitable-alternatives">Two simple but unsuitable alternatives</h1>
-
 <p>A first mechanism around this, which only works in C++, is to omit the parameter <em>name</em> in the function definition. Unfortunately, doing so means you cannot reference the parameter by name any longer in your documentation and, furthermore, this solution does not work for C.</p>
-
 <p>A second mechanism is to introduce side-effect free statements in your code of the form <code>(void)unused_argument_name;</code>. Doing this is extremely ugly (for starters, you have to remember to keep such statements in sync with reality) and I fear is not guaranteed to silence the compiler—because, well, the compiler will spot a spurious statement and could warn about it as well.</p>
-
 <p>Because these two solutions are suboptimal, I am not going to invest any more time on them. Fortunately, there is a third alternative.</p>
-
 <h1 id="tagging-unused-parameters-with-compiler-attributes">Tagging unused parameters with compiler attributes</h1>
-
 <p>The third and best mechanism around this is to explicitly tag the unused parameters with the <code>__attribute__((unused))</code> GCC extension as follows:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="n">model</span><span class="o">::</span><span class="n">test_result</span> <span class="n">compute_result</span><span class="p">(</span>
     <span class="k">const</span> <span class="n">optional</span><span class="o">&lt;</span> <span class="n">process</span><span class="o">::</span><span class="n">status</span> <span class="o">&gt;&amp;</span> <span class="n">status</span><span class="p">,</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">work_directory</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">unused</span><span class="p">)),</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">stdout_path</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">unused</span><span class="p">)),</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">stderr_path</span> <span class="n">__attribute__</span><span class="p">((</span><span class="n">unused</span><span class="p">)))</span> <span class="k">const</span><span class="p">;</span>
-</code></pre></div>
-<p>But this, as shown, is not portable. How can you make it so?</p>
-
+</code></pre></div><p>But this, as shown, is not portable. How can you make it so?</p>
 <h1 id="making-the-code-portable">Making the code portable</h1>
-
 <p>If you want your code to work portably across compilers, then you have to go a bit further because the <code>__attribute__</code> decorators are not standard. The most basic abstraction macro you&rsquo;d think of is as follows:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="cp">#define UTILS_UNUSED __attribute__((unused))
-</span></code></pre></div>
-<p>&hellip; which you could parameterize as:</p>
+</span></code></pre></div><p>&hellip; which you could parameterize as:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="cp">#define UTILS_UNUSED @ATTRIBUTE_UNUSED@
-</span></code></pre></div>
-<p>&hellip; so that your <code>configure.ac</code> script could determine what the right mechanism to mark a value as unused in your platform is and perform the replacement. This is not trivial, so take a look at Kyua&rsquo;s <a href="https://github.com/jmmv/kyua/blob/master/m4/compiler-features.m4">compiler-features.m4</a> for <code>configure.ac</code> to get some ideas.</p>
-
+</span></code></pre></div><p>&hellip; so that your <code>configure.ac</code> script could determine what the right mechanism to mark a value as unused in your platform is and perform the replacement. This is not trivial, so take a look at Kyua&rsquo;s <a href="https://github.com/jmmv/kyua/blob/master/m4/compiler-features.m4">compiler-features.m4</a> for <code>configure.ac</code> to get some ideas.</p>
 <p>Such a simple macro then lets you write:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="n">model</span><span class="o">::</span><span class="n">test_result</span> <span class="n">compute_result</span><span class="p">(</span>
     <span class="k">const</span> <span class="n">optional</span><span class="o">&lt;</span> <span class="n">process</span><span class="o">::</span><span class="n">status</span> <span class="o">&gt;&amp;</span> <span class="n">status</span><span class="p">,</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">work_directory</span> <span class="n">UTILS_UNUSED</span><span class="p">,</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">stdout_path</span> <span class="n">UTILS_UNUSED</span><span class="p">,</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">stderr_path</span> <span class="n">UTILS_UNUSED</span><span class="p">)</span> <span class="k">const</span><span class="p">;</span>
-</code></pre></div>
-<p>&hellip; which gets us most of the way there, but not fully.</p>
-
+</code></pre></div><p>&hellip; which gets us most of the way there, but not fully.</p>
 <h1 id="going-further">Going further</h1>
-
 <p>The <code>UTILS_UNUSED</code> macro shown above lets the compiler know that the argument may be unused and that this is acceptable. Unfortunately, if an argument is marked as unused but it is <em>actually used</em>, the compiler will not tell you about it. Such a thing can happen once you modify the code months down the road and forget to modify the function signature. If this happens, it is a recipe for obscure issues, if only because you will confuse other programmers when they read the code and cannot really understand the intent behind the attribute declaration.</p>
-
 <p>My trick to fix this, which I&rsquo;ve been using successfully for various years, is to define a macro that <em>also wraps the argument name</em>; say: <code>UTILS_UNUSED_PARAM(stdout_path)</code>. This macro does two things: first, it abstracts the definition of the attribute so that <code>configure</code> may strip it out if the attribute is not supported by the underlying compiler; and, second and more importantly, <strong>it <em>renames</em> the given argument by prefixing it with the <code>unused_</code> string</strong>. This renaming is where the beauty lies: the name change will forbid you from using the parameter via its given name and thus, whenever you have to start using the parameter, you will very well know to remove the macro from the function definition. Has worked every single time since!</p>
-
 <p>Here is how the macro looks like (straight from <a href="https://github.com/jmmv/kyua/blob/master/utils/defs.hpp.in">Kyua&rsquo;s defs.hpp.in file</a>):</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="cp">#define UTILS_UNUSED @ATTRIBUTE_UNUSED@
 </span><span class="cp">#define UTILS_UNUSED_PARAM(name) unused_ ## name UTILS_UNUSED
-</span></code></pre></div>
-<p>And here is how the macro would be used in our example above:</p>
+</span></code></pre></div><p>And here is how the macro would be used in our example above:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="c1">/// This is a Doxygen-style docstring.
 </span><span class="c1">///
 </span><span class="c1">/// Note how, in this comment, we must refer to our unused
@@ -253,14 +225,11 @@ Why may unused parameters appear? You would think that unused parameters should 
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">UTILS_UNUSED_PARAM</span><span class="p">(</span><span class="n">work_directory</span><span class="p">),</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">UTILS_UNUSED_PARAM</span><span class="p">(</span><span class="n">stdout_path</span><span class="p">),</span>
     <span class="k">const</span> <span class="n">fs</span><span class="o">::</span><span class="n">path</span><span class="o">&amp;</span> <span class="n">UTILS_UNUSED_PARAM</span><span class="p">(</span><span class="n">stderr_path</span><span class="p">))</span> <span class="k">const</span><span class="p">;</span>
-</code></pre></div>
-<h1 id="what-about-doxygen">What about Doxygen?</h1>
-
+</code></pre></div><h1 id="what-about-doxygen">What about Doxygen?</h1>
 <p>As I just mentioned Doxygen above, there is one extra trick to get our macros working during the documentation extraction phase. Because Doxygen does not implement a full-blown C/C++ parser—although I wish it did, and nowadays this is relatively easy thanks to LLVM!—you have to tell Doxygen how to interpret the macro. Do so with the following code to the <code>Doxyfile</code> control file:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="n">PREDEFINED</span>  <span class="o">=</span> <span class="s">&#34;UTILS_UNUSED=&#34;</span>
 <span class="n">PREDEFINED</span> <span class="o">+=</span> <span class="s">&#34;UTILS_UNUSED_PARAM(name)=unused_ ## name&#34;</span>
-</code></pre></div>
-<p>So, what about you? Do you keep your code warning-free by applying similar techniques?</p>
+</code></pre></div><p>So, what about you? Do you keep your code warning-free by applying similar techniques?</p>
 </article>
             </div>
           </div>

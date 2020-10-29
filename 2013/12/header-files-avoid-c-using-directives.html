@@ -21,7 +21,7 @@ using and using namespace The C&#43;&#43; using directive and its more generic u
   <meta property="og:description" content="Following up on the previous C&#43;&#43; post, here comes one more thing to consider when writing header files in this language.
 using and using namespace The C&#43;&#43; using directive and its more generic using namespace counterpart, allow the programmer to bring a given symbol or all the symbols in a namespace, respectively, into the calling scope. This feature exists to simplify typing and, to some extent, to make the code more readable.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/12/header-files-avoid-c-using-directives.html">
 
@@ -31,7 +31,7 @@ using and using namespace The C&#43;&#43; using directive and its more generic u
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -218,16 +218,10 @@ Header files</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p>Following up on the previous C++ post, here comes one more thing to consider when writing header files in this language.</p>
-
+              <article><p>Following up on the previous C++ post, here comes one more thing to consider when writing header files in this language.</p>
 <h1 id="using-and-using-namespace"><code>using</code> and <code>using namespace</code></h1>
-
 <p>The C++ <code>using</code> directive and its more generic <code>using namespace</code> counterpart, allow the programmer to bring a given symbol or all the symbols in a namespace, respectively, into the calling scope. This feature exists to simplify typing and, to some extent, to make the code more readable. (It may have come into existence to simplify the porting of old, non-ISO C++ code to modern C++, but that&rsquo;s just a guess.)</p>
-
 <p>The most common use of these that I have seen is to slap a <code>using namespace std;</code> at the beginning of a source file so that all of the symbols in the standard library are available without having to prefix each one of them with <code>std::</code>. So far so good.</p>
-
 <p>Another not-so-common practice is to rarely use this directive and, when using it, place it in the innermost scope where it is needed. In particular, this can make a function much easier to digest:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="kt">int</span> <span class="nf">complex_computation</span><span class="p">(...</span> <span class="n">inputs</span> <span class="p">...)</span> <span class="p">{</span>
     <span class="k">using</span> <span class="n">my_long_namespace</span><span class="o">::</span><span class="n">and_another_one</span><span class="o">::</span><span class="n">compute_engine</span><span class="p">;</span>
@@ -236,23 +230,14 @@ Header files</b> series</a>.</i></p>
     <span class="k">const</span> <span class="n">compute_engine</span><span class="o">::</span><span class="n">result</span> <span class="n">r</span> <span class="o">=</span> <span class="n">ce</span><span class="p">.</span><span class="n">run</span><span class="p">(...</span> <span class="n">inputs</span> <span class="p">...);</span>
     <span class="k">return</span> <span class="n">r</span><span class="p">.</span><span class="n">to_integer</span><span class="p">();</span>
 <span class="p">}</span>
-</code></pre></div>
-<p>Imagine how this function would look like if you had to prefix every instance of <code>compute_engine</code> with <code>my_long_namespace::and_another_one::</code>!</p>
-
+</code></pre></div><p>Imagine how this function would look like if you had to prefix every instance of <code>compute_engine</code> with <code>my_long_namespace::and_another_one::</code>!</p>
 <h1 id="the-rule">The rule</h1>
-
 <p>To recap, <code>using</code> directives in implementation, <code>cpp</code> files, is perfectly fine.</p>
-
 <p>Now, what&rsquo;s wrong—really, really wrong—is to place a <code>using</code> directive <em>in a header file</em>. These directives exist to be used at the source file level where the programmer has full control of all included headers and their possible conflicts. If header files decide to import names within a namespace into, say, the global scope, it is highly likely that two header files collide. Not to mention that doing so renders namespaces useless!</p>
-
 <p>So: keep all declarations in a header file well-contained into a namespace and do not ever expose those to the global scope with a <code>using</code> directive. Even more: do not ever do this for namespaces you do not control, like <code>std</code>.</p>
-
 <h1 id="the-exception">The exception</h1>
-
 <p>But I think there is a little exception, as usual.</p>
-
 <p>Sometimes, standard libraries from different vendors differ in what they expose via the C++-style headers for standard C functionality. Take <code>vsnprintf(3)</code> as an example. This function is declared in the <code>stdio.h</code> file in C and in the <code>cstdio</code> file in C++. Using the latter should mean that the function is made available only in the <code>std</code> namespace, not globally&hellip; but that&rsquo;s not always the case. Some standard libraries will expose <code>vsnprintf(3)</code> as a global symbol even when using <code>cstdio</code>.</p>
-
 <p>The question is: how do you use this function in your code? Because, depending on the compiler, you will either have to prefix its call with <code>std::</code> or not. You have two alternatives:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c++" data-lang="c++"><span class="c1">// ----- OPTION 1 -----
 </span><span class="c1"></span>
@@ -279,11 +264,8 @@ Header files</b> series</a>.</i></p>
 
     <span class="c1">// Assume it is in ::
 </span><span class="c1"></span>    <span class="o">::</span><span class="n">vsnprintf</span><span class="p">(...);</span>
-</code></pre></div>
-<p>These rely on you being able to define <code>HAVE_STD_VSNPRINTF</code> accordingly, which you can do with a manually-crafted <code>autoconf</code> test or with more complex magic that relies on compiler-defined constants.</p>
-
+</code></pre></div><p>These rely on you being able to define <code>HAVE_STD_VSNPRINTF</code> accordingly, which you can do with a manually-crafted <code>autoconf</code> test or with more complex magic that relies on compiler-defined constants.</p>
 <p>What happens when you have to use this function in many different header files, though? Do you repeat this compatibility hack in all of the files you care about, or do you try to code reuse by putting it in a header file? Obviously, the latter is better. But if you do the latter, you really should go for option 1 because option 2 would violate the rule above pretty badly.</p>
-
 <p>Can you think of other exceptions?</p>
 </article>
             </div>

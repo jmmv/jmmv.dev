@@ -21,7 +21,7 @@ When you force yourself to avoid modifying already-defined variables, you will n
   <meta property="og:description" content="Single assignment says that a variable should only be assigned a value once; i.e. a variable should only be initialized and never modified later. This could be said to be a property of functional programming—never mind that it&amp;rsquo;s used in compiler optimization a damn lot—so it may sound a bit out of scope in a readability post. Not really.
 When you force yourself to avoid modifying already-defined variables, you will need to find other ways to express your intent.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/07/readability-don-modify-variables.html">
 
@@ -31,7 +31,7 @@ When you force yourself to avoid modifying already-defined variables, you will n
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -248,33 +248,23 @@ Readability</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p><a href="http://en.wikipedia.org/wiki/Assignment_(computer_science)#Single_assignment">Single assignment</a> says that a variable should only be assigned a value once; i.e. a variable should only be <em>initialized</em> and never modified later. This could be said to be a property of functional programming—never mind that it&rsquo;s used in compiler optimization a damn lot—so it may sound a bit out of scope in a readability post. Not really.</p>
-
+              <article><p><a href="http://en.wikipedia.org/wiki/Assignment_(computer_science)#Single_assignment">Single assignment</a> says that a variable should only be assigned a value once; i.e. a variable should only be <em>initialized</em> and never modified later. This could be said to be a property of functional programming—never mind that it&rsquo;s used in compiler optimization a damn lot—so it may sound a bit out of scope in a readability post. Not really.</p>
 <p>When you <em>force yourself to avoid modifying already-defined variables</em>, you will need to find other ways to express your intent. To do so, in general: you will use a high-order construction instead of a loop; you will end up having to define intermediate variables, each with its own descriptive name; or you will move pieces of the code to an auxiliary function, also with a descriptive name.</p>
-
 <p>As a result, you will get clearer code: an identifier within a code block will be only used for a single purpose. Once the reader has determined what the identifier is and what it refers to, he can hold onto that assumption for the whole code block.</p>
-
 <p>Let&rsquo;s take a look at the previously-described cases one by one.</p>
-
 <h1 id="use-high-order-constructions-instead-of-accumulators">Use high-order constructions instead of accumulators</h1>
-
 <p>High-order constructions, like list comprehensions, <code>map</code>s, <code>reduce</code>s, <code>filter</code>s, <code>sum</code>s, etc. are powerful constructs that can replace loops in many cases. Use them to construct the value of a variable at once, instead of building it by accumulating values over a loop.</p>
-
 <p>In other words, given this code:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">adults</span> <span class="o">=</span> <span class="p">[]</span>
 <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">people</span><span class="p">:</span>
     <span class="k">if</span> <span class="n">person</span><span class="o">.</span><span class="n">age</span> <span class="o">&gt;=</span> <span class="mi">21</span><span class="p">:</span>
-        <span class="n">adults</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">person</span><span class="p">)</span></code></pre></div>
-<p>Change it to one of the following:</p>
+        <span class="n">adults</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">person</span><span class="p">)</span>
+</code></pre></div><p>Change it to one of the following:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">adults</span> <span class="o">=</span> <span class="p">[</span><span class="n">person</span> <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">people</span> <span class="k">if</span> <span class="n">person</span><span class="o">.</span><span class="n">age</span> <span class="o">&gt;=</span> <span class="mi">21</span><span class="p">]</span>
 <span class="c1"># OR</span>
-<span class="n">adults</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">person</span><span class="p">:</span> <span class="n">person</span><span class="o">.</span><span class="n">age</span> <span class="o">&gt;=</span> <span class="mi">21</span><span class="p">,</span> <span class="n">people</span><span class="p">)</span></code></pre></div>
-<p>Reasoning over a loop is hard: loops can do &ldquo;anything&rdquo;, so you must read the whole structure to understand what is going on and what the side-effects are. On the other hand, these two one-liners show exactly what your intent is. (Additionally, because these alternative idioms are at a higher semantic level, your compiler or runtime engine could do a much better job at optimizing—or, mind you, parallelizing—them.)</p>
-
+<span class="n">adults</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">person</span><span class="p">:</span> <span class="n">person</span><span class="o">.</span><span class="n">age</span> <span class="o">&gt;=</span> <span class="mi">21</span><span class="p">,</span> <span class="n">people</span><span class="p">)</span>
+</code></pre></div><p>Reasoning over a loop is hard: loops can do &ldquo;anything&rdquo;, so you must read the whole structure to understand what is going on and what the side-effects are. On the other hand, these two one-liners show exactly what your intent is. (Additionally, because these alternative idioms are at a higher semantic level, your compiler or runtime engine could do a much better job at optimizing—or, mind you, parallelizing—them.)</p>
 <h1 id="break-up-long-expressions-into-various-intermediate-values">Break up long expressions into various intermediate values</h1>
-
 <p>Given this code:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">people</span> <span class="o">=</span> <span class="n">load_people</span><span class="p">(</span><span class="nb">file</span><span class="p">)</span>
 <span class="n">everybody_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">people</span><span class="p">)</span>
@@ -283,8 +273,8 @@ Readability</b> series</a>.</i></p>
 <span class="n">adults_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">people</span><span class="p">)</span>
 
 <span class="n">people</span> <span class="o">=</span> <span class="p">[</span><span class="n">person</span> <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">people</span> <span class="k">if</span> <span class="n">person</span><span class="o">.</span><span class="n">city</span> <span class="o">==</span> <span class="n">here</span><span class="p">]</span>
-<span class="n">nearby_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">people</span><span class="p">)</span></code></pre></div>
-<p>You can see that the <code>people</code> variable has been assigned a value three times. Each time, a new filter has been applied to construct the subsequent value. Note that to understand what value of <code>people</code> might have at any point of the snippet, you must know what has happened up to that point. If you do this instead:</p>
+<span class="n">nearby_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">people</span><span class="p">)</span>
+</code></pre></div><p>You can see that the <code>people</code> variable has been assigned a value three times. Each time, a new filter has been applied to construct the subsequent value. Note that to understand what value of <code>people</code> might have at any point of the snippet, you must know what has happened up to that point. If you do this instead:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="n">people</span> <span class="o">=</span> <span class="n">load_people</span><span class="p">(</span><span class="nb">file</span><span class="p">)</span>
 <span class="n">everybody_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">people</span><span class="p">)</span>
 
@@ -293,11 +283,9 @@ Readability</b> series</a>.</i></p>
 
 <span class="n">nearby_adults</span> <span class="o">=</span> <span class="p">[</span><span class="n">person</span> <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">adults</span>
                  <span class="k">if</span> <span class="n">person</span><span class="o">.</span><span class="n">city</span> <span class="o">==</span> <span class="n">here</span><span class="p">]</span>
-<span class="n">nearby_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">nearby_adults</span><span class="p">)</span></code></pre></div>
-<p>Then it&rsquo;s obvious what every variable holds from the point where they were defined to the end of the code block. The names of the intermediate computations are clear, and the original variables always hold their initial values.</p>
-
+<span class="n">nearby_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">nearby_adults</span><span class="p">)</span>
+</code></pre></div><p>Then it&rsquo;s obvious what every variable holds from the point where they were defined to the end of the code block. The names of the intermediate computations are clear, and the original variables always hold their initial values.</p>
 <h1 id="move-auxiliary-computations-to-a-separate-function">Move auxiliary computations to a separate function</h1>
-
 <p>This is a followup to the previous code snippet. We could go one step further and rewrite it as follows:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">FilterAdults</span><span class="p">(</span><span class="n">people</span><span class="p">);</span>
     <span class="k">return</span> <span class="p">[</span><span class="n">person</span> <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">people</span> <span class="k">if</span> <span class="n">person</span><span class="o">.</span><span class="n">age</span> <span class="o">&gt;</span> <span class="mi">21</span><span class="p">]</span>
@@ -312,9 +300,8 @@ Readability</b> series</a>.</i></p>
 <span class="n">adults_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">adults</span><span class="p">)</span>
 
 <span class="n">nearby_adults</span> <span class="o">=</span> <span class="n">FilterNearby</span><span class="p">(</span><span class="n">adults</span><span class="p">)</span>
-<span class="n">nearby_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">nearby_adults</span><span class="p">)</span></code></pre></div>
-<p>This is my preferred alternative when the computation of the intermediate values is more complex than a single line (not the case above). Note that by splitting every step into its own function, you give your code higher semantical meaning and, as a bonus point, you can unit-test the various components more easily. Note also that you are <a href="/2013/06/readability-avoid-comments.html">avoiding any kind of comments</a> by making the code itself state what the various steps are.</p>
-
+<span class="n">nearby_widget</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">nearby_adults</span><span class="p">)</span>
+</code></pre></div><p>This is my preferred alternative when the computation of the intermediate values is more complex than a single line (not the case above). Note that by splitting every step into its own function, you give your code higher semantical meaning and, as a bonus point, you can unit-test the various components more easily. Note also that you are <a href="/2013/06/readability-avoid-comments.html">avoiding any kind of comments</a> by making the code itself state what the various steps are.</p>
 <p>Let me conclude by saying that what is described in this post are not golden rules. There will be cases where modifying an existing variable is the right thing to do, either because it&rsquo;s unavoidable or because it&rsquo;s just clearer that way. But, if you stop for a moment to consider single assignments every time you write code, you will generally realize that there is a more expressive, self-documenting way to do the same thing.</p>
 </article>
             </div>

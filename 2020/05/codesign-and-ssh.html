@@ -21,7 +21,7 @@ The build of the app was failing with an errSecInternalComponent error printed b
   <meta property="og:description" content="I just spent sometime between 30 minutes and 1 hour convincing the Mac Pro that sits in my office to successfully codesign an iOS app via Bazel. This was after having to update the signing key to a newer one and after rebooting the machine due to the macOS 10.15.5 upgrade—all remotely thanks to COVID-19.
 The build of the app was failing with an errSecInternalComponent error printed by codesign. It is not the first time I face this, but in all previous cases, I had either been at the computer to click through security popups, had had functional Chrome Remote Desktop access, or did not have to install a new signing key remotely.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/05/codesign-and-ssh.html">
 
@@ -31,7 +31,7 @@ The build of the app was failing with an errSecInternalComponent error printed b
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,52 +159,42 @@ The build of the app was failing with an errSecInternalComponent error printed b
             <div class="col">
               
               <article><p>I just spent sometime between 30 minutes and 1 hour convincing the Mac Pro that sits in my office to successfully <code>codesign</code> an iOS app via Bazel. This was after having to update the signing key to a newer one and after rebooting the machine due to the macOS 10.15.5 upgrade—all remotely thanks to COVID-19.</p>
-
 <p>The build of the app was failing with an <code>errSecInternalComponent</code> error printed by <code>codesign</code>. It is not the first time I face this, but in all previous cases, I had either been at the computer to click through security popups, had had functional Chrome Remote Desktop access, or did not have to install a new signing key remotely.</p>
-
 <p>Here are the notes of what I discovered throughout this process in case I face it again in the future.</p>
-
 <p>The first thing I did was distill the problem into a minimal reproduction so I didn&rsquo;t have to go through the cost of a full build to test if my troubleshooting steps had an effect. This is <em>always</em> a good idea. The following was sufficient to show the problem:</p>
-
 <pre><code>$ rm /tmp/empty
 $ touch /tmp/empty
 $ codesign --sign &quot;${KEY_SHORT_HASH?}&quot; -v /tmp/empty
 /tmp/empty: errSecInternalComponent
-</code></pre>
-
-<p>And here are the steps to fix it, all from the command line because that&rsquo;s all I had access to:</p>
-
+</code></pre><p>And here are the steps to fix it, all from the command line because that&rsquo;s all I had access to:</p>
 <ol>
-<li><p>Inspect existing identities to find the hash of the expired one:</p>
-
+<li>
+<p>Inspect existing identities to find the hash of the expired one:</p>
 <pre><code>$ security find-identity
 </code></pre></li>
-
-<li><p>Delete the expired identity from the login keychain using its long hash, obtained from the step above:</p>
-
+<li>
+<p>Delete the expired identity from the login keychain using its long hash, obtained from the step above:</p>
 <pre><code>$ security delete-identity -Z &quot;${LONG_HASH?}&quot;
 </code></pre></li>
-
-<li><p>Download the new <code>identity.p12</code> file and install it into the <em>system</em> keychain, not the <em>login</em> one:</p>
-
+<li>
+<p>Download the new <code>identity.p12</code> file and install it into the <em>system</em> keychain, not the <em>login</em> one:</p>
 <pre><code>$ sudo security import identity.p12 -k /Library/Keychains/System.keychain -P &quot;${PASSPHRASE?}&quot; -T /usr/bin/codesign
-</code></pre>
-
-<p>The <code>-T /usr/bin/codesign</code> flag is supposed to make the system trust this tool to access the imported identity without asking for a password&hellip; but the system still wants to ask for the password at least once and, as far as I can tell, the only way it has to do so seems to be through the graphical UI.</p>
-
-<p>Installing the identity into the system keychain side-steps this need to add a password. The rationale I&rsquo;ve found online is that the SSH daemon is trusted to access this keychain, so given that I&rsquo;m accessing the machine via SSH, it can get access.</p></li>
+</code></pre><p>The <code>-T /usr/bin/codesign</code> flag is supposed to make the system trust this tool to access the imported identity without asking for a password&hellip; but the system still wants to ask for the password at least once and, as far as I can tell, the only way it has to do so seems to be through the graphical UI.</p>
+<p>Installing the identity into the system keychain side-steps this need to add a password. The rationale I&rsquo;ve found online is that the SSH daemon is trusted to access this keychain, so given that I&rsquo;m accessing the machine via SSH, it can get access.</p>
+</li>
 </ol>
-
 <p>And that&rsquo;s it. It sounds very simple, right? But I got lost in trying many different things. In particular, I tried:</p>
-
 <ol>
-<li><p>Locking and unlocking the login keychain via <code>security lock-keychain</code> and <code>security unlock-keychain</code>, as the documentation online says. No luck.</p></li>
-
-<li><p>Researching and writing an AppleScript (!) snippet to let me enter the password remotely into the popup window that macOS shows. This didn&rsquo;t work due to other permissions missing, but it wouldn&rsquo;t have worked anyway because the calls to <code>codesign</code> from SSH didn&rsquo;t seem to wait for such popup window.</p></li>
-
-<li><p>Trying to recover Chrome Remote Desktop access, which I had enabled before abandoning the office but which stopped working as soon as I rebooted the machine in the past. Apparently you need to physically log in for the daemon to start, and I suspect the macOS upgrades invalidated whatever permissions this needed.</p></li>
+<li>
+<p>Locking and unlocking the login keychain via <code>security lock-keychain</code> and <code>security unlock-keychain</code>, as the documentation online says. No luck.</p>
+</li>
+<li>
+<p>Researching and writing an AppleScript (!) snippet to let me enter the password remotely into the popup window that macOS shows. This didn&rsquo;t work due to other permissions missing, but it wouldn&rsquo;t have worked anyway because the calls to <code>codesign</code> from SSH didn&rsquo;t seem to wait for such popup window.</p>
+</li>
+<li>
+<p>Trying to recover Chrome Remote Desktop access, which I had enabled before abandoning the office but which stopped working as soon as I rebooted the machine in the past. Apparently you need to physically log in for the daemon to start, and I suspect the macOS upgrades invalidated whatever permissions this needed.</p>
+</li>
 </ol>
-
 <p>What a waste of time and I&rsquo;m not even sure this is the right way to go. But for now, it&rsquo;ll do.</p>
 </article>
             </div>

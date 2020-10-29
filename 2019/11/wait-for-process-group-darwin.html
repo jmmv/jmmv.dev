@@ -21,7 +21,7 @@ macOS has a bunch of fancy features that other systems do not have, but process 
   <meta property="og:description" content="In the previous posts, we saw why waiting for a process group is complicated and we covered a specific, bullet-proof mechanism to accomplish this on Linux. Now is the time to investigate this same topic on macOS. Remember that the problem we are trying to solve (#10245) is the following: given a process group, wait for all of its processes to fully terminate.
 macOS has a bunch of fancy features that other systems do not have, but process control is not among them.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/11/wait-for-process-group-darwin.html">
 
@@ -31,7 +31,7 @@ macOS has a bunch of fancy features that other systems do not have, but process 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,15 +159,10 @@ macOS has a bunch of fancy features that other systems do not have, but process 
             <div class="col">
               
               <article><p>In the previous posts, we saw why <a href="/2019/11/wait-for-process-group.html">waiting for a process group is complicated</a> and we covered a specific, bullet-proof mechanism to <a href="/2019/11/wait-for-process-group-linux.html">accomplish this on Linux</a>. Now is the time to investigate this same topic on macOS. Remember that the problem we are trying to solve (<a href="https://github.com/bazelbuild/bazel/issues/10245">#10245</a>) is the following: given a process group, wait for all of its processes to fully terminate.</p>
-
 <p>macOS has a bunch of fancy features that <a href="/2019/03/macos-threads-qos-and-bazel.html">other systems do not have</a>, but process control is not among them. We do not have features like Linux&rsquo;s child subreaper or PID namespaces to keep track of process groups. Therefore, we&rsquo;ll have to roll our own. And the only way to do this is to scan the process table looking for processes with the desired process group identifier (PGID) and waiting until they are gone.</p>
-
 <p>Unfortunately, there is no portable API to programmatically access the process table. Sure, you can imagine shelling out to <code>ps(1)</code> and parsing its output, but this would be very inefficient and error-prone. So we have no choice but to rely on Darwin-specific primitives for efficiency and reliability.</p>
-
 <p>We can query the process table in Darwin by using <code>sysctl(3)</code> and looking under the <code>kern.proc.pgrp.&lt;PGID&gt;</code> name (MIB). (It&rsquo;s interesting to see that this is modeled after the BSD&rsquo;s <code>kvm_getprocs(2)</code> interface and I&rsquo;m not sure why Darwin had to merge it with <code>sysctl(3)</code>.) However: this MIB doesn&rsquo;t appear to be documented so things might break in the future. The way I found this is by looking at <a href="https://opensource.apple.com/source/adv_cmds/adv_cmds-172/ps/ps.c.auto.html">Apple&rsquo;s own <code>ps.c</code> source code</a>.</p>
-
 <p>Let&rsquo;s coerce the <code>sysctl(3)</code> interface to give us what we want. The interface is not the easiest to use, but it&rsquo;s not that difficult either; we just have to account for the fact that its return value is of variable size:</p>
-
 <div class="src">
   
   
@@ -237,21 +232,15 @@ macOS has a bunch of fancy features that other systems do not have, but process 
     </div>
   </div>
 
-
 <p>The above code snippet gives us a <code>wait_for_process_group</code> function that ensures all processes in a process group are gone, except for the leader. With this, we could implement the following algorithm:</p>
-
 <ol>
 <li>Start process group.</li>
 <li>Wait for the process group leader to terminate using <code>waitpid(2)</code>. Remember that we want to report the exit status of the leader, so we must do this.</li>
 <li>Wait for all other processes in the group to exit by calling <code>wait_for_process_group</code>.</li>
 </ol>
-
 <p>This works&hellip; but there is a little problem. Once <code>waitpid(2)</code> returns, the kernel has cleared all knowledge of our process leader, which means all of its children became orphan and were reparented to <code>init(8)</code>. The PGID was thus reclaimed and could now be used by a racing process. (This is very unlikely because the kernel will try hard to not reallocate PIDs too quickly, but it&rsquo;s still a possibility and experience has shown me that, with scale, the unlikely is actually common.)</p>
-
 <p>So how do we fix this? We need to introduce an extra step. We have to detect when the process group leader becomes a zombie <em>without actually reaping its status</em> so that the PGID remains assigned while we do our <code>wait_for_process_group</code> dance.</p>
-
 <p>And to do this, we use another Darwin-specific primitive: <code>kqueue(2)</code>. With this functionality, we can wait for the child process to change its status. (We could possibly do this by monitoring <code>SIGCHLD</code> but I haven&rsquo;t found a way to make this not racy, and anything dealing with signals always makes me cringe.) The code looks like follows:</p>
-
 <div class="src">
   
   
@@ -296,20 +285,15 @@ macOS has a bunch of fancy features that other systems do not have, but process 
     </div>
   </div>
 
-
 <p>Alright. So now we have another function, called <code>wait_for_process</code>, that will wait until the given PID becomes a zombie. With this, our algorithm looks like:</p>
-
 <ol>
 <li>Start process group.</li>
 <li>Wait for the process group leader to become a zombie with <code>wait_for_process</code>. At this point, the PGID is still assigned to us.</li>
 <li>Wait for all other processes in the group to exit by calling <code>wait_for_process_group</code>.</li>
 <li>Collect the leader&rsquo;s status by using <code>waitpid(2)</code>.</li>
 </ol>
-
 <p>Simple, right? It was all in the details&mdash;which is why I had to come up with the sample code in these posts.</p>
-
 <p>Let&rsquo;s put it all into practice by updating our original test tool:</p>
-
 <div class="src">
   
   
@@ -385,19 +369,13 @@ macOS has a bunch of fancy features that other systems do not have, but process 
     </div>
   </div>
 
-
 <p>And if we build and run it with the same same sample command as before:</p>
-
 <pre><code>$ ./wait-all-darwin /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
 1
 2
 $
-</code></pre>
-
-<p>you&rsquo;ll see that <code>wait-all-darwin</code> did not terminate until the nested subshell did, even though the outer shell exited quickly.</p>
-
+</code></pre><p>you&rsquo;ll see that <code>wait-all-darwin</code> did not terminate until the nested subshell did, even though the outer shell exited quickly.</p>
 <p>Great. <em>However</em>, be aware that this solution is <em>not</em> bullet-proof: if a subprocess creates a new process group, it will escape our algorithm and there is nothing we can do about it. (It looks like FreeBSD has a <code>NOTE_TRACK</code> event that could let us track those processes&hellip; but of course this doesn&rsquo;t exist on Darwin.) Anyway, in the context of <a href="/2019/11/bazel-process-wrapper.html">Bazel&rsquo;s process wrapper</a>, we are willing to live with this limitation.</p>
-
 <p>Lastly note that this solution should be generalizable to other systems. In the worst case, you&rsquo;d need to use <code>ps(1)</code> to walk the process table, but you could still do it. The only issue is that you might race against other processes grabbing the PGID as described above, but it&rsquo;s a pretty unlikely scenario and maybe it can be fixed with some <code>SIGCHLD</code> magic.</p>
 </article>
             </div>

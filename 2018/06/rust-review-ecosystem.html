@@ -21,7 +21,7 @@ The standard library The std library feels generally well-thought out and full o
   <meta property="og:description" content="In this part of the review, I would like to focus on Rust&amp;rsquo;s ecosystem: in other words, how Rust plays with other parts of a functioning system and how Rust&amp;rsquo;s standard library vs. external libraries interact with each other. There are a lot of pieces to cover in these areas and they have left me with mixed feelings. Let&amp;rsquo;s look at some.
 The standard library The std library feels generally well-thought out and full of features.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/06/rust-review-ecosystem.html">
 
@@ -31,7 +31,7 @@ The standard library The std library feels generally well-thought out and full o
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -223,38 +223,21 @@ Rust review</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p>In this part of the review, I would like to focus on Rust&rsquo;s ecosystem: in other words, how Rust plays with other parts of a functioning system and how Rust&rsquo;s standard library vs. external libraries interact with each other. There are a lot of pieces to cover in these areas and they have left me with mixed feelings. Let&rsquo;s look at some.</p>
-
+              <article><p>In this part of the review, I would like to focus on Rust&rsquo;s ecosystem: in other words, how Rust plays with other parts of a functioning system and how Rust&rsquo;s standard library vs. external libraries interact with each other. There are a lot of pieces to cover in these areas and they have left me with mixed feelings. Let&rsquo;s look at some.</p>
 <h1 id="the-standard-library">The standard library</h1>
-
 <p>The <a href="https://doc.rust-lang.org/std/"><code>std</code></a> library feels generally well-thought out and full of features.</p>
-
 <p>One specific thing I have found to be neat is the separation of generic concepts from platform-specific features. For example, the <a href="https://doc.rust-lang.org/std/fs/"><code>fs</code></a> module restricts itself to portable APIs that work on any operating system, but you can import platform-specific traits from other modules (like <a href="https://doc.rust-lang.org/std/os/unix/fs/trait.MetadataExt.html">Unix&rsquo;s variant of <code>MetadataExt</code></a>) which magically extends these APIs with those platform&rsquo;s features. I&rsquo;ve never observed such seamless integration between generic and platform-specific APIs anywhere else.</p>
-
 <p>On the other hand, it&rsquo;s sad that basic functionality such as options parsing and logging are not in the standard library. This makes it harder to write command-line tools, which arguably are one of the main things you&rsquo;d want to write with a systems-oriented language like Rust. And the reason I qualify this as sad is because, by pushing these responsibilities to external libraries, there is no &ldquo;standard&rdquo; way to implement these features which results in inconsistencies among tools.</p>
-
 <p>Finally, the standard library is also lacking in some of the most low-level parts. For example: there is no way to change file owners without resorting to an unsafe <code>libc</code> call or to <a href="https://github.com/rust-lang/rfcs/issues/1368">handle Unix signals</a> in a good manner. Again, these are things you&rsquo;d expect a systems-oriented language to offer from the get go, but Rust doesn&rsquo;t do this fully yet.</p>
-
 <p>But maybe I&rsquo;m being unfair. After all, <a href="https://blog.rust-lang.org/2015/05/15/Rust-1.0.html">Rust 1.0 was only published 3 years ago</a> and that release explicitly claimed that the <code>std</code> library wasn&rsquo;t &ldquo;done&rdquo;.</p>
-
 <h1 id="nightly-builds-and-unstable-apis">Nightly builds and unstable APIs</h1>
-
 <p>Another &ldquo;problematic&rdquo; area are nightly builds and unstable APIs. I haven&rsquo;t had a chance to experience the pain myself much, but I&rsquo;ve read many stories on how some tools may require specific nightly builds and some of their dependencies may require other specific versions, making it impossible to build the final product. I have the impression, though, that this is becoming less of a problem these days because people are aware of this issue, and because the standard library has quickly gained many of the missing features that required nightly builds.</p>
-
 <p>What I have had to deal with are unstable APIs. I&rsquo;ve been a bit surprised by how some functionality I was looking for, which seemed pretty essential, was marked &ldquo;nightly-only&rdquo;. The good thing is that these APIs are clearly highlighted in the documentation and the compiler does not allow you to use them unless you <a href="https://doc.rust-lang.org/unstable-book/index.html">explicitly declare their use</a>. In other words: to use unstable features, you must make a conscious choice to do so, and you must specify this in the code.</p>
-
 <h1 id="ide-integration">IDE integration</h1>
-
 <p>During my experimentation, I only played with the <a href="https://github.com/rust-lang-nursery/rls-vscode">Visual Studio Code integration</a> via the <a href="https://github.com/rust-lang-nursery/rls">Rust Language Server (RLS)</a>, which incidentally is the reference IDE implementation using the RLS.</p>
-
 <p>On the one hand, it&rsquo;s great that the editor &ldquo;just works&rdquo; on a Cargo-based project: no need to fiddle with the manual installation of tools nor any kind of configuration. On the other hand, I&rsquo;ve found the whole integration a bit unstable. In many occasions, code completion or code hints stop to work and the only way to recover is to restart the RLS.</p>
-
 <h1 id="open-source-world">Open-source world</h1>
-
 <p>To conclude, a few words on the &ldquo;open-source world&rdquo;, by which I try to refer to the ecosystem of tools that form the foundations of the Unix-like systems we use every day.</p>
-
 <p>Rust feels like a well-behaved player in this area. Rust seems to support the specifics of the underlying operating systems without claiming that they are &ldquo;wrong&rdquo;. One example is in what I explained above about the standard library and its ability to expose platform-specific features; the other is in <a href="https://doc.rust-lang.org/reference/linkage.html">supporting a variety of library styles</a>. As we shall see soon, this is a huge contrast to Go&rsquo;s approach.</p>
 </article>
             </div>

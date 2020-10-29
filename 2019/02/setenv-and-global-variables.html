@@ -19,7 +19,7 @@
   <meta name="description" content="This is the tale of yet another Bazel bug, this time involving environment variables, global state, and gRPC. Through it, I&#39;ll argue that you should never use setenv within a program unless you are doing so to execute something else.">
   <meta property="og:description" content="This is the tale of yet another Bazel bug, this time involving environment variables, global state, and gRPC. Through it, I&#39;ll argue that you should never use setenv within a program unless you are doing so to execute something else.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/02/setenv-and-global-variables.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -157,35 +157,28 @@
             <div class="col">
               
               <article><p>This is the tale of yet another Bazel bug, this time involving environment variables, global state, and gRPC. Through it, I&rsquo;ll argue that you should never use <code>setenv</code> within a program unless you are doing so to execute something else (and even then with caveats). Before we start, I hope we can agree upfront that using global variables to pass state within a program is bad; can&rsquo;t we?</p>
-
-<hr />
-
+<hr>
 <p>Bazel is a build tool and, as such, is a program that runs on your computer&mdash;quite likely as an interactive tool on the command line. That said, Bazel uses a client/server architecture: the client handles command-line invocations which the server is responsible for executing. The server exists as an optimization to maintain state across those invocations and to avoid the cost of starting a new JVM for each command. Therefore, you can think of this client/server split as an implementation detail.</p>
-
-<p>The Bazel client and server always run on the same machine and they communicate with each other using gRPC over a localhost-bound <code>AF_INET</code> socket<sup class="footnote-ref" id="fnref:af-unix"><a href="#fn:af-unix">1</a></sup>. Because of this, and because gRPC is sent over HTTP, the connection is subject to the proxy rules defined by the conventional <code>http_proxy</code>, <code>https_proxy</code>, and <code>no_proxy</code> environment variables<sup class="footnote-ref" id="fnref:proxy-case"><a href="#fn:proxy-case">2</a></sup>.</p>
-
+<p>The Bazel client and server always run on the same machine and they communicate with each other using gRPC over a localhost-bound <code>AF_INET</code> socket<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>. Because of this, and because gRPC is sent over HTTP, the connection is subject to the proxy rules defined by the conventional <code>http_proxy</code>, <code>https_proxy</code>, and <code>no_proxy</code> environment variables<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup>.</p>
 <p>But we know that the client and server always run on the same machine, so we must avoid the use of proxies when establishing the connection between the two. The way Bazel forced the communication to skip proxies was by <em>setting</em> the <code>no_proxy</code> environment variable during its own startup to later influence the internals of the gRPC library. This, by itself, is bad enough: the code was essentially using a global variable to configure how another piece of code had to behave. But this was also buggy: the <code>no_proxy</code> setting overrode user configuration (<a href="https://github.com/bazelbuild/bazel/issues/6400">issue #6400</a>), preventing those users from legitimately configuring proxy settings for outgoing connections.</p>
-
 <p>A user decided to fix this issue and implemented code to avoid overriding a possibly-existing value of <code>no_proxy</code> (<a href="https://github.com/bazelbuild/bazel/pull/6399">PR #6399</a>). The change made Bazel <em>extend</em> the value a preexisting <code>no_proxy</code> variable to respect the user settings, but to configure localhost-bound connections to bypass proxies. This seemed reasonable, but was it right?</p>
-
 <p>Luckily, I could overhear conversations about this bug regarding the naming of all these variables, and the thought came to mind: &ldquo;why are we abusing environment variables to control what&rsquo;s essentially a property of an individual connection?&rdquo; Bazel should leave all these environment variables untouched and configure gRPC as needed for that one connection, explicitly.</p>
-
-<p>This hint was sufficient for someone else in the team to indicate that this was, in fact, possible: we just had to set the <code>grpc.enable_http_proxy</code> property on the channel to false to bypass all proxy-related settings for the Bazel client/server communication. This coworker followed up on this to implement this simpler and saner fix (<a href="https://github.com/bazelbuild/bazel/pull/7368">PR #7368</a>)<sup class="footnote-ref" id="fnref:grpc-update"><a href="#fn:grpc-update">3</a></sup>, which means Bazel won&rsquo;t mess with your proxy settings any longer and will respect them where they matter.</p>
-
+<p>This hint was sufficient for someone else in the team to indicate that this was, in fact, possible: we just had to set the <code>grpc.enable_http_proxy</code> property on the channel to false to bypass all proxy-related settings for the Bazel client/server communication. This coworker followed up on this to implement this simpler and saner fix (<a href="https://github.com/bazelbuild/bazel/pull/7368">PR #7368</a>)<sup id="fnref:3"><a href="#fn:3" class="footnote-ref" role="doc-noteref">3</a></sup>, which means Bazel won&rsquo;t mess with your proxy settings any longer and will respect them where they matter.</p>
 <p>Moral of the story? Don&rsquo;t mutate environment variables from within your process (unless that&rsquo;s to configure a new child process, and even then <a href="https://www.gnu.org/software/libc/manual/html_node/Environment-Access.html#Environment-Access">be careful with threads</a>): they are essentially global variables. Or, simply: avoid <code>setenv</code> and <code>putenv</code>.</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:af-unix">You may wonder why the Bazel client and server don&rsquo;t talk to each other via an <code>AF_UNIX</code> socket instead. I&rsquo;m told that these were not supported in gRPC when the communication code was ported from whatever thing we used in the past&mdash;but they are now. Moving to a Unix-domain socket would be nice (e.g. to avoid having to deal with a shared secret) but I don&rsquo;t know how this would translate to the Windows port.
- <a class="footnote-return" href="#fnref:af-unix"><sup>[return]</sup></a></li>
-<li id="fn:proxy-case">All environment variables that control proxy settings are typically specified in lower case. This is likely <a href="https://unix.stackexchange.com/questions/212894/whats-the-right-format-for-the-http-proxy-environment-variable-caps-or-no-ca">a historical mistake</a> which has been made worse by some recent programs trying to recognize the upper case variants. The mess is huge now, so the only safe solution, as a user, is to define both variants and ensure their values match.
- <a class="footnote-return" href="#fnref:proxy-case"><sup>[return]</sup></a></li>
-<li id="fn:grpc-update">Applying this fix made us discover that we had to update our dependency on gRPC (<a href="https://github.com/bazelbuild/bazel/issues/2804">issue #2804</a>) to a newer version because the per-channel <code>grpc.enable_http_proxy</code> feature was not available in the stale versions we depended on. Hopefully this explains why the original code abused environment variables in the first place.
- <a class="footnote-return" href="#fnref:grpc-update"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>You may wonder why the Bazel client and server don&rsquo;t talk to each other via an <code>AF_UNIX</code> socket instead. I&rsquo;m told that these were not supported in gRPC when the communication code was ported from whatever thing we used in the past&mdash;but they are now. Moving to a Unix-domain socket would be nice (e.g. to avoid having to deal with a shared secret) but I don&rsquo;t know how this would translate to the Windows port. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2" role="doc-endnote">
+<p>All environment variables that control proxy settings are typically specified in lower case. This is likely <a href="https://unix.stackexchange.com/questions/212894/whats-the-right-format-for-the-http-proxy-environment-variable-caps-or-no-ca">a historical mistake</a> which has been made worse by some recent programs trying to recognize the upper case variants. The mess is huge now, so the only safe solution, as a user, is to define both variants and ensure their values match. <a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:3" role="doc-endnote">
+<p>Applying this fix made us discover that we had to update our dependency on gRPC (<a href="https://github.com/bazelbuild/bazel/issues/2804">issue #2804</a>) to a newer version because the per-channel <code>grpc.enable_http_proxy</code> feature was not available in the stale versions we depended on. Hopefully this explains why the original code abused environment variables in the first place. <a href="#fnref:3" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

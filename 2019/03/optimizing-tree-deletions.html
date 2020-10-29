@@ -21,7 +21,7 @@ It turns out, however, that deleting file system trees can be very expensive&amp
   <meta property="og:description" content="Bazel likes creating very deep and large trees on disk during a build. One example is the output tree, which naturally contains all the artifacts of your build. Another, more problematic example is the symlink forest trees created for every action when sandboxing is enabled. As garbage gets created, it must be deleted.
 It turns out, however, that deleting file system trees can be very expensive&amp;mdash;and especially so on macOS. In fact, calls to our deleteTree algorithm routinely showed up in my profiling runs when trying to diagnose slowdowns using the dynamic scheduler.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/03/optimizing-tree-deletions.html">
 
@@ -31,7 +31,7 @@ It turns out, however, that deleting file system trees can be very expensive&amp
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,9 +159,7 @@ It turns out, however, that deleting file system trees can be very expensive&amp
             <div class="col">
               
               <article><p>Bazel likes creating very deep and large trees on disk during a build. One example is the output tree, which naturally contains all the artifacts of your build. Another, more problematic example is the symlink forest trees created for every action when sandboxing is enabled. As garbage gets created, it must be deleted.</p>
-
 <p>It turns out, however, that deleting file system trees can be very expensive&mdash;and especially so on macOS. In fact, calls to our <code>deleteTree</code> algorithm routinely showed up in my profiling runs when trying to diagnose slowdowns using the <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">dynamic scheduler</a>. One thing I quickly wondered is: why can I easily catch Bazel stuck in the tree deletion but I can never catch it busily creating such a tree? Is tree deletion inherently slow or are we doing something stupid?</p>
-
 <p>A quick look at the algorithm we used to have in <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/vfs/FileSystemUtils.java;drc=a539293149375850b82dda2b51f38bb440584336;bpv=;bpt=0;l=559"><code>FileSystemUtils#deleteTree()</code></a> reveals that it is the latter. Paraphrasing to remove the irrelevant differences between <code>deleteTree</code> and <code>deleteTreesBelow</code>:</p>
 <div class="highlight"><pre class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">deleteTree</span><span class="o">(</span><span class="n">Path</span> <span class="n">path</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">IOException</span> <span class="o">{</span>
   <span class="k">if</span> <span class="o">(</span><span class="n">path</span><span class="o">.</span><span class="na">isDirectory</span><span class="o">(</span><span class="n">Symlinks</span><span class="o">.</span><span class="na">NOFOLLOW</span><span class="o">))</span> <span class="o">{</span>
@@ -173,9 +171,8 @@ It turns out, however, that deleting file system trees can be very expensive&amp
     <span class="o">}</span>
   <span class="o">}</span>
   <span class="n">path</span><span class="o">.</span><span class="na">delete</span><span class="o">();</span>
-<span class="o">}</span></code></pre></div>
-<p>We can observe a few inefficiencies here:</p>
-
+<span class="o">}</span>
+</code></pre></div><p>We can observe a few inefficiencies here:</p>
 <ol>
 <li>Those three <code>path.set*</code> calls end up being individual <code>chmod(2)</code> calls. They could all be combined into one. Why wasn&rsquo;t this done?</li>
 <li>Do we always have to &ldquo;unprotect&rdquo; the directories before trying to delete their contents? Protected directories are likely not the common case given that the majority of the trees we try to delete from within Bazel are trees we created ourselves.</li>
@@ -183,26 +180,18 @@ It turns out, however, that deleting file system trees can be very expensive&amp
 <li>Reading the contents of a directory typically also returns the types of those entries. We could use that to avoid the stats.</li>
 <li>We are constructing a ton of superfluous strings (one for each entry to be removed), all of which are absolute paths. Paths in Bazel tend to be very long, so the amount of data copied every single time is non-trivial and thus likely has a noticeable CPU cost.</li>
 </ol>
-
 <p>Wow.</p>
-
 <p>The major problem is the disproportionate number of system calls issued: <strong>for every file to delete we issue 2-3 system calls, and for every directory, 7+</strong>.</p>
-
 <p>We should and can do much better:</p>
-
 <ul>
 <li><code>readdir(2)</code> returns the type of the entries it finds in the common case so we can avoid the stat to query the type of each entry. (We may still get <code>DT_UNKNOWN</code> as the type, for example when on NFS, but we can handle that with a stat.)</li>
 <li>Once we know what type of entry we have to delete, we can directly issue <code>unlink(2)</code> or <code>rmdir(2)</code> system calls to avoid having to guess later on via <code>remove(3)</code>.</li>
 <li>We can assume that the tree to be deleted is readable and writable, so we shouldn&rsquo;t issue any <code>chown(2)</code> calls unless we really have to.</li>
 <li>We don&rsquo;t need to build any intermediate paths: we can use operations like <code>openat(2)</code> and <code>unlinkat(2)</code> to work purely on file descriptors.</li>
 </ul>
-
 <p>All of this is much easier to do efficiently from C code than from Java code. Fortunately, the <code>UnixFileSystem</code> implementation of the file system objects backing the paths we deal with already had JNI glue, so I only had to update that piece of code. The amount of code to implement this is larger than I expected however. See <a href="https://github.com/bazelbuild/bazel/commit/fac322b1ef7a9acbe71f3718143c0dae43fb5833">commit fac322b1</a>.</p>
-
 <p>So. Does this make any difference? You bet!</p>
-
 <p>For a large build of an iOS app on macOS using sandboxing (the default configuration in Bazel), this cut down total build times from 7,300s to 5,100s. That&rsquo;s <strong>a 30% speedup</strong>. And this has had nice (unthought) effects on other parts of the code too: cleaning up the results of that same build via <code>bazel clean</code> used to take about 18s and now takes about 12s (similar ~30% speedup).</p>
-
 <p>Moral of the story? Be mindful of overheads. All the powerful abstractions we rely on make it too easy to miss <a href="/2018/04/bazel-xcode-locations-cache.html">details like this</a>.</p>
 </article>
             </div>

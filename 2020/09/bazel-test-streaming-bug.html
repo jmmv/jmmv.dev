@@ -17,11 +17,11 @@
 
   
   <meta name="description" content="About two weeks ago, I found a very interesting bug in Bazel&amp;rsquo;s test output streaming functionality while writing tests for a new feature related to Ctrl&#43;C interrupts. I fixed the bug, wrote a test for it, and&amp;hellip; the test itself came back as flaky, which made me find another very subtle bug in the test that needed a one-line fix. This is the story of both.
-Bazel has a feature known as test output streaming: by default, Bazel captures the outputs (stdout and stderr) of the tests it runs, saves those in local log files, and tells the user where they are when a test fails.">
+ Bazel has a feature known as test output streaming: by default, Bazel captures the outputs (stdout and stderr) of the tests it runs, saves those in local log files, and tells the user where they are when a test fails.">
   <meta property="og:description" content="About two weeks ago, I found a very interesting bug in Bazel&amp;rsquo;s test output streaming functionality while writing tests for a new feature related to Ctrl&#43;C interrupts. I fixed the bug, wrote a test for it, and&amp;hellip; the test itself came back as flaky, which made me find another very subtle bug in the test that needed a one-line fix. This is the story of both.
-Bazel has a feature known as test output streaming: by default, Bazel captures the outputs (stdout and stderr) of the tests it runs, saves those in local log files, and tells the user where they are when a test fails.">
+ Bazel has a feature known as test output streaming: by default, Bazel captures the outputs (stdout and stderr) of the tests it runs, saves those in local log files, and tells the user where they are when a test fails.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/09/bazel-test-streaming-bug.html">
 
@@ -31,7 +31,7 @@ Bazel has a feature known as test output streaming: by default, Bazel captures t
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,36 +158,20 @@ Bazel has a feature known as test output streaming: by default, Bazel captures t
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>About two weeks ago, I found a very interesting bug in Bazel&rsquo;s test output streaming functionality while writing tests for a new feature related to Ctrl+C interrupts. I fixed the bug, wrote a test for it, and&hellip; the test itself came back as flaky, which made me find another very subtle bug in the test that needed a one-line fix. This is the story of both.</p>
-
-<!-- more -->
-
-<hr />
-
+              <article><p>About two weeks ago, I found a very interesting bug in Bazel&rsquo;s test output streaming functionality while writing tests for a new feature related to Ctrl+C interrupts. I fixed the bug, wrote a test for it, and&hellip; the test itself came back as flaky, which made me find another very subtle bug in the test that needed a one-line fix. This is the story of both.</p>
+<!-- raw HTML omitted -->
+<hr>
 <p>Bazel has a feature known as <strong>test output streaming</strong>: by default, Bazel captures the outputs (stdout and stderr) of the tests it runs, saves those in local log files, and tells the user where they are when a test fails. This is not very ergonomic when you are iterating on a test, so you can make Bazel print the output of the test as it runs by passing <code>--test_output=streamed</code> to the invocation.</p>
-
 <p>Test output <em>streaming</em> sounds fancy: when I first encountered this, I envisioned Bazel truly streaming the output from a remote server as it was generated. But things are not like that: enabling test output streaming has the side-effect of running the tests locally. And if you look at the internals, all the magic vanishes: there is a class called <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/util/io/FileWatcher.java;l=1;drc=f88f4d81acead9ef3e2f73d9a44afd76c2c239c1"><code>FileWatcher</code></a> that uses a thread to monitor for log file changes every 100ms. Sad face.</p>
-
-<h1 id="bazel-s-client-server-architecture">Bazel&rsquo;s client/server architecture</h1>
-
+<h1 id="bazels-clientserver-architecture">Bazel&rsquo;s client/server architecture</h1>
 <p>To further understand this story, we need to look at how Bazel prints messages to the console. &ldquo;It&rsquo;s just a command-line tool, duh, so it can print to stdout as it wishes!&rdquo; I hear you saying. Yeeees&hellip; but no. Things are more complex than that.</p>
-
 <p><a href="https://docs.bazel.build/versions/3.5.0/guide.html#clientserver-implementation">Bazel has a client/server architecture</a> where both processes always running on the same machine. The server is the long-lived Java process that keeps state in memory and processes the commands, which means it&rsquo;s the component that executes the tests. The ephemeral C++ client connects to this server to invoke a command and waits for the server to terminate execution of that command before returning control to the user.</p>
-
 <p>See where am I going? The server is a daemon process: it has no access to the console. The client is the process that is attached to the console. While the client is actively running a command on the server, the client fetches stdout/stderr data from the server and prints it to the console. This communication all happens over gRPC (via <a href="https://grpc.io/docs/what-is-grpc/core-concepts/">a true stream</a>). And once the client is gone, the server cannot print anything else.</p>
-
-<h1 id="the-ctrl-c-bug-during-output-streaming">The Ctrl+C bug during output streaming</h1>
-
+<h1 id="the-ctrlc-bug-during-output-streaming">The Ctrl+C bug during output streaming</h1>
 <p>So here is the bug: if you happened to be streaming the output of a test and you hit Ctrl+C, the following Bazel command you ran would detect that the server wasn&rsquo;t there and start a new one.</p>
-
 <p>This is unexpected. The server is intended to be long-lived and reused across different commands. Given that I had not changed any startup flags between the two invocations, the only possible explanation for this behavior was that the server had died while handling Ctrl+C. But this is <em>very</em> subtle behavior: there were no visible error messages. The only thing you could notice was the server starting a second time and thus the second command taking longer than it should have. But if you didn&rsquo;t pay attention, it was super-easy to miss that something was wrong.</p>
-
 <p>But I did notice because I was writing a test precisely for <a href="https://github.com/bazelbuild/bazel/commit/2bb3b73d5739fd9cae152a3626b4a6c203d8cef6">a new feature involved in Ctrl+C interrupt handling</a>. And in this test, I saw things not behaving as expected, so I rolled up my sleeves and dug down a little.</p>
-
 <p>Given that iterating on Bazel integration tests is painful due to how slow they can be, I tried to reproduce the problem by hand, which was easy. But I had to look into the server&rsquo;s <code>java.log</code> to actually an indication of misbehavior:</p>
-
 <pre><code>java.lang.IllegalStateException: Stream is already completed, no further calls are allowed
         at com.google.common.base.Preconditions.checkState(Preconditions.java:508)
         at io.grpc.stub.ServerCalls$ServerCallStreamObserverImpl.onNext(ServerCalls.java:340)
@@ -204,61 +188,52 @@ Bazel has a feature known as test output streaming: by default, Bazel captures t
         at com.google.devtools.build.lib.events.ReporterStream.write(ReporterStream.java:55)
         at com.google.devtools.build.lib.exec.TestLogHelper$FilterTestHeaderOutputStream.write(TestLogHelper.java:123)
         at com.google.devtools.build.lib.util.io.FileWatcher.run(FileWatcher.java:96)
-</code></pre>
-
-<p>Yikes. <a href="/2020/09/bazel-ui-locking.html">The UI again?</a> Please no. Spoiler alert: it wasn&rsquo;t.</p>
-
+</code></pre><p>Yikes. <a href="/2020/09/bazel-ui-locking.html">The UI again?</a> Please no. Spoiler alert: it wasn&rsquo;t.</p>
 <p>I won&rsquo;t get into a lot of detail here, but if we trace through the classes involved, what we find is that Bazel is writing into the gRPC stream used to feed stdout from the server to the client, but it does so <em>after</em> the client has terminated. In other words: we have a resource leak (the gRPC stream) that outlives the client and, thanks to some <a href="/2013/07/readability-abuse-assertions.html">paranoid coding</a>, we detect an invalid state later on.</p>
-
 <p>This didn&rsquo;t surprise me. Handling interrupts correctly is very difficult no matter the programming model: signal handlers, Go channels, Java interrupts&hellip; all of them are hard. Furthermore, interrupts are rare, so their handlers often see little testing. What surprised me, though, was: if this is such an obvious bug, how come nobody had ever noticed it before? Bazel has a long history and tons of invocations per day, so surely somebody must have hit Ctrl+C and triggered this?</p>
-
 <p>Well, apparently I might have been the first one to notice and pause to think that something was off. The reason is that the misbehavior we observe here depends on the strategy used to run the tests. As we <a href="/2019/12/bazel-strategies.html">saw in the past</a>, the strategy is the component in charge of running subprocesses and dealing with their outputs, and thus the strategy is the component that is interrupted when you hit Ctrl+C. It was possible that the strategy was leaking resources in some way and making them outlive the client.</p>
-
 <p>And indeed that was the case. Months earlier, I had spent some time ensuring the local strategy <a href="/2019/11/wait-for-process-group.html">handled process interrupts correctly</a>&hellip; but I had not touched the sandboxed strategy at all. And, guess what, I was seeing problems because the sandboxed strategy was in use. Which explains why this hasn&rsquo;t seen a ton of exposure before: within Google, for example, we default to remote test execution so cancellations happen in very different ways.</p>
-
 <p>Having diagnosed the problem, <a href="https://github.com/bazelbuild/bazel/commit/397f172139169410abf672c6ff95dfb9e2f56fe6">fixing it was relatively straightforward</a> but required a code audit. I encountered the obvious issue: the sandboxed strategy was killing the subprocess but failed to wait for its completion (sending a signal is an asynchronous action), but I also found other possible leaks. Writing the integration test for the fix wasn&rsquo;t that simple though.</p>
-
 <h1 id="the-new-integration-test">The new integration test</h1>
-
 <p>Here is how the test for this bug fix works:</p>
-
 <ol>
-<li><p>Make Bazel run a test program that prints a &ldquo;cookie&rdquo; message and then simply sleeps for a long time, waiting for it to be interrupted.</p></li>
-
-<li><p>Run the test with <code>--test_output=streamed</code> in a background invocation of Bazel, redirecting all stdout/stderr to a log file.</p></li>
-
-<li><p>Periodically grep the log file until the &ldquo;cookie&rdquo; message shows up, which indicates that Bazel has reached the point in which we want to send the interrupt.</p></li>
-
-<li><p>Send an interrupt signal to Bazel (the client).</p></li>
-
-<li><p>Wait until the background process (the client) finishes to ensure the command has completed.</p></li>
-
-<li><p>Check the Bazel server logs to verify that there isn&rsquo;t a crash (whitebox testing).</p></li>
-
-<li><p>Repeat all steps from above  to run the test a second time, <em>without explicitly shutting down the Bazel server</em>.</p></li>
-
-<li><p>Verify that the output of the second run doesn&rsquo;t say that the Bazel server had to start again (blackbox testing).</p></li>
+<li>
+<p>Make Bazel run a test program that prints a &ldquo;cookie&rdquo; message and then simply sleeps for a long time, waiting for it to be interrupted.</p>
+</li>
+<li>
+<p>Run the test with <code>--test_output=streamed</code> in a background invocation of Bazel, redirecting all stdout/stderr to a log file.</p>
+</li>
+<li>
+<p>Periodically grep the log file until the &ldquo;cookie&rdquo; message shows up, which indicates that Bazel has reached the point in which we want to send the interrupt.</p>
+</li>
+<li>
+<p>Send an interrupt signal to Bazel (the client).</p>
+</li>
+<li>
+<p>Wait until the background process (the client) finishes to ensure the command has completed.</p>
+</li>
+<li>
+<p>Check the Bazel server logs to verify that there isn&rsquo;t a crash (whitebox testing).</p>
+</li>
+<li>
+<p>Repeat all steps from above  to run the test a second time, <em>without explicitly shutting down the Bazel server</em>.</p>
+</li>
+<li>
+<p>Verify that the output of the second run doesn&rsquo;t say that the Bazel server had to start again (blackbox testing).</p>
+</li>
 </ol>
-
 <p>It took me a while to get all the details right, possibly because of the very subtle bug in the test I will discuss below. But, eventually I got the test to pass on all the platforms BazelCI supports, which is always&hellip; involved, so I submitted it and finished the work in the original Ctrl+C feature that brought me here.</p>
-
 <h1 id="flakiness-in-the-new-test">Flakiness in the new test</h1>
-
 <p>A few days later, the dreaded report came: &ldquo;your new test is flaky&rdquo;. Yikes, I hate bugs like these. Debugging Bazel integration tests and looking for flakiness is a task that can easily suck a full day, if not more. Luckily, Bazel&rsquo;s <code>--runs_per_test=100</code> combined with remote execution is super-handy here, as you can expose any kind of flakiness in minutes.</p>
-
 <p>I&rsquo;m not exactly sure how I went about troubleshooting the problem, but it wasn&rsquo;t trivial. I researched a bunch of loose ends and at some point I added timestamps to the various steps the test was taking. This was the key to uncover the bug: somehow, the second iteration of the test was running almost immediately after the first one. Which wasn&rsquo;t normal because the test does some pretty slow polling (1-second steps) to wait for Bazel to reach the interrupt point. I was expecting to see, at least, a 1-second delay between the first and the second test. But it wasn&rsquo;t there.</p>
-
 <p>And then it hit me. Here is the simplified version of how I ran Bazel in the background and waited for it to show the &ldquo;cookie&rdquo; message:</p>
-<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">bazel <span class="s2">&#34;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&#34;</span> &gt;<span class="s2">&#34;</span><span class="si">${</span><span class="nv">TEST_log</span><span class="si">}</span><span class="s2">&#34;</span> <span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span> <span class="p">&amp;</span>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">bazel <span class="s2">&#34;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&#34;</span> &gt;<span class="s2">&#34;</span><span class="si">${</span><span class="nv">TEST_log</span><span class="si">}</span><span class="s2">&#34;</span> 2&gt;<span class="p">&amp;</span><span class="m">1</span> <span class="p">&amp;</span>
 <span class="k">while</span> ! grep -q <span class="s2">&#34;Ready for interrupt&#34;</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">TEST_log</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">;</span> <span class="k">do</span>
   sleep <span class="m">1</span>
-<span class="k">done</span></code></pre></div>
-<p>I had implemented this same logic a bunch of times in different tests and never had problems, so I didn&rsquo;t give it a second thought. But this test is slightly different because it runs the above code snippet <em>twice in a loop</em>, without the test framework&rsquo;s cleanup intervening.</p>
-
+<span class="k">done</span>
+</code></pre></div><p>I had implemented this same logic a bunch of times in different tests and never had problems, so I didn&rsquo;t give it a second thought. But this test is slightly different because it runs the above code snippet <em>twice in a loop</em>, without the test framework&rsquo;s cleanup intervening.</p>
 <p>The most plausible explanation for the lack of any delay in the second run meant that maybe we were picking up the log of the previous invocation by mistake during the second test run. And, that was precisely the problem. But why? How?</p>
-
 <p>The reason is simple: the code above works reliably when <code>TEST_log</code> <em>doesn&rsquo;t</em> exist, but it is racy when it does. You see: the first line in the snippet above, the one that runs <code>bazel</code> in the background, is problematic. That line makes the shell redirect the output to <code>TEST_log</code>&hellip; but the key observation is that <strong>the redirection is configured in the subprocess</strong>: when that statement completes, there is no guarantee that <code>TEST_log</code> has been truncated and set up as the output of the <code>bazel</code> command yet. &ldquo;Obviously&rdquo; you might say, and it <em>is</em> obvious if you think about it&hellip; but you need to know quite a bit about how the shell works to reason about this&mdash;and it&rsquo;s hard to notice after you&rsquo;ve written this same pattern successfully countless times.</p>
-
 <p>With this in mind, <a href="https://github.com/bazelbuild/bazel/commit/368708495912814db46893a9d891989c0b5793a1">the fix for the test&rsquo;s flakiness was trivial</a>: ensure we start without a <code>TEST_log</code> (or with an empty log) to remove the possibility of the race condition.</p>
 </article>
             </div>

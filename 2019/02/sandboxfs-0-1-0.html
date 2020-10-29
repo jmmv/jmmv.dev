@@ -21,7 +21,7 @@ The journey to this first release has been a long one. sandboxfs was first conce
   <meta property="og:description" content="I am pleased to announce that the first release of sandboxfs, 0.1.0, is finally here! You can download the sources and prebuilt binaries from the 0.1.0 release page and you can read the installation instructions for more details.
 The journey to this first release has been a long one. sandboxfs was first conceived over two years ago, was first announced in August 2017, showed its first promising results in April 2018, and has been undergoing a rewrite from Go to Rust.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/02/sandboxfs-0-1-0.html">
 
@@ -31,7 +31,7 @@ The journey to this first release has been a long one. sandboxfs was first conce
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,75 +158,50 @@ The journey to this first release has been a long one. sandboxfs was first conce
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>I am pleased to announce that the first release of <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a>, 0.1.0, is <em>finally</em> here! You can download the sources and prebuilt binaries from the <a href="https://github.com/bazelbuild/sandboxfs/releases/tag/sandboxfs-0.1.0">0.1.0 release page</a> and you can read the <a href="https://github.com/bazelbuild/sandboxfs/blob/master/INSTALL.md">installation instructions</a> for more details.</p>
-
+              <article><p>I am pleased to announce that the first release of <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a>, 0.1.0, is <em>finally</em> here! You can download the sources and prebuilt binaries from the <a href="https://github.com/bazelbuild/sandboxfs/releases/tag/sandboxfs-0.1.0">0.1.0 release page</a> and you can read the <a href="https://github.com/bazelbuild/sandboxfs/blob/master/INSTALL.md">installation instructions</a> for more details.</p>
 <p>The journey to this first release has been a long one. sandboxfs was first conceived over two years ago, was <a href="/2017/08/introducing-sandboxfs.html">first announced in August 2017</a>, showed its <a href="https://blog.bazel.build/2018/04/13/preliminary-sandboxfs-support.html">first promising results in April 2018</a>, and has been undergoing a rewrite from Go to Rust. (And by the way, this has been my 20% project at Google so rest assured that they are still possible!)</p>
-
 <p>Alright. All that basic information laid out, let&rsquo;s take a look at what this is.</p>
-
 <h1 id="what-is-sandboxfs">What is sandboxfs?</h1>
-
 <p>sandboxfs is a FUSE file system that exposes an arbitrary view of the host&rsquo;s file system. In other words: it exposes directories or files from your file system in a completely different layout without having to copy or symlink them. You can think of sandboxfs as an advanced version of <a href="https://bindfs.org/">bindfs</a> (or <code>mount --bind</code> or <code>mount_null(8)</code> depending on your system) in which you can combine and nest files.</p>
-
 <p>To put this in a concrete example, let&rsquo;s say you want to create a container to run a compiler in. You could do something like the following:</p>
 <div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">$ sandboxfs <span class="se">\
 </span><span class="se"></span>    --mapping<span class="o">=</span>rw:/:/tmp/scratch <span class="se">\
 </span><span class="se"></span>    --mapping<span class="o">=</span>ro:/usr/bin:/usr/bin <span class="se">\
 </span><span class="se"></span>    --mapping<span class="o">=</span>ro:/usr/include:/usr/include <span class="se">\
 </span><span class="se"></span>    --mapping<span class="o">=</span>ro:/usr/lib:/usr/lib <span class="se">\
-</span><span class="se"></span>    /tmp/mnt</code></pre></div>
-<p>which would create a hierarchy under <code>/tmp/mnt</code>. Under that tree, all writes would go to <code>/tmp/scratch</code> except for the <code>/usr/bin</code>, <code>/usr/include</code> and <code>/usr/lib</code> subdirectories which would be read-only and correspond to the real directories at root. With this, you could constrain a compiler under <code>/tmp/mnt</code> (say, using chroot) and have it see only the things you allowed it to see.</p>
-
+</span><span class="se"></span>    /tmp/mnt
+</code></pre></div><p>which would create a hierarchy under <code>/tmp/mnt</code>. Under that tree, all writes would go to <code>/tmp/scratch</code> except for the <code>/usr/bin</code>, <code>/usr/include</code> and <code>/usr/lib</code> subdirectories which would be read-only and correspond to the real directories at root. With this, you could constrain a compiler under <code>/tmp/mnt</code> (say, using chroot) and have it see only the things you allowed it to see.</p>
 <p>So far so good. But the real key feature of sandboxfs is that it provides a &ldquo;side channel&rdquo; to reconfigure the mappings at runtime without having to remount the file system. This is critical for the Bazel use case described below as is what allows us to achieve good performance.</p>
-
 <h1 id="use-cases">Use cases</h1>
-
 <p>sandboxfs was primarily targeted at making <a href="https://bazel.build/">Bazel</a>&rsquo;s sandboxing mechanism faster. The Bazel build system allows each build action to be isolated from the rest of the system, and to do so, it currently constructs a sandbox using symlinks. The problems are that: symlinks do not scale because they require a system call for each input, and symlinks are &ldquo;unsafe&rdquo; because some tools like to use their real paths (possibly &ldquo;escaping&rdquo; the sandbox). You can read much more about this topic in the <a href="https://blog.bazel.build/2017/08/25/introducing-sandboxfs.html">Introducing sandboxfs</a> post.</p>
-
 <p>But there are more use cases than this. The one that I&rsquo;d like to get to at some point, and the one that really sparked the idea for this project even before Bazel, is pkg_comp. <a href="https://github.com/jmmv/pkg_comp">pkg_comp</a> uses chroot sandboxes to build pkgsrc packages in and, at the moment, constructs the contents of the chroot using either bindfs or <code>mount_null</code> depending on the platform. Instantiating many mount points is problematic (e.g. each mount operation can be slow and OSXFUSE has a limit on the number of mount points), and fragile. Using sandboxfs would let pkg_comp instantiate a single mount point, resolving these issues.</p>
-
 <p>Lastly, you can imagine this being useful for cases where you have to generate a file system that resembles a &ldquo;real system&rdquo; in which to run contained commands or services &ndash; i.e. the root file system of a container. Using sandboxfs, you can create such a view very cheaply, both in time and in disk space.</p>
-
 <h1 id="rust-rewrite">Rust rewrite</h1>
-
 <p>The original implementation of sandboxfs was in Go, which was great to make something functional and relatively robust. Unfortunately, I reached a point where that implementation was showing performance problems that were hard to overcome and, at that time, I was getting interested in Rust.</p>
-
 <p>If you remember from my <a href="/2018/05/rust-review-introduction.html">Rust review: Introduction</a> post from almost a year ago, I decided to learn Rust and, as part of the process, rewrite sandboxfs in it. Well, the sandboxfs 0.1.0 release is the culmination of this experiment!</p>
-
 <p>The journey has been mostly good. I&rsquo;m <em>much</em> more confident about the new codebase than the old one due to the robustness enforced by the language, and I feel we can obtain all possible performance out of it. Profiling the Go version showed bottlenecks in the Go&rsquo;s runtime, and Rust doesn&rsquo;t have a runtime. That might have been fixable&hellip; but after having spotted a bunch of concurrency bugs in the Go code while writing the Rust version (because Rust wouldn&rsquo;t just let me transcribe the old code structure &ldquo;as is&rdquo;), I can&rsquo;t say I want to go back to the old version.</p>
-
 <p>At this point, however, the major problem is the lack of maturity in critical dependencies: I&rsquo;m particularly concerned about the FUSE library, for example, as it feels mostly abandoned and in poor shape (which is the same that happened with Go by the way). I mean, it works, but it lacks some important features that prevent implementing sandboxfs completely, like kernel cache invalidations. Upgrading the library to support a more-recent FUSE protocol versions is certainly possible, but that&rsquo;d likely mean forking <em>and</em> maintaining the bindings.</p>
-
 <h1 id="performance">Performance</h1>
-
 <p>The million-dollar question: <strong>is the new Rust version faster than the old Go version?</strong> Well&hellip; it <em>should</em> be and original prototyping showed that it was&hellip;. but I&rsquo;m having trouble getting good measurements with Bazel builds. In fact, even the Go version of a year ago is behaving much worse than it did!?</p>
-
 <p>I think a bug deep in our build stack is responsible for these regressions. We recently diagnosed what the problem was and fixed it, so I&rsquo;m hopeful that I&rsquo;ll be able to get good measurements once the fix rolls out. At that point I&rsquo;ll benchmark large builds again and publish a post in the Bazel blog.</p>
-
 <p>To be honest, the inability to measure great performance is the reason why I&rsquo;ve postponed this release for so long. I wanted to be able to post impressive numbers at release time&hellip; but delaying the release any further is harmful. Given that sandboxfs now works well-enough in combination with Bazel, having a simple installation mechanism from crates.io and prebuilt binaries will be very helpful to let people try things out.</p>
-
 <h1 id="parting-words">Parting words</h1>
-
 <p>Anyway, time for you to try this out!</p>
-
 <p>If you have Cargo installed, you should be up and running with a simple <code>cargo install sandboxfs</code> (assuming you have <code>pkgconfig</code> and the FUSE development libraries on your system). Otherwise, please head to the <a href="https://github.com/bazelbuild/sandboxfs/blob/master/INSTALL.md">installation instructions</a> for more details and alternative installation methods.</p>
-
 <p>Make sure to read the <code>sandboxfs(1)</code> manual page once installed as it contains a lot more information on usage and caveats. Unfortunately I cannot easily serve it preformatted in HTML (<a href="https://dspinellis.github.io/manview/">manview</a> looked very promising&hellip; but it fails to render this page correctly).</p>
-
 <p>NOTE: If you are a Bazel user&hellip; simply pass <code>--experimental_use_sandboxfs</code> to Bazel to get faster sandboxed builds! But, as the name implies, this is experimental so expect the possibility of breakage.</p>
-
 <p>And I need help in many areas! Roughly:</p>
-
 <ul>
-<li><p>Addressing To-Dos in the codebase: there are plenty of &ldquo;little&rdquo; problems annotated with <code>TODO</code> which would deliver more features, fix some obvious corner cases, and improve performance.</p></li>
-
-<li><p>Figuring out what to do with the FUSE library. I would like to bring it up to a current kernel protocol version and make it multithreaded, but these changes are very intrusive and would likely require a fork. Not sure I have the time to maintain that&hellip;</p></li>
-
-<li><p>Adding more features to OSXFUSE. In particular, the thing I would really like is to add <code>getattrlist(2)</code> support to the kernel extension (dunno if we&rsquo;d need to change the protocol). Without this, <a href="https://github.com/jmmv/sandboxctl/blob/90e556b8d8760b9ec2e5383db88fff4c8882148a/modules/darwin_native.subr#L233">Xcode tools do not run within a chroot</a>&hellip; which prevents the pkg_comp use case described above.</p></li>
+<li>
+<p>Addressing To-Dos in the codebase: there are plenty of &ldquo;little&rdquo; problems annotated with <code>TODO</code> which would deliver more features, fix some obvious corner cases, and improve performance.</p>
+</li>
+<li>
+<p>Figuring out what to do with the FUSE library. I would like to bring it up to a current kernel protocol version and make it multithreaded, but these changes are very intrusive and would likely require a fork. Not sure I have the time to maintain that&hellip;</p>
+</li>
+<li>
+<p>Adding more features to OSXFUSE. In particular, the thing I would really like is to add <code>getattrlist(2)</code> support to the kernel extension (dunno if we&rsquo;d need to change the protocol). Without this, <a href="https://github.com/jmmv/sandboxctl/blob/90e556b8d8760b9ec2e5383db88fff4c8882148a/modules/darwin_native.subr#L233">Xcode tools do not run within a chroot</a>&hellip; which prevents the pkg_comp use case described above.</p>
+</li>
 </ul>
-
 <p>Either way, let me know how it goes or if you would like to help 😊</p>
 </article>
             </div>

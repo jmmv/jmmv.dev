@@ -21,7 +21,7 @@ if balance &amp;gt;= 0: color = BLACK else: color = RED In this little code snip
   <meta property="og:description" content="In the most basic form, a conditional has two branches and the conditional expression inspects a single variable on entry. For example:
 if balance &amp;gt;= 0: color = BLACK else: color = RED In this little code snippet, the condition balance &amp;gt;= 0 only depends on one variable, and the two branches of the conditional cover all possible values of the input variable. I.e. the first branch covers all cases where the balance is positive or zero, and the second branch covers all cases where the balance is negative.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/07/readability-explicitly-state.html">
 
@@ -31,7 +31,7 @@ if balance &amp;gt;= 0: color = BLACK else: color = RED In this little code snip
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -252,25 +252,21 @@ Readability</b> series</a>.</i></p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">if</span> <span class="n">balance</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
     <span class="n">color</span> <span class="o">=</span> <span class="n">BLACK</span>
 <span class="k">else</span><span class="p">:</span>
-    <span class="n">color</span> <span class="o">=</span> <span class="n">RED</span></code></pre></div>
-<p>In this little code snippet, the condition <code>balance &gt;= 0</code> only depends on one variable, and the two branches of the conditional cover all possible values of the input variable. I.e. the first branch covers all cases where the balance is positive or zero, and the second branch covers all cases where the balance is negative. The balance variable cannot have a value not covered by these cases. Easy.</p>
-
+    <span class="n">color</span> <span class="o">=</span> <span class="n">RED</span>
+</code></pre></div><p>In this little code snippet, the condition <code>balance &gt;= 0</code> only depends on one variable, and the two branches of the conditional cover all possible values of the input variable. I.e. the first branch covers all cases where the balance is positive or zero, and the second branch covers all cases where the balance is negative. The balance variable cannot have a value not covered by these cases. Easy.</p>
 <p>Now let&rsquo;s consider trickier conditionals: those that have compound expressions mixing multiple variables. Take a look at this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">if</span> <span class="n">checking_balance</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">savings_balance</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
     <span class="n">color</span> <span class="o">=</span> <span class="n">RED</span>
 <span class="k">else</span><span class="p">:</span>
-    <span class="n">color</span> <span class="o">=</span> <span class="n">BLACK</span></code></pre></div>
-<p>This simple conditional statement appears to have two code paths based on the way the code is written. However, there are actually four different possibilities:</p>
-
+    <span class="n">color</span> <span class="o">=</span> <span class="n">BLACK</span>
+</code></pre></div><p>This simple conditional statement appears to have two code paths based on the way the code is written. However, there are actually four different possibilities:</p>
 <ul>
 <li><code>checking_balance &lt; 0 and savings_balance &lt; 0</code></li>
 <li><code>checking_balance &gt;= 0 and savings_balance &lt; 0</code></li>
 <li><code>checking_balance &lt; 0 and savings_balance &gt;= 0</code></li>
 <li><code>checking_balance &gt;= 0 and savings_balance &gt;= 0</code></li>
 </ul>
-
 <p>In the previous code snippet, only one of these conditions was explicitly stated and the handling for the other three was folded into the else clause. This is OK in the sense that the program may be doing exactly what we want it to do. The <em>reader</em> of the code, on the other hand, lacks information: did the programmer consider the four cases? Did he really intend to bundle them together, or instead something was missed?</p>
-
 <p>My guideline to make the above &ldquo;obvious&rdquo; is to unfold the conditional to explicitly describe all possible cases. This forces me to have to think about these cases, and if nothing special has to be done, to document the fact:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">if</span> <span class="n">checking_balance</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">savings_balance</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
     <span class="n">color</span> <span class="o">=</span> <span class="n">RED</span>
@@ -280,13 +276,10 @@ Readability</b> series</a>.</i></p>
     <span class="n">color</span> <span class="o">=</span> <span class="n">BLACK</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="k">assert</span> <span class="n">checking_balance</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">savings_balance</span> <span class="o">&gt;=</span> <span class="mi">0</span>
-    <span class="n">color</span> <span class="o">=</span> <span class="n">BLACK</span></code></pre></div>
-<p>This idiom does not affect the semantics of your code and a smart compiler should be able to optimize the various cases out. However, this style shows to the reader that you have thought about all the corner cases, and it expresses what the intent is in these cases. Furthermore, when you are later writing tests, you can more easily determine what the corner cases of your code are by simple visual inspection of all code paths.</p>
-
+    <span class="n">color</span> <span class="o">=</span> <span class="n">BLACK</span>
+</code></pre></div><p>This idiom does not affect the semantics of your code and a smart compiler should be able to optimize the various cases out. However, this style shows to the reader that you have thought about all the corner cases, and it expresses what the intent is in these cases. Furthermore, when you are later writing tests, you can more easily determine what the corner cases of your code are by simple visual inspection of all code paths.</p>
 <p>Another important thing to note in the code above is the addition of an assertion to the <code>else</code> clause. Because the expression is compound, and because there are more than two code paths, it is not immediately obvious what case is being handled in the last branch. By adding an assertion that indicates what the condition is, this becomes obvious. We&rsquo;ll cover more on this topic on the next post.</p>
-
 <p>Lastly, be aware that the guideline proposed in this post does not necessarily make sense in all cases. For example, conditionals that handle a special behavior controlled by a boolean flag only have one branch, and explicitly writing an alternate branch with a simple <code>pass</code> statement would be pointless.</p>
-
 <p>I suspect that mastering this idiom and determining when it is good to use it or not is trickier than the other suggestions I&rsquo;ve been presenting. The only way to get good at these things is by lots of practice and, especially, by reading tons of other people&rsquo;s code to realize the ways in code can be confusing!</p>
 </article>
             </div>

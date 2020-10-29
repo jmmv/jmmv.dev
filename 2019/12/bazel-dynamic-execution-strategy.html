@@ -21,7 +21,7 @@ Simply put, dynamic execution is implemented as &amp;ldquo;just&amp;rdquo; one m
   <meta property="og:description" content="After introducing Bazel&amp;rsquo;s dynamic execution a couple of posts ago, it&amp;rsquo;s time to dive into its actual implementation details as promised. But pardon for the interruption in the last post, as I had to take a little detour to cover a necessary topic (local resources) for today&amp;rsquo;s article.
 Simply put, dynamic execution is implemented as &amp;ldquo;just&amp;rdquo; one more strategy called dynamic. The dynamic strategy, however, is different from all others because it does not have a corresponding spawn runner.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/12/bazel-dynamic-execution-strategy.html">
 
@@ -31,7 +31,7 @@ Simply put, dynamic execution is implemented as &amp;ldquo;just&amp;rdquo; one m
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -204,28 +204,15 @@ Bazel dynamic execution</b> series</a>.</i></p>
 
               
               <article><p>After <a href="/2019/12/bazel-dynamic-execution-introduction.html">introducing Bazel&rsquo;s dynamic execution</a> a couple of posts ago, it&rsquo;s time to dive into its actual implementation details as promised. But pardon for the interruption in the last post, as I had to take a little detour to cover a necessary topic (<a href="/2019/12/bazel-local-resources.html">local resources</a>) for today&rsquo;s article.</p>
-
 <p>Simply put, dynamic execution is implemented as &ldquo;just&rdquo; one more <a href="/2019/12/bazel-strategies.html">strategy</a> called <code>dynamic</code>. The dynamic strategy, however, is different from all others because it does <em>not</em> have a corresponding spawn runner. Instead, the <code>dynamic</code> strategy <em>wraps</em> two different strategies: one for local execution and one for remote execution.</p>
-
 <p>But which strategies does it wrap? Well, that&rsquo;s configurable via the <code>--dynamic_local_strategy</code> and <code>--dynamic_remote_strategy</code> flags, which behave in the same manner as <code>--strategy</code> but affect the different code paths within the dynamic scheduler for specific action mnemonics. Their defaults are <code>sandboxed</code> and <code>remote</code>, respectively.</p>
-
 <p>With that in mind, the <em>conceptual</em> behavior of the <code>dynamic</code> strategy is simple:</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-15.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_423">Slide 15</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>As you can see from the figure, the dynamic strategy delegates execution of the spawn given to it at <code>exec()</code> time to the remote and local strategies at once and then waits for their completion. Whichever strategy terminates first wins, and the other is stopped. This all happens inside <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/LegacyDynamicSpawnStrategy.java;l=236;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>LegacyDynamicSpawnStrategy#exec</code></a> by means of Java&rsquo;s <a href="https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/ExecutorService.html#invokeAny(java.util.Collection)"><code>Executor#invokeAny</code></a> primitive.</p>
-
 <p><code>invokeAny</code> is an executor method that takes two futures, schedules them to run, and polls for their completion. When one finishes, <code>invokeAny</code> actively cancels the other future (which, as we will see later, is where a lot of the difficulties lie). And as you can imagine, what these futures do is execute the <code>exec()</code> method of the wrapped strategies.</p>
-
 <p>An important and easy thing to notice in the figure above is how the number of jobs and the local resource tracking play together. Because we want to benefit from the massive parallelism of remote execution, we must configure <code>--jobs</code> to a high value (think hundreds) so that we have enough threads entering the dynamic strategy that can delegate to the remote strategy. But allowing all those threads to also delegate to the local strategy would overwhelm the local machine&hellip; so those are gated on checking that there are sufficient local resources left.</p>
-
 <p>This design allows the dynamic strategy to provide the best possible clean <em>and</em> incremental build times. For clean builds, we mostly benefit of the breath of remote workers accessible via remote execution, while maybe also running some actions locally. And for incremental builds with little parallelism, we mostly end up running everything locally and can transparently take advantage of features designed to aid in the edit/build/test cycle (e.g. <a href="https://blog.bazel.build/2015/12/10/java-workers.html">persistent workers</a>).</p>
-
 <p>But note something: by the time an action&rsquo;s execution has reached the strategy, it&rsquo;s already too late to make any smart decisions on <em>which</em> actions to run. We already know we have to send a spawn to remote execution, and we will try our best to run it locally if resources permit&hellip; but that&rsquo;s about it: there is no way to be smart about what parts of the build graph should only run locally or only remotely. And this is why I do not like calling this feature &ldquo;dynamic <em>scheduling</em>&rdquo; because&hellip; there is not much scheduling taking place. You can probably imagine some good heuristics to improve this, and we&rsquo;d like to implement those, so this is an open area of work. But, for now, this simplistic design already yields surprisingly good results.</p>
-
 <p>Now, while this design is simple, the devil is all in the details. And there are a lot of details to take care of which are not easy to handle. We&rsquo;ll dive into some of these in the upcoming posts.</p>
 </article>
             </div>

@@ -21,7 +21,7 @@ Once Bazel has finished loading and analyzing the build graph, Bazel enters the 
   <meta property="og:description" content="As strange as it may sound, a very important job of any build tool is to orchestrate the execution of lots of other programs&amp;mdash;and Bazel is no exception.
 Once Bazel has finished loading and analyzing the build graph, Bazel enters the execution phase. In this phase, the primary thing that Bazel does is walk the graph looking for actions to execute. Then, for each action, Bazel invokes its commands&amp;mdash;things like compiler and linker invocations&amp;mdash;as subprocesses.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/11/bazel-process-wrapper.html">
 
@@ -31,7 +31,7 @@ Once Bazel has finished loading and analyzing the build graph, Bazel enters the 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,32 +159,21 @@ Once Bazel has finished loading and analyzing the build graph, Bazel enters the 
             <div class="col">
               
               <article><p>As strange as it may sound, a very important job of any build tool is to orchestrate the execution of lots of other programs&mdash;and <a href="https://bazel.build/">Bazel</a> is no exception.</p>
-
-<p>Once Bazel has finished <em>loading</em> and <em>analyzing</em> the build graph, Bazel enters the <em>execution phase</em>. In this phase, the primary thing that Bazel does is walk the graph looking for actions to execute. Then, for each action, Bazel invokes its commands&mdash;things like compiler and linker invocations&mdash;as subprocesses. Under the default configuration<sup class="footnote-ref" id="fnref:default"><a href="#fn:default">1</a></sup>, all of these commands run on your machine.</p>
-
-<p>Running a subprocess is easy, but running thousands of them in an efficient and controlled manner is not. Yet every build tool has to do this. And every build tool has to come up with some form of process control to prevent processes from going rogue. In particular, Bazel ensures that its direct child processes do not leave other grandchild processes behind when terminated (especially on Ctrl+C<sup class="footnote-ref" id="fnref:make"><a href="#fn:make">2</a></sup>) and imposes a deadline for their execution.</p>
-
+<p>Once Bazel has finished <em>loading</em> and <em>analyzing</em> the build graph, Bazel enters the <em>execution phase</em>. In this phase, the primary thing that Bazel does is walk the graph looking for actions to execute. Then, for each action, Bazel invokes its commands&mdash;things like compiler and linker invocations&mdash;as subprocesses. Under the default configuration<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>, all of these commands run on your machine.</p>
+<p>Running a subprocess is easy, but running thousands of them in an efficient and controlled manner is not. Yet every build tool has to do this. And every build tool has to come up with some form of process control to prevent processes from going rogue. In particular, Bazel ensures that its direct child processes do not leave other grandchild processes behind when terminated (especially on Ctrl+C<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup>) and imposes a deadline for their execution.</p>
 <p>On Unix systems, we have been made to believe that <code>fork</code> and <code>exec</code> are the pinnacle of simplicity and flexibility for a process-management API&hellip; and they might be so for trivial cases. But they definitely come with a lot of problems as explained in the criticized <a href="https://www.microsoft.com/en-us/research/uploads/prod/2019/04/fork-hotos19.pdf">A <code>fork()</code> in the road</a> paper. Unfortunately, some features are only available via this mechanism (not via the alternate <code>posix_spawn</code>), so we must use these two primitives.</p>
-
 <p>But Bazel is written in Java, and the Java APIs for process management only support the basics to start and stop subprocesses. These APIs do not allow handling signals or dealing with process groups, both of which are crucial for the process control features required by Bazel.</p>
-
 <p>You might say that JNI should be sufficient to fix this, but that&rsquo;s not the case. If we were to implement these features in JNI, we&rsquo;d need to have code that <code>fork</code>s subprocesses from JNI&hellip; and that&rsquo;d be very problematic. By the time Bazel starts the execution phase, the Bazel process is massively multi-threaded, and you should be aware that <a href="https://thorstenball.com/blog/2014/10/13/why-threads-cant-fork/"><code>fork</code>ing a multi-threaded program is not safe</a>. We can trust that Java&rsquo;s own <a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/ProcessBuilder.html"><code>ProcessBuilder</code></a> does the right thing, but we may not implement our own.</p>
-
-<p>So how does Bazel solve this problem? By using separate helper binaries<sup class="footnote-ref" id="fnref:kyua"><a href="#fn:kyua">3</a></sup> written in C++ (well, an ugly hybrid of C and C++). These helper binaries wrap the execution of the arbitrary commands that Bazel really wants to run and perform the necessary low-level process manipulation. Then, Bazel can use the simpler <code>ProcessBuilder</code> API to spawn these processes, trusting that the wrappers are well-behaved and don&rsquo;t require careful process control.</p>
-
+<p>So how does Bazel solve this problem? By using separate helper binaries<sup id="fnref:3"><a href="#fn:3" class="footnote-ref" role="doc-noteref">3</a></sup> written in C++ (well, an ugly hybrid of C and C++). These helper binaries wrap the execution of the arbitrary commands that Bazel really wants to run and perform the necessary low-level process manipulation. Then, Bazel can use the simpler <code>ProcessBuilder</code> API to spawn these processes, trusting that the wrappers are well-behaved and don&rsquo;t require careful process control.</p>
 <p>There are two of these binaries: the <strong>process wrapper</strong> and the <strong>Linux sandbox</strong>, but I&rsquo;m going to focus on the former for the rest of this post.</p>
-
 <p>The <strong>process wrapper</strong>, located at <a href="https://source.bazel.build/bazel/+/master:src/main/tools/process-wrapper.cc;drc=9d9ac15b69530edd83c1b95f98a70efa8f98a27a"><code>src/main/tools/process-wrapper.cc</code></a>, is a very simple tool with the following functionality:</p>
-
 <ol>
 <li>Runs a subprocess with an optional timeout,</li>
 <li>redirects stdout and stderr to optionally-provided files,</li>
 <li>ensures the subprocess and all of its children are terminated on exit,</li>
 <li>and optionally collects runtime metrics from the subprocess.</li>
 </ol>
-
 <p>Once built, the tool is bundled into the Bazel executable and is placed in the install base at startup time. You can invoke it by hand if you wish to inspect its features:</p>
-
 <pre><code>.../some/workspace$ &quot;$(bazel info install_base)&quot;/_embedded_binaries/process-wrapper
 No command specified.
 Usage: /var/tmp/_bazel_jmmv/install/154077aea4bc476f9086f48e48456396/_embedded_binaries/process-wrapper -- command arg1 @args
@@ -197,46 +186,34 @@ Possible arguments:
   -s/--stats &lt;file&gt;  if set, write stats in protobuf format to a file
   -d/--debug  if set, debug info will be printed
   --  command to run inside sandbox, followed by arguments
-</code></pre>
-
-<p>Feel free to play around with the flags for a little bit.</p>
-
+</code></pre><p>Feel free to play around with the flags for a little bit.</p>
 <p>Going back to the list of features, the most interesting one is terminating the subprocess and all of its (transitive) children. And this is, in my opinion, the most important feature. For example: if Bazel runs a test program and said test program decides to spawn a second program, Bazel must ensure that both of these terminate once the test completes (either successfully, due to a failure, or on an interrupt).</p>
-
 <p>For example, if you run this command:</p>
-
 <pre><code>.../some/workspace$ /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
 1
 .../some/workspace$ 2
-</code></pre>
-
-<p>you will see that the number <code>2</code> appears after a 5-second delay even if the shell already regained control. But if you run the exact same command via the process wrapper:</p>
-
+</code></pre><p>you will see that the number <code>2</code> appears after a 5-second delay even if the shell already regained control. But if you run the exact same command via the process wrapper:</p>
 <pre><code>.../some/workspace$ &quot;$(bazel info install_base)&quot;/_embedded_binaries/process-wrapper /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
 1
 .../some/workspace$
-</code></pre>
-
-<p>the number <code>2</code> won&rsquo;t appear because the process wrapper will have cleaned up the stray subprocess on exit.</p>
-
+</code></pre><p>the number <code>2</code> won&rsquo;t appear because the process wrapper will have cleaned up the stray subprocess on exit.</p>
 <p>The way this works is by placing the first subprocess under a new process group and then making the process wrapper terminate this whole group in unison. Yes, process groups are not infallible because a process can trivially escape them (e.g. by creating its own process group or by starting a new session). But the process wrapper does not intend to be bullet-proof in this regard: first, it&rsquo;s not a security mechanism; and, second, it just <em>can&rsquo;t</em> do so in a portable manner.</p>
-
 <p>But we can do better if we are willing to introduce system-specific code. On Linux, we can handle this with <a href="http://man7.org/linux/man-pages/man7/pid_namespaces.7.html">PID namespaces</a>, which the aforementioned Linux sandbox wrapper does, and with the child subreaper feature. On macOS, we can do some tricks by walking the process table. And I hear the native process-management APIs on Windows are much better in this regard.</p>
-
 <p>Stay tuned; more on these topics in upcoming posts!</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:default">Local-only builds are the default in Bazel&mdash;but not in Blaze, the Google-internal variant of Bazel. Blaze has relied on the Google-internal distributed build system for many years and, as a result, the local execution aspects of Bazel have been &ldquo;neglected&rdquo; for quite a while. But don&rsquo;t panic. Local actions are something that I&rsquo;m actively trying to improve because they are making a comeback due to <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">dynamic scheduling</a>.
- <a class="footnote-return" href="#fnref:default"><sup>[return]</sup></a></li>
-<li id="fn:make">You might have experienced cases where you Ctrl+C a <code>make</code> invocation and the build commands are left behind, which is definitely not what you want to happen. As far as I know, this is still a problem with <code>bmake</code> on macOS.
- <a class="footnote-return" href="#fnref:make"><sup>[return]</sup></a></li>
-<li id="fn:kyua">Trust me, the helper binaries approach is infinitely easier to implement and reason about than trying to multiplex subprocess handling within a single process. I did the latter in Kyua and it was&hellip; complicated&hellip;
- <a class="footnote-return" href="#fnref:kyua"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>Local-only builds are the default in Bazel&mdash;but not in Blaze, the Google-internal variant of Bazel. Blaze has relied on the Google-internal distributed build system for many years and, as a result, the local execution aspects of Bazel have been &ldquo;neglected&rdquo; for quite a while. But don&rsquo;t panic. Local actions are something that I&rsquo;m actively trying to improve because they are making a comeback due to <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">dynamic scheduling</a>. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2" role="doc-endnote">
+<p>You might have experienced cases where you Ctrl+C a <code>make</code> invocation and the build commands are left behind, which is definitely not what you want to happen. As far as I know, this is still a problem with <code>bmake</code> on macOS. <a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:3" role="doc-endnote">
+<p>Trust me, the helper binaries approach is infinitely easier to implement and reason about than trying to multiplex subprocess handling within a single process. I did the latter in Kyua and it was&hellip; complicated&hellip; <a href="#fnref:3" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

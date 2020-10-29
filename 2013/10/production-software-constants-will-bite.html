@@ -23,7 +23,7 @@ def modify_remote_file(...): contents = get_remote_file(server_url, file_name, t
 def modify_remote_file(...): contents = get_remote_file(server_url, file_name, timeout=60) ... put_remote_file(server_url, file_name, contents, timeout=60) You would do this:
 # Maximum amount of time a request on the file server can take. FILE_SERVER_TIMEOUT = 60 def modify_remote_file(...): contents = get_remote_file(server_url, file_name, timeout=FILE_SERVER_TIMEOUT) .">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/10/production-software-constants-will-bite.html">
 
@@ -33,7 +33,7 @@ def modify_remote_file(...): contents = get_remote_file(server_url, file_name, t
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -214,8 +214,8 @@ Production software</b> series</a>.</i></p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">modify_remote_file</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
    <span class="n">contents</span> <span class="o">=</span> <span class="n">get_remote_file</span><span class="p">(</span><span class="n">server_url</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
    <span class="o">...</span>
-   <span class="n">put_remote_file</span><span class="p">(</span><span class="n">server_url</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">contents</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span></code></pre></div>
-<p>You would do this:</p>
+   <span class="n">put_remote_file</span><span class="p">(</span><span class="n">server_url</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">contents</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
+</code></pre></div><p>You would do this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="c1"># Maximum amount of time a request on the file server can take.</span>
 <span class="n">FILE_SERVER_TIMEOUT</span> <span class="o">=</span> <span class="mi">60</span>
 
@@ -224,20 +224,15 @@ Production software</b> series</a>.</i></p>
                               <span class="n">timeout</span><span class="o">=</span><span class="n">FILE_SERVER_TIMEOUT</span><span class="p">)</span>
    <span class="o">...</span>
    <span class="n">put_remote_file</span><span class="p">(</span><span class="n">server_url</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">contents</span><span class="p">,</span>
-                   <span class="n">timeout</span><span class="o">=</span><span class="n">FILE_SERVER_TIMEOUT</span><span class="p">)</span></code></pre></div>
-<p>This is obviously good advice so I&rsquo;m not going to dispel it here: the hardcoded number in the first snippet was hard to keep track of, hard to keep consistent across calls and hard to tweak when necessary.</p>
-
-<p>However, for software that runs in production far from the developer&rsquo;s machine, you have to go one step further: any constant that affects the behavior of the software and that may need to be tweaked under any circumstances—_no matter how unlikely_—should be a tunable that can be redefined at runtime. The key here is not being able to change the value while the server is running; that does not matter much. The key is to be able to change the constant&rsquo;s value <em>without having access to the source code nor having to rebuild the binary</em>.</p>
-
+                   <span class="n">timeout</span><span class="o">=</span><span class="n">FILE_SERVER_TIMEOUT</span><span class="p">)</span>
+</code></pre></div><p>This is obviously good advice so I&rsquo;m not going to dispel it here: the hardcoded number in the first snippet was hard to keep track of, hard to keep consistent across calls and hard to tweak when necessary.</p>
+<p>However, for software that runs in production far from the developer&rsquo;s machine, you have to go one step further: any constant that affects the behavior of the software and that may need to be tweaked under any circumstances—<em>no matter how unlikely</em>—should be a tunable that can be redefined at runtime. The key here is not being able to change the value while the server is running; that does not matter much. The key is to be able to change the constant&rsquo;s value <em>without having access to the source code nor having to rebuild the binary</em>.</p>
 <p>But&hellip; why?</p>
-
 <ul>
 <li>Because a constant value can turn into an outage and, when that happens, you want to be able to fix the immediate problem quickly without having to go to the source code at all. In our specific example above, suppose that code snippet was part of a server&rsquo;s startup to log some data in a remote server: if the file server became slow or was suffering from latency issues, it&rsquo;d be inconvenient for this other server to not (re)start up properly because it&rsquo;s timing out on the file server!</li>
 <li>Because a constant value may prevent you from fixing an outage quickly without having to rebuild the binary. This is an extension to the previous point. Suppose your server starts consuming too much CPU due to an inefficient algorithm that does not scale well with load and, to fix the current CPU shortcoming, you want to crank down the rate at which a certain background operation happens. If the rate at which such background operation runs is hardcoded in a constant, the only way you could do this is by rebuilding the binary.</li>
 </ul>
-
 <p>In other words: what we really want to achieve is a way for the operator to be able to tweak the behavior of a server at will while attempting to fix an outage, without having to modify the binary at all.</p>
-
 <p>Remember: rebuilding binaries and pushing them to production is <em>not</em> a quick task. It can be easy in some cases, but as with anything that touches production, you should be careful to not make the problem worse. Plus: who said the operator for the production service was the same person as the one that knows and is able to build new binaries in the correct manner? Oftentimes the operator won&rsquo;t know how to do the latter — or he may just not have the permissions!</p>
 </article>
             </div>

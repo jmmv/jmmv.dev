@@ -23,7 +23,7 @@
  A command-line option or simply option (also known as a flag or switch) modifies the operation of a command; the effect is determined by the command&amp;rsquo;s program.
  Yet, many developers abuse flags to do many unrelated things and therefore end up providing a non-standard and confusing user interface. Let&amp;rsquo;s take a look at some specific use cases, both bad and good.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/08/cli-design-putting-flags-to-good-use.html">
 
@@ -33,7 +33,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -235,80 +235,42 @@ CLI design</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p>As the Wikipedia puts it in its <a href="http://en.wikipedia.org/wiki/Command-line_interface">Command-line interface page</a>:</p>
-
+              <article><p>As the Wikipedia puts it in its <a href="http://en.wikipedia.org/wiki/Command-line_interface">Command-line interface page</a>:</p>
 <blockquote>
 <p>A <strong>command-line option</strong> or simply <strong>option</strong> (also known as a <strong>flag</strong> or <strong>switch</strong>) modifies the operation of a command; the effect is determined by the command&rsquo;s program.</p>
 </blockquote>
-
 <p>Yet, many developers abuse flags to do many unrelated things and therefore end up providing a non-standard and confusing user interface. Let&rsquo;s take a look at some specific use cases, both bad and good.</p>
-
 <h1 id="bad-requiring-a-flag">Bad: Requiring a flag</h1>
-
 <p>As mentioned above, a synonym for flag is <em>option</em>. As the definition of the word goes, an option is a thing that may be chosen, and therefore cannot be required. In other words: forcing the user to provide one or more options is wrong. For example, consider this interface definition:</p>
-
 <pre><code>do_backup --mode=incremental|full
-</code></pre>
-
-<p>In this case, we are asking the user to always provide a <code>--mode</code> flag to select the behavior of the backup utility. Apparently, providing this information is required because the developer did not offer a sane default (maybe because it doesn&rsquo;t make sense to have one). Because the user is forced to specify a backup mode, the interface could better be exposed as:</p>
-
+</code></pre><p>In this case, we are asking the user to always provide a <code>--mode</code> flag to select the behavior of the backup utility. Apparently, providing this information is required because the developer did not offer a sane default (maybe because it doesn&rsquo;t make sense to have one). Because the user is forced to specify a backup mode, the interface could better be exposed as:</p>
 <pre><code>do_backup incremental|full
-</code></pre>
-
-<p>The flag did not provide any value, and this new syntax is equally usable.</p>
-
+</code></pre><p>The flag did not provide any value, and this new syntax is equally usable.</p>
 <p>Alternatively, if <code>--mode</code> had had a default of <code>incremental</code>, the flag would have become optional and therefore the original interface with an optional flag would have been good.</p>
-
 <h1 id="bad-using-flags-as-named-arguments">Bad: Using flags as named arguments</h1>
-
 <p>As an extension to the previous use case, some interfaces choose to make use of flags as named arguments. Named arguments are not necessarily a bad thing: they allow gathering various data in an unspecified order and make command invocations self-explanatory. However, abusing flags to implement named arguments is the wrong thing to do unless <em>all</em> of the arguments are optional. Consider the following interface definition:</p>
-
 <pre><code>add_user --user=name --group=name [--shell=path] [--uid=id]
-</code></pre>
-
-<p>Note that both <code>--user</code> and <code>group</code> are required, and as mentioned above that&rsquo;s not the meaning a flag is supposed to convey. However, it&rsquo;s understandable that the developer chose to expose this interface, because it shows some consistency with the rest of the possible arguments (<code>--shell</code> and <code>--uid</code>).</p>
-
+</code></pre><p>Note that both <code>--user</code> and <code>group</code> are required, and as mentioned above that&rsquo;s not the meaning a flag is supposed to convey. However, it&rsquo;s understandable that the developer chose to expose this interface, because it shows some consistency with the rest of the possible arguments (<code>--shell</code> and <code>--uid</code>).</p>
 <p>Better ways to implement this interface would be:</p>
-
 <pre><code>add_user [--shell=path] [--uid=id] user=name group=name
 add_user user=name group=name [shell=path] [uid=id]
 add_user [--shell=path] [--uid=id] user_name group_name
-</code></pre>
-
-<p>As you can see, both the user and the group, which are required, are now either positional arguments or named arguments not disguised as flags. The other data can be collected either via flags or via other named arguments.</p>
-
+</code></pre><p>As you can see, both the user and the group, which are required, are now either positional arguments or named arguments not disguised as flags. The other data can be collected either via flags or via other named arguments.</p>
 <h1 id="bad-using-flags-to-select-subcommands">Bad: Using flags to select subcommands</h1>
-
 <p>Very frequently, CLI tools act as &ldquo;dispatchers&rdquo; for various different actions. Consider, for example, Git (or CVS, or Subversion, or even <code>ifconfig</code>). The <code>git</code> tool implements a consistent interface to launch actions such as adding a file to the index, checking in a change or pulling revisions from a remote server. The operations these actions perform are not related other than for the fact that they are part of Git and, in fact, each of these actions is implemented as a separate binary. That&rsquo;s all good.</p>
-
 <p>However, it&rsquo;s completely wrong to expose such different actions as flags. If you do so, you are forcing the user to have to specify a flag that is part of the subset of actions, and that is not an <em>optional</em> thing to do. Here goes an example of a tool that can be considered broken:</p>
-
 <pre><code>config [--verbose] [--override] --set key1=value1 [.. keyN=valueN]
 config [--verbose] --unset key1 [.. keyN]
-</code></pre>
-
-<p>This is wrong. The first problem of this interface is that the user is <em>required</em> to specify either <code>--set</code> or <code>--unset</code>, and requiring a flag is something that is not correct semantically as we have already seen above. The second problem of this interface is that the choice of the given flag affects the syntax of the positional arguments: when <code>--set</code> is provided, the arguments are of the form <code>key=value</code> and when <code>--unset</code> is provided the arguments are of the form <code>key</code>.</p>
-
+</code></pre><p>This is wrong. The first problem of this interface is that the user is <em>required</em> to specify either <code>--set</code> or <code>--unset</code>, and requiring a flag is something that is not correct semantically as we have already seen above. The second problem of this interface is that the choice of the given flag affects the syntax of the positional arguments: when <code>--set</code> is provided, the arguments are of the form <code>key=value</code> and when <code>--unset</code> is provided the arguments are of the form <code>key</code>.</p>
 <p>These two problems hint at an alternative interface for this utility; an interface based on subcommands. The correct usage for this interface should be:</p>
-
 <pre><code>config [--verbose] set [--override] key1=value1 [.. keyN=valueN]
 config [--verbose] unset key1 [.. keyN]
-</code></pre>
-
-<p>It is very important to notice one detail here: by converting the action selection to a subcommand, we are effectively breaking the structure of the command line in two parts: first, a block of options that apply to all subcommands, and a block of options that only apply to individual commands. Having to think about this separation will enlighten the way you implement the various options and how they are handled in code because, for example, <code>--override</code> should only be accepted in the case of <code>set</code>.</p>
-
+</code></pre><p>It is very important to notice one detail here: by converting the action selection to a subcommand, we are effectively breaking the structure of the command line in two parts: first, a block of options that apply to all subcommands, and a block of options that only apply to individual commands. Having to think about this separation will enlighten the way you implement the various options and how they are handled in code because, for example, <code>--override</code> should only be accepted in the case of <code>set</code>.</p>
 <h1 id="good-using-flags-to-tune-the-behavior-of-the-tool">Good: Using flags to tune the behavior of the tool</h1>
-
 <p>If you want to conditionally expose part of the functionality of a tool, using flags is the right thing to do. Specific cases in which flags are right are: enabling debugging features, selecting whether the output should be colored or not, specifying the number of columns in the printed data, raising the verbosity level, etc.</p>
-
 <h1 id="good-using-flags-to-provide-optional-data">Good: Using flags to provide optional data</h1>
-
 <p>Another case in which flags are perfectly valid are those in which you want to let the user provide additional data that is not required and that has reasonable defaults. Specific examples of this are: path to the configuration file to use, selection of the specific debugging level, etc.</p>
-
-<h1 id="that-s-it">That&rsquo;s it!</h1>
-
+<h1 id="thats-it">That&rsquo;s it!</h1>
 <p>Yup. There are no more cases in which flags are valid. You can only use flags to either fine-tune the behavior of the tool (or subcommand) and/or to tweak the value of built-in settings. Any other uses of flags are most likely invalid and you should reconsider the design of your tool.</p>
 </article>
             </div>

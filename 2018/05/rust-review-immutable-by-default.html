@@ -21,7 +21,7 @@ To understand why this is important, let&amp;rsquo;s cover some context first. O
   <meta property="og:description" content="Let&amp;rsquo;s start the deep dive by looking into a powerful feature of Rust: all variables and references are immutable by default unless qualified with mut.
 To understand why this is important, let&amp;rsquo;s cover some context first. One of my pet peeves when reviewing C&#43;&#43; code is to ask authors to sprinkle the const qualifier everywhere: if something ain&amp;rsquo;t mutated, say so explicitly. This includes marking local variables, function arguments, function return values, class attributes, etc.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/05/rust-review-immutable-by-default.html">
 
@@ -31,7 +31,7 @@ To understand why this is important, let&amp;rsquo;s cover some context first. O
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -224,21 +224,22 @@ Rust review</b> series</a>.</i></p>
 
               
               <article><p>Let&rsquo;s start the deep dive by looking into a powerful feature of Rust: <strong>all variables and references are immutable by default unless qualified with <code>mut</code></strong>.</p>
-
 <p>To understand why this is important, let&rsquo;s cover some context first. One of my pet peeves when reviewing C++ code is to ask authors to sprinkle the <code>const</code> qualifier <em>everywhere</em>: if something ain&rsquo;t mutated, say so explicitly. This includes marking local variables, function arguments, function return values, class attributes, etc. Unfortunately, there are plenty of people that argue that doing so is stupid: <a href="http://www.gotw.ca/gotw/081.htm"><code>const</code> doesn&rsquo;t help the compiler apply optimizations</a> and it makes the code harder to <em>write</em>. So why should everything be marked immutable?</p>
-
 <ol>
-<li><p><strong>To make the code easier to <em>read</em>.</strong> Code is read many more times than it&rsquo;s written. The easiest code to read is the code that requires keeping the least state in mind: i.e. the code with the smallest &ldquo;working set&rdquo; at any point. Reducing the number of mutable variables in a chunk makes its understanding infinitely easier because you know that once a variable has been given a value, it remains that way. You don&rsquo;t need to carefully look for places where the value might be mutated within the function nor in any of the called functions.</p></li>
-
-<li><p><strong>To prevent mistakes when using APIs.</strong> Projects grow and it&rsquo;s hard to track all the interactions between components. You&rsquo;d pass everything by value, in which case immutability wouldn&rsquo;t give you anything, but in practice you end up passing lots of values by reference to avoid copy costs. In those cases, it&rsquo;s very useful to know that calling a specific function won&rsquo;t mutate its arguments—which, again, reduces the working set you need to keep in mind.</p></li>
-
-<li><p><strong>To come up with better designs.</strong> Combining the previous two items, thinking of immutability has strong implications in the design of your types and interfaces. The reason I routinely highlight the lack of immutability during code reviews is because, inevitably, adding these qualifiers causes the author to have to redesign the code with immutability in mind. The results are cleaner code that is easier to read and easier to test. See my previous post <a href="/2013/07/readability-don-modify-variables.html">Readability: Don&rsquo;t modify variables</a> for some examples.</p></li>
-
-<li><p><strong>To help with concurrency.</strong> Immutable data structures are trivial to parallelize. Code that deals with immutable data could can be made parallel with ease and, in theory, this could be done automatically.</p></li>
+<li>
+<p><strong>To make the code easier to <em>read</em>.</strong> Code is read many more times than it&rsquo;s written. The easiest code to read is the code that requires keeping the least state in mind: i.e. the code with the smallest &ldquo;working set&rdquo; at any point. Reducing the number of mutable variables in a chunk makes its understanding infinitely easier because you know that once a variable has been given a value, it remains that way. You don&rsquo;t need to carefully look for places where the value might be mutated within the function nor in any of the called functions.</p>
+</li>
+<li>
+<p><strong>To prevent mistakes when using APIs.</strong> Projects grow and it&rsquo;s hard to track all the interactions between components. You&rsquo;d pass everything by value, in which case immutability wouldn&rsquo;t give you anything, but in practice you end up passing lots of values by reference to avoid copy costs. In those cases, it&rsquo;s very useful to know that calling a specific function won&rsquo;t mutate its arguments—which, again, reduces the working set you need to keep in mind.</p>
+</li>
+<li>
+<p><strong>To come up with better designs.</strong> Combining the previous two items, thinking of immutability has strong implications in the design of your types and interfaces. The reason I routinely highlight the lack of immutability during code reviews is because, inevitably, adding these qualifiers causes the author to have to redesign the code with immutability in mind. The results are cleaner code that is easier to read and easier to test. See my previous post <a href="/2013/07/readability-don-modify-variables.html">Readability: Don&rsquo;t modify variables</a> for some examples.</p>
+</li>
+<li>
+<p><strong>To help with concurrency.</strong> Immutable data structures are trivial to parallelize. Code that deals with immutable data could can be made parallel with ease and, in theory, this could be done automatically.</p>
+</li>
 </ol>
-
 <p>In the C++ case, I&rsquo;ve always found it unfortunate that <code>const</code> is not the default modifier—and we can probably blame <a href="https://en.wikipedia.org/wiki/Const_(computer_programming)#History">historical heritage</a> for that: <code>const</code> was a late addition to C (first appearing in C89) and C++ had to remain compatible with existing C APIs.</p>
-
 <p>But thankfully, Rust is not bound by such legacy: Rust <em>does</em> differentiate between immutable and mutable data (unlike e.g. Go, which is also a modern language), and has chosen to make the immutable case the default. And, aside from all of the benefits listed above, <strong>the borrow checker can take immutability to its advantage and make very powerful sanity-checks about the code</strong>. We&rsquo;ll explore this in the next episode.</p>
 </article>
             </div>

@@ -21,7 +21,7 @@ The rule The basic use of header files is to provide symbol declarations for fun
   <meta property="og:description" content="Let&amp;rsquo;s start the series with something simple: the basic structure of header files and why and how to protect against multiple inclusion.
 The rule The basic use of header files is to provide symbol declarations for functions and globals. Because multiple declarations of a given symbol in a single translation unit are a syntax error, you have to defensively structure your header files to not redefine anything in case they are included multiple times.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/11/header-files-multiple-inclusion.html">
 
@@ -31,7 +31,7 @@ The rule The basic use of header files is to provide symbol declarations for fun
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -218,41 +218,30 @@ Header files</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p>Let&rsquo;s start the series with something simple: the basic structure of header files and why and how to protect against multiple inclusion.</p>
-
+              <article><p>Let&rsquo;s start the series with something simple: the basic structure of header files and why and how to protect against multiple inclusion.</p>
 <h1 id="the-rule">The rule</h1>
-
 <p>The basic use of header files is to provide symbol declarations for functions and globals. Because multiple declarations of a given symbol in a single translation unit are a syntax error, you have to defensively structure your header files to not redefine anything in case they are included multiple times.</p>
-
 <p>Keep in mind that you just cannot prevent header files from being included more than once unless you were to forbid header files themselves from including other header files&hellip; and doing that would be suboptimal at best as we shall see in a future post on self-containment.</p>
-
 <p>Just follow this pattern and encapsulate the whole contents of the <em>whole</em> header file within a guard:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#if !defined(PROJECT_MODULE_H)
 </span><span class="cp">#define PROJECT_MODULE_H
 </span><span class="cp"></span>
 <span class="p">...</span> <span class="n">all</span> <span class="n">header</span> <span class="n">file</span> <span class="n">contents</span> <span class="n">go</span> <span class="n">here</span> <span class="p">...</span>
 
-<span class="cp">#endif  </span><span class="cm">/* !defined(PROJECT_MODULE_H) */</span></code></pre></div>
-<p>Easy, but there are two important details to keep in mind:</p>
-
+<span class="cp">#endif  </span><span class="cm">/* !defined(PROJECT_MODULE_H) */</span><span class="cp">
+</span></code></pre></div><p>Easy, but there are two important details to keep in mind:</p>
 <p>The first is <strong>to properly scope the guard names</strong>. These names must be unique within your project and within any project that may ever include them. Therefore, it is good practice to always prefix your guard names with the name of your project and follow them by the name of the module.</p>
-
 <p>The second is <strong>to not be clever</strong>. Compilers <em>expect</em> the structure above in order to apply optimizations against multiple inclusions of a single file. If you break the pattern, you can unknowingly incur higher build times. For example, <a href="http://gcc.gnu.org/onlinedocs/cppinternals/Guard-Macros.html">see GCC&rsquo;s documentation on this topic</a> for details.</p>
-
 <h1 id="the-exception">The exception</h1>
-
 <p>As with any rule there is an exception: not all header files can safely be included more than once. If a header file defines a static symbol or helper function, you have to ensure that it is not pulled in from more than one place.</p>
-
 <p>Yes, the compiler would detect this on its own but, for readability purposes, your header file should explicitly state this fact. Use this other pattern instead:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#if defined(PROJECT_MODULE_H)
 </span><span class="cp">#error &#34;Must only be included once and only from .c files&#34;
 </span><span class="cp">#endif
 </span><span class="cp">#define PROJECT_MODULE_H
 </span><span class="cp"></span>
-<span class="p">...</span> <span class="n">all</span> <span class="n">header</span> <span class="n">file</span> <span class="n">contents</span> <span class="n">go</span> <span class="n">here</span> <span class="p">...</span></code></pre></div>
-<p>But when can this happen? Very rarely, really. A specific case of the above would be a header file providing helper functions for testing, both their definitions and their implementation. Theoretically, you could split the two into a traditional header file and a source file, compile them separately and link them together with each test program you write. However, doing so may complicate your build unnecessarily. (Ab)using a single header file can make things easier to handle. <a href="https://github.com/jmmv/kyua/blob/master/utils/sqlite/test_utils.hpp">See this test_utils.hpp example.</a></p>
+<span class="p">...</span> <span class="n">all</span> <span class="n">header</span> <span class="n">file</span> <span class="n">contents</span> <span class="n">go</span> <span class="n">here</span> <span class="p">...</span>
+</code></pre></div><p>But when can this happen? Very rarely, really. A specific case of the above would be a header file providing helper functions for testing, both their definitions and their implementation. Theoretically, you could split the two into a traditional header file and a source file, compile them separately and link them together with each test program you write. However, doing so may complicate your build unnecessarily. (Ab)using a single header file can make things easier to handle. <a href="https://github.com/jmmv/kyua/blob/master/utils/sqlite/test_utils.hpp">See this test_utils.hpp example.</a></p>
 </article>
             </div>
           </div>

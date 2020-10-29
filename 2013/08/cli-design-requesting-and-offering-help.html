@@ -21,7 +21,7 @@ It is, therefore, important to realize that help does not only exist to aid the 
   <meta property="og:description" content="Any CLI application must offer help to describe its command line syntax: the flags it supports, the subcommands it implements, the meaning of the positional arguments, etc. Failure to do results in an application that is completely unusable: unlike GUI applications, the interface of CLI tools is not discoverable without instructions.
 It is, therefore, important to realize that help does not only exist to aid the user in recovering from errors.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/08/cli-design-requesting-and-offering-help.html">
 
@@ -31,7 +31,7 @@ It is, therefore, important to realize that help does not only exist to aid the 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -233,42 +233,23 @@ CLI design</b> series</a>.</i></p>
 <hr/>
 
               
-              <article>
-
-<p>Any CLI application must offer help to describe its command line syntax: the flags it supports, the subcommands it implements, the meaning of the positional arguments, etc. Failure to do results in an application that is completely unusable: unlike GUI applications, the interface of CLI tools is not discoverable without instructions.</p>
-
+              <article><p>Any CLI application must offer help to describe its command line syntax: the flags it supports, the subcommands it implements, the meaning of the positional arguments, etc. Failure to do results in an application that is completely unusable: unlike GUI applications, the interface of CLI tools is not discoverable without instructions.</p>
 <p>It is, therefore, important to realize that help does not only exist to aid the user in recovering from errors. Help also exists to teach users how the application works, what the expectations are and, more importantly, to showcase the features of the program.</p>
-
 <p>There are two major ways in which to provide such information and lots of minor variations in between these two extremes: on the one hand, we have the inclusion of a comprehensive builtin help system and, on the other hand, we have a simple and terse pointer to the complete and up-to-date manual page. Obviously, providing a builtin help system is more complex than just offering a pointer to a manual page, and for that reason we will focus most of the recommendations below on the former case.</p>
-
 <h1 id="only-show-help-when-explicitly-told-to-do-so">Only show help when explicitly told to do so</h1>
-
 <p>Long help messages should only be shown <em>when the user explicitly requests them</em>. Many application developers fall into the trap of trying to be too helpful and miserably failing at that. How so? When the user makes a usage mistake, the application greets him with the error details and <em>then</em> dumps the whole builtin help messages on the screen. After all: the user made a mistake, so why wouldn&rsquo;t he want to read everything about the interface? Well, he probably won&rsquo;t. This actually causes the opposite result because receiving a long help message is quite an annoying and unexpected behavior. Let&rsquo;s see why.</p>
-
 <p>Builtin help messages tend to be long and cause the screen to scroll upwards significantly, possibly pushing precious information over the top. If the application prints such a long help message after printing the error that the user made, the most obvious consequences are: first, that the command that the user typed and the associated error message get lost above the top of the screen and thus cannot be easily read (assuming the user knows how to scroll up, or else they won&rsquo;t be noticed at all!); and, second, reading long messages on the command line without a paging program is difficult. None of these make the experience pleasant and, even worse, hinder the debugging of the problem that the user is experiencing.</p>
-
 <p>Again, as I mentioned <a href="/2013/08/cli-design-error-reporting.html">in the previous post</a>: an experienced user will want a terse message describing exactly the mistake he made while a novice user will probably want that and also a pointer to further help. All this information can be conveyed in two lines, and thus you should not use more than that.</p>
-
 <h1 id="never-send-help-messages-to-stderr">Never send help messages to stderr</h1>
-
 <p>If you follow the previous guideline, you now know that the builtin help of an application should only be shown when explicitly requested by the user. Because the user is explicitly requesting help, the intended consequence of his application invocation is to receive help. <em>Help is not a side-effect nor an error.</em> Therefore, it&rsquo;s just plain wrong to send the help messages to stderr, both conceptually and practically.</p>
-
 <p>There are very few things as frustrating as invoking <code>frobmaker help | grep create</code> to see anything related to frob creation, only to be greeted by a giant, unfiltered set of messages on the screen. Users <em>want</em> to grep your help messages; don&rsquo;t make that difficult.</p>
-
 <h1 id="help-must-be-up-to-date-and-accurate">Help must be up-to-date and accurate</h1>
-
 <p>Misleading information is harmful. If you choose to implement a builtin help system in your program, make sure that its contents stay relevant, are up-to-date and, more importantly, are <em>extremely accurate</em> — especially when detailing the various options and arguments that the program supports. If you choose to (only) provide a manual page, make double-sure that it remains accurate as well.</p>
-
 <p>The good news is that keeping the builtin help system up-to-date and accurate is, usually, easier than keeping external documentation in sync with the code. After all, when you are changing the code, it&rsquo;s easier to change any user-facing information right there than knowing that there is a secondary place that needs updating and doing the matching changes there as well.</p>
-
 <p>But, on the other hand, we have all seen applications with inaccurate help messages that lack supported options or mention subcommands that have long been removed! Mistakes do happen, especially when the code is maintained by more than one person and not everyone is as careful and detail-oriented as you are.</p>
-
 <p>My suggestion to resolve this situation and prevent it from happening altogether is to use a library that allows you to implement <em>and</em> document the syntax of your command line programmatically. Usually, such a library provides abstractions to represent the various components of the command line, and keeping their associated documentation in sync with the existence of each component is much easier than dealing with separate entities. No: neither <code>getopt(3)</code> nor <code>getopt_long(3)</code> make the cut. You need something at a higher semantical level that is possibly (and hopefully) built on top of these two; most high-level toolkits provide such functionality, and most standard libraries in high-level languages do too. But if not, and your application is non-trivial, spend some time <a href="https://github.com/jmmv/kyua/tree/master/utils/cmdline">rolling your own</a>.</p>
-
 <h1 id="remember-help-is-important">Remember: help is important!</h1>
-
 <p>Mastering the skills to implement a good help system in your application is extremely important: even if your interface ends up being non-standard and/or confusing, having a good and discoverable help system means users will <em>still</em> be able to interact with your tool. A good help system minimizes user frustration and shows the amount of care that went into the development of your application.</p>
-
 <p>So, don&rsquo;t leave the help system and/or the documentation aside. Continuously spend time on these to make your software package cleaner overall.</p>
 </article>
             </div>

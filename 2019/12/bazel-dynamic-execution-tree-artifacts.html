@@ -17,11 +17,11 @@
 
   
   <meta name="description" content="To conclude the deep dive into Bazel&amp;rsquo;s dynamic spawn strategy, let&amp;rsquo;s look at the nightmare that tree artifacts have been with the local lock-free feature. And, yes, I&amp;rsquo;m double-posting today because I really want to finish these series before the end of the decade1!
-Tree artifacts are a fancy name for action outputs that are directories, not files. What&amp;rsquo;s special about them is that Bazel does not know a priori what the directory contents are: the rule behind the action just specifies that there will be a directory with files, and Bazel has to treat that as the unit of output from the action.">
+ Tree artifacts are a fancy name for action outputs that are directories, not files. What&amp;rsquo;s special about them is that Bazel does not know a priori what the directory contents are: the rule behind the action just specifies that there will be a directory with files, and Bazel has to treat that as the unit of output from the action.">
   <meta property="og:description" content="To conclude the deep dive into Bazel&amp;rsquo;s dynamic spawn strategy, let&amp;rsquo;s look at the nightmare that tree artifacts have been with the local lock-free feature. And, yes, I&amp;rsquo;m double-posting today because I really want to finish these series before the end of the decade1!
-Tree artifacts are a fancy name for action outputs that are directories, not files. What&amp;rsquo;s special about them is that Bazel does not know a priori what the directory contents are: the rule behind the action just specifies that there will be a directory with files, and Bazel has to treat that as the unit of output from the action.">
+ Tree artifacts are a fancy name for action outputs that are directories, not files. What&amp;rsquo;s special about them is that Bazel does not know a priori what the directory contents are: the rule behind the action just specifies that there will be a directory with files, and Bazel has to treat that as the unit of output from the action.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/12/bazel-dynamic-execution-tree-artifacts.html">
 
@@ -31,7 +31,7 @@ Tree artifacts are a fancy name for action outputs that are directories, not fil
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -203,64 +203,39 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <hr/>
 
               
-              <article><p>To conclude the deep dive into Bazel&rsquo;s dynamic spawn strategy, let&rsquo;s look at the nightmare that tree artifacts have been with the <a href="/2019/12/bazel-dynamic-execution-local-lockfree.html">local lock-free feature</a>. And, yes, I&rsquo;m double-posting today because I really want to finish these series before the end of the decade<sup class="footnote-ref" id="fnref:decade"><a href="#fn:decade">1</a></sup>!</p>
-
-<hr />
-
-<p><strong>Tree artifacts</strong> are a fancy name for action outputs that are directories, not files. What&rsquo;s special about them is that Bazel does not know <em>a priori</em> what the directory <em>contents</em> are: the rule behind the action just specifies that there will be a directory with files, and Bazel has to treat that as the unit of output from the action. Other than that, tree artifacts are &ldquo;just&rdquo; a different kind of output<sup class="footnote-ref" id="fnref:genrules"><a href="#fn:genrules">2</a></sup>.</p>
-
+              <article><p>To conclude the deep dive into Bazel&rsquo;s dynamic spawn strategy, let&rsquo;s look at the nightmare that tree artifacts have been with the <a href="/2019/12/bazel-dynamic-execution-local-lockfree.html">local lock-free feature</a>. And, yes, I&rsquo;m double-posting today because I really want to finish these series before the end of the decade<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>!</p>
+<hr>
+<p><strong>Tree artifacts</strong> are a fancy name for action outputs that are directories, not files. What&rsquo;s special about them is that Bazel does not know <em>a priori</em> what the directory <em>contents</em> are: the rule behind the action just specifies that there will be a directory with files, and Bazel has to treat that as the unit of output from the action. Other than that, tree artifacts are &ldquo;just&rdquo; a different kind of output<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup>.</p>
 <p>Let&rsquo;s consider a tricky action that spawns a script that goes like this:</p>
-
 <ol>
 <li>Create the tree artifact directory.</li>
 <li>Write a bunch of transient or temporary files <em>in</em> the tree artifact directory.</li>
 <li>Write a bunch of output files in the tree artifact directory.</li>
 <li>Remove the transient files immediately before terminating.</li>
 </ol>
-
 <p>The folllowing figure depicts these steps as they happen when the action is run remotely and locally by the dynamic strategy:</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-37.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_392">Slide 37</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>The important boxes in this figure are those labeled <strong>Delete temp files</strong>. Their location respective to other steps is also important.</p>
-
 <p>Now let&rsquo;s consider what happens when the dynamic scheduler decides to cancel each of these separate paths, and especially what happens if we are unlucky enough to stop the spawned script <em>before</em> it is able to do its final <strong>Delete temp files</strong> phase.</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-38.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_256">Slide 38</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>For the remote branch, the whole action and script run remotely, which means all real and transient outputs are written in a disk of a remote machine. Because we have cancelled the action and we haven&rsquo;t even started downloading any of its outputs, there is nothing to worry about: it&rsquo;s impossible for Bazel to ever encounter the transient files even if they were behind.</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-39.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_358">Slide 39</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>For the local branch, things are different&hellip; Remember that we are running with the local <em>unsandboxed</em> strategy for performance reasons, so the real outputs <em>as well as the transient outputs</em> were written to the output tree. If we kill the spawned script before it gets a chance to delete the transient files, those will stay behind in the output tree.</p>
-
 <p>And that&rsquo;s a problem. Because then, when the remote branch continues and fetches the outputs, the transient files will be there. After the downloads, Bazel will sanity-check via <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/skyframe/ActionMetadataHandler.java;l=351;drc=5284e6cd2dc4e7dfe625c9bef3d557e47b76b42b"><code>ActionMetadataHandler#getTreeArtifactValue</code></a>, called from <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/skyframe/SkyframeActionExecutor.java;l=1389;drc=5284e6cd2dc4e7dfe625c9bef3d557e47b76b42b"><code>SkyframeActionExecutor#checkOutputs</code></a>, that the on-disk collection of files matches what was downloaded from the remote worker&hellip; and encounter an inconsistency, thus crashing.</p>
-
 <p>The solution is easy, though it required a few iterations to get it in the right place. Simply put, we improved the local strategy&rsquo;s cancellation code path to destroy any tree artifacts as part of its cancellation process. This way, we pretend that the tree artifact directories were never created and the remote strategy can proceed to fetch the outputs. You can see this in revision <a href="https://source.bazel.build/bazel/+/0dd9ae90834bb08be116301553b88d0df8b0631e">0dd9ae90</a>. (And you can also see in the diff some test code to implement a Starlark rule that generates a tree artifact.)</p>
-
 <p>This concludes my deep dive into the dynamic scheduler. At least for now, until we have finished dealing a remaining race condition, have tuned the implementation, proved that it delivers even better performance than the legacy one, and the legacy implementation is gone.</p>
-
 <p>Hope you have a happy New Year&rsquo;s Eve if you happen to celebrate tonight. Bye bye 2010s. See you on the other side!</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:decade">Do you also think that the next decade starts on 2021, because there was no year 0? Good try, but dates are hard and some numbers do have special meaning to people. So I&rsquo;m going to continue believing that the 2010s end today.
- <a class="footnote-return" href="#fnref:decade"><sup>[return]</sup></a></li>
-<li id="fn:genrules">Except that you cannot declare a tree artifact from a <code>genrule</code>. Well, you can specify a directory as an output and it will work for local actions, but this will break when the <code>genrule</code> is run remotely. Tree artifacts can only be defined from Starlark rule implementations at this point&hellip; which is odd and needs fixing.
- <a class="footnote-return" href="#fnref:genrules"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>Do you also think that the next decade starts on 2021, because there was no year 0? Good try, but dates are hard and some numbers do have special meaning to people. So I&rsquo;m going to continue believing that the 2010s end today. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2" role="doc-endnote">
+<p>Except that you cannot declare a tree artifact from a <code>genrule</code>. Well, you can specify a directory as an output and it will work for local actions, but this will break when the <code>genrule</code> is run remotely. Tree artifacts can only be defined from Starlark rule implementations at this point&hellip; which is odd and needs fixing. <a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

@@ -21,7 +21,7 @@ Dynamic execution has been quite a hot topic in my work over the last few months
   <meta property="og:description" content="&amp;ldquo;Strategies? Will you talk about Bazel&amp;rsquo;s strategy for world domination 🙀?&amp;rdquo; No&amp;hellip; not exactly that.
 Dynamic execution has been quite a hot topic in my work over the last few months and I am getting ready to publish a series of posts on it soon. But before I do that, I need to first review Bazel&amp;rsquo;s execution strategies because they play a big role in understanding what dynamic execution is and how it&amp;rsquo;s implemented.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/12/bazel-strategies.html">
 
@@ -31,7 +31,7 @@ Dynamic execution has been quite a hot topic in my work over the last few months
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,75 +158,42 @@ Dynamic execution has been quite a hot topic in my work over the last few months
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>&ldquo;Strategies? Will you talk about Bazel&rsquo;s strategy for world domination 🙀?&rdquo; No&hellip; not exactly that.</p>
-
+              <article><p>&ldquo;Strategies? Will you talk about Bazel&rsquo;s strategy for world domination 🙀?&rdquo; No&hellip; not exactly that.</p>
 <p>Dynamic execution has been quite a hot topic in my work over the last few months and I am getting ready to publish a series of posts on it soon. But before I do that, I need to first review Bazel&rsquo;s execution strategies because they play a big role in understanding what dynamic execution <em>is</em> and how it&rsquo;s <em>implemented</em>.</p>
-
 <p>Simply put, <strong>strategies</strong> are Bazel&rsquo;s abstraction over the mechanism to run a subprocess as part of an action (think compiler invocation). In essence, they are a glorified <code>exec()</code> system call in Unix or <code>CreateProcess</code> in Windows and supercharge them to run subprocesses under <em>very</em> different environments.</p>
-
 <p>The invariant, however, is that strategies do <em>not</em> affect the semantics of the execution: that is, running the same command line on strategy <code>A</code> and strategy <code>B</code> must yield the same output files. As a consequence, changing strategies does not invalidate the analysis graph.</p>
-
 <p>Because of the previous invariant, we can mix and match strategies at run time without affecting the output behavior. This is exposed via the repeated <code>--strategy</code> flag, which takes arguments of the form <code>[mnemonic]=strategy</code>. With this flag, you can tell Bazel to run certain classes of actions under a specific strategy. For example, you might say <code>--strategy=remote --strategy=Javac=worker</code> to set the default strategy to <code>remote</code> and to override it with <code>worker</code> for Java compiles alone. There also is the <code>--strategy_regexp</code> flag to select strategies based on action messages, but I&rsquo;ll leave the &ldquo;magic&rdquo; of that aside. And there is also some fancy support for <a href="https://blog.bazel.build/2019/06/19/list-strategy.html">automatic strategy selection</a>.</p>
-
 <p>Regarding implementation, all strategies are classes that implement the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/actions/SpawnActionContext.java;l=22;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>SpawnActionContext</code></a> interface. Overly simplifying, they must provide an <code>exec()</code> method that takes a <code>Spawn</code> (essentially a command line description) and returns a collection of <code>SpawnResult</code>s. Why a collection? Because a strategy may implement retries, and their failed results are exposed as part of the return value.</p>
-
 <p>Looking further into their implementation, strategies wrap a <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/exec/SpawnRunner.java;l=92;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>SpawnRunner</code></a>, which is the thing that actually knows how to run a spawn. You will notice that this interface&rsquo;s <code>exec()</code> returns a single <code>SpawnResult</code>, which helps understand how the strategy and its spawn runner relate: the strategy contains higher-level logic around the spawn runner and the spawn runner is in charge of the execution details.</p>
-
 <p>With that, let&rsquo;s now review the primary strategies in Bazel.</p>
-
 <h1 id="the-standalone-strategy">The <code>standalone</code> strategy</h1>
-
 <p>The standalone (aka local) strategy is the simplest you can have, and is a good starting point to learn more about the internals of strategies and process execution in Bazel.</p>
-
 <p>This strategy executes spawns directly <em>on</em> the output tree. That is: the commands are run with a current working directory that resides inside the output tree and all file references are within that directory. There are no restrictions on what the process can do, so the process can inadvertently have side-effects on unrelated files.</p>
-
 <p>This strategy is at <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/standalone/StandaloneSpawnStrategy.java;l=25;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>StandaloneSpawnStrategy</code></a> and uses the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/exec/local/LocalSpawnRunner.java;l=71;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>LocalSpawnRunner</code></a>.</p>
-
 <h1 id="the-sandboxed-strategy">The <code>sandboxed</code> strategy</h1>
-
 <p>The sandboxed strategy exists to support Bazel&rsquo;s promise of correct builds and is the default strategy for any local action (which means all actions unless you are doing any customization).</p>
-
 <p>This strategy runs each spawn under a controlled environment that is isolated from the output tree and that is prevented from interacting with the system in certain ways (e.g. no networking access).</p>
-
 <p>During an <code>exec()</code>, the sandbox strategy performs these steps:</p>
-
 <ol>
 <li>Create a directory outside of the output tree that exclusively contains the inputs required by the spawn as read-only files. This is currently done in the form of a symlink forest.</li>
 <li>Execute the spawn under that separate directory, using system-specific technologies like namespaces on Linux and <a href="/2019/11/macos-sandbox-exec.html"><code>sandbox-exec</code> on macOS</a> to constrain what the process can do.</li>
 <li>Move the outputs out of the sandbox and into the output tree.</li>
 <li>Delete the sandbox.</li>
 </ol>
-
 <p>This approach works&hellip; but can have a significant penalty on action execution performance. This has been a pet peeve of mine and I&rsquo;ve been trying to <a href="https://blog.bazel.build/2018/04/13/preliminary-sandboxfs-support.html">improve it for a long time with sandboxfs</a>, though I haven&rsquo;t gotten to major breakthroughs just yet.</p>
-
 <p>This strategy is implemented as one class per supported operating system and all of them live under the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/sandbox/;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>sandbox</code></a> subdirectory.</p>
-
 <h1 id="the-worker-strategy">The <code>worker</code> strategy</h1>
-
 <p>The worker strategy exists to speed up the edit/build/test cycle of languages whose compiler is costly to start or whose compiler keeps state around to optimize incremental builds. The strategy communicates with a long-lived <a href="https://blog.bazel.build/2015/12/10/java-workers.html"><em>persistent worker</em> process</a> and essentially sends the command lines to execute to that separate process.</p>
-
 <p>For example: in the case of Java, the persistent worker avoids the penalty of JVM startup and JIT warmup times; and in the case of Dart, the persistent worker allows the compiler to keep file state in memory so that subsequent compilations are much faster.</p>
-
 <p>The risk of allowing workers is that they can introduce correctness issues more easily than the typical startup/shutdown process: any bugs while processing an action, which may be harmless if the compiler is shut down immediately afterwards, can have cascading effects if the compiler is kept around for a long time and reused for other files. (Yes, we have hit these kind of issues in e.g. the Swift worker.)</p>
-
 <p>Additionally, worker management in Bazel is currently very rudimentary so blindly enabling workers can make your machine melt due to memory pressure. We have plans to improve this significantly but haven&rsquo;t gotten to them just yet.</p>
-
 <p>This strategy is at <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/worker/WorkerSpawnStrategy.java;l=29;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>WorkerSpawnStrategy</code></a> and uses the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/worker/WorkerSpawnRunner.java;l=65;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>WorkerSpawnRunner</code></a>.</p>
-
 <h1 id="the-remote-strategy">The <code>remote</code> strategy</h1>
-
 <p>The remote strategy is the crown jewel of Bazel. This strategy is what allows Bazel to execute processes on remote machines thus letting your project break loose of the constraints of a single machine&rsquo;s build power.</p>
-
 <p>This is the most complex strategy of all if only because of the need to coordinate with remote machines over gRPC, having to multiplex requests, and having to deal with networking hiccups. I will not dive into any of its details here.</p>
-
 <p>This strategy is at <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/remote/RemoteSpawnStrategy.java;l=30;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>RemoteSpawnStrategy</code></a> and uses the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/remote/RemoteSpawnRunner.java;l=99;drc=b202e1b026cea27d4939f1782c66f9e5f3b1cd06"><code>RemoteSpawnRunner</code></a>.</p>
-
-<hr />
-
+<hr>
 <p>That&rsquo;s all for today. In the coming posts, I&rsquo;ll cover dynamic execution in detail and will likely refer to this post in multiple occasions.</p>
-
 <p>Be aware, however, that a lot of the details on how strategies are defined and registered in Bazel are about to change as part of the ongoing <a href="https://groups.google.com/forum/#!topic/bazel-dev/SJyIAtJ6lIQ">Platforms &amp; Toolchains work</a>. The specifics behind strategy implementation should not change, though.</p>
 </article>
             </div>

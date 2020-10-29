@@ -21,7 +21,7 @@ In fact, I&amp;rsquo;m exceedingly convinced that the amount of assertion-like c
   <meta property="og:description" content="The point of this post is simple and I&amp;rsquo;ll spoil it from the get go: every time you make an assumption in a piece of code, make such assumption explicit in the form of an assertion or error check. If you cannot do that (are you sure?), then write a detailed comment.
 In fact, I&amp;rsquo;m exceedingly convinced that the amount of assertion-like checks in a piece of code is a good indicator of the programmer&amp;rsquo;s expertise.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/02/encode-your-assumptions.html">
 
@@ -31,7 +31,7 @@ In fact, I&amp;rsquo;m exceedingly convinced that the amount of assertion-like c
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,50 +158,32 @@ In fact, I&amp;rsquo;m exceedingly convinced that the amount of assertion-like c
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>The point of this post is simple and I&rsquo;ll spoil it from the get go: <strong>every time you make an assumption in a piece of code, make such assumption explicit in the form of an assertion or error check</strong>. If you cannot do that (are you sure?), then write a detailed comment.</p>
-
+              <article><p>The point of this post is simple and I&rsquo;ll spoil it from the get go: <strong>every time you make an assumption in a piece of code, make such assumption explicit in the form of an assertion or error check</strong>. If you cannot do that (are you sure?), then write a detailed comment.</p>
 <p>In fact, I&rsquo;m exceedingly convinced that the amount of assertion-like checks in a piece of code is a good indicator of the programmer&rsquo;s expertise.</p>
-
 <p>But&hellip; why? Story time!</p>
-
 <h1 id="the-bug">The bug</h1>
-
 <p>Bazel has a progress reporting message that says how many build actions are currently runnable and how many are actually running. For example, given a <code>--jobs=16</code> setting on a machine with 12 cores and assuming your build graph has sufficient parallelism, there can be 16 active actions but only 12 can run because that&rsquo;s what the machine&rsquo;s resources allow: the other 4 are waiting on those resources. Under these conditions, the progress reporting message would say: <code>16 actions, 12 running</code>.</p>
-
 <p>Bazel also has a feature known as dynamic scheduling, which we <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">recently announced</a>. With this feature, all actions allowed by the <code>--jobs</code> concurrency degree are sent to a remote execution service and a subset of those actions, as allowed by the machine&rsquo;s resources, are <em>also</em> executed on the local machine. In other words: a subset of actions run in two places <em>at the same time</em>.</p>
-
 <p>One of our initial adopters for this dynamic scheduling feature reported that Bazel often said <code>100 actions, 24 running</code>, with varying counts of <code>24</code>. They were curious to know why this implied that 100 actions (as specified by our <code>--jobs=100</code> setting) were runnable but only ~24 were truly running. This made no sense because we have sufficient remote execution capacity to allow those 100 actions to run at the same time. Furthermore, the low running counts had no relation to the number of CPUs on their machine.</p>
-
 <p>I wanted to track this down to understand what these numbers were really counting. To do this, I searched for the progress message with the regexp <code>actions,.*running</code>, which quickly yielded <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/runtime/ExperimentalStateTracker.java;l=563?q=actions,.*running"><code>ExperimentalStateTracker.java:563</code></a>. From there, it didn&rsquo;t take long to understand what was going on.</p>
-
-<h1 id="some-details-on-bazel-s-architecture">Some details on Bazel&rsquo;s architecture</h1>
-
+<h1 id="some-details-on-bazels-architecture">Some details on Bazel&rsquo;s architecture</h1>
 <p>But before we continue, it is important to understand a couple of concepts of behind Bazel&rsquo;s design:</p>
-
 <ol>
-<li><p>Bazel is implemented as a loosely-coupled collection of modules, defined by the <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/runtime/BlazeModule.java"><code>BlazeModule</code></a> interface.</p></li>
-
-<li><p>To keep the coupling low, Bazel uses <a href="https://github.com/google/guava/wiki/EventBusExplained">Guava&rsquo;s event bus</a> to post state change notifications across modules.</p></li>
+<li>
+<p>Bazel is implemented as a loosely-coupled collection of modules, defined by the <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/runtime/BlazeModule.java"><code>BlazeModule</code></a> interface.</p>
+</li>
+<li>
+<p>To keep the coupling low, Bazel uses <a href="https://github.com/google/guava/wiki/EventBusExplained">Guava&rsquo;s event bus</a> to post state change notifications across modules.</p>
+</li>
 </ol>
-
 <p>This all sounds good on paper, but the problem is that the possible set of messages, the conditions in which they get sent, and their relative ordering is&hellip; under-specified (which is a mild way of saying &ldquo;not specified at all&rdquo;).</p>
-
 <h1 id="understanding-the-bug">Understanding the bug</h1>
-
 <p>Why is any of this related? Well, as it turns out, the progress reporting code in <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/runtime/ExperimentalStateTracker.java"><code>ExperimentalStateTracker</code></a> extensively relies on processing events to process what is going on in Bazel. In particular, this code receives <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/actions/ActionStatusMessage.java"><code>ActionStatusMessage</code></a> notifications, which indicate action status changes. These messages are &ldquo;keyed&rdquo; by the action identifier and are posted, for example, when an action becomes runnable or when an action is truly running.</p>
-
 <p>You may start to see where the pieces fall together. As I said above, dynamic scheduling causes some actions to run twice concurrently&hellip; which means we end up with &ldquo;conflicting&rdquo; <a href="https://source.bazel.build/bazel/+/d1f28833a90a7b2f67a91d33bc375a68d9aae5db:src/main/java/com/google/devtools/build/lib/actions/ActionStatusMessage.java"><code>ActionStatusMessage</code></a> events for the action. It is possible for an action to start running remotely, at which point it is counted by the tracker as runnable and running&hellip; but once we try to run the action locally and realize we don&rsquo;t have enough spare resources, its local counterpart blocks on the scheduling stage and is reported as runnable, not running. From the tracker&rsquo;s perspective, the action &ldquo;regressed&rdquo; and went from running to runnable, which is something that should never happen&hellip; and miscounts actions.</p>
-
 <h1 id="conclusion">Conclusion</h1>
-
 <p>Alright, so how does this relate, at all, to my initial claim? Well, the author of the status tracker mentioned that, yes, the tracker <em>assumes</em> that actions are unique. This is a perfectly reasonable thing to assume. But this assumption was&hellip; nowhere. Not in the code, not in comments. Which means that the bug in action counting manifested itself when the assumptions were violated and we only knew about it because of an avid user.</p>
-
 <p>Now imagine: if the tracker had validated this assumption, say with an assertion, Bazel would have crashed the moment it detected this action miscounting. Given that this behavior is triggered by a new feature, the developer of the new feature would have immediately noticed the breakage in progress reporting: CI pre-submit tests would have failed and would not have let them check the code in. But instead, the bug persisted and it took some curiosity and digging after-the-fact to find out the issue. Which luckily gave me enough material for a post 😉</p>
-
 <p>This bug is tracked at <a href="https://github.com/bazelbuild/bazel/issues/7345">https://github.com/bazelbuild/bazel/issues/7345</a>.</p>
-
 <p>Fixing this bug seems like a nice starter project to get into the core of Bazel&rsquo;s architecture! Let me know if you are interested in helping.</p>
 </article>
             </div>

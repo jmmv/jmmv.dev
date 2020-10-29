@@ -21,7 +21,7 @@ This sandboxing functionality is exposed via the sandbox-exec(1) command-line ut
   <meta property="og:description" content="macOS includes a sandboxing mechanism to closely control what processes can do on the system. Sandboxing can restrict file system accesses on a path level, control which host/port pairs can be reached over the network, limit which binaries can be executed, and much more. All applications installed via the App Store are subject to sandboxing.
 This sandboxing functionality is exposed via the sandbox-exec(1) command-line utility, which unfortunately has been listed as deprecated for at least the last two major versions of macOS.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/11/macos-sandbox-exec.html">
 
@@ -31,7 +31,7 @@ This sandboxing functionality is exposed via the sandbox-exec(1) command-line ut
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,13 +159,9 @@ This sandboxing functionality is exposed via the sandbox-exec(1) command-line ut
             <div class="col">
               
               <article><p>macOS includes a sandboxing mechanism to closely control what processes can do on the system. Sandboxing can restrict file system accesses on a path level, control which host/port pairs can be reached over the network, limit which binaries can be executed, and much more. All applications installed via the App Store are subject to sandboxing.</p>
-
 <p>This sandboxing functionality is exposed via the <code>sandbox-exec(1)</code> command-line utility, which unfortunately has been listed as deprecated for at least the last two major versions of macOS. It is still there, however, and the supplemental manual pages like <code>sandbox(7)</code> or <code>sandboxd(8)</code> do not mention the deprecation&hellip; which makes me think that the new <a href="https://developer.apple.com/app-sandboxing/">App Sandboxing</a> feature is built on the same kernel subsystem as <code>sandbox-exec(1)</code>.</p>
-
 <p>Anyway, so if this tool is deprecated, why am I writing about it?</p>
-
 <p>Because we still use <code>sandbox-exec(1)</code> in Bazel to implement action sandboxing on macOS. For example, each action (e.g. each compiler invocation) runs with a configuration that looks like this:</p>
-
 <pre><code>(version 1)
 (debug deny)
 (allow default)
@@ -184,23 +180,13 @@ This sandboxing functionality is exposed via the sandbox-exec(1) command-line ut
     (subpath &quot;/private/var/folders/p4/px0ds0qs4w58bk9fjp34q32h0000gn/T&quot;)
     (subpath &quot;/private/tmp&quot;)
 )
-</code></pre>
-
-<p>This profile restricts actions so that they can only write to a specific set of directories and so that they cannot access remote network services. Or does it?</p>
-
+</code></pre><p>This profile restricts actions so that they can only write to a specific set of directories and so that they cannot access remote network services. Or does it?</p>
 <p>We got a recent bug report saying that network blocking had stopped working (<a href="https://github.com/bazelbuild/bazel/issues/10068">#10068</a>), which made us fear that the deprecation had finally taken place on Catalina and that our use of this tool was now completely broken.</p>
-
 <p>Strange though, so that sent me digging. And as part of this research, I stumbled upon the <code>/usr/share/sandbox/</code> directory, which contains sandboxing profiles for <em>a lot</em> of services. This alone is very cool because it shows that the system actually uses this feature to harden a great deal of functionality. And this is also promising because, while I can imagine Apple yanking the <code>sandbox-exec(1)</code> <em>tool</em> altogether, the sandboxing subsystem will have to remain for their own use in system services (and thus available in some maybe-undocumented way if the answer is not App Sandboxing).</p>
-
 <p>All the files in this directory are also a good resource to learn the kinds of things that can be controlled via the sandboxing functionality. To get a sense of these, run:</p>
-
 <pre><code>$ grep -h 'allow[ -]' /usr/share/sandbox/* | sed -Ee 's,^.*allow.([^ )]*).*$,\1,' | sort | uniq
-</code></pre>
-
-<p>Where does this leave Bazel though? For now we&rsquo;ll continue to rely on <code>sandbox-exec(1)</code> and fix the known bug regarding networking. We know the tool may go away. We&rsquo;ll keep monitoring the situation. But for now, we have no pressure to migrate to something else&hellip; and we have many more things to focus our limited engineering time on.</p>
-
+</code></pre><p>Where does this leave Bazel though? For now we&rsquo;ll continue to rely on <code>sandbox-exec(1)</code> and fix the known bug regarding networking. We know the tool may go away. We&rsquo;ll keep monitoring the situation. But for now, we have no pressure to migrate to something else&hellip; and we have many more things to focus our limited engineering time on.</p>
 <p>Where does this leave you? We&rsquo;ll fix the bug and you&rsquo;ll continue to enjoy sandboxing on macOS. But if you have the time and knowedge to migrate Bazel to use App Sandboxing (if that&rsquo;s the right answer), then we&rsquo;ll gladly accept your contributions!</p>
-
 <p>Happy reverse-enginneering.</p>
 </article>
             </div>

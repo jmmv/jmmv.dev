@@ -21,7 +21,7 @@ All along we guessed that these problems were caused by Bazel&amp;rsquo;s abuse 
   <meta property="og:description" content="Since the publication of Bazel a few years ago, users have reported (and I myself have experienced) general slowdowns when Bazel is running on Macs: things like the window manager stutter and others like the web browser cannot load new pages. Similarly, after the introduction of the dynamic spawn scheduler, some users reported slower builds than pure remote or pure local builds, which made no sense.
 All along we guessed that these problems were caused by Bazel&amp;rsquo;s abuse of system threads, as it used to spawn 200 runnable threads during analysis and used to run 200 concurrent compiler subprocesses.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/03/macos-threads-qos-and-bazel.html">
 
@@ -31,7 +31,7 @@ All along we guessed that these problems were caused by Bazel&amp;rsquo;s abuse 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,71 +158,45 @@ All along we guessed that these problems were caused by Bazel&amp;rsquo;s abuse 
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>Since the publication of Bazel a few years ago, users have reported (and I myself have experienced) general slowdowns when Bazel is running on Macs:  things like the window manager stutter and others like the web browser cannot load new pages. Similarly, after the introduction of the <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">dynamic spawn scheduler</a>, some users reported <em>slower</em> builds than pure remote or pure local builds, which made no sense.</p>
-
+              <article><p>Since the publication of Bazel a few years ago, users have reported (and I myself have experienced) general slowdowns when Bazel is running on Macs:  things like the window manager stutter and others like the web browser cannot load new pages. Similarly, after the introduction of the <a href="https://blog.bazel.build/2019/02/01/dynamic-spawn-scheduler.html">dynamic spawn scheduler</a>, some users reported <em>slower</em> builds than pure remote or pure local builds, which made no sense.</p>
 <p>All along we guessed that these problems were caused by Bazel&rsquo;s abuse of system threads, as it used to spawn 200 <em>runnable</em> threads during analysis and used to run 200 concurrent compiler subprocesses. We tackled the problem by reducing Bazel&rsquo;s abuse (e.g. <a href="https://github.com/bazelbuild/bazel/commit/ac880418885061d1039ad6b3d8c28949782e02d6">commit ac88041</a>) of system resources&hellip; and while we saw an improvement, the issue remained.</p>
-
 <p>So we collectively chalked these slowdowns up to macOS being bad under heavy load. But I refused to believe this: I have witnessed Macs experience very high load (for example via <code>cargo build</code>, via NetBSD&rsquo;s <code>build.sh</code>, and via Lightroom) without noticing this misbehavior, so I&rsquo;ve been chasing another root cause on and off since then.</p>
-
 <h1 id="the-underlying-cause">The underlying cause</h1>
-
 <p>Kinda by coincidence, a coworker recently mentioned the existence of <a href="https://developer.apple.com/library/archive/documentation/Performance/Conceptual/power_efficiency_guidelines_osx/PrioritizeWorkAtTheTaskLevel.html">QoS service classes</a> in Darwin. From his point of view, this was interesting because those would let us reduce battery consumption on laptops (and that was the internal-only bug he filed, which I later paraphrased in <a href="https://github.com/bazelbuild/bazel/issues/7446">issue #7446</a>).</p>
-
 <p>But a loud alarm fired in my head. QoS involves scheduling and scheduling involves choosing some things over others based on a priority. If we can set QoS levels on a thread basis, then surely this also affects performance in some ways we didn&rsquo;t know. And maybe this explained why <code>nice 20</code> didn&rsquo;t make a difference. Right? <em>Right?</em> And indeed it does.</p>
-
-<p>I started investigating by running the following<sup class="footnote-ref" id="fnref:tooling"><a href="#fn:tooling">1</a></sup> during a build:</p>
-
+<p>I started investigating by running the following<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup> during a build:</p>
 <pre><code>sudo powermetrics --show-process-qos --samplers tasks -n 1 | head -n 30
-</code></pre>
-
-<p>and quickly noticed that Bazel was running at a higher QoS class than the system services it requires to function efficiently. In particular, Bazel was running at the <strong>Default</strong> class, and services like srcfs (the FUSE file system that serves the Google monorepo) and OpenVPN (which we require to contact remote execution) were running at the (lower) <strong>Utility</strong> and <strong>Background</strong> priorities respectively.</p>
-
+</code></pre><p>and quickly noticed that Bazel was running at a higher QoS class than the system services it requires to function efficiently. In particular, Bazel was running at the <strong>Default</strong> class, and services like srcfs (the FUSE file system that serves the Google monorepo) and OpenVPN (which we require to contact remote execution) were running at the (lower) <strong>Utility</strong> and <strong>Background</strong> priorities respectively.</p>
 <p>Uh oh: Bazel&rsquo;s overloading of resources prevented the system from scheduling important services, some of which are required by the kernel to respond quickly (e.g. FUSE) or by applications to avoid dropping network connections (e.g. OpenVPN).</p>
-
 <p>This is when I started to believe that, maybe, just maybe, Darwin is actually pretty good at scheduling and <em>we</em> are the ones who set up <em>us</em> the bomb.</p>
-
 <h1 id="validation">Validation</h1>
-
 <p>Was this theory true? To test this out, I quickly hacked some changes to Bazel to make itself lower its own priority class to the lowest one, <strong>Background</strong>, and tried a build. And lo and behold, the build using dynamic scheduling completed quickly enough and the machine remained as responsive as ever. No UI stuttering, no network latency increases: just a perfectly-functioning machine.</p>
-
 <p>But this wasn&rsquo;t a great solution: <strong>Background</strong>, being the lowest priority, has no scheduling guarantees. In fact, I noticed that the machine remained about 25% idle during a build with this setting so this was no good&mdash;builds would be slower overall even if we kept the system snappy, and developers <em>always</em> complain about slow builds no matter how fast you make them (I do too, of course).</p>
-
-<p>A better solution was to fix any system services running as <strong>Background</strong> to run, at least, at <strong>Utility</strong> in order to ensure their scheduling. This was easy enough to do via launchd settings. And with this done, I had to lower Bazel to that same priority<sup class="footnote-ref" id="fnref:better-fix"><a href="#fn:better-fix">2</a></sup> to not starve the services it needs.</p>
-
+<p>A better solution was to fix any system services running as <strong>Background</strong> to run, at least, at <strong>Utility</strong> in order to ensure their scheduling. This was easy enough to do via launchd settings. And with this done, I had to lower Bazel to that same priority<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup> to not starve the services it needs.</p>
 <h1 id="implementation">Implementation</h1>
-
 <p>Making this happen in Bazel was hard though and is still far from perfect, but it seems good-enough for now.</p>
-
-<p>As you may know, Bazel is implemented as a client/server application where the server is a background process that remains running on your machine and the client &ldquo;just&rdquo; proxies I/O to the console. As it turns out, this architecture is beneficial in our situation because the only way I&rsquo;ve found<sup class="footnote-ref" id="fnref:posix-spawn"><a href="#fn:posix-spawn">3</a></sup> to change the QoS service class of an application&mdash;and thus change the default class of all of its threads and subprocesses&mdash;is via a Darwin-specific extension to <code>posix_spawn</code>.</p>
-
+<p>As you may know, Bazel is implemented as a client/server application where the server is a background process that remains running on your machine and the client &ldquo;just&rdquo; proxies I/O to the console. As it turns out, this architecture is beneficial in our situation because the only way I&rsquo;ve found<sup id="fnref:3"><a href="#fn:3" class="footnote-ref" role="doc-noteref">3</a></sup> to change the QoS service class of an application&mdash;and thus change the default class of all of its threads and subprocesses&mdash;is via a Darwin-specific extension to <code>posix_spawn</code>.</p>
 <p>Given that the client already has to spawn the server as a separate process, it made sense to just use this extension to run the server at the right priority. But this was not easy: the code used the <code>fork</code>/<code>exec</code> combination and went through great extents to make this work reliably under a multi-threaded scenario&mdash;though no matter how careful, it was still buggy. So the first step was to convert this piece of logic to <code>posix_spawn</code> (<a href="https://github.com/bazelbuild/bazel/commit/18a0e23fe9fa1935f6d278e4f6872ba03e84d82f">commit 18a0e23</a>), which in itself allowed me to move a lot of the tricky logic into a separate single-threaded subprocess.</p>
-
 <p>With that complex surgery done, setting the QoS service class of the server process under macOS was trivial (<a href="https://github.com/bazelbuild/bazel/commit/087734009801242b83655efb863b2d5a761ae3dc">commit 0877340</a>) and easy to review.</p>
-
 <h1 id="results">Results</h1>
-
 <p>Considering the simplified solution we have now, did it make a difference? <a href="https://twitter.com/jmmv/status/1101941199127150593">You bet!</a></p>
-
 <p>I can finally run Bazel builds on my 2-core laptop without killing it. But that&rsquo;s not very impressive, right? What <em>is</em> impressive are the improvements we are seeing in builds that use dynamic scheduling: users that reported 30-minute long builds in the past are now claiming <strong>5</strong>-minute long builds. And all because we don&rsquo;t starve network-related services.</p>
-
 <p>Pretty cool, huh? Preliminary results looks very promising but we still have some issues left to address. For example: Bazel&rsquo;s own resource abuse can still compete with other services at its same priority&mdash;but that&rsquo;s a more &ldquo;normal&rdquo; problem to tackle.</p>
-
 <p>The takeaway is simple: if you develop for macOS, be very aware of <a href="https://developer.apple.com/library/archive/documentation/Performance/Conceptual/power_efficiency_guidelines_osx/PrioritizeWorkAtTheTaskLevel.html">QoS service classes</a>.</p>
-<div class="footnotes">
-
-<hr />
-
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:tooling">The amount of instrumentation within Darwin to troubleshoot power-consumption issues is astonishing and is probably the reason why iPhones last so long with a single battery charge. Or at least that&rsquo;s what I heard from a previous Apple engineer, and this seems to confirm it.
- <a class="footnote-return" href="#fnref:tooling"><sup>[return]</sup></a></li>
-<li id="fn:better-fix">Making Bazel and its dependent services run at <strong>Utility</strong> priority works but is probably not the greatest solution. The best solution would be to switch to XPC for inter-process communication because, then, the QoS level of an operation would flow through all components. For example: if Bazel, running as <strong>Default</strong> required to open a file served by srcfs, srcfs would respond at the same level instead of a lower one, ensuring that the end-to-end request was handled properly. But the question is: how do you make this happen in FUSE? And how do you implement this while keeping the code portable?
- <a class="footnote-return" href="#fnref:better-fix"><sup>[return]</sup></a></li>
-<li id="fn:posix-spawn">How did I find the <code>posix_spawn</code> extension, you ask? Well, I noticed that launchd can tune the class of the daemons it spawns, so surely there had to exist an API in the system to do so. A <code>ripgrep</code> call away over <code>/Applications/Xcode.app/</code> quickly yielded the relevant system primitives. Yes yes, don&rsquo;t depend on undocumented APIs blah blah blah, but the ones I found do have docstrings in them! Ugh.
- <a class="footnote-return" href="#fnref:posix-spawn"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>The amount of instrumentation within Darwin to troubleshoot power-consumption issues is astonishing and is probably the reason why iPhones last so long with a single battery charge. Or at least that&rsquo;s what I heard from a previous Apple engineer, and this seems to confirm it. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2" role="doc-endnote">
+<p>Making Bazel and its dependent services run at <strong>Utility</strong> priority works but is probably not the greatest solution. The best solution would be to switch to XPC for inter-process communication because, then, the QoS level of an operation would flow through all components. For example: if Bazel, running as <strong>Default</strong> required to open a file served by srcfs, srcfs would respond at the same level instead of a lower one, ensuring that the end-to-end request was handled properly. But the question is: how do you make this happen in FUSE? And how do you implement this while keeping the code portable? <a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:3" role="doc-endnote">
+<p>How did I find the <code>posix_spawn</code> extension, you ask? Well, I noticed that launchd can tune the class of the daemons it spawns, so surely there had to exist an API in the system to do so. A <code>ripgrep</code> call away over <code>/Applications/Xcode.app/</code> quickly yielded the relevant system primitives. Yes yes, don&rsquo;t depend on undocumented APIs blah blah blah, but the ones I found do have docstrings in them! Ugh. <a href="#fnref:3" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

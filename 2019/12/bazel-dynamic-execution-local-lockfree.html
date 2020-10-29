@@ -21,7 +21,7 @@ Or does it? If you think about it closely, that change made it so that builds th
   <meta property="og:description" content="In the previous post, we saw how accounting for artifact download times makes the dynamic strategy live to its promise of delivering the best of local and remote build times.
 Or does it? If you think about it closely, that change made it so that builds that were purely local couldn&amp;rsquo;t be made worse by enabling the dynamic scheduler: the dynamic strategy would always favor the local branch of a spawn if the remote one took a long time.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/12/bazel-dynamic-execution-local-lockfree.html">
 
@@ -31,7 +31,7 @@ Or does it? If you think about it closely, that change made it so that builds th
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -204,11 +204,8 @@ Bazel dynamic execution</b> series</a>.</i></p>
 
               
               <article><p>In the <a href="/2019/12/bazel-dynamic-execution-download-times.html">previous post</a>, we saw how accounting for artifact download times makes the dynamic strategy live to its promise of delivering the best of local and remote build times.</p>
-
 <p>Or does it? If you think about it closely, that change made it so that builds that were purely local couldn&rsquo;t be made worse by enabling the dynamic scheduler: the dynamic strategy would always favor the local branch of a spawn if the remote one took a long time. But for builds that were better off when they were fully remote (think of a fully-cached build with great networking), this is not true: the dynamic strategy might hurt them because because we may discard some of those remote cache hits.</p>
-
 <p>Think about this scenario:</p>
-
 <ol>
 <li>Send RPC for remote execution and detect a cache hit.</li>
 <li>Start downloading outputs.</li>
@@ -216,39 +213,19 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <li>Downloads complete, but the lock is taken so the remote branch aborts.</li>
 <li>The local unsandboxed spawn now has to run through completion, even if that takes a long time or a lot of local resources (think battery!).</li>
 </ol>
-
 <p>Which, in a picture, looks like this:</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-29.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_34">Slide 29</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>Not great. The real problem here is the local <em>unsandboxed</em> strategy. If we were using the sandboxed strategy, all would be good because we&rsquo;d only take the <a href="/2019/12/bazel-dynamic-execution-output-locking.html">output lock</a> once the local spawn finished execution. But because we do <em>not</em> use sandboxing for performance reasons, we take the lock right away.</p>
-
 <p>What if we could <strong>remove</strong> the output lock?</p>
-
 <p>What if, instead, we could make the local strategy run free and make the remote branch actively cancel the local branch when it is ready to put the outputs in place?</p>
-
 <p>Then, we would make as much progress as possible on each branch and stop it at the last minute:</p>
-
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-30.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_202">Slide 30</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
-
+<!-- raw HTML omitted -->
 <p>Great, but it turns out that this &ldquo;simple&rdquo; idea has been very difficult to implement. Let&rsquo;s see why.</p>
-
 <p>The first step was to refactor the dynamic strategy to not use the output lock. What we need instead is for each branch to cancel each other right before writing to the output tree. I like calling this &ldquo;cross-cancellations&rdquo; and you can compare this to coöperative vs. preëmptive scheduling: using a lock is akin to the former while issuing cancellations is akin to the latter.</p>
-
 <p>But implementing cross-cancellations was such an intrusive change that I did not feel comfortable rolling it out without a flag. And, well, because the change was so extensive, I actually <a href="https://source.bazel.build/bazel/+/0bf5bbd90f3fd702fc838d9a144b599ad0490c4d">forked</a> the implementation because the flag would have made the majority of the code conditional. This is why we now have the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/LegacyDynamicSpawnStrategy.java;l=71;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>LegacyDynamicSpawnStrategy</code></a> and the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/DynamicSpawnStrategy.java;l=74;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>DynamicSpawnStrategy</code></a>. You can pick which one to use with the <code>--[no]legacy_spawn_strategy</code> flag, and my plan is to remove the legacy one at some point this year, of course.</p>
-
 <p>Other than intrusive, these changes were also <a href="https://source.bazel.build/bazel/+/4b1cdfc6df3d662dbc489d21e0ee8d69515e7ee1">so</a> <a href="https://source.bazel.build/bazel/+/f126b58ce5845b86bdfb40445f5b2f96c29fe935">incredibly</a> <a href="https://source.bazel.build/bazel/+/42b3be219e6f15aaf69d8de2edf925a2725151cb">hard</a> to get right due to concurrency issues. And especially, because cancelling a future and reliably waiting for its completion is difficult. <a href="https://docs.oracle.com/javase/tutorial/essential/concurrency/interrupt.html">Java&rsquo;s Interrupts</a> don&rsquo;t make it easy either. It is even more painful when you have to reliably terminate subprocesses as <a href="/2019/11/wait-for-process-group.html">we already saw</a>.</p>
-
 <p>Anyway. The second step was making the local unsandboxed strategy run without grabbing any kind of lock. A <a href="https://source.bazel.build/bazel/+/9a62ad079ddfa68daf24ecf3ce8cf15fc8326d9c">trivial change</a> really, but useless without the new dynamic scheduler. This behavior is gated behind <code>--experimental_local_lockfree_output</code>.</p>
-
 <p>For the most part, this all works now but none of this is enabled by default yet. I&rsquo;m still encountering some form of race condition where the local branch leaves some files behind after cancellation, which confuses the remote branch&hellip; and only seems to happen for tree artifacts. More on this later. And once that is done, I&rsquo;ll also have to profile and optimize the new <code>DynamicSpawnStrategy</code> as it&rsquo;s not giving better build times yet.</p>
-
 <p>The eventual side effect of these features is that they will enable us to remove or tighten the <code>--experimental_local_execution_delay</code> hack.</p>
 </article>
             </div>

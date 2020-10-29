@@ -23,7 +23,7 @@ Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you 
 Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your macOS system up-to-date and secure.
 ">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2017/02/pkg_comp-2.0-tutorial-macos.html">
 
@@ -33,7 +33,7 @@ Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -161,57 +161,40 @@ Goals: to use pkg_comp 2.0 to build a binary repository of all the packages you 
             <div class="col">
               
               <article><p>This is a tutorial to guide you through the <a href="/2017/02/introducing-pkg_comp-2.0.html">shiny new pkg_comp 2.0</a> on macOS <a href="https://github.com/jmmv/pkg_comp/blob/master/INSTALL.md#using-the-macos-installer">using the macOS-specific self-installer</a>.</p>
-
 <p><strong>Goals:</strong> to use pkg_comp 2.0 to build a binary repository of all the packages you are interested in; to keep the repository fresh on a daily basis; and to use that repository with pkgin to maintain your macOS system up-to-date and secure.</p>
-
 <p>This tutorial is specifically targeted at macOS and relies on the macOS-specific self-installer package.  For a more generic tutorial that uses the <code>pkg_comp-cron</code> package in pkgsrc, see <a href="/2017/02/pkg_comp-2.0-tutorial-netbsd.html">Keeping NetBSD up-to-date with pkg_comp 2.0</a>.</p>
-
 <h1 id="getting-started">Getting started</h1>
-
 <p>First download and install the standalone macOS installer package.  To find the right file, navigate to the <a href="https://github.com/jmmv/pkg_comp/releases">releases page on GitHub</a>, pick the most recent release, and download the file with a name of the form <code>pkg_comp-&lt;version&gt;-macos.pkg</code>.</p>
-
 <p>Then double-click on the file you downloaded and follow the installation instructions.  You will be asked for your administrator password because the installer has to place files under <code>/usr/local/</code>; note that pkg_comp requires root privileges anyway to run (because it uses <code>chroot(8)</code> internally), so you will have to grant permission at some point or another.</p>
-
 <p>The installer modifies the default <code>PATH</code> (by creating <code>/etc/paths.d/pkg_comp</code>) to include pkg_comp&rsquo;s own installation directory and pkgsrc&rsquo;s installation prefix.  Restart your shell sessions to make this change effective, or update your own shell startup scripts accordingly if you don&rsquo;t use the standard ones.</p>
-
 <p>Lastly, make sure to have Xcode installed in the standard <code>/Applications/Xcode.app</code> location and that all components required to build command-line apps are available.  Tip: try running <code>cc</code> from the command line and seeing if it prints its usage message.</p>
-
 <h1 id="adjusting-the-configuration">Adjusting the configuration</h1>
-
 <p>The macOS flavor of pkg_comp is configured with an installation prefix of <code>/usr/local/</code>, which means that the executable is located in <code>/usr/local/sbin/pkg_comp</code> and the configuration files are in <code>/usr/local/etc/pkg_comp/</code>.  This is intentional to keep the pkg_comp installation separate from your pkgsrc installation so that it can run no matter what state your pkgsrc installation is in.</p>
-
 <p>The configuration files are as follows:</p>
-
 <ul>
-<li><p><code>/usr/local/etc/pkg_comp/default.conf</code>: This is pkg_comp&rsquo;s own configuration file and the defaults configured by the installer should be good to go for macOS.</p>
-
-<p>In particular, packages are configured to go into <code>/opt/pkg/</code> instead of the traditional <code>/usr/pkg/</code>.  This is a necessity because the latter is not writable starting with OS X El Capitan thanks to System Integrity Protection (SIP).</p></li>
-
-<li><p><code>/usr/local/etc/pkg_comp/sandbox.conf</code>: This is the configuration file for sandboxctl, which is the support tool that pkg_comp uses to manage the compilation sandbox.  The default settings configured by the installer should be good.</p></li>
-
-<li><p><code>/usr/local/etc/pkg_comp/extra.mk.conf</code>: This is pkgsrc&rsquo;s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you&rsquo;d like to set.  You should <em>not</em> configure the layout of the installed files (e.g. <code>LOCALBASE</code>) because that&rsquo;s handled internally by pkg_comp as specified in <code>default.conf</code>.</p></li>
-
-<li><p><code>/usr/local/etc/pkg_comp/list.txt</code>: This determines the set of packages you want to build automatically (either via the <code>auto</code> command or your periodic cron job).  The automated builds will fail unless you list at least one package.</p>
-
-<p>Make sure to list <code>pkgin</code> here to install a better binary package management tool.  You&rsquo;ll find this very handy to keep your installation up-to-date.</p></li>
+<li>
+<p><code>/usr/local/etc/pkg_comp/default.conf</code>: This is pkg_comp&rsquo;s own configuration file and the defaults configured by the installer should be good to go for macOS.</p>
+<p>In particular, packages are configured to go into <code>/opt/pkg/</code> instead of the traditional <code>/usr/pkg/</code>.  This is a necessity because the latter is not writable starting with OS X El Capitan thanks to System Integrity Protection (SIP).</p>
+</li>
+<li>
+<p><code>/usr/local/etc/pkg_comp/sandbox.conf</code>: This is the configuration file for sandboxctl, which is the support tool that pkg_comp uses to manage the compilation sandbox.  The default settings configured by the installer should be good.</p>
+</li>
+<li>
+<p><code>/usr/local/etc/pkg_comp/extra.mk.conf</code>: This is pkgsrc&rsquo;s own configuration file.  In here, you should configure things like the licenses that are acceptable to you and the package-specific options you&rsquo;d like to set.  You should <em>not</em> configure the layout of the installed files (e.g. <code>LOCALBASE</code>) because that&rsquo;s handled internally by pkg_comp as specified in <code>default.conf</code>.</p>
+</li>
+<li>
+<p><code>/usr/local/etc/pkg_comp/list.txt</code>: This determines the set of packages you want to build automatically (either via the <code>auto</code> command or your periodic cron job).  The automated builds will fail unless you list at least one package.</p>
+<p>Make sure to list <code>pkgin</code> here to install a better binary package management tool.  You&rsquo;ll find this very handy to keep your installation up-to-date.</p>
+</li>
 </ul>
-
 <p>Note that these configuration files use the <code>/var/pkg_comp/</code> directory as the dumping ground for: the pkgsrc tree, the downloaded distribution files, and the built binary packages.  We will see references to this location later on.</p>
-
 <h2 id="the-cron-job">The cron job</h2>
-
 <p>The installer configures a cron job that runs as root to invoke pkg_comp daily.  The goal of this cron job is to keep your local packages repository up-to-date so that you can do binary upgrades at any time.  You can edit the cron job configuration interactively by running <code>sudo crontab -e</code>.</p>
-
 <p>This cron job won&rsquo;t have an effect until you have populated the <code>list.txt</code> file as described above, so it&rsquo;s safe to let it enabled until you have configured pkg_comp.</p>
-
 <p>If you want to disable the periodic builds, just remove the pkg_comp entry from the crontab.</p>
-
 <p>On slow machines, or if you are building a lot of packages, you may want to consider decreasing the build frequency from <code>@daily</code> to <code>@weekly</code>.</p>
-
 <h2 id="sample-configuration">Sample configuration</h2>
-
 <p>Here is what the configuration looks like on my Mac Mini as dumped by the <code>config</code> subcommand.  Use this output to get an idea of what to expect.  I&rsquo;ll be using the values shown here in the rest of the tutorial:</p>
-
 <pre><code>$ pkg_comp config
 AUTO_PACKAGES = autoconf automake bash colordiff dash emacs24-nox11 emacs25-nox11 fuse-bindfs fuse-sshfs fuse-unionfs gdb git-base git-docs glib2 gmake gnuls libtool-base lua52 mercurial mozilla-rootcerts mysql56-server pdksh pkg_developer pkgconf pkgin ruby-jekyll ruby-jekyll-archives ruby-jekyll-paginate scmcvs smartmontools sqlite3 tmux vim
 CVS_ROOT = :ext:anoncvs@anoncvs.NetBSD.org:/cvsroot
@@ -235,19 +218,12 @@ VARBASE = /opt/pkg/var
 DARWIN_NATIVE_WITH_XCODE = true
 SANDBOX_ROOT = /var/pkg_comp/sandbox
 SANDBOX_TYPE = darwin-native
-</code></pre>
-
-<h1 id="building-your-own-packages-by-hand">Building your own packages by hand</h1>
-
+</code></pre><h1 id="building-your-own-packages-by-hand">Building your own packages by hand</h1>
 <p>Now that you are fully installed and configured, you&rsquo;ll build some stuff by hand to ensure the setup works before the cron job comes in.</p>
-
 <p>The simplest usage form, which involves full automation and assumes you have listed at least one package in <code>list.txt</code>, is something like this:</p>
-
 <pre><code>$ sudo pkg_comp auto
 </code></pre>
-
 <p>This trivially-looking command will:</p>
-
 <ol>
 <li>clone or update your copy of pkgsrc;</li>
 <li>create the sandbox;</li>
@@ -255,56 +231,36 @@ SANDBOX_TYPE = darwin-native
 <li>use pbulk to build the given packages; and</li>
 <li>destroy the sandbox.</li>
 </ol>
-
 <p>After a successful invocation, you&rsquo;ll be left with a collection of packages in the <code>/var/pkg_comp/packages/</code> directory.</p>
-
 <p>If you&rsquo;d like to restrict the set of packages to build during a manually-triggered build, provide those as arguments to <code>auto</code>.  This will override the contents of <code>AUTO_PACKAGES</code> (which was derived from your <code>list.txt</code> file).</p>
-
 <p>But what if you wanted to invoke all stages separately, bypassing <code>auto</code>?  The command above would be equivalent to:</p>
-
 <pre><code>$ sudo pkg_comp fetch
 $ sudo pkg_comp sandbox-create
 $ sudo pkg_comp bootstrap
 $ sudo pkg_comp build &lt;package names here&gt;
 $ sudo pkg_comp sandbox-destroy
 </code></pre>
-
 <p>Go ahead and play with these.  You can also use the <code>sandbox-shell</code> command to interactively enter the sandbox.  See <code>pkg_comp(8)</code> for more details.</p>
-
 <p>Lastly note that the root user will receive email messages if the periodic pkg_comp cron job fails, but only if it fails.  That said, you can find the full logs for all builds, successful or not, under <code>/var/pkg_comp/log/</code>.</p>
-
 <h1 id="installing-the-resulting-packages">Installing the resulting packages</h1>
-
 <p>Now that you have built your first set of packages, you will want to install them.  This is easy on macOS because you did <em>not</em> use pkgsrc itself to install pkg_comp.</p>
-
 <p>First, unpack the pkgsrc installation.  <strong>You only have to do this once:</strong></p>
-
 <pre><code>$ cd /
 $ sudo tar xzvpf /var/pkg_comp/packages/bootstrap.tgz
 </code></pre>
-
 <p>That&rsquo;s it.  You can now install any packages you like:</p>
-
 <pre><code>$ PKG_PATH=file:///var/pkg_comp/packages/All sudo pkg_add pkgin &lt;other package names&gt;
 </code></pre>
-
 <p>The command above assume you have restarted your shell to pick up the correct path to the pkgsrc installation.  If the call to <code>pkg_add</code> fails because of a missing binary, try restarting your shell or explicitly running the binary as <code>/opt/pkg/sbin/pkg_add</code>.</p>
-
 <h1 id="keeping-your-system-up-to-date">Keeping your system up-to-date</h1>
-
 <p>Thanks to the cron job that builds your packages, your local repository under <code>/var/pkg_comp/packages/</code> will always be up-to-date; you can use that to quickly upgrade your system with minimal downtime.</p>
-
 <p>Assuming you are going to use <code>pkgtools/pkgin</code> as recommended above (and why not?), configure your local repository:</p>
-
 <pre><code>$ sudo /bin/sh -c &quot;echo file:///var/pkg_comp/packages/All &gt;&gt;/opt/pkg/etc/pkgin/repositories.conf&quot;
 </code></pre>
-
 <p>And, from now on, all it takes to upgrade your system is:</p>
-
 <pre><code>$ sudo pkgin update
 $ sudo pkgin upgrade
 </code></pre>
-
 <p>Enjoy!</p></article>
             </div>
           </div>

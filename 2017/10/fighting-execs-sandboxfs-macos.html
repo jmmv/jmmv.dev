@@ -19,7 +19,7 @@
   <meta name="description" content="Since the announcement of sandboxfs a few weeks ago, I&#39;ve been stabilizing its integration with Bazel as a new sandboxing technique.  As part of this work, I encountered issues when macOS was immediately killing signed binaries executed through the sandbox.  Read on for the long troubleshooting process and the surprising trivial solution.">
   <meta property="og:description" content="Since the announcement of sandboxfs a few weeks ago, I&#39;ve been stabilizing its integration with Bazel as a new sandboxing technique.  As part of this work, I encountered issues when macOS was immediately killing signed binaries executed through the sandbox.  Read on for the long troubleshooting process and the surprising trivial solution.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2017/10/fighting-execs-sandboxfs-macos.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -156,58 +156,33 @@
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>A few weeks ago, <a href="/2017/08/introducing-sandboxfs.html">we announced sandboxfs</a>: a FUSE file system to expose an arbitrary view of the host&rsquo;s file system.  We intend to use this file system in <a href="http://bazel.build/">Bazel</a> to provide a faster and more correct sandboxing technique for build actions.</p>
-
+              <article><p>A few weeks ago, <a href="/2017/08/introducing-sandboxfs.html">we announced sandboxfs</a>: a FUSE file system to expose an arbitrary view of the host&rsquo;s file system.  We intend to use this file system in <a href="http://bazel.build/">Bazel</a> to provide a faster and more correct sandboxing technique for build actions.</p>
 <p>Since then, I&rsquo;ve been actively working on stabilizing sandboxfs per se and its integration with Bazel.  The first milestone, which we haven&rsquo;t reached yet, is to get Bazel to self-build on macOS with sandboxfs.  The second milestone, which obviously depends on builds being stable, is performance evaluation and optimization.  The goal is to measure the behavior of this technique against previous sandboxing strategies on the Mac.  Depending on the numbers, we&rsquo;ll decide whether it makes sense to continue investing in the sandboxfs idea or not.</p>
-
 <p>Work on the first milestone has been far from easy.  Getting sandboxfs to a sufficiently stable state that is able to support Bazel&rsquo;s self-build has been very tricky.  The original implementation was written on Linux and, even though FUSE should be the same across systems, there are subtle (unexpected) differences that cause strange behaviors.</p>
-
-<p>The last issue in this saga was &ldquo;fun&rdquo; to troubleshoot and fix.  As I was telling the story to a coworker, I realized how ridiculous this all was&hellip; so I decided to write it down for you.  As you will see, the fix was pretty much a one-liner&mdash;but understanding what was happening took hours and writing tests for the fix took days.</p>
-
+<p>The last issue in this saga was &ldquo;fun&rdquo; to troubleshoot and fix.  As I was telling the story to a coworker, I realized how ridiculous this all was&hellip; so I decided to write it down for you.  As you will see, the fix was pretty much a one-liner—but understanding what was happening took hours and writing tests for the fix took days.</p>
 <h1 id="problem-statement">Problem statement</h1>
-
 <p>Bazel uses sandboxfs to expose a directory tree that contains the tools required for a build action, the sources for the action, and a writable directory for the outputs.  For a Java action, the tree needs to contain the JDK mapped into the view.</p>
-
 <p>These actions were failing and in not very obvious ways.  (Bazel hides the failure message from the subprocess and I haven&rsquo;t spent much time in figuring out why.)  To reproduce, I set up my own minimal sandboxfs instance mimicking what Bazel was requesting for the action and ran Java from it:</p>
-
 <pre><code>$ mkdir /tmp/bin
 $ cp /usr/bin/java /tmp/bin
 $ sandboxfs static --read_only_mapping=/:/tmp/bin /tmp/mnt &amp;
 $ /tmp/mnt/java
 Killed: 9
-</code></pre>
-
-<p>Oh wow.  Such error.  Much descriptive.</p>
-
-<h1 id="let-s-troubleshoot">Let&rsquo;s troubleshoot</h1>
-
+</code></pre><p>Oh wow.  Such error.  Much descriptive.</p>
+<h1 id="lets-troubleshoot">Let&rsquo;s troubleshoot</h1>
 <p><strong>Q. Bazel only maps individual files in the sandbox (e.g. the Java binary).  Did Bazel forget to map additional files required to start up the Java process?</strong></p>
-
 <p>A. It was possible that Java (or dyld or whatever else the process needs to start up) needed to access many more files than the ones that were mapped by Bazel for some reason, so I set up a looser sandboxfs instance to expose my full file system:</p>
-
 <pre><code>$ sandboxfs static --read_only_mapping=/:/ /tmp/mnt &amp;
 $ /tmp/mnt/usr/bin/java
 Killed: 9
-</code></pre>
-
-<p>And no, that was not the problem.  Not surprising given that the other sandboxing technique implemented in Bazel is known to work just fine.</p>
-
+</code></pre><p>And no, that was not the problem.  Not surprising given that the other sandboxing technique implemented in Bazel is known to work just fine.</p>
 <p><strong>Q. What system calls is the process issuing that need to be served by FUSE?  Maybe the execution was trying to access a file in a way that was not properly implemented within sandboxfs.</strong></p>
-
 <p>A. To look into this, I would have used <code>ktrace</code>&hellip; but to my surprise, this old trusty tool is gone from macOS Sierra and replaced with something completely different in macOS High Sierra.</p>
-
 <p>There are alternatives though.</p>
-
 <p><code>fs_usage</code>, which is not as simple nor as comprehensive as <code>ktrace</code>, could do the job.  But no, nothing. <code>fs_usage</code> caught zero accesses from the attempt to run Java from the sandbox.  Maybe the fancier <em>Instruments</em> could help, which I have little experience with&hellip; but no, nothing either.</p>
-
 <p>What?  How is that possible?  Am I misusing the tools?  I&rsquo;d expect at least some system call by dyld trying to load shared libraries&hellip;  Given confusion, I resorted to reading more documentation and playing around with known-good cases.  But no luck.</p>
-
 <p><strong>Q. Maybe the process is truly killed before it has even had a chance to do anything.  What does the kernel think?</strong></p>
-
 <p>A. Let&rsquo;s see:</p>
-
 <pre><code>$ sudo dmesg
 [...]
 AMFI: code signature validation failed.
@@ -215,93 +190,49 @@ AMFI: code signature validation failed.
 mac_vnode_check_signature: /private/tmp/mnt/java: code signature validation failed fatally: When validating /private/tmp/mnt/java:
   The code contains a Team ID, but validating its signature failed.
 Please check your system log.proc 49122: load code signature error 4 for file &quot;java&quot;
-</code></pre>
-
-<p>There you go.  Something about signatures and a &ldquo;possible race condition&rdquo;.  Yikes: troubleshooting either can be painful.  Which is it gonna be?</p>
-
+</code></pre><p>There you go.  Something about signatures and a &ldquo;possible race condition&rdquo;.  Yikes: troubleshooting either can be painful.  Which is it gonna be?</p>
 <p><strong>Q. Let&rsquo;s start with the signatures, as that&rsquo;s potentially easier to figure out than catching a race.  Where are the signatures stored?</strong></p>
-
 <p>A. My first thought was &ldquo;extended attributes&rdquo; given how macOS has traditionally enjoyed storing file information in resource forks.  sandboxfs does not yet implement extended attributes so, if macOS stored anything regarding signatures in them, validation wouldn&rsquo;t work:</p>
-
 <pre><code>$ ls -Ll /usr/bin/java
 -rwxr-xr-x  1 root  wheel  58336 Sep 21 00:34 /usr/bin/java
-</code></pre>
-
-<p>No, no extended attributes for the binary under test (note there is no <code>@</code> sign after the permissions). Nothing.</p>
-
+</code></pre><p>No, no extended attributes for the binary under test (note there is no <code>@</code> sign after the permissions). Nothing.</p>
 <p>That said, as the failure was so mysterious, I instrumented sandboxfs to print requests for extended attributes in case those were being requested for some other file, and there indeed was one read for <code>com.apple.quarantine</code> on the binary.  Could be related given the name, but doubtful because the attribute was not on the binary.</p>
-
 <p><strong>Q. What about the read path?  If reads misbehave, that could cause signature validation to fail.</strong></p>
-
 <p>A. I reviewed the code in detail without finding anything obviously wrong, but that&rsquo;s not sufficient to prove there is no problem.  File systems are complex beasts and it&rsquo;s hard to know if you are handling an operation correctly unless you know of all possible corner cases (and I don&rsquo;t know them all).</p>
-
 <p>Fortunately, there are many more FUSE file systems out there with which to play. I built <a href="http://bindfs.org/">bindfs</a> and tried mapping the exact same files as with sandboxfs&hellip; and voila, things worked just fine: Java started up as expected.</p>
-
 <p>OK, good.  That means that FUSE works fine even after the update to High Sierra and that I have a baseline with which to compare behavior.  I modified the bindfs code to print a trace of all file opens and reads, did the same in sandboxfs, and compared the two traces.  Identical (same operations, same arguments, etc.), up to the crash point.</p>
-
 <p><strong>Q. Maybe the operations we implement are correct, but are we implementing all operations that are necessary?</strong></p>
-
 <p>A. At first, I just tried to map a different binary into the sandboxfs, like <code>/bin/ls</code> and run that.  This worked fine, so it seems executions do work through the file system (which in turn means paging ought to be working correctly).</p>
-
 <p>But let&rsquo;s look in more detail.  bindfs implements FUSE hooks that sandboxfs does not yet (like the extended attributes ones that we already discarded), so maybe those silent rejections from sandboxfs are what cause the problem.  A cursory review of all possibilities didn&rsquo;t show anything obvious other than <code>statvfs</code> not being there.</p>
-
 <p>Running sandboxfs with <code>--debug</code> showed that <code>statvfs</code> was being called multiple times, so maybe the verification process wanted to know something about the file system size?  I tried adding a fake implementation of statvfs to sandboxfs but no luck either.</p>
-
 <p><strong>Q. Then we have to go back to the difficult case.  Is it a race condition?</strong></p>
-
-<p>A. Assuming there is a race condition, <em>where</em> is it?  Sure, sandboxfs is heavily threaded, but is the race there?  How could the kernel even know if that was the case?  (It can&rsquo;t&mdash;much less with goroutines as they don&rsquo;t have a 1:1 mapping with a kernel primitive.)</p>
-
+<p>A. Assuming there is a race condition, <em>where</em> is it?  Sure, sandboxfs is heavily threaded, but is the race there?  How could the kernel even know if that was the case?  (It can&rsquo;t—much less with goroutines as they don&rsquo;t have a 1:1 mapping with a kernel primitive.)</p>
 <p><em>[Shudder]</em> Are the Go FUSE bindings handling kernel requests as a whole incorrectly and the incorrect order trips the kernel&rsquo;s race condition detection?  Note that bindfs is written in C so it uses a completely different FUSE stack, so there could indeed be something fishy in the Go one.</p>
-
 <p>Nah, crazy talk.  No desire to go down this route just yet, so let&rsquo;s think about other possibilities.</p>
-
 <p><strong>Q. We have been assuming that those entries in dmesg come from the kernel, but do they?</strong></p>
-
 <p>A. Google turned out nothing useful: searching for parts of the error messages found some forum posts with users reporting similar issues&hellip; but as you may expect for obscure problems, all answers were non-sensical or <a href="https://xkcd.com/979/">missing</a>.</p>
-
 <p>Google also turned out some results for the open-source Darwin sources when I searched for the <code>mac_vnode_check_signature</code> message, but searching the other parts of the message in the returned file wasn&rsquo;t successful.</p>
-
 <p>Given the difficulty in running textual queries on the web UI for the sources, I downloaded the Darwin sources and ran <code>grep -ri</code> on them for various parts of the error message.  Nothing.  What? It&rsquo;s indeed not the kernel coming up with the denial for the verification: the message must be coming from a kernel extension&hellip; or a userspace component?</p>
-
 <p>Let&rsquo;s take out the big guns:</p>
-
 <pre><code>$ find /System -type f -print0 | xargs -0 -P 12 -n 1 sh -c 'if strings &quot;$0&quot; | grep &quot;Possible race detected&quot;; then echo &quot;$0&quot;; fi'
 %s: Possible race detected. Rejecting.
 /System/Library/Extensions/AppleMobileFileIntegrity.kext/Contents/MacOS/AppleMobileFileIntegrity
-</code></pre>
-
-<p>(Did I just grep my whole system for an error string?  Yes I did.  Not the first time I use this technique to find culprits, and not the last one either I suspect.  It&rsquo;s pretty effective.)</p>
-
+</code></pre><p>(Did I just grep my whole system for an error string?  Yes I did.  Not the first time I use this technique to find culprits, and not the last one either I suspect.  It&rsquo;s pretty effective.)</p>
 <p>Look, one match!</p>
-
 <p><strong>Q. AppleMobileFileIntegrity.  That sounds suspicious.  What is that thing?</strong></p>
-
-<p>A. Google turned out several results, most pointing at forum threads about rooting iPhones or bypassing security protections&mdash;something I was not interested in.</p>
-
+<p>A. Google turned out several results, most pointing at forum threads about rooting iPhones or bypassing security protections—something I was not interested in.</p>
 <p>This led me to discover the <code>amfid</code> daemon, which as you may expect is not documented (its manual page is a joke), and invoking it for help didn&rsquo;t produce anything useful.</p>
-
 <p><strong>Q. <em>[Mind wanders]</em> Let me interrupt you for a second.  I just had an idea!  Are the FUSE-level mount options different between sandboxfs and bindfs?</strong></p>
-
 <p>A. The <code>fusermount</code> binary, which is a helper tool that actually configures the file system&rsquo;s mount point, accepts a bunch of options to configure how the mount point is set up.  These could be different between sandboxfs and bindfs causing the behavior discrepancy.</p>
-
 <p>Some code inspection yielded that the answer is yes: the options differ.  One of them caught my eye: <code>-o allow_other</code>.  So I patched this into sandboxfs, which was a matter of adding a the single extra parameter <code>fuse.AllowRoot()</code> to the mount call&hellip; and&hellip;</p>
-
 <p>Ta-da!  Java now started.</p>
-
 <p><strong>Q. Waaaaaaat? 3 hours into this for this stupid problem?!?!</strong></p>
-
 <p>A. Yep.  Stupid problem, but finding the solution is always regarding.  So far, we have gained a lot of context on what&rsquo;s going on and we know what needs to change for the problem to go away.</p>
-
 <p>And then it dawned on me.  The <code>amfid</code> daemon!  What is it running as?!</p>
-
 <pre><code>$ ps aux | grep amfi[d]
 root             75739   0.0  0.1  2495744  12824   ??  Ss    2:22PM   0:00.04 /usr/libexec/amfid
-</code></pre>
-
-<p>That explains it.</p>
-
+</code></pre><p>That explains it.</p>
 <p>Let&rsquo;s rationalize the problem:</p>
-
 <ol>
 <li>You try to exec Java from within the sandboxfs.</li>
 <li>The kernel gets the execution request and maps the executable into memory.</li>
@@ -311,15 +242,10 @@ root             75739   0.0  0.1  2495744  12824   ??  Ss    2:22PM   0:00.04 /
 <li>The <code>amfid</code> daemon tells the kernel that there was a race condition: the executable that the kernel told it to inspect is now gone.</li>
 <li>The kernel cannot verify the signature so it terminates the process.</li>
 </ol>
-
 <p>Simple, huh?  Well, that&rsquo;s my current working theory.  Since I fixed the problem, I haven&rsquo;t been able to reproduce it any longer.  Is the kernel caching signature verifications anywhere?  Maybe, but I couldn&rsquo;t figure that out.  Did the recent update of OSXFUSE fix something within it?  Did the Xcode update do so?  Too many moving pieces.</p>
-
 <h1 id="the-fix">The fix</h1>
-
 <p>The one-line fix mentioned above became a multi-line fix because of the desire to expose the permissions tunable to the user.</p>
-
 <p>I ended up adding a new <code>--allow</code> flag to sandboxfs that can take one of: <code>self</code> to indicate default access; <code>other</code> to indicate that any user can access the file system; and <code>root</code> to indicate that only the user that mounted the file system and root can access it.  But still: this was doable in like 20, 30 minutes tops.</p>
-
 <p>Now, testing the new feature was harder and it took several hours over several days to get the tests right.  This is a horror story for another day.</p>
 </article>
             </div>

@@ -23,7 +23,7 @@ One specific problem is that function parameters are numbered, not named, so the
 One specific problem is that function parameters are numbered, not named, so the risk of cryptic code is high. Let&amp;rsquo;s see why this is a problem.
 ">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/03/shell-readability-function-parameters.html">
 
@@ -33,7 +33,7 @@ One specific problem is that function parameters are numbered, not named, so the
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -196,22 +196,17 @@ Shell readability</b> series</a>.</i></p>
 
               
               <article><p>The shell supports defining functions, which, <a href="/2018/02/shell-readability-main.html">as we learned in the previous post</a>, you should embrace and use. Unfortunately, they are fairly primitive and their use can, paradoxically, introduce other readability problems.</p>
-
 <p>One specific problem is that <strong>function parameters are numbered, not named</strong>, so the risk of cryptic code is high. Let&rsquo;s see why this is a problem.</p>
-
 <p>Tell me what this function does and how to invoke it:</p>
 <div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">fetch<span class="o">()</span> <span class="o">{</span>
     <span class="nb">local</span> <span class="nv">rflag</span><span class="o">=</span>
     <span class="o">[</span> -z <span class="s2">&#34;</span><span class="si">${</span><span class="nv">3</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">]</span> <span class="o">||</span> <span class="nv">rflag</span><span class="o">=</span><span class="s2">&#34;-r</span><span class="si">${</span><span class="nv">3</span><span class="si">}</span><span class="s2">&#34;</span>
     mkdir -p <span class="s2">&#34;</span><span class="si">${</span><span class="nv">4</span><span class="si">}</span><span class="s2">&#34;</span>
     <span class="o">(</span> <span class="nb">cd</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">4</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">&amp;&amp;</span> cvs -d<span class="s2">&#34;</span><span class="si">${</span><span class="nv">1</span><span class="si">}</span><span class="s2">&#34;</span> -q checkout -P <span class="si">${</span><span class="nv">rflag</span><span class="si">}</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">2</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">)</span>
-<span class="o">}</span></code></pre></div>
-<p>As the <code>fetch</code> function name says, it fetches something, and as the content says, it does so from CVS. All good, right? But how do you invoke this function? With some effort, you can see that the function takes up to four parameters, but what is each one meant to be? Will you get them in the right order?</p>
-
+<span class="o">}</span>
+</code></pre></div><p>As the <code>fetch</code> function name says, it fetches something, and as the content says, it does so from CVS. All good, right? But how do you invoke this function? With some effort, you can see that the function takes up to four parameters, but what is each one meant to be? Will you get them in the right order?</p>
 <p>Sadly, the style—or lack thereof—above plagues all shell code out there, giving the shell a worse reputation than it already has.</p>
-
 <p>You could slightly improve the snippet above with a comment that documented each parameter, but the problem is that <a href="/2013/06/readability-avoid-comments.html">comments easily get out of sync</a>. You are better off avoiding them. (Docstrings are a different story which I may save for another day, but there is no such thing as docstrings for the shell.)</p>
-
 <p>A nicer solution is to <strong>make the parameter names part of the code</strong>. Take a look at this idiom:</p>
 <div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">fetch<span class="o">()</span> <span class="o">{</span>
     <span class="nb">local</span> <span class="nv">cvsroot</span><span class="o">=</span><span class="s2">&#34;</span><span class="si">${</span><span class="nv">1</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">;</span> <span class="nb">shift</span>
@@ -223,19 +218,20 @@ Shell readability</b> series</a>.</i></p>
     <span class="o">[</span> -z <span class="s2">&#34;</span><span class="si">${</span><span class="nv">tag</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">]</span> <span class="o">||</span> <span class="nv">rflag</span><span class="o">=</span><span class="s2">&#34;-r</span><span class="si">${</span><span class="nv">tag</span><span class="si">}</span><span class="s2">&#34;</span>
     mkdir -p <span class="s2">&#34;</span><span class="si">${</span><span class="nv">dir</span><span class="si">}</span><span class="s2">&#34;</span>
     <span class="o">(</span> <span class="nb">cd</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">dir</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">&amp;&amp;</span> cvs -d<span class="s2">&#34;</span><span class="si">${</span><span class="nv">cvsroot</span><span class="si">}</span><span class="s2">&#34;</span> -q checkout -P <span class="si">${</span><span class="nv">rflag</span><span class="si">}</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">module</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">)</span>
-<span class="o">}</span></code></pre></div>
-<p>The four local variable definitions at the beginning of the function exist purely to assign names to the parameters. With that trick, <strong>the function&rsquo;s prototype is obvious</strong>: you immediately know there are four parameters, you know in which order to pass them, and you can reasonably guess their purpose based on their names. <strong>Just like in a &ldquo;real&rdquo; programming language.</strong></p>
-
+<span class="o">}</span>
+</code></pre></div><p>The four local variable definitions at the beginning of the function exist purely to assign names to the parameters. With that trick, <strong>the function&rsquo;s prototype is obvious</strong>: you immediately know there are four parameters, you know in which order to pass them, and you can reasonably guess their purpose based on their names. <strong>Just like in a &ldquo;real&rdquo; programming language.</strong></p>
 <p>A few caveats though, because every time I suggest this idiom in a code review, people &ldquo;tweak&rdquo; it in harmful ways:</p>
-
 <ul>
-<li><p><strong>Use <code>shift</code> instead of numbering the parameters.</strong> The reason is two-fold. First, using <code>shift</code> combined with <code>set -e</code> makes function calls fail if they are not given enough parameters. And second, the order of the statements corresponds exactly to the order in which parameters are expected: there is no room for mistake. A potential code edit that reorders those lines would cause the code to fail instead of becoming more confusing but continuing to work.</p></li>
-
-<li><p><strong>Keep the <code>shift</code> call on the same line as the variable definition.</strong> Avoid the temptation to break them apart. The <code>shift</code> calls on their own lines introduce unnecessary vertical noise. Due to the noise, it becomes more tempting to avoid the <code>shift</code> and number the parameters, which I already said wasn&rsquo;t a good idea.</p></li>
-
-<li><p><strong>Use <code>${@}</code> to refer to an unknown number of parameters.</strong> The only safe way to handle a variable number of parameters is to expand them via <code>&quot;${@}&quot;</code>—but assigning that expansion to a variable isn&rsquo;t possible. In particular, <strong>do not</strong> write <code>local args=&quot;${*}&quot;</code>: just keep those arguments unnamed and use <code>&quot;${@}&quot;</code> where necessary to refer to them. (Sure, if you <em>already</em> depend on Bash, you can use an unportable array to store these&hellip; but think twice before adding a Bash dependency.)</p></li>
+<li>
+<p><strong>Use <code>shift</code> instead of numbering the parameters.</strong> The reason is two-fold. First, using <code>shift</code> combined with <code>set -e</code> makes function calls fail if they are not given enough parameters. And second, the order of the statements corresponds exactly to the order in which parameters are expected: there is no room for mistake. A potential code edit that reorders those lines would cause the code to fail instead of becoming more confusing but continuing to work.</p>
+</li>
+<li>
+<p><strong>Keep the <code>shift</code> call on the same line as the variable definition.</strong> Avoid the temptation to break them apart. The <code>shift</code> calls on their own lines introduce unnecessary vertical noise. Due to the noise, it becomes more tempting to avoid the <code>shift</code> and number the parameters, which I already said wasn&rsquo;t a good idea.</p>
+</li>
+<li>
+<p><strong>Use <code>${@}</code> to refer to an unknown number of parameters.</strong> The only safe way to handle a variable number of parameters is to expand them via <code>&quot;${@}&quot;</code>—but assigning that expansion to a variable isn&rsquo;t possible. In particular, <strong>do not</strong> write <code>local args=&quot;${*}&quot;</code>: just keep those arguments unnamed and use <code>&quot;${@}&quot;</code> where necessary to refer to them. (Sure, if you <em>already</em> depend on Bash, you can use an unportable array to store these&hellip; but think twice before adding a Bash dependency.)</p>
+</li>
 </ul>
-
 <p>The code above is a simplified and edited version of <a href="https://github.com/jmmv/shtk/blob/3105998e3b685fda74d512670c20a113526da681/cvs.subr#L47">the <code>shtk_cvs_checkout</code> function</a>. shtk uses this idiom throughout.</p></article>
             </div>
           </div>

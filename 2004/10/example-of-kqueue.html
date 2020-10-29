@@ -21,7 +21,7 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
   <meta property="og:description" content="The documentation of kqueue is quite decent but it lacks some examples. After reading its main manual pages (kqueue(9) and kevent(9)), I wasn&amp;rsquo;t sure about how it worked, so I had to write a test program to verify its behavior.
 Let&amp;rsquo;s start by analyzing the test program to later see its full code. The program will monitor changes to the /tmp/foo file and will print messages whenever it is deleted, modified or their attributes change.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2004/10/example-of-kqueue.html">
 
@@ -31,7 +31,7 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -158,23 +158,25 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
             <div class="col">
               
               <article><p>The documentation of kqueue is quite decent but it lacks some examples.  After reading its main <a href="http://netbsd.gw.com/cgi-bin/man-cgi?kqueue++NetBSD-current">manual pages</a> (<code>kqueue(9)</code> and <code>kevent(9)</code>), I wasn&rsquo;t sure about how it worked, so I had to write a test program to verify its behavior.</p>
-
 <p>Let&rsquo;s start by analyzing the test program to later see its full code.  The program will monitor changes to the <code>/tmp/foo</code> file and will print messages whenever it is deleted, modified or their attributes change. The program finishes when the file being monitoring is deleted.</p>
-
 <p>The steps to use kqueue are the following:</p>
-
 <ul>
-<li><p>Call <code>kqueue(2)</code> to create a new kernel event queue.  The descriptor it returns will be later used by <code>kevent(2)</code>.</p></li>
-
-<li><p>Open the file to monitor and keep its descriptor around.  We&rsquo;ll need this to attach an event monitor to it.</p></li>
-
-<li><p>Initialize a vector of <code>struct kevent</code> elements that describes the changes to monitor. Since we are only monitoring a single file, we need a one-element vector. This vector is filled up with calls to the <code>EV_SET</code> macro.  This macro takes: the descriptor of the kqueue, the descriptor of the file to monitor (<code>ident</code>), the <code>filter</code> to apply to it, several flags and optional arguments to the filter.  Note that an entry in this table is identified by its <code>ident/filter</code> pair.</p></li>
-
-<li><p>Call the <code>kevent(2)</code> function.  This system call takes the list of changes to monitor we constructed before and does not return until at least one event is received (or when an associated timeout is exhausted).  The function returns the number of changes received and stores information about them in another vector of <code>struct kevent</code> elements (we&rsquo;ll only get notifications of one event at a time, hence we don&rsquo;t use a vector, but a simple variable).</p></li>
-
-<li><p>Interpret the results.  If <code>kevent(2)</code> returned a number greater than 0, we have to inspect the output vector and see which events were received. Each filter has its semantics about the results.  For example, we are using the <code>EVFILT_VNODE</code> filter, which takes a list of conditions to monitor in the <code>fflags</code> field and modifies it to include only the conditions that triggered the filter.</p></li>
+<li>
+<p>Call <code>kqueue(2)</code> to create a new kernel event queue.  The descriptor it returns will be later used by <code>kevent(2)</code>.</p>
+</li>
+<li>
+<p>Open the file to monitor and keep its descriptor around.  We&rsquo;ll need this to attach an event monitor to it.</p>
+</li>
+<li>
+<p>Initialize a vector of <code>struct kevent</code> elements that describes the changes to monitor. Since we are only monitoring a single file, we need a one-element vector. This vector is filled up with calls to the <code>EV_SET</code> macro.  This macro takes: the descriptor of the kqueue, the descriptor of the file to monitor (<code>ident</code>), the <code>filter</code> to apply to it, several flags and optional arguments to the filter.  Note that an entry in this table is identified by its <code>ident/filter</code> pair.</p>
+</li>
+<li>
+<p>Call the <code>kevent(2)</code> function.  This system call takes the list of changes to monitor we constructed before and does not return until at least one event is received (or when an associated timeout is exhausted).  The function returns the number of changes received and stores information about them in another vector of <code>struct kevent</code> elements (we&rsquo;ll only get notifications of one event at a time, hence we don&rsquo;t use a vector, but a simple variable).</p>
+</li>
+<li>
+<p>Interpret the results.  If <code>kevent(2)</code> returned a number greater than 0, we have to inspect the output vector and see which events were received. Each filter has its semantics about the results.  For example, we are using the <code>EVFILT_VNODE</code> filter, which takes a list of conditions to monitor in the <code>fflags</code> field and modifies it to include only the conditions that triggered the filter.</p>
+</li>
 </ul>
-
 <p>With these concepts clear and with help of the manual pages, you should be able to interpret the following code easily:</p>
 <div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;sys/event.h&gt;</span><span class="cp">
 </span><span class="cp">#include</span> <span class="cpf">&lt;sys/time.h&gt;</span><span class="cp">
@@ -224,8 +226,8 @@ Let&amp;rsquo;s start by analyzing the test program to later see its full code. 
    <span class="n">close</span><span class="p">(</span><span class="n">kq</span><span class="p">);</span>
    <span class="n">close</span><span class="p">(</span><span class="n">f</span><span class="p">);</span>
    <span class="k">return</span> <span class="n">EXIT_SUCCESS</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div>
-<p>Now compile and run the program in one terminal.  In another one, modify the <code>/tmp/foo</code> file and see how our test program shows the events! If you delete the file, the program will terminate. (Note that we are not monitoring all possible events; we&rsquo;d watch for file renames, as well as other conditions if we needed to.)</p>
+<span class="p">}</span>
+</code></pre></div><p>Now compile and run the program in one terminal.  In another one, modify the <code>/tmp/foo</code> file and see how our test program shows the events! If you delete the file, the program will terminate. (Note that we are not monitoring all possible events; we&rsquo;d watch for file renames, as well as other conditions if we needed to.)</p>
 </article>
             </div>
           </div>

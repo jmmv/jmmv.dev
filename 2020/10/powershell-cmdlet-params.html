@@ -19,7 +19,7 @@
   <meta name="description" content="The way PowerShell handles flags in scripts (aka cmdlets) differs completely from what Unix shells do. These differences allow PowerShell to gain insight on how scripts have to be executed, which in turn can deliver a better interactive user experience. Read on for a comparison while wearing Unix-tinted glasses.">
   <meta property="og:description" content="The way PowerShell handles flags in scripts (aka cmdlets) differs completely from what Unix shells do. These differences allow PowerShell to gain insight on how scripts have to be executed, which in turn can deliver a better interactive user experience. Read on for a comparison while wearing Unix-tinted glasses.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/10/powershell-cmdlet-params.html">
 
@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -156,20 +156,12 @@
           <div class="row">
             <div class="col">
               
-              <article>
-
-<p>One of my personal goals with <a href="/2020/10/bye-google-hi-microsoft.html">my new position at Microsoft</a> is to learn more about Windows and its ecosystem. As you know, I&rsquo;m a systems person and I&rsquo;ve been in the Unix and macOS realm for the last&hellip; 22 years or so. During this time, I&rsquo;ve certainly touched Windows here and there but, for the most part, a lot of it remains a mystery to me.</p>
-
+              <article><p>One of my personal goals with <a href="/2020/10/bye-google-hi-microsoft.html">my new position at Microsoft</a> is to learn more about Windows and its ecosystem. As you know, I&rsquo;m a systems person and I&rsquo;ve been in the Unix and macOS realm for the last&hellip; 22 years or so. During this time, I&rsquo;ve certainly touched Windows here and there but, for the most part, a lot of it remains a mystery to me.</p>
 <p>Yesterday already, I uncovered a couple of interesting things worth discussing. In this post I&rsquo;m going to focus on just one of those two, and that is: how PowerShell handles input parameters in its scripts. I&rsquo;ll be looking at this through the lenses of a long-time Unix user and I&rsquo;ll hopefully be posting more articles of this style in the future. <a href="https://twitter.com/jmmv/">Follow me</a>, wink, wink.</p>
-
 <h1 id="the-unix-way">The Unix way</h1>
-
 <p>Parsing flags gets old very, very quickly. I have written code to parse flags and arguments countless times in a multitude of languages. And no matter what, every time I have to do this I have to look at the <code>getopts</code> description in the <code>sh(1)</code> manual page for shell scripts, the <code>getopt(3)</code> and <code>getopt_long(3)</code> manual pages for C and C++ programs, and any other kind of documentation for the language of the day.</p>
-
 <p>Now, <em>of course</em> there are plenty of libraries to simplify flags parsing. You just have to hit a rock and uncover at least 10. However, no matter what you do in your code, the shell is <em>oblivious</em> to what&rsquo;s going on under your program.</p>
-
 <p>Say you have a script named <code>example.sh</code> with the following contents:</p>
-
 <div class="src">
   
   
@@ -186,7 +178,7 @@
 <span class="k">done</span>
 <span class="nb">shift</span> <span class="k">$((</span><span class="si">${</span><span class="nv">OPTIND</span><span class="si">}</span> <span class="o">-</span> <span class="m">1</span><span class="k">))</span>
 
-<span class="o">[</span> -n <span class="s2">&#34;</span><span class="si">${</span><span class="nv">path</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">]</span> <span class="o">||</span> <span class="o">{</span> <span class="nb">echo</span> <span class="s2">&#34;Path (-p) is empty&#34;</span> <span class="m">1</span>&gt;<span class="p">&amp;</span><span class="m">2</span><span class="p">;</span> <span class="nb">exit</span> <span class="m">1</span><span class="p">;</span> <span class="o">}</span>
+<span class="o">[</span> -n <span class="s2">&#34;</span><span class="si">${</span><span class="nv">path</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">]</span> <span class="o">||</span> <span class="o">{</span> <span class="nb">echo</span> <span class="s2">&#34;Path (-p) is empty&#34;</span> 1&gt;<span class="p">&amp;</span>2<span class="p">;</span> <span class="nb">exit</span> 1<span class="p">;</span> <span class="o">}</span>
 
 <span class="nb">echo</span> <span class="s2">&#34;Force: </span><span class="si">${</span><span class="nv">force</span><span class="si">}</span><span class="s2">&#34;</span>
 <span class="nb">echo</span> <span class="s2">&#34;Path: </span><span class="si">${</span><span class="nv">path</span><span class="si">}</span><span class="s2">&#34;</span>
@@ -197,7 +189,6 @@
       </div>
     </div>
   </div>
-
 
 <p>When we run the script above from the shell, we get an experience like this:</p>
 <div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">$ ./example.sh
@@ -212,33 +203,22 @@ Path: some/path
 
 $ ./example.sh -p some/path -f
 Force: true
-Path: some/path</code></pre></div>
-<p>For every command invocation above, the shell:</p>
-
+Path: some/path
+</code></pre></div><p>For every command invocation above, the shell:</p>
 <ol>
 <li><strong>tokenized the command line</strong> to extract words, and it did so using the <code>IFS</code> environment variable (have you ever heard of this?);</li>
 <li><strong>looked for the executable</strong> in the given location because the program name contained a slash, else it would have checked its in-memory cache of programs (did you know about the <code>rehash</code> or <code>hash</code> builtins?) and fallen back to scanning the <code>PATH</code>; and</li>
 <li><strong>executed the program with the arguments</strong> as they were, in a subprocess.</li>
 </ol>
-
 <p>So far so good: there is no magic. The words we typed were exactly what the executed program got (after tokenization), and it did not matter that <code>example.sh</code> was a shell script: the exact same thing would have happened if we had run a native program like <code>ls(1)</code>.</p>
-
 <p>Once running, though, our <code>example.sh</code> script had to scan the arguments, find that <code>-f</code> and <code>-p</code> looked like options, interpret them, and do something with them. What you should notice is that there were two erroneous executions: one where we forgot to specify a required flag (<code>-p</code>) and one where we used an unknown flag (<code>-h</code>), and both of these required special handling in our code.</p>
-
 <p>And this is were is where things get more interesting.</p>
-
 <p>What if you wanted the shell to support autocompletion for the flags that the program supports? You <em>can</em> do that, of course&mdash;<em>if</em> the shell supports such a feature. I bet that, if you navigate to <code>/etc/bash_completion.d/</code> on your machine, you&rsquo;ll find some stuff in there. Those are Bash-specific scripts that Bash loads and uses to extend its autocompletion features. The content of these scripts is usually awful-looking though, and I remember having to recurrently fight problems in the implementation we had in Bazel&hellip;</p>
-
 <p>I digress. The point I want you to remember is that programs run by the shell are black boxes, no matter if they are scripts or arbitrary native binaries.</p>
-
 <h1 id="the-powershell-way">The PowerShell way</h1>
-
 <p>In PowerShell, you can run arbitrary programs, yes, but you can <em>also</em> run cmdlets. A cmdlet is, essentially, an extension point for PowerShell. Builtin commands are cmdlets, but you can define your own in a variety of languages. Cmdlets can be written in C# and VB.NET&hellip; and, of course, they can be written in PowerShell&rsquo;s own language too. In this latter case, we can call them scripts.</p>
-
 <p>The thing that differentiates arbitrary programs from cmdlets is that when you run programs, PowerShell knows nothing about them. As a result, the shell essentially replicates &ldquo;the Unix way&rdquo; of running the called program as a black box. But when you run cmdlets, PowerShell <em>knows</em> stuff about them and can do pretty interesting things with that information.</p>
-
 <p>Let&rsquo;s take a look at an equivalent example named <code>example.ps1</code>:</p>
-
 <div class="src">
   
   
@@ -262,7 +242,6 @@ Path: some/path</code></pre></div>
     </div>
   </div>
 
-
 <p>(Yes, I installed PowerShell within my Debian WSL instance; hence the <code>#!</code> header.) Here is what happens when we run this script with the same sample cases as above:</p>
 <div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">&gt; example.ps1
 cmdlet example.ps1 at command pipeline position 1
@@ -283,28 +262,20 @@ Path: some/path
 
 &gt; example.ps1 -Path some/path -Force
 Force: True
-Path: some/path</code></pre></div>
-<p>Note the differences? Here are the key ones:</p>
-
+Path: some/path
+</code></pre></div><p>Note the differences? Here are the key ones:</p>
 <ul>
 <li>When we ran the script <strong>without arguments</strong>, the shell figured out which ones were missing and interactively asked us for values. We could even type <code>!?</code> at the prompt of each parameter to access the built-in help strings.</li>
 <li>When we ran the script <strong>with the standard <code>-?</code> flag</strong>, the shell auto-generated a help string based on the parameter definitions.</li>
 <li>When we <strong>specified all required parameters</strong> as arguments, the script ran unattended (without stopping to ask for user input).</li>
 <li>And when we tried to <strong>autocomplete the flag names</strong> (not pictured, sorry), the shell was able to do so.</li>
 </ul>
-
 <p>Every cmdlet gets these integration features, and the syntax for defining how parameters behave is much richer than what I showed here. For example, you can even attach full docstrings with inline markup, and these are then exposed as part of the interactive help for the cmdlet. <a href="https://docs.microsoft.com/en-us/powershell/scripting/learn/ps101/09-functions?view=powershell-7#parameters">Peek through the documentation</a> for some more details.</p>
-
 <p>The question is, then: how does this all work? How can PowerShell be aware of the flags within the script before executing it? With metadata!</p>
-
 <p>WARNING: From this point on I&rsquo;m speculating based on the few things I&rsquo;ve seen so far while researching this post, so I might be wrong. Please let me know if you find any lies.</p>
-
 <p>You see, if you opened the documentation I linked to above, you&rsquo;ll notice that <code>param()</code> is an annotation for <em>functions</em>: this statement must come first within a function definition, and the contents of the <code>param()</code> list get attached to the function. If you are the shell and you have such information attached to a function object, then you can do whatever you want with that metadata before running any of the function&rsquo;s code. You can detect missing flags, validate their contents, or offer autocompletion.</p>
-
 <p>&ldquo;But, but, but: that <code>example.ps1</code> does not contain any function definition!&rdquo; Right. I can imagine that, in such a case, the shell just treats the whole file as if it were a function and expects <code>param()</code> to come first. In fact, it&rsquo;s a syntax error if it doesn&rsquo;t. With that assumption, the shell can read the parameters list first if it is present and do whatever it wants with it. It might even be reading the whole file first and putting its contents into an anonymous function object, I don&rsquo;t know.</p>
-
 <p>As for cmdlets implemented in C# or VB.NET, things have to be different though because they are <del>native</del> managed code. But that should be no problem. Managed code has great introspection features, so it&rsquo;s perfectly feasible for PowerShell to extract such information from class/function annotations from the code.</p>
-
 <p>And that&rsquo;s all for now. As a long-time Unix user, I found this quite an interesting difference in paradigms, and I can start to see how cmdlet pipelines can be very powerful. More surprises in future posts!</p>
 </article>
             </div>

@@ -21,7 +21,7 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
   <meta property="og:description" content="In the previous post, we saw why waiting for a process group to terminate is important (at least in the context of Bazel), and we also saw why this is a difficult thing to do in a portable manner. So today, let&amp;rsquo;s dive into how to do this properly on a Linux system.
 On Linux, we have two routes: using the child subreaper feature or using PID namespaces. We&amp;rsquo;ll focus on the former because that&amp;rsquo;s what we&amp;rsquo;ll use to fix (#10245) the process wrapper1, and because they are sufficient to fully address our problem.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/11/wait-for-process-group-linux.html">
 
@@ -31,7 +31,7 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,19 +159,12 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
             <div class="col">
               
               <article><p>In the <a href="/2019/11/wait-for-process-group.html">previous post</a>, we saw why waiting for a process group to terminate is important (at least in the context of Bazel), and we also saw why this is a difficult thing to do in a portable manner. So today, let&rsquo;s dive into how to do this properly on a Linux system.</p>
-
-<p>On Linux, we have two routes: using the <strong>child subreaper</strong> feature or using <strong>PID namespaces</strong>. We&rsquo;ll focus on the former because that&rsquo;s what we&rsquo;ll use to fix (<a href="https://github.com/bazelbuild/bazel/issues/10245">#10245</a>) the process wrapper<sup class="footnote-ref" id="fnref:namespaces"><a href="#fn:namespaces">1</a></sup>, and because they are sufficient to fully address our problem.</p>
-
+<p>On Linux, we have two routes: using the <strong>child subreaper</strong> feature or using <strong>PID namespaces</strong>. We&rsquo;ll focus on the former because that&rsquo;s what we&rsquo;ll use to fix (<a href="https://github.com/bazelbuild/bazel/issues/10245">#10245</a>) the process wrapper<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>, and because they are sufficient to fully address our problem.</p>
 <p>But before going into what the child subreaper feature does, let&rsquo;s recap what happens to orphaned processes.</p>
-
 <p>When a process terminates, the kernel must keep some of its information around&mdash;the exit code, among other details&mdash;until its parent collects such details. The process is said to be in the <strong>zombie</strong> state at this point because the process still exists on the system tables but is dead. When the parent collects the details of the process via a call to <code>wait(2)</code>, the kernel doesn&rsquo;t need to keep the state of the process any longer and the zombie disappears.</p>
-
 <p>Processes also have a pointer to their parent (the parent PID, or PPID). So&hellip; what happens if such parent becomes a zombie and then disappears? Its children become <strong>orphan</strong>, and they must be assigned to a new parent to keep the PPID valid. The traditional solution in Unix is to give those processes to PID 1, or <code>init(8)</code>, which in turn takes care of clearing their state when they terminate. The way the <code>init(8)</code> daemon does this is with a &ldquo;reaper&rdquo; loop that repeatedly calls <code>wait(2)</code> to discard the state of these adopted processes when they terminate.</p>
-
 <p>The <strong>child subreaper</strong> feature allows us to change the process that becomes the new parent. By using this feature on a given process, we tell the kernel that, when a grandchild of that process becomes orphan, we want to take ownership of it. We have essentially replaced <code>init(8)</code>&rsquo;s responsibilities for a subset of the process tree.</p>
-
 <p>So let&rsquo;s go back to our sample code to fix it:</p>
-
 <div class="src">
   
   
@@ -250,35 +243,32 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
     </div>
   </div>
 
-
 <p>There are two changes to notice compared to the previous post:</p>
-
 <ul>
-<li><p>The call to <code>prctl(2)</code><sup class="footnote-ref" id="fnref:portability"><a href="#fn:portability">2</a></sup> with a first argument of <code>1</code>, which configures our tool to become the child subreaper before it spawns any subprocess. (This API is not cryptic at all.)</p></li>
-
-<li><p>More subtly, we now use <code>wait(2)</code> instead of <code>waitpid(2)</code> to wait for all stray subprocesses. This is because, as the acting child subreaper, we will be assigned <em>any</em> subprocess that terminates <em>even if said process decided to escape the process group</em>&mdash;which is nice.</p></li>
+<li>
+<p>The call to <code>prctl(2)</code><sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup> with a first argument of <code>1</code>, which configures our tool to become the child subreaper before it spawns any subprocess. (This API is not cryptic at all.)</p>
+</li>
+<li>
+<p>More subtly, we now use <code>wait(2)</code> instead of <code>waitpid(2)</code> to wait for all stray subprocesses. This is because, as the acting child subreaper, we will be assigned <em>any</em> subprocess that terminates <em>even if said process decided to escape the process group</em>&mdash;which is nice.</p>
+</li>
 </ul>
-
 <p>If we build our sample program and run the same command as in the previous post:</p>
-
 <pre><code>$ ./wait-all-linux /bin/sh -c '/bin/sh -c &quot;sleep 5; echo 2&quot; &amp; echo 1'
 1
 2
 $
-</code></pre>
-
-<p>You&rsquo;ll see that <code>wait-all-linux</code> did not terminate until the nested subshell did, even though the outer shell exited quickly.</p>
-<div class="footnotes">
-
-<hr />
-
+</code></pre><p>You&rsquo;ll see that <code>wait-all-linux</code> did not terminate until the nested subshell did, even though the outer shell exited quickly.</p>
+<section class="footnotes" role="doc-endnotes">
+<hr>
 <ol>
-<li id="fn:namespaces">PID namespaces are already in use by the <code>linux-sandbox</code> tool in Bazel, but note that using them can cause <a href="https://github.com/bazelbuild/bazel/issues/3236">other kinds of subtle problems</a> due to PID virtualization.
- <a class="footnote-return" href="#fnref:namespaces"><sup>[return]</sup></a></li>
-<li id="fn:portability">FreeBSD also provides the child subreaper feature via <code>procctl(PROC_REAP_ACQUIRE)</code> since the 10.2 release so this post could apply to that system as well. I haven&rsquo;t found any other system with this though.
- <a class="footnote-return" href="#fnref:portability"><sup>[return]</sup></a></li>
+<li id="fn:1" role="doc-endnote">
+<p>PID namespaces are already in use by the <code>linux-sandbox</code> tool in Bazel, but note that using them can cause <a href="https://github.com/bazelbuild/bazel/issues/3236">other kinds of subtle problems</a> due to PID virtualization. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2" role="doc-endnote">
+<p>FreeBSD also provides the child subreaper feature via <code>procctl(PROC_REAP_ACQUIRE)</code> since the 10.2 release so this post could apply to that system as well. I haven&rsquo;t found any other system with this though. <a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
 </ol>
-</div>
+</section>
 </article>
             </div>
           </div>

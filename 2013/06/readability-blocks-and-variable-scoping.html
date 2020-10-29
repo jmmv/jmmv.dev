@@ -21,7 +21,7 @@ To illustrate what this means, consider this snippet in which we define a functi
   <meta property="og:description" content="In a dynamically-typed language, it is common for the scoping semantics of a variable to be wider than a single code block. For example: in at least Python and the shell, it is the case that a variable defined anywhere within a function —even inside conditionals or loops— is reachable anywhere in the function from there on.
 To illustrate what this means, consider this snippet in which we define a function to compute the CPU requirements needed in a database system to support a set of tables:">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.54.0" />
+  <meta name="generator" content="Hugo 0.76.5" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/06/readability-blocks-and-variable-scoping.html">
 
@@ -31,7 +31,7 @@ To illustrate what this means, consider this snippet in which we define a functi
   <link rel="alternate" type="application/rss+xml"
         title="jmmv.dev" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.d277829c365f24ab40cc633c221d647b1f765cf42c212852ae7acb0a3546406d.css">
+  <link rel="stylesheet" href="/sass/main.min.bdc4c9e403a0d3d67d444eb72b2bfd041900b99e46767b0577f6552c2f180a3c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -249,7 +249,6 @@ Readability</b> series</a>.</i></p>
 
               
               <article><p>In a dynamically-typed language, it is common for the scoping semantics of a variable to be wider than a single code block. For example: in at least Python and the shell, it is the case that a variable defined <em>anywhere</em> within a function —even inside conditionals or loops— is reachable anywhere in the function from there on.</p>
-
 <p>To illustrate what this means, consider this snippet in which we define a function to compute the CPU requirements needed in a database system to support a set of tables:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">cpu_requirements</span><span class="p">(</span><span class="n">database</span><span class="p">):</span>
     <span class="n">disk_bytes</span><span class="p">,</span> <span class="n">tables_count</span> <span class="o">=</span> <span class="n">calculate_summaries</span><span class="p">(</span><span class="n">database</span><span class="p">)</span>
@@ -262,11 +261,9 @@ Readability</b> series</a>.</i></p>
 
     <span class="o">...</span> <span class="n">various</span> <span class="n">tens</span> <span class="n">of</span> <span class="n">lines</span> <span class="n">of</span> <span class="n">code</span> <span class="o">...</span>
 
-    <span class="k">return</span> <span class="n">cpu</span> <span class="o">+</span> <span class="n">SAFETY_MARGIN</span></code></pre></div>
-<p>The thing I want you to note in this code snippet is that we are defining the <code>cpu</code> variable in all code paths of the conditional and later using the computed value <em>outside</em> the conditional, possibly after tens of lines of code. Practically, there is nothing wrong with this as long as the code works as intended, but I personally find this style to be confusing: the code does not show the <em>intent</em> of the programmer regarding where a variable is going to be used.</p>
-
+    <span class="k">return</span> <span class="n">cpu</span> <span class="o">+</span> <span class="n">SAFETY_MARGIN</span>
+</code></pre></div><p>The thing I want you to note in this code snippet is that we are defining the <code>cpu</code> variable in all code paths of the conditional and later using the computed value <em>outside</em> the conditional, possibly after tens of lines of code. Practically, there is nothing wrong with this as long as the code works as intended, but I personally find this style to be confusing: the code does not show the <em>intent</em> of the programmer regarding where a variable is going to be used.</p>
 <p>As a guideline, define a variable in the outermost block where it is used. Visually, this means defining the variable at the leftmost indentation level in which it is going to be referenced later.</p>
-
 <p>The code above would be rewritten as follows:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">cpu_requirements</span><span class="p">(</span><span class="n">tables_info</span><span class="p">):</span>
     <span class="n">disk_bytes</span><span class="p">,</span> <span class="n">tables_count</span> <span class="o">=</span> <span class="n">calculate_summaries</span><span class="p">(</span><span class="n">database</span><span class="p">)</span>
@@ -281,14 +278,12 @@ Readability</b> series</a>.</i></p>
 
     <span class="o">...</span> <span class="n">various</span> <span class="n">tens</span> <span class="n">of</span> <span class="n">lines</span> <span class="n">of</span> <span class="n">code</span> <span class="o">...</span>
 
-    <span class="k">return</span> <span class="n">cpu</span> <span class="o">+</span> <span class="n">SAFETY_MARGIN</span></code></pre></div>
-<p>There are two key ideas behind these tiny adjustments:</p>
-
+    <span class="k">return</span> <span class="n">cpu</span> <span class="o">+</span> <span class="n">SAFETY_MARGIN</span>
+</code></pre></div><p>There are two key ideas behind these tiny adjustments:</p>
 <ul>
 <li>First, the scope of the <code>cpu</code> variable is explicitly declared to be outside of the conditional. This happens right before entering the alternative code paths, so there is a clear expectation that this variable <em>will</em> be used later on outside of the conditional statement.</li>
 <li>And second, the expectation that the <code>cpu</code> variable has been assigned a value in all possible code paths is explicitly coded by an assertion. This is important. Consider that the code in each branch of the conditional could be multiple lines long, and the assignment of a value to our variable might be buried among those lines. With the assertion, we want to ensure that whatever happens to the contents of the conditional branches in future revisions does not mean that the initialization of the variable is lost (by mistake).</li>
 </ul>
-
 <p>Everything mentioned here applies to loops and other higher-level constructs as well, particularly <code>try</code>/<code>catch</code> blocks. Consider this code:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">get_current_user_data</span><span class="p">():</span>
     <span class="k">try</span><span class="p">:</span>
@@ -301,8 +296,8 @@ Readability</b> series</a>.</i></p>
     <span class="k">except</span> <span class="n">helper_module</span><span class="o">.</span><span class="n">GroupQueryError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">BackendError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">user_data</span><span class="p">,</span> <span class="n">group_data</span></code></pre></div>
-<p>The code in this example performs two separate queries via a helper module, and these queries raise exceptions defined in the helper module. To be self-contained, our <code>get_current_user_data()</code> rewrites these exceptions as a generic exception defined in the current module. The issue, however, is that the variables defined within the <code>try</code> block are accessed later separately. I would instead do:</p>
+    <span class="k">return</span> <span class="n">user_data</span><span class="p">,</span> <span class="n">group_data</span>
+</code></pre></div><p>The code in this example performs two separate queries via a helper module, and these queries raise exceptions defined in the helper module. To be self-contained, our <code>get_current_user_data()</code> rewrites these exceptions as a generic exception defined in the current module. The issue, however, is that the variables defined within the <code>try</code> block are accessed later separately. I would instead do:</p>
 <div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">get_current_user_data</span><span class="p">():</span>
     <span class="n">user_data</span> <span class="o">=</span> <span class="bp">None</span>
     <span class="k">try</span><span class="p">:</span>
@@ -318,11 +313,9 @@ Readability</b> series</a>.</i></p>
         <span class="k">raise</span> <span class="n">BackendError</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
     <span class="k">assert</span> <span class="n">group_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
 
-    <span class="k">return</span> <span class="n">user_data</span><span class="p">,</span> <span class="n">group_data</span></code></pre></div>
-<p>Which is very similar to what we did above for conditionals.</p>
-
+    <span class="k">return</span> <span class="n">user_data</span><span class="p">,</span> <span class="n">group_data</span>
+</code></pre></div><p>Which is very similar to what we did above for conditionals.</p>
 <p>To wrap everything up, keep these guidelines in mind:</p>
-
 <ul>
 <li>Define variables in the outermost block where they are referenced.</li>
 <li>If you don&rsquo;t have a good default value to which to initialize the variable to—because, for example, its value is computed in a conditional path—set it to <code>None</code> and later assert that it has been set to something different.</li>
