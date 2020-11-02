@@ -1,14 +1,22 @@
 .PHONY: all clean
+all: cmdline-args-unix-vs-windows
 all: inline-array-go
 all: rest-api-go
 all: rest-api-rust
 all: powershell-cmdlet-params
 all: wait-for-process-group
+clean: clean-cmdline-args-unix-vs-windows
 clean: clean-inline-array-go
 clean: clean-rest-api-go
 clean: clean-rest-api-rust
 clean: clean-powershell-cmdlet-params
 clean: clean-wait-for-process-group
+
+.PHONY: clean-cmdline-args-unix-vs-windows cmdline-args-unix-vs-windows
+cmdline-args-unix-vs-windows:
+	( cd cmdline-args-unix-vs-windows && make all )
+clean-cmdline-args-unix-vs-windows:
+	( cd cmdline-args-unix-vs-windows && make clean )
 
 .PHONY: clean-inline-array-go inline-array-go
 inline-array-go:
