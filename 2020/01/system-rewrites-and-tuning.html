@@ -169,7 +169,30 @@
 <h1 id="thesis-exemplified-p50-and-p99-latencies">Thesis exemplified: p50 and p99 latencies</h1>
 <p>Say you own a backend system that currently offers <code>p50 = 100ms</code> and <code>p99 = 500ms</code> latencies. Both of these are problematic and your users have been asking you for improvements, <em>especially</em> on the <code>p50</code> front. You know that you can design a new version of this system that delivers <code>p50 = 30ms</code> (an impressive 70% cut) but your new design does nothing for the <code>p99</code>&mdash;in fact, the new design will makes it harder to address the <code>p99</code> in the future.</p>
 <p>So what if someone came around and iteratively tuned the old system to its absolute best, lowering the latencies to <code>p50 = 70ms</code> and <code>p99 = 300ms</code>? Sure, the gains on <code>p50</code> are nowhere as impressive as with your new design&mdash;they are a mere 30% vs. the proposed 70%&mdash;but the gains on the <code>p99</code> are very tangible. If this happened, your proposed redesign would be doomed: proceeding with that design would indeed cut the <code>p50</code>s further, but it would also harm the new baseline <code>p99</code>s&mdash;something that would not be acceptable once users got used to them.</p>
-<!-- raw HTML omitted -->
+<table style="margin-left: auto; margin-right: auto; width: 80%">
+    <thead>
+        <tr>
+            <th></th>
+            <th align="right">Legacy system</th>
+            <th align="right">Tuned legacy system</th>
+            <th align="right">Proposed system</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th>p50</th>
+            <td align="right">100ms</td>
+            <td align="right" style="color: goldenrod">70ms</td>
+            <td align="right" style="color: green">30ms</td>
+        </tr>
+        <tr>
+            <th>p99</th>
+            <td align="right">500ms</td>
+            <td align="right" style="color: green">300ms</td>
+            <td align="right" style="color: firebrick">500ms</td>
+        </tr>
+    </tbody>
+</table>
 <p>The table summarizes what I mentioned above. Note how the tuned legacy system, while not impressive on the <code>p50</code>s front, may be an overall best answer than the proposed system. The main takeaway thus is:</p>
 <blockquote>
 <p>By improving the old system in <em>dimensions that the redesign didn&rsquo;t think about</em>, we have made the work of the redesign much harder. And that is <em>good</em>, because then the redesign won&rsquo;t corner us in a position that is hard go get out of.</p>
@@ -185,7 +208,7 @@
 <p>Let&rsquo;s look now at another story: one in which I&rsquo;ve been directly implicated as the primary engineer doing the work.</p>
 <p>iOS builds at Google had traditionally run locally and our engineers were requesting faster build times. The obvious solution to this problem, based on all of our other builds, was to bring remote/distributed execution to these builds. So we did.</p>
 <p>When rolling this feature out, we noticed that clean build times improved by more than 50% but incremental build times worsened and increased by 10x. To make things worse for <em>us</em>, teams were hard at work tuning their local-only builds, improving their clean build times and thus minimizing the gains remote execution provided in this case.</p>
-<p>Deploying this feature was therefore not an option, so we had to go back to the drawing board to find an alternative. In the end, we had to come up with a vastly different answer to the problem and combine both local and remote resources during a build. You can read more on this in my <!-- raw HTML omitted -->Bazel dynamic execution<!-- raw HTML omitted --> posts.</p>
+<p>Deploying this feature was therefore not an option, so we had to go back to the drawing board to find an alternative. In the end, we had to come up with a vastly different answer to the problem and combine both local and remote resources during a build. You can read more on this in my <a href="/2019/12/bazel-dynamic-execution-introduction.html">Bazel dynamic execution</a> posts.</p>
 <p>This situation is slightly different than the others as it did not involve redesigning a system. However, the situation is similar enough because the baseline performance targets of our iOS builds were inherently different than those in other builds&mdash;and thus the cargoculted solution was insufficient. If we had started &ldquo;from scratch&rdquo; with remote builds only (and never had those local-only builds), we would have been blind to the potential higher targets we could achieve by leveraging local resources.</p>
 <h1 id="parting-words">Parting words</h1>
 <p>Be very skeptical every time someone proposes to rewrite a piece of software. Often enough, the cheaper and safer answer is to perform iterative improvement to solve most problems.</p>

@@ -214,12 +214,21 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <li>Remove the transient files immediately before terminating.</li>
 </ol>
 <p>The folllowing figure depicts these steps as they happen when the action is run remotely and locally by the dynamic strategy:</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2019-12-12-bazel-dynamic-execution-37.svg" class="with-border">
+  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_392">Slide 37</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
+</figure>
 <p>The important boxes in this figure are those labeled <strong>Delete temp files</strong>. Their location respective to other steps is also important.</p>
 <p>Now let&rsquo;s consider what happens when the dynamic scheduler decides to cancel each of these separate paths, and especially what happens if we are unlucky enough to stop the spawned script <em>before</em> it is able to do its final <strong>Delete temp files</strong> phase.</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2019-12-12-bazel-dynamic-execution-38.svg" class="with-border">
+  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_256">Slide 38</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
+</figure>
 <p>For the remote branch, the whole action and script run remotely, which means all real and transient outputs are written in a disk of a remote machine. Because we have cancelled the action and we haven&rsquo;t even started downloading any of its outputs, there is nothing to worry about: it&rsquo;s impossible for Bazel to ever encounter the transient files even if they were behind.</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2019-12-12-bazel-dynamic-execution-39.svg" class="with-border">
+  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_358">Slide 39</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
+</figure>
 <p>For the local branch, things are different&hellip; Remember that we are running with the local <em>unsandboxed</em> strategy for performance reasons, so the real outputs <em>as well as the transient outputs</em> were written to the output tree. If we kill the spawned script before it gets a chance to delete the transient files, those will stay behind in the output tree.</p>
 <p>And that&rsquo;s a problem. Because then, when the remote branch continues and fetches the outputs, the transient files will be there. After the downloads, Bazel will sanity-check via <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/skyframe/ActionMetadataHandler.java;l=351;drc=5284e6cd2dc4e7dfe625c9bef3d557e47b76b42b"><code>ActionMetadataHandler#getTreeArtifactValue</code></a>, called from <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/skyframe/SkyframeActionExecutor.java;l=1389;drc=5284e6cd2dc4e7dfe625c9bef3d557e47b76b42b"><code>SkyframeActionExecutor#checkOutputs</code></a>, that the on-disk collection of files matches what was downloaded from the remote worker&hellip; and encounter an inconsistency, thus crashing.</p>
 <p>The solution is easy, though it required a few iterations to get it in the right place. Simply put, we improved the local strategy&rsquo;s cancellation code path to destroy any tree artifacts as part of its cancellation process. This way, we pretend that the tree artifact directories were never created and the remote strategy can proceed to fetch the outputs. You can see this in revision <a href="https://source.bazel.build/bazel/+/0dd9ae90834bb08be116301553b88d0df8b0631e">0dd9ae90</a>. (And you can also see in the diff some test code to implement a Starlark rule that generates a tree artifact.)</p>

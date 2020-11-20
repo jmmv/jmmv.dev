@@ -212,7 +212,45 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <li>second, because we can take advantage of things like <a href="https://blog.bazel.build/2015/12/10/java-workers.html">persistent workers</a>, which are designed to offer super-fast edit/build/test cycles.</li>
 </ul>
 <p>Put in numbers, here is what dynamic execution looks like for a relatively large iOS build I measured at Google a few months ago:</p>
-<!-- raw HTML omitted -->
+<table style="margin-left: auto; margin-right: auto; width: 80%">
+    <thead>
+        <tr>
+            <th></th>
+            <th></th>
+            <th align="right">Local</th>
+            <th align="right">Remote</th>
+            <th align="right">Dynamic</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th rowspan="2" style="vertical-align:middle">MacBook Pro 2015<br>4 cores</th>
+            <th>Clean</th>
+            <td align="right" style="color: firebrick">2895s</td>
+            <td align="right" style="color: goldenrod">487s</td>
+            <td align="right" style="color: green">454s</td>
+        </tr>
+        <tr>
+            <th>Incremental</th>
+            <td align="right" style="color: green">23s</td>
+            <td align="right" style="color: firebrick">143s</td>
+            <td align="right" style="color: green">22s</td>
+        </tr>
+        <tr>
+            <th rowspan="2" style="vertical-align:middle">iMac Pro 2017<br>18 cores</th>
+            <th>Clean</th>
+            <td align="right" style="color: firebrick">1045s</td>
+            <td align="right" style="color: goldenrod">283s</td>
+            <td align="right" style="color: green">229s</td>
+        </tr>
+        <tr>
+            <th>Incremental</th>
+            <td align="right" style="color: green">17s</td>
+            <td align="right" style="color: firebrick">118s</td>
+            <td align="right" style="color: green">17s</td>
+        </tr>
+    </tbody>
+</table>
 <p>Notice how the <strong>Dynamic</strong> column has the best numbers of each row. Essentially, dynamic execution has the potential to match (and improve) the <strong>Remote</strong> timing for clean builds and the <strong>Local</strong> timing for incremental builds.</p>
 <p>Unfortunately, the table above shows best-case metrics obtained from a controlled benchmark with an idle machine and good network connectivity. In real-world deployments, we observed <em>worse</em> incremental build times with dynamic scheduling&mdash;and we traced these down to the way the dynamic scheduler was originally written.</p>
 <p>But how did we find these issues, you ask? By reasoning about the inner mechanics of dynamic execution and making informed guesses about where the problems might lie. When the dynamic scheduler was first introduced, it was written with Google-internal builds in mind. That is:</p>
