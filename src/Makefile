@@ -1,16 +1,25 @@
 .PHONY: all clean
+all: builder-pattern-for-tests
 all: cmdline-args-unix-vs-windows
 all: inline-array-go
 all: rest-api-go
 all: rest-api-rust
 all: powershell-cmdlet-params
 all: wait-for-process-group
+clean: clean-builder-pattern-for-tests
 clean: clean-cmdline-args-unix-vs-windows
 clean: clean-inline-array-go
 clean: clean-rest-api-go
 clean: clean-rest-api-rust
 clean: clean-powershell-cmdlet-params
 clean: clean-wait-for-process-group
+
+.PHONY: clean-builder-pattern-for-tests builder-pattern-for-tests
+builder-pattern-for-tests:
+	( cd builder-pattern-for-tests && cargo build )
+clean-builder-pattern-for-tests:
+	( cd builder-pattern-for-tests && cargo clean )
+	rm -f builder-pattern-for-tests/Cargo.lock
 
 .PHONY: clean-cmdline-args-unix-vs-windows cmdline-args-unix-vs-windows
 cmdline-args-unix-vs-windows:

@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <meta property="og:site_name" content="jmmv.dev">
+
+  <title>Using the builder pattern to define test scenarios - jmmv.dev</title>
+  <meta property="og:title" content="Using the builder pattern to define test scenarios - jmmv.dev">
+
+  
+
+  
+  <meta name="description" content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&amp;rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, the ideas presented here apply to any language. So don&amp;rsquo;t leave just because I said Rust!
+">
+  <meta property="og:description" content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&amp;rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, the ideas presented here apply to any language. So don&amp;rsquo;t leave just because I said Rust!
+">
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.78.1" />
+
+  <meta property="og:url" content="https://jmmv.dev/2020/12/builder-pattern-for-tests.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/2020/12/builder-pattern-for-tests.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="jmmv.dev" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/sass/main.min.4a771eefa9be3b150ed1af08f28c598e79c5f837f721231770c26a9646a0fefe.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+</head>
+
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;jmmv.dev
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/work.html" >Work</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="http://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Using the builder pattern to define test scenarios</h1>
+
+        <p>December 4, 2020 &middot;
+        About 5 minutes
+        &middot;
+        Tags:
+        <a class="text-reset" href="/tags/programming">programming</a>, <a class="text-reset" href="/tags/rust">rust</a></p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div class="row">
+            <div class="col">
+              
+              <article><p>I&rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, <strong>the ideas presented here apply to any language</strong>. So don&rsquo;t leave just because I said Rust!</p>
+<hr>
+<p>While Rust provides excellent facilities to execute unit and integration tests via <code>cargo test</code>, the APIs to write such tests are&hellip; extremely limited. In essence, we can tag tests functions with <code>#[test]</code> and we can then use the <code>assert*</code> family of macros plus <code>unwrap()/expect()</code> calls to validate values. But that&rsquo;s about it. No fixtures. No <a href="https://junit.org/junit5/">JUnit-like advanced features</a>. No <a href="https://truth.dev/">Truth-like expressive assertions</a>. No nothing.</p>
+<p>These limitations, and in particular the lack of fixtures, can lead to convoluted test code. The fact is that some tests, even if they are true unit tests, require quite a bit of boilerplate: prepare fake objects with golden values, inject those into the code under test, and validate results. If we want to adhere to the principle of making each individual test case (aka each <code>#[test]</code> function) focus on a single behavior, we find ourselves with a lot of code duplication. Code duplication blurs the essence behind each test, which then makes tests harder to maintain&mdash;and hard to maintain tests is something you <em>really</em> do not want in a codebase.</p>
+<p>To mitigate these limitations and keep the content of test functions focused on behavior, I&rsquo;ve found myself writing helpers of the form <code>do_ok_test_for_blah()</code>. These helpers wrap the <code>blah()</code> under test and abstract away all of the uninteresting setup/teardown noise, customizing these based on input parameters.</p>
+<p>The problem is that functions like <code>do_ok_test_for_blah()</code> quickly become complex. As you add more test cases, the amount of parameters to pass to these functions grows too, and the tests that used to be succinct aren&rsquo;t any more. To compensate, you might add extra functions like <code>do_ok_test_for_blah_with_bleh()</code> that provide even further wrapping&hellip; but then you end up with a real mess that goes counter the original goal of simplifying the test code. Mind you, a lot of the older tests in EndBASIC suffer from this problem and it&rsquo;s a pain to touch them, so I had to find a solution.</p>
+<p>Of course, there are crates out there to provide extra testing facilities for Rust. But how far can we get with the simple Rust primitives? Pretty far actually.</p>
+<blockquote>
+<p>What if we used the builder pattern to define the test scenario with required and optional properties, set expectations in a declarative manner, and then hid the test logic within it?</p>
+</blockquote>
+<p>The idea is to define a <em>type</em> (or <code>struct</code>, or <code>class</code>, or whatever your language of choice offers to encapsulate data) that holds all details needed to set up a test and also carries the expectations of the test. The type requires the minimum amount of parameters to run a &ldquo;null&rdquo; test scenario, and allows passing all other parameters in an optional manner. Lastly, a single <code>run()</code>-like function takes care of preparing the test scenario and running through it.</p>
+<hr>
+<p>Let&rsquo;s illustrate all these words with a trivial example.</p>
+<p>Consider a simple and non-generic <code>sum_all</code> function that takes an array of <code>i32</code> values and sums them all:</p>
+<div class="src">
+  
+  
+  <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[cfg(test)]</span><span class="w"> </span><span class="k">mod</span> <span class="nn">tests</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="sd">/// Sums all input `values` and returns the total.
+</span><span class="sd"></span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">sum_all</span><span class="p">(</span><span class="n">values</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">i32</span><span class="p">])</span><span class="w"> </span>-&gt; <span class="kt">i32</span> <span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">values</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">v</span><span class="p">;</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="n">result</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+  <div class="footer">
+      <div class="filename">
+        <a href="/src/builder-pattern-for-tests/src/lib.rs" type="text/plain">src/lib.rs</a>
+      </div>
+    </div>
+  </div>
+
+<p>Yes, this is a simplistic function that can be trivially tested: using the builder pattern here is overkill, but hopefully you get the idea of how this helps verify more complex interfaces.</p>
+<p>To test this function, we define a <code>SumAllTest</code> type to represent the builder pattern, with these properties:</p>
+<ul>
+<li>Given that <code>sum_all()</code> always returns a value, the test must always know what value to expect; therefore, we express this requirement as part of the type&rsquo;s constructor.</li>
+<li>The data to pass to the function is variable, though, so we make it optional via an <code>add_value()</code> method. I&rsquo;ve chosen to use an accumulator method here to further illustrate how a builder might be helpful.</li>
+<li>We define a <code>run()</code> method that <em>consumes the builder</em> and executes the test.</li>
+</ul>
+<p>Our test code looks like this:</p>
+<div class="src">
+  
+  
+  <div class="highlight"><pre class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#![deny(warnings)]</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">use</span><span class="w"> </span><span class="k">crate</span>::<span class="o">*</span><span class="p">;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="sd">/// Builder pattern for tests that validate `sum_all`.
+</span><span class="sd"></span><span class="cp">#[must_use]</span><span class="w">
+</span><span class="w"></span><span class="k">struct</span> <span class="nc">SumAllTest</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">expected</span>: <span class="kt">i32</span><span class="p">,</span><span class="w">
+</span><span class="w">    </span><span class="n">values</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">i32</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">SumAllTest</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="sd">/// Creates the test scenario and initializes it with the result we expect.
+</span><span class="sd"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">expect</span><span class="p">(</span><span class="n">value</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="n">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">expected</span>: <span class="nc">value</span><span class="p">,</span><span class="w"> </span><span class="n">values</span>: <span class="nc">vec</span><span class="o">!</span><span class="p">()</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="sd">/// Registers a value to pass to `sum_all` as an input.
+</span><span class="sd"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">add_value</span><span class="p">(</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="kt">i32</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">values</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="bp">self</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w">    </span><span class="sd">/// Runs `sum_all` with all recorded values and checks the result.
+</span><span class="sd"></span><span class="w">    </span><span class="k">fn</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">actual</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_all</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">values</span><span class="p">);</span><span class="w">
+</span><span class="w">        </span><span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">expected</span><span class="p">,</span><span class="w"> </span><span class="n">actual</span><span class="p">);</span><span class="w">
+</span><span class="w">    </span><span class="p">}</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="cp">#[test]</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">test_sum_all_with_no_values</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">SumAllTest</span>::<span class="n">expect</span><span class="p">(</span><span class="mi">0</span><span class="p">).</span><span class="n">run</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="cp">#[test]</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">test_sum_all_with_one_value</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">SumAllTest</span>::<span class="n">expect</span><span class="p">(</span><span class="mi">5</span><span class="p">).</span><span class="n">add_value</span><span class="p">(</span><span class="mi">5</span><span class="p">).</span><span class="n">run</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="cp">#[test]</span><span class="w">
+</span><span class="w"></span><span class="k">fn</span> <span class="nf">test_sum_all_with_many_values</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span><span class="w">    </span><span class="n">SumAllTest</span>::<span class="n">expect</span><span class="p">(</span><span class="mi">8</span><span class="p">).</span><span class="n">add_value</span><span class="p">(</span><span class="mi">3</span><span class="p">).</span><span class="n">add_value</span><span class="p">(</span><span class="mi">4</span><span class="p">).</span><span class="n">add_value</span><span class="p">(</span><span class="mi">1</span><span class="p">).</span><span class="n">run</span><span class="p">();</span><span class="w">
+</span><span class="w"></span><span class="p">}</span><span class="w">
+</span></code></pre></div>
+  <div class="footer">
+      <div class="filename">
+        <a href="/src/builder-pattern-for-tests/src/tests.rs" type="text/plain">src/tests.rs</a>
+      </div>
+    </div>
+  </div>
+
+<p>The beauty of this design is that each test case is now declarative. The test case expresses, <em>in code</em>, what the test scenario looks like and what the expectations are. And given the simplicity of the calls, we can trivially express each scenario in its own test case. When we run the tests, we get what we expect:</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">running 3 tests
+test tests::test_sum_all_many_values ... ok
+test tests::test_sum_all_no_values ... ok
+test tests::test_sum_all_one_value ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+</code></pre></div><p>Great!</p>
+<p>But before we go, there is <em>one key detail</em> I glanced over. This detail is critical to ensure that your tests always do the right thing:</p>
+<p><strong>IMPORTANT: The test builder has to be annotated with <code>#[must_use]</code>.</strong> You may want also want to accompany that with the optional <code>#[deny(warnings)]</code>.</p>
+<p>You see: given the above design, it&rsquo;s all too easy to forget to call <code>run()</code> on the test builder&mdash;and if you forget to do that, the test will do nothing and will always pass. That&rsquo;s too risky for test code. Fortunately, by using the <code>#[must_use]</code> annotation on the builder type, the compiler will catch such problems.</p>
+<p>To witness: if we remove the <code>run()</code> call from any of the tests above and try to build:</p>
+<div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">error: unused `SumAllTest` that must be used
+  --&gt; src/tests.rs:33:5
+   |
+33 |     SumAllTest::expect(0);
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+</code></pre></div><p>Rust fails the build and tells us that we forgot to consume the builder object. There is no way we can forget to call <code>run()</code> once we have initialized a <code>SumAllTest</code> object, so the test code will always be exercised.</p>
+<hr>
+<p>What do you think? Interesting? Problematic?</p>
+<p>For a more realistic example, check out <a href="https://github.com/jmmv/endbasic/blob/bd15aa4f2ff44c7491e5890976725ddae465d5d6/core/src/console.rs#L703">EndBASIC <code>read_line</code>&rsquo;s own tests</a>.</p></article>
+            </div>
+          </div>
+
+          <div class="container post-links post-links-action">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Want more posts like this one? Take a moment to subscribe!</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 text-center">
+                <form class="feedburner form-horizontal"
+                      action="https://feedburner.google.com/fb/a/mailverify"
+                      method="post"
+                      target="popupwindow"
+                      onsubmit="feedburnerSubmit()"> 
+                  <input type="text" name="email"
+                         placeholder="Type email, press enter"
+                        class="form-control input-sm"/>
+                  <input type="hidden" value="jmmv" name="uri"/>
+                  <input type="hidden" name="loc" value="en_US"/>
+                </form>
+              </div>
+              <div class="col-md-3 text-center">
+                <p>
+                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+                    <img src="/images/badges/Twitter_logo_blue_32.png" alt="Follow @jmmv on Twitter">
+                  </a>
+                </p>
+              </div>
+              <div class="col-md-3 text-center">
+                <p><a href="/feed.xml"><img
+                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links post-links-action">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Enjoyed this article? Spread the word or join the ongoing discussion!</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Using&#43;the&#43;builder&#43;pattern&#43;to&#43;define&#43;test&#43;scenarios&amp;url=https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html">
+                  <img src="/images/badges/reddit.png"
+                       alt="Reddit logo"
+                       width="64" height="64">
+                  <br>
+                  <strong>Share on Reddit</strong>
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Using&#43;the&#43;builder&#43;pattern&#43;to&#43;define&#43;test&#43;scenarios&amp;u=https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html">
+                  <img src="/images/badges/ycombinator.png"
+                       alt="Hacker News logo"
+                       width="64" height="64">
+                  <br>
+                  <strong>Share on Hacker News</strong>
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Using&#43;the&#43;builder&#43;pattern&#43;to&#43;define&#43;test&#43;scenarios&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html&#43;%E2%80%94&#43;cc&#43;%40jmmv">
+                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
+                       alt="Twitter logo"
+                       width="64" height="64">
+                  <br>
+                  <strong>Share on Twitter</strong>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2020/11/endbasic-0.3.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span></span>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col">
+    <h2>Subscribe</h2>
+
+    <div class="row">
+      <div class="col-sm-6 text-center">
+        <p>
+          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+            <img src="/images/badges/Twitter_logo_blue_32.png" alt="Follow @jmmv on Twitter">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-6 text-center">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <script>
+      function feedburnerSubmit() {
+        window.open('https://feedburner.google.com/fb/a/mailverify?uri=jmmv', 'popupwindow', 'scrollbars=yes,width=550,height=520');
+        gtag('event', 'sign_up', {'event_category': 'engagement', 'event_label': 'feedburner', 'value': 1 });
+        return true;
+      }
+    </script>
+
+    <form class="feedburner form-horizontal"
+          action="https://feedburner.google.com/fb/a/mailverify"
+          method="post"
+          target="popupwindow"
+          onsubmit="feedburnerSubmit()">
+      <input type="text" name="email"
+        placeholder="Type email, press enter"
+        class="form-control input-sm"/>
+      <input type="hidden" value="jmmv" name="uri"/>
+      <input type="hidden" name="loc" value="en_US"/>
+      <p>
+        <small>Subscription by
+        <a href="https://feedburner.google.com"
+        target="_blank">FeedBurner</a></small>
+      </p>
+    </form>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
+      
+        <li><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
+      
+        <li><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
+      
+        <li><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
+      
+        <li><a href="/2020/04/hello-endbasic.html">Hello, EndBASIC!</a></li>
+      
+      <li><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (33)
+        <ul id="archive-year-2020" class="collapse">
+        
+          
+          <li><a href="/archive.html#2020-12">December 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
+</div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2020 Julio Merino</p>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
+
+<script>
+$('article :header').each(function() {
+  var attr = $(this).attr('id');
+  if (typeof attr !== typeof undefined && attr !== false) {
+    $(this).append('<a class="anchor" href="#' + $(this).context.id + '">' +
+      '<img src="/octicons/link.svg" aria-hidden="true">' +
+      '</a>')
+  }
+})
+</script>
+
+<script>
+$("blockquote").addClass("blockquote");
+$("pre.chroma").addClass("pre-scrollable");
+
+$("p:contains('NOTE: ')").addClass("callout callout-info");
+$("p:contains('IMPORTANT: ')").addClass("callout callout-info");
+$("p:contains('WARNING: ')").addClass("callout callout-warning");
+$("p:contains('UPDATE (')").addClass("callout callout-warning");
+$("p:contains('DANGER: ')").addClass("callout callout-danger");
+$("p:contains('DISCLAIMER: ')").addClass("callout callout-danger");
+</script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-63557333-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-63557333-1');
+</script>
+
+  </body>
+</html>
