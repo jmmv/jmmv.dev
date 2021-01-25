@@ -189,7 +189,7 @@ Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, insta
 <p>Maybe the second sandbox had paths pointing into the first sandbox? Unlikely, but that kind of dependency would explain the problem. Here is where I instrumented (<em>cough</em> added <code>printf</code>s <em>cough</em>) Bazel to show the reconfiguration requests sent to sandboxfs. And, of course, the second sandbox had no references to the first sandbox. How could they possibly interfere with each other then?</p>
 <h1 id="a-performance-optimization-in-sandboxfs">A performance optimization in sandboxfs</h1>
 <p>Let&rsquo;s take a detour from debugging.</p>
-<p>An important thing to be know here is that sandboxfs comes with a performance optimization that avoids having to re-read the same toolchains from disk on each action.</p>
+<p>An important thing to know here is that sandboxfs comes with a performance optimization that avoids having to re-read the same toolchains from disk on each action.</p>
 <p>The way this works is the following: when a file is mapped at two different locations within the sandboxfs mount point, sandboxfs preserves the same inode number for the two instances of the file&mdash;hereby simulating hard links. This is done for the duration of the sandboxfs instance, even if a file goes through various map and unmap operations.</p>
 <p>In our particular case, the whole JVM is mapped into each action&rsquo;s subdirectory. If we look into the sandboxfs instance with <code>ls -i</code>, we see something like this:</p>
 <pre><code>25 .../sandboxfs/1/external/remotejdk11_macos/bin/java
