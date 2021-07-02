@@ -30,7 +30,7 @@ This theory applies mostly to tests that verify infrastructure software like ser
   <meta property="og:description" content="My latest developer productivity rant thesis is that integration tests should be written in the exact same language as the thing they test. Specifically, not shell.
 This theory applies mostly to tests that verify infrastructure software like servers or command line tools. It is too easy to fall into the trap of using the shell because it feels like the natural choice to interact with tools. But I argue that this is a big mistake that hurts the long-term health of the project, and once trapped, it&amp;rsquo;s hard to escape.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/03/bazel-tests-in-java-part-1.html">
 
@@ -40,7 +40,7 @@ This theory applies mostly to tests that verify infrastructure software like ser
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -207,7 +207,7 @@ This theory applies mostly to tests that verify infrastructure software like ser
 <p>Of course this is a fixable problem: we could come up with better abstractions in the testing framework, but doing so in shell is futile because of the reduced number of primitives available to construct high-level abstractions and the easiness by which global state leaks.</p>
 <h2 id="what-is-the-shell-anyway-a-non-portable-beast-that-is">What is the shell anyway? A non-portable beast, that is</h2>
 <p>The &ldquo;shell&rdquo; is a very broad term and, when treated as such, is full of pitfalls. I&rsquo;ve been avoiding to mention the fact that Bazel requires Bash, not a standard shell&hellip; so it&rsquo;s time cover this.</p>
-<p>What variant of the shell are we talking about: POSIX, Korn, Bash&hellip; Zsh? Each implementation supports different features, some of which are obvious (<code>[</code> vs. <code>[[</code>) and some of which are subtle (<code>[</code>&rsquo;s support of <code>==</code> or lack thereof). It&rsquo;s hard to know what&rsquo;s portable and what is not.</p>
+<p>What variant of the shell are we talking about: POSIX, Korn, Bash&hellip; Zsh? Each implementation supports different features, some of which are obvious (<code>[</code> vs. <code>[[</code>) and some of which are subtle (<code>[</code>'s support of <code>==</code> or lack thereof). It&rsquo;s hard to know what&rsquo;s portable and what is not.</p>
 <p>Do we care about the shell version? Different versions implement different features and they come with different bugs. The shining pain point here is macOS&rsquo;s Bash: it&rsquo;s an ancient version that contains serious bugs, at least one of which prevents writing shell with &ldquo;strict mode&rdquo; turned on because well-formed code fails to parse under certain circumstances.</p>
 <p>And what about the supporting tools? The shell is a cryptic language with a limited amount of built-in functionality. The vast majority of actions require invoking external commands (e.g. <code>cp</code>, <code>grep</code>, <code>find</code>), which is slow and prone to portability problems: where do the tools live? What flags do they support? Do the flags behave the same across systems? &hellip; are they even external? E.g. <code>echo</code> is both a built-in and an external tool, and they are not guaranteed to be compatible within the same system!</p>
 <p>All of these make writing readable and robust shell code exceeding difficult. And they also make writing portable shell almost impossible: one must have excellent knowledge of all the shell variants and it&rsquo;s increasingly hard to become knowledgeable in this area: the world in general assumes that &ldquo;Bash and shell&rdquo; are synonyms so there is little documentation about the differences (and the documentation that exists is <a href="http://www.gnu.org/software/autoconf/manual/autoconf.html#Programming-in-M4sh">not obvious</a>).</p>

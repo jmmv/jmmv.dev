@@ -30,7 +30,7 @@
   <meta property="og:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
  The Apache HTTP Server is the most popular web server due to its functionality, stability, and maturity.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2005/10/lightweight-web-serving-with-thttpd.html">
 
@@ -40,7 +40,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -250,7 +250,7 @@ The suggested group is &quot;www&quot;.
 ===========================================================================
 </code></pre><p>Note that the exact output depends on your mk.conf settings. I used all the default settings, so the program installed under <code>/usr/pkg/</code> with its configuration file stored as <code>/usr/pkg/etc/thttpd.conf</code>. Keep the correct paths in mind before proceeding.</p>
 <h1 id="creating-the-server-directory">Creating the Server Directory</h1>
-<p>Now that the server is installed, it is time to configure it. The very first thing to change is the documents' root directory (<code>DocumentRoot</code>, as Apache httpd calls it). The default is <code>/usr/pkg/share/thttpd/</code>, a far from optimal value in most cases due to its dynamic nature. (Remember that <code>/usr/</code> is often mounted read-only.) A better place is, for example, <code>/home/www/</code>, so change the configuration to use this directory instead. Open the configuration file (<code>/usr/pkg/etc/thttpd.conf</code>) in your favorite editor and change the dir variable to point to the correct directory, like this:</p>
+<p>Now that the server is installed, it is time to configure it. The very first thing to change is the documents&rsquo; root directory (<code>DocumentRoot</code>, as Apache httpd calls it). The default is <code>/usr/pkg/share/thttpd/</code>, a far from optimal value in most cases due to its dynamic nature. (Remember that <code>/usr/</code> is often mounted read-only.) A better place is, for example, <code>/home/www/</code>, so change the configuration to use this directory instead. Open the configuration file (<code>/usr/pkg/etc/thttpd.conf</code>) in your favorite editor and change the dir variable to point to the correct directory, like this:</p>
 <pre><code>dir=/home/www
 </code></pre><p>Once this is done, create the directory itself and a simple page inside it:</p>
 <pre><code># mkdir /home/www
@@ -284,7 +284,7 @@ The suggested group is &quot;www&quot;.
 </code></pre><h1 id="enabling-the-server">Enabling the Server</h1>
 <p>Now you are ready to start the server, usually by using the provided rc.d script. First, copy this script to the appropriate system directory, <code>/etc/rc.d/</code>, so that it is available at boot time:</p>
 <pre><code># cp /usr/pkg/share/examples/rc.d/thttpd /etc/rc.d/
-</code></pre><p>Once it is in place, enable it. Now is another opportunity to make things a bit better, security-wise: tell the daemon to chroot itself into the documents' root directory after startup. This is easy to do on NetBSD by passing the <code>-r</code> flag to the daemon. With this in mind, modify <code>/etc/rc.conf</code>:</p>
+</code></pre><p>Once it is in place, enable it. Now is another opportunity to make things a bit better, security-wise: tell the daemon to chroot itself into the documents&rsquo; root directory after startup. This is easy to do on NetBSD by passing the <code>-r</code> flag to the daemon. With this in mind, modify <code>/etc/rc.conf</code>:</p>
 <pre><code># cat &gt;&gt;/etc/rc.conf
 echo thttpd=YES
 echo thttpd_flags=-r
@@ -294,7 +294,7 @@ echo thttpd_flags=-r
 </code></pre><p>Before continuing, it&rsquo;s helpful to verify that everything works correctly. First connect to <code>http://localhost/</code> (note that this link will work only if you run this from the machine on which you installed thttpd), and check that the web page you wrote before appears. Secondly, make sure that the <code>-r</code> flag was effective; you do not want to discover several months later that what you thought was chrooted in fact was not. Check this with help from the <code>fstat</code> command, whose purpose is to show the status of all open files. Search for the root file used by the daemon:</p>
 <pre><code># fstat | grep ^thttpd | grep root
 thttpd   thttpd      1206 root /home    2351520 drwxrwxr-x 512 r
-</code></pre><p>What the output shows is that the command is being executed under the directory pointed to by the <code>2351520</code> inode, living under the <code>/home</code> filesystem (which is a separate partition). To verify that the inode number belongs to your documents' root directory, use the <code>ls</code> utility:</p>
+</code></pre><p>What the output shows is that the command is being executed under the directory pointed to by the <code>2351520</code> inode, living under the <code>/home</code> filesystem (which is a separate partition). To verify that the inode number belongs to your documents&rsquo; root directory, use the <code>ls</code> utility:</p>
 <pre><code># ls -lidF /home/www/
 2351520 drwxrwxr-x  2 root  www  512 Jun  4 16:35 /home/www/
 </code></pre><p>The number on the first column matches the inode number shown by <code>fstat</code>. This daemon is chrooted inside the appropriate directory.</p>

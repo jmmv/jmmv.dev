@@ -30,7 +30,7 @@ The journey to this first release has been a long one. sandboxfs was first conce
   <meta property="og:description" content="I am pleased to announce that the first release of sandboxfs, 0.1.0, is finally here! You can download the sources and prebuilt binaries from the 0.1.0 release page and you can read the installation instructions for more details.
 The journey to this first release has been a long one. sandboxfs was first conceived over two years ago, was first announced in August 2017, showed its first promising results in April 2018, and has been undergoing a rewrite from Go to Rust.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/02/sandboxfs-0-1-0.html">
 
@@ -40,7 +40,7 @@ The journey to this first release has been a long one. sandboxfs was first conce
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -176,7 +176,7 @@ The journey to this first release has been a long one. sandboxfs was first conce
 </code></pre></div><p>which would create a hierarchy under <code>/tmp/mnt</code>. Under that tree, all writes would go to <code>/tmp/scratch</code> except for the <code>/usr/bin</code>, <code>/usr/include</code> and <code>/usr/lib</code> subdirectories which would be read-only and correspond to the real directories at root. With this, you could constrain a compiler under <code>/tmp/mnt</code> (say, using chroot) and have it see only the things you allowed it to see.</p>
 <p>So far so good. But the real key feature of sandboxfs is that it provides a &ldquo;side channel&rdquo; to reconfigure the mappings at runtime without having to remount the file system. This is critical for the Bazel use case described below as is what allows us to achieve good performance.</p>
 <h1 id="use-cases">Use cases</h1>
-<p>sandboxfs was primarily targeted at making <a href="https://bazel.build/">Bazel</a>&rsquo;s sandboxing mechanism faster. The Bazel build system allows each build action to be isolated from the rest of the system, and to do so, it currently constructs a sandbox using symlinks. The problems are that: symlinks do not scale because they require a system call for each input, and symlinks are &ldquo;unsafe&rdquo; because some tools like to use their real paths (possibly &ldquo;escaping&rdquo; the sandbox). You can read much more about this topic in the <a href="https://blog.bazel.build/2017/08/25/introducing-sandboxfs.html">Introducing sandboxfs</a> post.</p>
+<p>sandboxfs was primarily targeted at making <a href="https://bazel.build/">Bazel</a>&lsquo;s sandboxing mechanism faster. The Bazel build system allows each build action to be isolated from the rest of the system, and to do so, it currently constructs a sandbox using symlinks. The problems are that: symlinks do not scale because they require a system call for each input, and symlinks are &ldquo;unsafe&rdquo; because some tools like to use their real paths (possibly &ldquo;escaping&rdquo; the sandbox). You can read much more about this topic in the <a href="https://blog.bazel.build/2017/08/25/introducing-sandboxfs.html">Introducing sandboxfs</a> post.</p>
 <p>But there are more use cases than this. The one that I&rsquo;d like to get to at some point, and the one that really sparked the idea for this project even before Bazel, is pkg_comp. <a href="https://github.com/jmmv/pkg_comp">pkg_comp</a> uses chroot sandboxes to build pkgsrc packages in and, at the moment, constructs the contents of the chroot using either bindfs or <code>mount_null</code> depending on the platform. Instantiating many mount points is problematic (e.g. each mount operation can be slow and OSXFUSE has a limit on the number of mount points), and fragile. Using sandboxfs would let pkg_comp instantiate a single mount point, resolving these issues.</p>
 <p>Lastly, you can imagine this being useful for cases where you have to generate a file system that resembles a &ldquo;real system&rdquo; in which to run contained commands or services &ndash; i.e. the root file system of a container. Using sandboxfs, you can create such a view very cheaply, both in time and in disk space.</p>
 <h1 id="rust-rewrite">Rust rewrite</h1>

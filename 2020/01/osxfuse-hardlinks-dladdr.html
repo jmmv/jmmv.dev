@@ -32,7 +32,7 @@ Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, insta
 It&amp;rsquo;s already 2020 and I&amp;rsquo;m only 17 days late in writing a first post. I was planning to start with an opinion article, but as its draft is taking longer than I wanted&amp;hellip; I&amp;rsquo;ll present you the story of a recent crazy bug that has kept me busy for the last couple of days.
 Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, install sandboxfs and build Bazel with sandboxfs enabled, like this:">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/01/osxfuse-hardlinks-dladdr.html">
 
@@ -42,7 +42,7 @@ Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, insta
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -207,7 +207,7 @@ Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, insta
 <p>But why? As far as I can tell, this feature had never been a problem. In fact, Bazel could build itself on top of sandboxfs not long ago. What has changed?</p>
 <h1 id="narrowing-the-problem-down">Narrowing the problem down</h1>
 <p>Let&rsquo;s get back to debugging.</p>
-<p>Up to this point, we know that sandboxfs' inode sharing is causing problems&mdash;so we know how to workaround the problem. But why is this a problem? We still have zero information on why this might be causing the JVM to crash.</p>
+<p>Up to this point, we know that sandboxfs&rsquo; inode sharing is causing problems&mdash;so we know how to workaround the problem. But why is this a problem? We still have zero information on why this might be causing the JVM to crash.</p>
 <p>To continue our debugging session, I ran <code>dtruss</code> over the failing binary:</p>
 <pre><code>[...]
 getattrlist(&quot;/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2\0&quot;, 0x112C81158, 0x700000D90120)                 = 0 0
@@ -267,7 +267,7 @@ Target 0: (java) stopped.
     frame #5: 0x00007fff6664083b libsystem_pthread.dylib`thread_start + 15
 </code></pre><p>From these, however, we can get the name of the crashing function: <code>os::init_system_properties_values</code>. And OpenJDK is open source, so with a bit of digging I reached <a href="https://github.com/AdoptOpenJDK/openjdk-jdk11/blob/master/src/hotspot/os/bsd/os_bsd.cpp"><code>os_bsd.cpp</code></a>, which indeed calls into <code>strrchr</code> and it&rsquo;s most likely doing so on a <code>nullptr</code> returned by <code>os::jvm_path</code>.</p>
 <p>Yet still not enough information. If the process had been easier, I&rsquo;d have rebuilt the JVM with debugging symbols and traced through the debugger&mdash;but it&rsquo;s not easy, so I was left with visual code inspection, which led to nowhere. So then I thought that maybe I could dig further with <code>lldb</code>.</p>
-<p>And indeed I could. I spent a bit of time figuring out <code>lldb</code>&rsquo;s capabilities, and found that I could disassemble the whole function, dump registers, and print memory positions<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>. It wasn&rsquo;t trivial to make sense of the data because I had to read about x86-64 calling conventions (never had to use them before) and figure out the right incarnation of commands to get to the details I needed. But eventually I got them. I got to the <code>os::dll_address_to_library_name</code> function, which calls into the system&rsquo;s <code>dlattr(3)</code>, and which was returning an invalid path: for the JVM executed from <code>.../sandboxfs/2</code>, the <code>dlinfo.dli_fname</code> field contained a path into <code>.../sandboxfs/1</code>. What the hell.</p>
+<p>And indeed I could. I spent a bit of time figuring out <code>lldb</code>'s capabilities, and found that I could disassemble the whole function, dump registers, and print memory positions<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>. It wasn&rsquo;t trivial to make sense of the data because I had to read about x86-64 calling conventions (never had to use them before) and figure out the right incarnation of commands to get to the details I needed. But eventually I got them. I got to the <code>os::dll_address_to_library_name</code> function, which calls into the system&rsquo;s <code>dlattr(3)</code>, and which was returning an invalid path: for the JVM executed from <code>.../sandboxfs/2</code>, the <code>dlinfo.dli_fname</code> field contained a path into <code>.../sandboxfs/1</code>. What the hell.</p>
 <p>We can now explain the crash: we get a path to a file that doesn&rsquo;t exist any longer (because the preceding action&rsquo;s sandbox was cleared) and this code is not prepared to deal with such error condition. Boom. But still, why?</p>
 <h1 id="minimal-reproduction-steps">Minimal reproduction steps</h1>
 <p>At this point I knew where the problem was, but any attempts at further debugging were made annoying by the indirections introduced by Bazel during execution and by the JVM&rsquo;s complex code.</p>
@@ -328,7 +328,7 @@ $ ( cd /tmp/mnt/b &amp;&amp; ./a.out )
 </ol>
 <p>Note how the second invocation reports the path to the library from the first invocation. Tracing the FUSE calls implies that this should not be happening because the calls happen on the right directories and inodes, so that path is coming from who knows where&hellip;</p>
 <p>I imagined leaving open files behind to cause this kind of trouble, but <code>lsof</code> doesn&rsquo;t report <code>a.out</code> nor <code>libaddr.dylib</code> as open anywhere in the system between the two executions.</p>
-<p>Disabling <code>dyld</code>&rsquo;s own caches, flushing the kernels file cache via <code>purge</code>, and disabling all FUSE caches at mount time didn&rsquo;t prevent the problem either.</p>
+<p>Disabling <code>dyld</code>'s own caches, flushing the kernels file cache via <code>purge</code>, and disabling all FUSE caches at mount time didn&rsquo;t prevent the problem either.</p>
 <p>As a last attempt, I tried to reproduce this by setting up the scenario above using hard links on the &ldquo;real&rdquo; disk (on top of APFS) without luck. I also tried to expose this set up via <a href="https://bindfs.org/">bindfs</a>, but it turns out that bindfs doesn&rsquo;t expose the underlying hardlinks as such&hellip; so no luck in ruling out FUSE.</p>
 <p>Yet, the only conclusion is that the kernel is tracking this information. And because the problem doesn&rsquo;t show up with APFS, it most likely is the OSXFUSE kext&rsquo;s fault.</p>
 <h1 id="root-cause">Root cause</h1>

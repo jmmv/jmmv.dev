@@ -27,12 +27,12 @@
 
   <meta name="description" content="As the Wikipedia puts it (emphasis mine):
  An assertion is a predicate (a true–false statement) placed in a program to indicate that the developer thinks that the predicate is always true at that place. If an assertion evaluates to false at run-time, an assertion failure results, which typically causes execution to abort.
- On the programmer&amp;rsquo;s side, assertions are invaluable in writing readable code: they provide a mechanism with which developers can explicitly state their thoughts and expectations in the form of code instead of comments.">
+ On the programmer&amp;lsquo;s side, assertions are invaluable in writing readable code: they provide a mechanism with which developers can explicitly state their thoughts and expectations in the form of code instead of comments.">
   <meta property="og:description" content="As the Wikipedia puts it (emphasis mine):
  An assertion is a predicate (a true–false statement) placed in a program to indicate that the developer thinks that the predicate is always true at that place. If an assertion evaluates to false at run-time, an assertion failure results, which typically causes execution to abort.
- On the programmer&amp;rsquo;s side, assertions are invaluable in writing readable code: they provide a mechanism with which developers can explicitly state their thoughts and expectations in the form of code instead of comments.">
+ On the programmer&amp;lsquo;s side, assertions are invaluable in writing readable code: they provide a mechanism with which developers can explicitly state their thoughts and expectations in the form of code instead of comments.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2013/10/production-software-be-wary-of.html">
 
@@ -42,7 +42,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -217,8 +217,8 @@ Production software</b> series</a>.</i></p>
 <blockquote>
 <p>An <strong>assertion</strong> is a predicate (a true–false statement) placed in a program to indicate that the developer <em>thinks</em> that the predicate is always true at that place. If an assertion evaluates to false at run-time, an assertion failure results, <strong>which typically causes execution to abort</strong>.</p>
 </blockquote>
-<p>On the <em>programmer</em>&rsquo;s side, assertions are invaluable in <a href="http://julipedia.meroh.net/search/label/readability">writing readable code</a>: they provide a mechanism with which developers can explicitly state their thoughts and expectations <a href="/2013/06/readability-avoid-comments.html">in the form of code instead of comments</a>.</p>
-<p>However, on the <em>deployer and sysadmin</em>&rsquo;s side, misplaced assertions can easily turn into a massive, possibly distributed outage. What should be a controlled failure in the face of invalid input or unpredicted state, an assertion can easily exacerbate those two problems by making the deployed application go &ldquo;poof&rdquo; without notice.</p>
+<p>On the <em>programmer</em>&lsquo;s side, assertions are invaluable in <a href="http://julipedia.meroh.net/search/label/readability">writing readable code</a>: they provide a mechanism with which developers can explicitly state their thoughts and expectations <a href="/2013/06/readability-avoid-comments.html">in the form of code instead of comments</a>.</p>
+<p>However, on the <em>deployer and sysadmin</em>&lsquo;s side, misplaced assertions can easily turn into a massive, possibly distributed outage. What should be a controlled failure in the face of invalid input or unpredicted state, an assertion can easily exacerbate those two problems by making the deployed application go &ldquo;poof&rdquo; without notice.</p>
 <p>The basic rule of thumb is: <strong>never ever use assertions to validate user input</strong>. By <em>user input</em> we understand any data that comes from outside the program, including a configuration or input file, the parameters embedded in an URL query or the arguments provided in an RPC. User input always needs some form of sanitization and such checks must be done in a way that allows returning controlled error codes to the caller. Assertions don&rsquo;t allow this kind of control so they are not suitable. In fact, assertions present two problems in this case: if assertions are enabled, the program will <em>crash</em> when facing invalid input; and if assertions are disabled, the program will perform no validation of the input! Both situations are undesirable.</p>
 <p><em>&ldquo;But not all assertions are about user input!&quot;</em> I hear you say. True. But, first of all, ask yourself again if the assertion floating your mind really is not about user input&hellip; sure it&rsquo;s not? Really? OK, then your assertion might <em>still</em> be a problem because it can still be triggered. Remember: any assertion failure will cause the whole process to exit abruptly.</p>
 <p>Why are all these things scary, though? Because somebody, intentionally or unintentionally, could cause all your servers to crash at once. Suppose you have, by mistake, used an assertion to ensure that a given integer in an input parameter of an RPC call is within some bounds. If the attacker can send an RPC with an integer out of bunds to all of your servers, the servers will immediately crash as soon as they start performing input data validation. And note that this user need not talk to all of your servers directly: maybe he is just talking to a frontend server which later just distributes the &ldquo;query of death&rdquo; to a large subset of backend services. What should have happened here, however, is that the server should have spotted the invalid data and returned an error to the attacker.</p>

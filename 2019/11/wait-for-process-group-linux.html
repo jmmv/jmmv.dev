@@ -30,7 +30,7 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
   <meta property="og:description" content="In the previous post, we saw why waiting for a process group to terminate is important (at least in the context of Bazel), and we also saw why this is a difficult thing to do in a portable manner. So today, let&amp;rsquo;s dive into how to do this properly on a Linux system.
 On Linux, we have two routes: using the child subreaper feature or using PID namespaces. We&amp;rsquo;ll focus on the former because that&amp;rsquo;s what we&amp;rsquo;ll use to fix (#10245) the process wrapper1, and because they are sufficient to fully address our problem.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2019/11/wait-for-process-group-linux.html">
 
@@ -40,7 +40,7 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -166,7 +166,7 @@ On Linux, we have two routes: using the child subreaper feature or using PID nam
 <p>But before going into what the child subreaper feature does, let&rsquo;s recap what happens to orphaned processes.</p>
 <p>When a process terminates, the kernel must keep some of its information around&mdash;the exit code, among other details&mdash;until its parent collects such details. The process is said to be in the <strong>zombie</strong> state at this point because the process still exists on the system tables but is dead. When the parent collects the details of the process via a call to <code>wait(2)</code>, the kernel doesn&rsquo;t need to keep the state of the process any longer and the zombie disappears.</p>
 <p>Processes also have a pointer to their parent (the parent PID, or PPID). So&hellip; what happens if such parent becomes a zombie and then disappears? Its children become <strong>orphan</strong>, and they must be assigned to a new parent to keep the PPID valid. The traditional solution in Unix is to give those processes to PID 1, or <code>init(8)</code>, which in turn takes care of clearing their state when they terminate. The way the <code>init(8)</code> daemon does this is with a &ldquo;reaper&rdquo; loop that repeatedly calls <code>wait(2)</code> to discard the state of these adopted processes when they terminate.</p>
-<p>The <strong>child subreaper</strong> feature allows us to change the process that becomes the new parent. By using this feature on a given process, we tell the kernel that, when a grandchild of that process becomes orphan, we want to take ownership of it. We have essentially replaced <code>init(8)</code>&rsquo;s responsibilities for a subset of the process tree.</p>
+<p>The <strong>child subreaper</strong> feature allows us to change the process that becomes the new parent. By using this feature on a given process, we tell the kernel that, when a grandchild of that process becomes orphan, we want to take ownership of it. We have essentially replaced <code>init(8)</code>'s responsibilities for a subset of the process tree.</p>
 <p>So let&rsquo;s go back to our sample code to fix it:</p>
 <div class="src">
   

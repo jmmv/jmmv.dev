@@ -28,7 +28,7 @@
   <meta name="description" content="In the previous post, we saw how .d directories permit programmatic edits to system-wide configuration with ease. But this same concept can be applied to other kinds of tracking. Let&amp;rsquo;s dive into a few examples ranging from desktop menu entries to the package manager&amp;rsquo;s database itself.">
   <meta property="og:description" content="In the previous post, we saw how .d directories permit programmatic edits to system-wide configuration with ease. But this same concept can be applied to other kinds of tracking. Let&amp;rsquo;s dive into a few examples ranging from desktop menu entries to the package manager&amp;rsquo;s database itself.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/08/database-directories.html">
 
@@ -38,7 +38,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -159,7 +159,7 @@
           <div class="row">
             <div class="col">
               
-              <article><p>In &ldquo;<a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a>&rdquo;, we learned how <code>.d</code> directories permit programmatic edits to system-wide configuration with ease. But this same concept&mdash;using directories with many individual files within instead of a single gigantic file&mdash;can be applied to other kinds of system-wide tracking.</p>
+              <article><p>In &ldquo;<a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a>&quot;, we learned how <code>.d</code> directories permit programmatic edits to system-wide configuration with ease. But this same concept&mdash;using directories with many individual files within instead of a single gigantic file&mdash;can be applied to other kinds of system-wide tracking.</p>
 <p>I know it&rsquo;s a stretch, but if it helps you in these modern times, you can think of a directory as a NoSQL database or a key/value store where each file represents a row/key and its contents represent the value of that entity. Adding and removing elements from the &ldquo;database&rdquo; is a matter of creating and deleting files, respectively, and retrieving elements can be done either by key lookup or by sequential scanning of the directory&rsquo;s contents (though be aware that file systems don&rsquo;t necessarily store entries in lexicographical order!).</p>
 <p>We can take advantage of this core idea to represent system-wide databases while allowing them to be programmatically <em>and</em> concurrently mutated with ease. If we do this, just like we did for configuration files before, the packaging system can create and delete files on a package basis without having to do any file edits.</p>
 <p>Easy, right? Yes, there is nothing more to it than this! But to keep you entertained, let me cover a bunch of different examples to see how this plays out in practice.</p>
@@ -265,7 +265,7 @@ udevdir=${udev_dir}
 <pre><code>debian:~&gt; pkg-config --variable=udevdir udev
 /lib/udev
 debian:~&gt;
-</code></pre><p>The elephant in the room is &ldquo;<em>why <code>pkgconfig</code></em>&rdquo;. After all, your system almost-certainly has its own package management tool. dpkg in Debian and rpm in Fedora (RedHat back then, actually) could have also been used to query details about installed system components. I&rsquo;m guessing it was easier to introduce a separate system years ago that worked across systems than trying to thread this information through all possible package managers in all Linux distributions in a way that was easy to query.</p>
+</code></pre><p>The elephant in the room is &ldquo;<em>why <code>pkgconfig</code></em>&quot;. After all, your system almost-certainly has its own package management tool. dpkg in Debian and rpm in Fedora (RedHat back then, actually) could have also been used to query details about installed system components. I&rsquo;m guessing it was easier to introduce a separate system years ago that worked across systems than trying to thread this information through all possible package managers in all Linux distributions in a way that was easy to query.</p>
 <h1 id="package-metadata">Package metadata</h1>
 <p>Speaking about package managers, these also tend to be a notable adopter of the &ldquo;directories as databases&rdquo; concept. To find a prime example, we can look at pkgsrc&rsquo;s database of installed packages. In my macOS system this lives under <code>/opt/pkg/libdata/pkgdb/</code>. What&rsquo;s inside?</p>
 <pre><code>macos:/opt/pkg/libdata/pkgdb&gt; ls -dF *lib*
@@ -288,7 +288,7 @@ macos:/opt/pkg/libdata/pkgdb&gt;
 <h1 id="going-on-a-tangent-svn-and-git">Going on a tangent: svn and git</h1>
 <p>Version control systems (VCSs) are no exception here, though they are a bit off-topic because they aren&rsquo;t system-wide databases.</p>
 <p>VCSs have also used plain files and directories as their backing store for ages, going back to CVS and possibly more. But let&rsquo;s focus on a couple more modern systems by starting with Subversion.</p>
-<p>If memory serves well, the first versions of Subversion used an actual database, BDB, to store the repository. This was a huge departure from CVS' plain files model and caused discomfort to system administrators: &ldquo;What if the database gets corrupted?&rdquo; &ldquo;Can we trust Subversion enough, still in beta, to do the right thing?&rdquo; With CVS, we could do manual file recovery and repository-level hand-edits (common to scrub sensitive data).</p>
+<p>If memory serves well, the first versions of Subversion used an actual database, BDB, to store the repository. This was a huge departure from CVS&rsquo; plain files model and caused discomfort to system administrators: &ldquo;What if the database gets corrupted?&rdquo; &ldquo;Can we trust Subversion enough, still in beta, to do the right thing?&rdquo; With CVS, we could do manual file recovery and repository-level hand-edits (common to scrub sensitive data).</p>
 <p>As a result of this, the Subversion developers wrote <a href="https://svn.apache.org/repos/asf/subversion/trunk/notes/fsfs">FSFS</a>, an alternate backend for their database that uses plain files in a directory. There we have it once again: a directory used as a database! We can easily create one and check its contents for entertainment, but I won&rsquo;t get into the details here:</p>
 <pre><code>debian:~&gt; svnadmin create /tmp/repo &amp;&amp; cd /tmp/repo
 debian:/tmp/repo&gt; ls -F

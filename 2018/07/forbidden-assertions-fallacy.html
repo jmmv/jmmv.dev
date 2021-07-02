@@ -30,7 +30,7 @@ Errors are a controlled mechanism by which the program propagates details about 
   <meta property="og:description" content="There are two ways to handle abnormal conditions in a program: errors and assertions.
 Errors are a controlled mechanism by which the program propagates details about a faulty condition up the call chain—be it with explicit error return statements or with exceptions. Errors must be used to validate all conditions that might be possible but aren&amp;rsquo;t valid given the context. Examples include: sanitizing any kind of input (as provided by the user or incoming from the network), and handling error codes from system calls or libraries.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2018/07/forbidden-assertions-fallacy.html">
 
@@ -40,7 +40,7 @@ Errors are a controlled mechanism by which the program propagates details about 
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -168,7 +168,7 @@ Errors are a controlled mechanism by which the program propagates details about 
 <p>To illustrate the problem assertions can cause, let&rsquo;s talk about a specific <strong>query of death (QOD)</strong> problem.</p>
 <h1 id="the-disaster">The disaster</h1>
 <p>Let&rsquo;s consider a distributed system composed of a single frontend controller and a set of backend servers, each responsible for a different part of a dataset. The frontend server receives user requests and redirects them to the backends. One of such requests is a textual search query that requires the frontend to contact <em>all</em> backends for processing.</p>
-<p>Let&rsquo;s also consider that the programmer has made a little mistake in the <em>backend</em>&rsquo;s query serving path and has used an assertion to validate the contents of the request from the frontend. After all, we trust the frontend, so the contents of the request must be valid, right? But&hellip; the request contains the original query that the user provided so the assertion triggers when this query is malformed.</p>
+<p>Let&rsquo;s also consider that the programmer has made a little mistake in the <em>backend</em>&lsquo;s query serving path and has used an assertion to validate the contents of the request from the frontend. After all, we trust the frontend, so the contents of the request must be valid, right? But&hellip; the request contains the original query that the user provided so the assertion triggers when this query is malformed.</p>
 <p>Now, what happens when a user sends an invalid query, be it malicious or not? The frontend happily redirects the query to all the backends and all the backends trip over the assertion&hellip; crashing in unison. Oops. We have a correlated failure against which no replication would have helped. What&rsquo;s worse: if you have sufficiently smart traffic routing, your routing system might determine that the cluster has died and decide to redirect the query to a different cluster&hellip; triggering the same failure on a new set of servers. Rinse and repeat. Our innocent assertion has caused a global cascading failure, taking all of our service down.</p>
 <p>Alright, that was bad. You go ahead and write a <a href="https://landing.google.com/sre/book/chapters/postmortem-culture.html">blameless postmortem</a> in which you identify the assertion as the root cause. As a <em>corrective measure</em>, you fix that piece of code to handle the condition with a graceful error. And as a <em>preventive measure</em>, you reassess the validity of all assertions in your codebase and then <strong>decide to forbid assertions in the serving path, project-wide</strong>.</p>
 <h1 id="the-fallacy">The fallacy</h1>

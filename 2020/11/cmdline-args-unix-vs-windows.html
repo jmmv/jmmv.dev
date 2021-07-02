@@ -28,7 +28,7 @@
   <meta name="description" content="Let&amp;rsquo;s continue our dive into the very interesting topic of how Unix (or Linux or what have you) and Windows differ regarding argument processing. And by that I mean: how a program (the caller) communicates the set of arguments to pass to another program (the callee) at execution time, how the callee receives such arguments, and what are the consequences of each design.">
   <meta property="og:description" content="Let&amp;rsquo;s continue our dive into the very interesting topic of how Unix (or Linux or what have you) and Windows differ regarding argument processing. And by that I mean: how a program (the caller) communicates the set of arguments to pass to another program (the callee) at execution time, how the callee receives such arguments, and what are the consequences of each design.">
   <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.80.0" />
+  <meta name="generator" content="Hugo 0.68.3" />
 
   <meta property="og:url" content="https://jmmv.dev/2020/11/cmdline-args-unix-vs-windows.html">
 
@@ -38,7 +38,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.7aafaa57ba8dcfefc373a22484dc2781e9758f10f56aac02e770e99c49973204.css">
+  <link rel="stylesheet" href="/sass/main.min.10c9d5a1219415137d407d2593046a9c6a42115458f02204a9cf7811b112950c.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -350,7 +350,7 @@ argv[1] = &#39;p*&#39;
 FIND: Parameter format not correct
 </code></pre></div><p>Uh, excuse me? I&rsquo;m convinced many other commands take strings without double quotes when they aren&rsquo;t strictly needed (<code>CD</code> being the obvious example when the path doesn&rsquo;t contain spaces). So why is <code>FIND</code> so finicky about this?</p>
 <p>Well, the answer is probably &ldquo;because MS-DOS did it that way&rdquo;, and the mechanism by which this can be implemented is obvious: the <code>FIND</code> process receives the raw command line as provided by the shell and so can explicitly insist on the double quotes. But&hellip; <em>how</em> is it doing that? As we saw above, the <code>msvcrt</code> runtime does argument splitting before handing control off to <code>main()</code>, and said common code strips out surrounding double quotes. So how is <code>FIND</code> accessing the raw command line?</p>
-<p>Disappointingly, I don&rsquo;t know yet. I <em>know</em> how it <em>could</em> be implemented, but I do not know how exactly <code>FIND</code> does it. I spent a couple of hours tracing through <code>FIND</code>&rsquo;s execution within WinDbgX (with which I had zero experience before this exercise). I looked at ReactOS&rsquo;s <code>FIND</code> (which doesn&rsquo;t seem to reproduce this &ldquo;bug&rdquo;) and <code>msvcrt</code>&rsquo;s implementation without success because I could not confirm any of the leads I encountered. I even looked at <a href="https://github.com/microsoft/MS-DOS/blob/master/v2.0/source/FIND.ASM">the MS-DOS 2.0 assembly version of this code</a>, which confirmed that it did its own argument splitting. But the only thing I can conclude from this investigation is that <code>FIND</code>&rsquo;s <code>main()</code> receives the full command line as a single argument&hellip; and something is happening pre-<code>main</code> to disable splitting, but I can&rsquo;t quite tell what.</p>
+<p>Disappointingly, I don&rsquo;t know yet. I <em>know</em> how it <em>could</em> be implemented, but I do not know how exactly <code>FIND</code> does it. I spent a couple of hours tracing through <code>FIND</code>'s execution within WinDbgX (with which I had zero experience before this exercise). I looked at ReactOS&rsquo;s <code>FIND</code> (which doesn&rsquo;t seem to reproduce this &ldquo;bug&rdquo;) and <code>msvcrt</code>'s implementation without success because I could not confirm any of the leads I encountered. I even looked at <a href="https://github.com/microsoft/MS-DOS/blob/master/v2.0/source/FIND.ASM">the MS-DOS 2.0 assembly version of this code</a>, which confirmed that it did its own argument splitting. But the only thing I can conclude from this investigation is that <code>FIND</code>'s <code>main()</code> receives the full command line as a single argument&hellip; and something is happening pre-<code>main</code> to disable splitting, but I can&rsquo;t quite tell what.</p>
 <p>What I did find were <a href="https://docs.microsoft.com/en-us/cpp/c-runtime-library/link-options?view=msvc-160">more options to configure the <code>msvcrt</code></a>, and among these is one to disable all argument processing. If we use it in our program:</p>
 <div class="highlight"><pre class="chroma"><code class="language-text" data-lang="text">C:\Users\jmmv\test&gt; cl print-args.c /link noarg.obj
 </code></pre></div><p>Then&hellip;</p>
@@ -358,7 +358,7 @@ FIND: Parameter format not correct
 argc = 0
 </code></pre></div><p>which makes <code>main()</code> blind to any input arguments and I&rsquo;m not sure how that would be useful. However, there is the magic <code>_acmdln</code> global variable that does include the raw command line as received by the process, so you could use that to perform any kind of manual splitting if you had to.</p>
 <h1 id="verdict">Verdict</h1>
-<p>The Unix simplicity wins hands down in this case. With its simple approach, the user gets a consistent experience across all programs. On the other hand, Windows' argument processing is crazy talk riddled by what I think are backwards-compatibility hacks.</p>
+<p>The Unix simplicity wins hands down in this case. With its simple approach, the user gets a consistent experience across all programs. On the other hand, Windows&rsquo; argument processing is crazy talk riddled by what I think are backwards-compatibility hacks.</p>
 <p>But let&rsquo;s not forget that Unix is similarly crazy when we get to <em>options</em> parsing: options are plain text arguments and each program must implement its own variant on how they are interpreted. And that&rsquo;s why you end up with programs that take long options prefixed with a single dash and other programs that need two dashes, for example. PowerShell has gotten <a href="/2020/10/powershell-cmdlet-params.html">these details right</a>, but you must stay within the realms of cmdlets for that to be true.</p>
 </article>
             </div>
