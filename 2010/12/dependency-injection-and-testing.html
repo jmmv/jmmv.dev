@@ -25,24 +25,10 @@
 
   
 
-  <meta name="description" content="A coworker just sent me some Python code for review and, among such code, there was the addition of a function similar to:def PathWithCurrentDate(prefix, now=None):
-&#34;&#34;&#34;Extend a path with a year/month/day subdirectory layout.
-Args:
-prefix: string, The path to extend with the date subcomponents.
-now: datetime.date, The date to use for the path; if None, use
-the current date.
-Returns:
-string, The new computed path with the date appended.
-&#34;&#34;&#34;">
-  <meta property="og:description" content="A coworker just sent me some Python code for review and, among such code, there was the addition of a function similar to:def PathWithCurrentDate(prefix, now=None):
-&#34;&#34;&#34;Extend a path with a year/month/day subdirectory layout.
-Args:
-prefix: string, The path to extend with the date subcomponents.
-now: datetime.date, The date to use for the path; if None, use
-the current date.
-Returns:
-string, The new computed path with the date appended.
-&#34;&#34;&#34;">
+  <meta name="description" content="A coworker just sent me some Python code for review and, among such code, there was the addition of a function similar to:
+def PathWithCurrentDate(prefix, now=None): &amp;#34;&amp;#34;&amp;#34;Extend a path with a year/month/day subdirectory layout. Args: prefix: string, The path to extend with the date subcomponents. now: datetime.date, The date to use for the path; if None, use the current date. Returns: string, The new computed path with the date appended. &amp;#34;&amp;#34;&amp;#34; path = os.">
+  <meta property="og:description" content="A coworker just sent me some Python code for review and, among such code, there was the addition of a function similar to:
+def PathWithCurrentDate(prefix, now=None): &amp;#34;&amp;#34;&amp;#34;Extend a path with a year/month/day subdirectory layout. Args: prefix: string, The path to extend with the date subcomponents. now: datetime.date, The date to use for the path; if None, use the current date. Returns: string, The new computed path with the date appended. &amp;#34;&amp;#34;&amp;#34; path = os.">
   <meta name="author" content="Julio Merino">
   <meta name="generator" content="Hugo 0.68.3" />
 
@@ -175,7 +161,112 @@ string, The new computed path with the date appended.
           <div class="row">
             <div class="col">
               
-              <article>A coworker just sent me some Python code for review and, among such code, there was the addition of a function similar to:<pre>def PathWithCurrentDate(prefix, now=None):<br />    """Extend a path with a year/month/day subdirectory layout.<br /><br />    Args:<br />        prefix: string, The path to extend with the date subcomponents.<br />        now: datetime.date, The date to use for the path; if None, use<br />            the current date.<br /><br />    Returns:<br />        string, The new computed path with the date appended.<br />    """<br />    path = os.path.join(prefix, '%Y', '%m', '%d')<br />    if now:<br />        return now.strftime(path)<br />    else:<br />        return datetime.datetime.now().strftime(path)</pre>The purpose of this function, as the docstring says, is to simplify the construction of a path that lays out files on disk depending on a given date.<br /><br />This function works just fine... but it has a serious design problem (in my opinion) that you only see when you try to write unit tests for such function (guess what, the code to review did not include any unit tests for this). If I ask you to write tests for <tt>PathWithCurrentDate</tt>, how would you do that? You would need to consider these cases (at the very very least):<div><div><ul><li>Passing <tt>now=None</tt> correctly fetches the current date. To write such a test, we must stub out the call to <tt>datetime.datetime.now()</tt> so that our test is deterministic. This is easy to do with helper libraries but does not count as trivial to me.</li><li>Could <tt>datetime.datetime.now()</tt> raise an exception? If so, test that the exception is correctly propagated to match the function contract.</li><li>Passing an actual date to <tt>now</tt> works. We know this is a different code path that does not call <tt>datetime.datetime.now()</tt>, but still we must stub it out to ensure that the test is not going through that past in case the current date actually matches the date hardcoded in the test as an argument to <tt>now</tt>.</li></ul><div>My point is: why is such a trivial function so complex to validate? Why such a trivial function needs to depend on external state? Things become more obvious if we take a look at a caller of this function:</div></div></div><pre>def BackupTree(source, destination):<br />    path = PathWithCurrentDate(destination)<br />    CreateArchive(source, os.path.join(path, 'archive.tar.gz'))</pre>Now, question again: how do we test this? Our tests would look like:<pre>def testOk(self):<br />    # Why do we even have to do this?<br />    ... create stub for datetime.datetime.now() to return a fake date ...<br /><br />   CreateArchive('/foo', '/backups/prefix')<br />   ... validate that the archive was generated in the fake date directory ...</pre>Having to stub out the call to <tt>datetime.datetime.now()</tt> before calling <tt>CreateArchive</tt> is a really, really weird thing at first glance. To be able to write this test, you must have deep insight of how the auxiliary functions called within the function work to know what dependencies on external state they have. Lots of black magic involved.<div><br /></div><div>All this said, the above may not seem like a big issue because, well, a call to <tt>datetime.datetime.now()</tt> is cheap. But imagine that the call being performed deep inside the dependency tree was more expensive and dealt with some external state that is hard to mock out.</div><div><br /></div><div>The trick to make this simpler and clearer is to apply a form of <a href="http://en.wikipedia.org/wiki/Dependency_injection">Dependency injection</a> (or, rather, "value injection"). We want the <tt>PathWithCurrentDate</tt> function to be a simple data manipulation routine that has no dependencies on external state (i.e. make it purely functional). The easiest way to do so is to remove the <tt>now=None</tt> code path and pass the date in right from the most external caller (aka, the <tt>main()</tt> program).  For example (skipping docstrings for brevity):</div><pre>def PathWithCurrentDate(prefix, now):<br />    path = os.path.join(prefix, '%Y', '%m', '%d')<br />    return now.strftime(path)<br /><br />def BackupTree(source, destination, backup_date):<br />    path = PathWithCurrentDate(destination, backup_date)<br />    CreateArchive(source, os.path.join(path, 'archive.tar.gz'))</pre>With this approach, the dependency on <tt>datetime.datetime.now()</tt> (aka, a dependency on global state) completely vanishes from the code. The code paths to validate are less, and they are much simpler to test. There is no need to stub out a function call seemingly unused by <tt>BackupTree</tt>.<br /><br />Another advantage of this approach can be seen if we were to have multiple functions accessing the same path. In this case, we would need to ensure that all calls receive the exact same date... what if the program kept running past 12AM and the "now" value changed? It is trivial to reason about this feature if the code does not have hidden queries to "now" (aka global state) within the code... but it becomes tricky to ensure our code is right if we can't easily audit where the "now" value is queried from!<br /><br />The "drawback", as some will think, is that the caller of any of these functions must do more work on its own to provide the correct arguments to the called functions.  "And if I always want the backup to be created on the current directory, why can't the backup function decide on itself?", they may argue.  But, to me, the former is definitely not a drawback and the latter... is troublesome as explained in this post.<br /><br />Another "drawback", as some others would say, is that testing is not a goal. Indeed it is not: testing is only a means to "correct" code, but it is also true that having testable code often improves (internal) APIs and overall design.<br /><br />To conclude: the above is an over-simplistic case study and my explanations will surely not convince anyone to stop doing black evil "clever" magic from within functions (and, worse, from within constructors).  You will only realize that the above makes any sense when you start unit-testing your code. Start today! :-)
+              <article><p>A coworker just sent me some Python code for review and, among such
+code, there was the addition of a function similar to:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">PathWithCurrentDate</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">now</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="s2">&#34;&#34;&#34;Extend a path with a year/month/day subdirectory layout.
+</span><span class="s2">
+</span><span class="s2">    Args:
+</span><span class="s2">        prefix: string, The path to extend with the date subcomponents.
+</span><span class="s2">        now: datetime.date, The date to use for the path; if None, use
+</span><span class="s2">            the current date.
+</span><span class="s2">
+</span><span class="s2">    Returns:
+</span><span class="s2">        string, The new computed path with the date appended.
+</span><span class="s2">    &#34;&#34;&#34;</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s1">&#39;%Y&#39;</span><span class="p">,</span> <span class="s1">&#39;%m&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">now</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</code></pre></div><p>The purpose of this function, as the docstring says, is to simplify the
+construction of a path that lays out files on disk depending on a given
+date.</p>
+<p>This function works just fine&hellip; but it has a serious design problem (in
+my opinion) that you only see when you try to write unit tests for such
+function (guess what, the code to review did not include any unit tests
+for this). If I ask you to write tests for <code>PathWithCurrentDate</code>, how
+would you do that? You would need to consider these cases (at the very
+very least):</p>
+<ul>
+<li>Passing <code>now=None</code> correctly fetches the current date. To write such
+a test, we must stub out the call to <code>datetime.datetime.now()</code> so
+that our test is deterministic. This is easy to do with helper
+libraries but does not count as trivial to me.</li>
+<li>Could <code>datetime.datetime.now()</code> raise an exception? If so, test that
+the exception is correctly propagated to match the function
+contract.</li>
+<li>Passing an actual date to <code>now</code> works. We know this is a different
+code path that does not call <code>datetime.datetime.now()</code>, but still we
+must stub it out to ensure that the test is not going through that
+past in case the current date actually matches the date hardcoded in
+the test as an argument to <code>now</code>.</li>
+</ul>
+<p>My point is: why is such a trivial function so complex to validate? Why
+such a trivial function needs to depend on external state? Things become
+more obvious if we take a look at a caller of this function:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">BackupTree</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">destination</span><span class="p">):</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">PathWithCurrentDate</span><span class="p">(</span><span class="n">destination</span><span class="p">)</span>
+    <span class="n">CreateArchive</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;archive.tar.gz&#39;</span><span class="p">))</span>
+</code></pre></div><p>Now, question again: how do we test this? Our tests would look like:</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">testOk</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># Why do we even have to do this?</span>
+    <span class="o">...</span> <span class="n">create</span> <span class="n">stub</span> <span class="k">for</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span> <span class="n">to</span> <span class="k">return</span> <span class="n">a</span> <span class="n">fake</span> <span class="n">date</span> <span class="o">...</span>
+
+   <span class="n">CreateArchive</span><span class="p">(</span><span class="s1">&#39;/foo&#39;</span><span class="p">,</span> <span class="s1">&#39;/backups/prefix&#39;</span><span class="p">)</span>
+   <span class="o">...</span> <span class="n">validate</span> <span class="n">that</span> <span class="n">the</span> <span class="n">archive</span> <span class="n">was</span> <span class="n">generated</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">fake</span> <span class="n">date</span> <span class="n">directory</span> <span class="o">...</span>
+</code></pre></div><p>Having to stub out the call to <code>datetime.datetime.now()</code> before calling
+<code>CreateArchive</code> is a really, really weird thing at first glance. To be
+able to write this test, you must have deep insight of how the auxiliary
+functions called within the function work to know what dependencies on
+external state they have. Lots of black magic involved.</p>
+<p>All this said, the above may not seem like a big issue because, well, a
+call to <code>datetime.datetime.now()</code> is cheap. But imagine that the call
+being performed deep inside the dependency tree was more expensive and
+dealt with some external state that is hard to mock out.</p>
+<p>The trick to make this simpler and clearer is to apply a form of
+<a href="http://en.wikipedia.org/wiki/Dependency_injection">Dependency
+injection</a> (or,
+rather, &ldquo;value injection&rdquo;). We want the <code>PathWithCurrentDate</code> function
+to be a simple data manipulation routine that has no dependencies on
+external state (i.e. make it purely functional). The easiest way to do
+so is to remove the <code>now=None</code> code path and pass the date in right from
+the most external caller (aka, the <code>main()</code> program). For example
+(skipping docstrings for brevity):</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="k">def</span> <span class="nf">PathWithCurrentDate</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">now</span><span class="p">):</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s1">&#39;%Y&#39;</span><span class="p">,</span> <span class="s1">&#39;%m&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">BackupTree</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">destination</span><span class="p">,</span> <span class="n">backup_date</span><span class="p">):</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">PathWithCurrentDate</span><span class="p">(</span><span class="n">destination</span><span class="p">,</span> <span class="n">backup_date</span><span class="p">)</span>
+    <span class="n">CreateArchive</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;archive.tar.gz&#39;</span><span class="p">))</span>
+</code></pre></div><p>With this approach, the dependency on <code>datetime.datetime.now()</code> (aka, a
+dependency on global state) completely vanishes from the code. The code
+paths to validate are less, and they are much simpler to test. There is
+no need to stub out a function call seemingly unused by <code>BackupTree</code>.</p>
+<p>Another advantage of this approach can be seen if we were to have
+multiple functions accessing the same path. In this case, we would need
+to ensure that all calls receive the exact same date&hellip; what if the
+program kept running past 12AM and the &ldquo;now&rdquo; value changed? It is
+trivial to reason about this feature if the code does not have hidden
+queries to &ldquo;now&rdquo; (aka global state) within the code&hellip; but it becomes
+tricky to ensure our code is right if we can&rsquo;t easily audit where the
+&ldquo;now&rdquo; value is queried from!</p>
+<p>The &ldquo;drawback&rdquo;, as some will think, is that the caller of any of these
+functions must do more work on its own to provide the correct arguments
+to the called functions. &ldquo;And if I always want the backup to be created
+on the current directory, why can&rsquo;t the backup function decide on
+itself?&quot;, they may argue. But, to me, the former is definitely not a
+drawback and the latter&hellip; is troublesome as explained in this post.</p>
+<p>Another &ldquo;drawback&rdquo;, as some others would say, is that testing is not a
+goal. Indeed it is not: testing is only a means to &ldquo;correct&rdquo; code, but
+it is also true that having testable code often improves (internal) APIs
+and overall design.</p>
+<p>To conclude: the above is an over-simplistic case study and my
+explanations will surely not convince anyone to stop doing black evil
+&ldquo;clever&rdquo; magic from within functions (and, worse, from within
+constructors). You will only realize that the above makes any sense when
+you start unit-testing your code. Start today! :-)</p>
 </article>
             </div>
           </div>
