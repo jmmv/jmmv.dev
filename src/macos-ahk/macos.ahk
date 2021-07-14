@@ -1,6 +1,6 @@
 ; Sets up macOS-like keybindings on Windows via AutoHotkey.
 ;
-; Last updated on 2021-07-07.
+; Last updated on 2021-07-14.
 
 #SingleInstance force
 #NoEnv
@@ -8,8 +8,6 @@
 #InstallKeybdHook
 
 Menu, Tray, Standard
-
-SetTitleMatchMode, 2
 
 GroupAdd, terminals, ahk_exe powershell.exe
 GroupAdd, terminals, ahk_exe WindowsTerminal.exe
@@ -37,12 +35,12 @@ return
 ; These modifiers work *after* remapping the modifiers.
 ; It doesn't matter where the keys are remapped; order is irrelevant.
 
-; Make sure to select the desired mapping for the right-hand menu key.
-$AppsKey::RCtrl  ; Surface Laptop.
-;$AppsKey::RWin  ; Sculpt keyboard.
+;$AppsKey::RCtrl  ; Surface Laptop.
+$AppsKey::RWin  ; Sculpt keyboard.
 
 ; Program launchers.
 $#e::Run explorer
+$#n::Run notepad
 $#t::Run wt
 
 ; Window manipulation.
@@ -53,12 +51,19 @@ $^Left::Send ^#{Left}
 $^Right::Send ^#{Right}
 
 ; Screenshots.
-;!+3::Send {PrintScreen}
-;!+4::Send #+{S}
+;$!+3::Send {PrintScreen}
+;$!+4::Send #+{S}
+
+; Special characters.
+$^+c::Send {ç}
+$^+n::Send {ñ}
+$!-::Send {–}
+$!+-::Send {—}
 
 ; Hide all instances of active program.
 !h::
 WinGetClass, class, A
+SetTitleMatchMode, 2
 WinGet, AllWindows, List
 loop %AllWindows% {
     WinGetClass, WinClass, % "ahk_id " AllWindows%A_Index%
@@ -67,6 +72,24 @@ loop %AllWindows% {
     }
 }
 return
+
+; Cycle between same-app windows.
+!`::
+WinGet, ActiveProcess, ProcessName, A
+WinGet, OpenWindowsAmount, Count, ahk_exe %ActiveProcess%
+if (OpenWindowsAmount > 1) {
+    WinGetTitle, FullTitle, A
+    AppTitle := SubStr(FullTitle, InStr(FullTitle, " ", false, -1) + 1)
+
+    SetTitleMatchMode, 2
+    WinGet, WindowsWithSameTitleList, List, %AppTitle%
+
+    if (WindowsWithSameTitleList > 1) {
+        WinActivate, % "ahk_id " WindowsWithSameTitleList%WindowsWithSameTitleList%
+    }
+}
+return
+
 
 ; Lock screen and turn off monitor.
 $!^q::

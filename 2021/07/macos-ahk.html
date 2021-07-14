@@ -191,7 +191,7 @@ If so, this post will equip you with an AutoHotkey configuration file that bring
   
   <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">; Sets up macOS-like keybindings on Windows via AutoHotkey.
 ;
-; Last updated on 2021-07-07.
+; Last updated on 2021-07-14.
 
 #SingleInstance force
 #NoEnv
@@ -199,8 +199,6 @@ If so, this post will equip you with an AutoHotkey configuration file that bring
 #InstallKeybdHook
 
 Menu, Tray, Standard
-
-SetTitleMatchMode, 2
 
 GroupAdd, terminals, ahk_exe powershell.exe
 GroupAdd, terminals, ahk_exe WindowsTerminal.exe
@@ -228,12 +226,12 @@ return
 ; These modifiers work *after* remapping the modifiers.
 ; It doesn&#39;t matter where the keys are remapped; order is irrelevant.
 
-; Make sure to select the desired mapping for the right-hand menu key.
-$AppsKey::RCtrl  ; Surface Laptop.
-;$AppsKey::RWin  ; Sculpt keyboard.
+;$AppsKey::RCtrl  ; Surface Laptop.
+$AppsKey::RWin  ; Sculpt keyboard.
 
 ; Program launchers.
 $#e::Run explorer
+$#n::Run notepad
 $#t::Run wt
 
 ; Window manipulation.
@@ -244,12 +242,19 @@ $^Left::Send ^#{Left}
 $^Right::Send ^#{Right}
 
 ; Screenshots.
-;!+3::Send {PrintScreen}
-;!+4::Send #+{S}
+;$!+3::Send {PrintScreen}
+;$!+4::Send #+{S}
+
+; Special characters.
+$^+c::Send {�}
+$^+n::Send {�}
+$!-::Send {�}
+$!+-::Send {�}
 
 ; Hide all instances of active program.
 !h::
 WinGetClass, class, A
+SetTitleMatchMode, 2
 WinGet, AllWindows, List
 loop %AllWindows% {
     WinGetClass, WinClass, % &#34;ahk_id &#34; AllWindows%A_Index%
@@ -258,6 +263,24 @@ loop %AllWindows% {
     }
 }
 return
+
+; Cycle between same-app windows.
+!`::
+WinGet, ActiveProcess, ProcessName, A
+WinGet, OpenWindowsAmount, Count, ahk_exe %ActiveProcess%
+if (OpenWindowsAmount &gt; 1) {
+    WinGetTitle, FullTitle, A
+    AppTitle := SubStr(FullTitle, InStr(FullTitle, &#34; &#34;, false, -1) + 1)
+
+    SetTitleMatchMode, 2
+    WinGet, WindowsWithSameTitleList, List, %AppTitle%
+
+    if (WindowsWithSameTitleList &gt; 1) {
+        WinActivate, % &#34;ahk_id &#34; WindowsWithSameTitleList%WindowsWithSameTitleList%
+    }
+}
+return
+
 
 ; Lock screen and turn off monitor.
 $!^q::
