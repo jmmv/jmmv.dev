@@ -83,7 +83,7 @@ function rejectCookies() {
 }
 
 function cookiesAllowed() {
-    getCookie("cookies_allowed") != "false"
+    return getCookie("cookies_allowed") != "false";
 }
 
 function handleSaveRequestResponse(response) {
