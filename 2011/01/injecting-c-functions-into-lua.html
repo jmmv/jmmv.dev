@@ -30,7 +30,7 @@ Things get a bit messy when we want to inject native functions into the Lua envi
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Things get a bit messy when we want to inject native functions into the Lua envi
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2011\/01\/injecting-c-functions-into-lua.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2011\/01\/injecting-c-functions-into-lua.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ Things get a bit messy when we want to inject native functions into the Lua envi
               
               <article>The <a href="/2011/01/c-interface-to-lua.html">C++ interface to Lua</a> implemented in <a href="http://code.google.com/p/kyua/">Kyua</a> exposes a <tt>lua::state</tt> class that wraps the lower-level <tt>lua_State*</tt> type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the <tt>lua::state</tt> class.<br /><br />Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the <tt>lua_CFunction</tt> type:<blockquote><tt>typedef int (*lua_CFunction)(lua_State*);</tt></blockquote>Now, let's consider this code:<pre>int<br />awesome_native_function(lua_State* state)<br />{<br />    // Uh, we have access to s, so we bypass the lua::state!<br />    ... do something nasty ...<br /><br />    // Oh, and we can throw an exception here...<br />    //with bad consequences.<br />}<br /><br />void<br />setup(...)<br />{<br />    lua::state state;<br />    state.push_c_function(awesome_native_function);<br />    state.set_global("myfunc");<br />    ... run some script ...<br />}</pre>The fact that we must pass a <tt>lua_CFunction</tt> prototype to the <tt>lua_pushcfunction</tt> object means that such function must have access to the raw <tt>lua_State*</tt> pointer... which we want to avoid.<br /><br />What we really want is the caller code to define a function such as:<blockquote><tt>typedef int (*cxx_function)(lua::state&)</tt></blockquote>In an ideal world, the <tt>lua::state</tt> class would implement a <tt>push_cxx_function</tt> that took a <tt>cxx_function</tt>, generated a thin C wrapper and injected such generated wrapper into Lua.  Unfortunately, we are not in an ideal world: C++ does not have high-order functions and thus the "generate a wrapper function" part of the previous proposal does not really work.<br /><br />What we can do instead, though, is to make the creation of C wrappers for these C++ functions trivial. And this is what <a href="http://code.google.com/p/kyua/source/detail?r=42">r42</a> did.  The approach I took is similar to this overly-simplified (and broken) example:<pre>template&lt; cxx_function Function &gt;<br />int<br />wrap_cxx_function(lua_State* state)<br />{<br />    try {<br />        lua::state state_wrapper(state);<br />        return Function(state_wrapper);<br />    } catch (...) {<br />        luaL_error(state, "Geez, don't go into C's land!");<br />    }<br />}</pre>This template wrapper takes a <tt>cxx_function</tt> object and generates a corresponding C function <i>at compile time</i>. This wrapper function ensures that C++ state does not propagate into the C world, as that often has catastrophical consequences. (Due to language limitations, the input function must have external linkage.  So no, it cannot be static.)<br /><br />As a result, we can rewrite our original snippet as:<pre>int<br />awesome_native_function(lua::state& state)<br />{<br />    // See, we cannot access lua_State* now.<br /><br />    ... do something ...<br />    throw std::runtime_error("And we can even do this!");<br />}<br /><br />void<br />setup(...)<br />{<br />    lua::state state;<br />    state.push_c_function(<br />        wrap_cxx_function< awesome_native_function >);<br />    state.set_global("myfunc");<br />    ... run some script ...<br />}</pre>Neat? I think so, but maybe not so much. I'm pretty sure there are cooler ways of achieving the above purpose in a cleaner way, but this one works nicely and has few overhead.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ Things get a bit messy when we want to inject native functions into the Lua envi
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2011\/01\/injecting-c-functions-into-lua.html");
   gaRequest();
 </script>
 <noscript>

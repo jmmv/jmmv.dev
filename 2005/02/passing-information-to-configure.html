@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/02\/passing-information-to-configure.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/02\/passing-information-to-configure.html';
+  </script>
 </head>
 
 
@@ -158,6 +164,24 @@
               
               <article><p><a href="http://www.gnu.org/software/autoconf/">GNU Autoconf</a> provides three ways to pass information to the generated configure scripts; these are enable-style flags, with-style flags and command line variables. Despite each one is provided with a very concrete goal in mind, many people overloads their meaning. Their purpose is clearly described in the <a href="http://www.gnu.org/software/autoconf/manual/index.html">manual</a>, which these people "forget" to read. (I know it's impossible to read everything one would like to... not an excuse in this case, I'd say.)</p>  <p>So let's see which is the real purpose of the above methods:</p>  <ul> <li>Enable-style flags: these are provided for packages that have optional compile-time features.  They are defined using the <tt>AC_ARG_ENABLE</tt> macro.  An example could be a <tt>--enable-debug</tt> argument.  Note how this could change the behavior of the current package <i>only</i>, without adding additional dependencies nor requirements.</li>  <li>With-style flags: these are provided for packages that require, or can optionally use, other software packages that are already installed. They are defined using the <tt>AC_ARG_WITH</tt> macro.  An example that you can see in many packages is <tt>--with-x</tt>, used to manually enable or disable X11 support. Note how X11 is always an external package, hence the use of a with-style argument.</li>  <li>Command line variables: anything else you can't do with the previous arguments.  They are defined using the <tt>AC_ARG_VAR</tt> variable and are passed to the configure script as normal arguments. Most configure scripts provide some default variables defined this way. E.g., <tt>CC</tt>, which could be used as: <tt>./configure CC=gcc</tt>, <i>not</i> <tt>CC=gcc ./configure</tt>.  Be aware that both will work, but the semantics are quite different; I encourage you to read the manual.</li> </ul>  <p>Now let's analyze a problem I fixed two months ago, in which I required to pass the configuration script some information. For some "strange" reason, the <a href="http://boost.org/">Boost</a> package creates libraries with different names (in fact, different <i>suffixes</i>) depending on the system where they are built on.  Due to this, <a href="http://www.venge.net/monotone/">Monotone</a> failed to build under <a href="http://www.netbsd.org/">NetBSD</a> (or even <a href="http://www.suse.com/">SuSE Linux</a> because it didn't know it had to use a different suffix.</p>  <p>I tried to fix it in an automated way, but AFAICT, it's almost impossible (or, at the very least, very error prone). So I decided to do it manually by passing the required information (the suffix name) to the configure script. Some people may have used a with-style argument, say <tt>--with-boost-suffix=&lt;string&gt;</tt>, but that'd have been incorrect. Remember that these arguments are to enable or disable external dependencies, but in this case we are not doing that. An enable-style argument would have been equally incorrect.</p>  <p>So I had to add a command line (environment) variable, called <tt>BOOST_SUFFIX</tt>, which takes the appropriate string for the current build system. The result is that, when needed, you can call the configure script with an extra argument that specifies how the library is named. I.e., what I have to do ATM is: <tt>./configure BOOST_SUFFIX=-gcc</tt>.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -951,10 +975,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/02\/passing-information-to-configure.html");
   gaRequest();
 </script>
 <noscript>

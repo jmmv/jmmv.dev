@@ -30,7 +30,7 @@ Even more, you can ask it to load a specific class based on its name, which allo
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Even more, you can ask it to load a specific class based on its name, which allo
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/10\/java-dynamic-class-loading.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/10\/java-dynamic-class-loading.html';
+  </script>
 </head>
 
 
@@ -160,6 +166,24 @@ Even more, you can ask it to load a specific class based on its name, which allo
               
               <article>One of the things I like most about <a href="http://java.sun.com/">Java</a> is its ability to load classes on demand. Given its interpreted nature, the virtual machine can detect when a class is not yet loaded and bring it to memory transparently; think of this as page faults and the MMU handling them.<br /><br />Even more, you can ask it to load a specific class based on its name, which allows you to design powerful abstract models painlessly. Of course, you can do the same thing with C or C++, but things are trickier — dynamically loadable modules are not easy to deal with. (You could also use <a href="http://julipedia.blogspot.com/2005/10/linkers-link-sets.html">link sets</a>.)<br /><br />As an example, let's consider (a simplification of) a set of generic classes for unit testing that I've written as part of a university project:<br /><ul>   <li><i>Test</i>: An abstract class to implement unit tests. Each class in the project will have another class dedicated to testing, which will inherit this one. For example, given a Foo class, there will be a TestFoo that does whatever is appropriate to ensure that Foo works.</li>   <li><i>Tester</i>: A generic driver that, based on commands given in the standard input, loads the appropriate test class, runs its unit tests and verifies the results based on prerecorded (correct) output values.</li> </ul> The thing is: how do you get a Tester class that is <i>completely</i> independent of, say, TestFoo? Ideally, Tester should only know the Test class and nothing else. Here is where dynamic class loading comes to help.<br /><br />The Tester class receives a class name (Foo in our example) on the program's standard input, among a set of arguments that describe the unit test to be executed. Based on this name, it tries to load its corresponding testing class and, if it succeeds, it executes the appropriate methods. This is only possible because all testing classes have Test as the common ancestor.<br /><br />As a code example, assume a <tt>className</tt> variable that holds the name read from standard input and a <tt>opName</tt> variable that has the name of the operation to be tested:<br /><pre>String className, opName;<br />/* Read className and opName from stdin. */<br />try {<br />    Class c = Class.forName("Test" + className);<br />    Test t = (Test)c;<br />    t.execute(opName);<br />} catch (Exception e) {<br />    /* Catching Exception for simplicity. */<br />}</pre>It is up to your imagination how you use this feature, but, as you can see, it is extremely useful.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -953,10 +977,12 @@ Even more, you can ask it to load a specific class based on its name, which allo
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/10\/java-dynamic-class-loading.html");
   gaRequest();
 </script>
 <noscript>

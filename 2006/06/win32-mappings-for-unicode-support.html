@@ -30,7 +30,7 @@ After creating a fresh C&#43;&#43; Win32 console application project from Visual
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ After creating a fresh C&#43;&#43; Win32 console application project from Visual
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2006\/06\/win32-mappings-for-unicode-support.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2006\/06\/win32-mappings-for-unicode-support.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ After creating a fresh C&#43;&#43; Win32 console application project from Visual
               
               <article>I have spent some time during the past few days to play with the Win32 API <a href="http://julipedia.blogspot.com/2005/06/mfc-developing-for-windows.html">again</a> after a year since first looking at them.  I must learn how to manage processes under Windows as part of my SoC project, Boost.Process, and this involves native Windows programming with the Win32 API.<br /><br />After creating a fresh C++ Win32 console application project from Visual Studio 2005, I noticed that the template code had a <tt>_tmain</tt> function rather than a <tt>main</tt> one.  I did not pay much attention to it until I looked at some code examples that deal with the <tt>CreateProcess</tt> call: they use weirdly named functions such as <tt>_tcsdup</tt> and types as <tt>_TCHAR</tt> instead of the traditional <tt>strdup</tt> and <tt>char *</tt> respectively. I could not resist to learn <i>why</i> they did this.<br /><br />Spending some time searching and reading the MSDN documentation answered my question.  These functions and types are wrappers around the standard objects: the functions and types they really point to depend on whether you define the <tt>_UNICODE</tt> macro during the build or not.<br /><br />As you can easily guess, defining <tt>_UNICODE</tt> maps those routines and types to entities that can handle Unicode strings, effectively making your application Unicode-aware.  Similarly, if you do not define the symbol, the application remains SBCS/MBCS compatible (the distinction between these two also depends on another macro, as far as I can tell). And because all these redirections are handled by the preprocessor, there is no run-time overhead.<br /><br />For example: the <tt>_tmain</tt> function is mapped to the traditional <tt>main</tt> subroutine if and only if <tt>_UNICODE</tt> is undefined while it is mapped to <tt>wmain</tt> otherwise.  The latter takes wide-character <tt>argv</tt> and <tt>envp</tt> pointers in contrast to the former.<br /><br />I do not know to which extent this macro is supported by the standard libraries, although I bet almost everything supports it; I have seen many other functions taking advantage of this redirection. In the specific domain I am analyzing, there are two implementations for <tt>CreateProcess</tt>: <tt>CreateProcessW</tt>, the Unicode version; and <tt>CreateProcessA</tt>, the ANSI one.<br /><br />OK, my knowledge about internationalization is very limited, and I do not know if this feature is very useful or not, but it seems quite interesting at the very least.<br /><br />See <a href="http://msdn2.microsoft.com/en-us/library/tsbaswba.aspx">Routine Mappings (CRT)</a> and <a href="http://msdn2.microsoft.com/en-us/library/6wd819wh.aspx">main: Program Startup (C++)</a> for more details.<br /><br /><span style="font-weight: bold;">Edit (17:24)</span>: Changed MFC references to Win32.  Thanks to Jason for pointing out the difference between the two in one of the comments.  I am in fact investigating the latter.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ After creating a fresh C&#43;&#43; Win32 console application project from Visual
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2006\/06\/win32-mappings-for-unicode-support.html");
   gaRequest();
 </script>
 <noscript>

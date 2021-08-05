@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/08\/local-sockets-permissions.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/08\/local-sockets-permissions.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article><p style="text-align: left;">A few days ago, I was trying <a href="http://www.gnome.org/%7Eveillard/gamin/">gamin</a> under <a href="http://www.netbsd.org/">NetBSD</a> which unfortunately didn't work at all. The first problem I encountered was that it complained about the excessive permissions given to newly created local sockets (those stored in the file-system, also known as "Unix sockets" historically). After analyzing the issue, I saw that those files were given 777 permissions, regardless of the user's umask. Strangely, the code was explicitly checking for this mode after creation, so I was probably missing something.</p>  <p>I wrote a little test program that creates a local socket and ran it under Linux, <a href="http://www.freebsd.org/">FreeBSD</a> and <a href="http://www.openbsd.org/">OpenBSD</a>.  All of them correctly respected the user's umask (setting the permissions to 755).  So, what was going on with NetBSD?</p>  <p>After asking in the tech-kern@ mailing list, I was told the following: the traditional Unix behavior when creating local sockets was to give them 777 permissions to mimic real sockets (i.e., everybody can connect to them). Therefore, the <i>portable</i> way to create them in a secure way is to first make a directory with safe permissions (say, 700) and then create the socket inside it.</p>  <p>However, I'm thinking about changing NetBSD to honor the user's mask in this case too (it's a trivial fix). It does not hurt in any way and it may improve portability of some "non-portable" programs. (Though, this will hide portability bugs in some programs, which makes me dubious about the change...)</p>  <p>By the way, gamin was doing the right thing (creating sockets inside secure directories) so I don't know why it wanted to ensure that the sockets were "safe".</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/08\/local-sockets-permissions.html");
   gaRequest();
 </script>
 <noscript>

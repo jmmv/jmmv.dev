@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2011\/10\/kyua-weekly-status-report_23.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2011\/10\/kyua-weekly-status-report_23.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article><br /><ul><li>Moved all the logic code of the "debug", "list" and "test" commands from the CLI layer to the engine layer.</li><ul><li>Up until now, the CLI modules implementing these commands contained all the logic to load Kyuafiles and iterating over them to find matching tests and applying the desired operation to them. This kind of code belongs in "driver" modules (aka controllers) of the engine layer, because there is nothing UI-related in them.</li><li>After this refactoring, the code left in the CLI modules is purely presentation-related, and the code in the engine implements all the logic.</li><li>The goal of these changes is to be able to hide the interactions with the database in these controllers. The CLI layer has no business in dealing with the database connection (other than allowing the user to specify which database to talk to, of course).</li></ul><li>Implemented a very simple RAII model for SQLite transactions.</li><li>Some additions to the utils::sqlite bindings to simplify some common calling patterns (e.g. binding statement parameters by name).</li><li>Preliminary prototypes at database initialization. This involves creating new databases and populating them with the initial schema, plus dealing with database metadata to, e.g. detect if we are dealing with the correct schema version.</li><ul><li>The code for this is still too crappy to be submitted, so don't look for it in the repository just yet!</li><li>The design document details many things that should be part of the schema (e.g. "sessions"0, but I've decided that I'll start easy with a simplified schema and later build on top of it. Otherwise there will be too many clunky moving parts to deal with while the fundamental ideas are not yet completely clear.</li></ul><li>Fixes to let the code build and run again in NetBSD (macppc at least).</li></ul><div>I've now been stuck for a few days trying to figure out what the best way to implement the conversion of (new) in-memory objects to database objects is, and how to later recover these objects. E.g. what the correct abstractions are to take test case results and put them in the database, and how to retrieve these results to generate reports later on. I now start to have a clear mental picture on how this should look like, but I have yet to see how it will scale.</div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2011\/10\/kyua-weekly-status-report_23.html");
   gaRequest();
 </script>
 <noscript>

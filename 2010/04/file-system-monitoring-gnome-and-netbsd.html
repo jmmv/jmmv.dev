@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2010\/04\/file-system-monitoring-gnome-and-netbsd.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2010\/04\/file-system-monitoring-gnome-and-netbsd.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article>A few days ago, I decided to start using NetBSD, as well as Gnome on NetBSD once again, mostly because the lack of their use makes my skills feel rusty in many different areas. While NetBSD has surprised me in a good way (I am running it on a Macbook Pro and things like wireless and DRI work), Gnome has not. There are tons of broken things that prevent a smooth user experience.<br /><br />One of these broken things is the monitoring of changes in the file system. Actually, this has never worked 100%. But what is this and why does it matter, you ask? Well, file system monitoring is an internal component of the Gnome infrastructure that allows the desktop to receive notifications when files or directories change. This way, if, say, you are viewing the Downloads folder in Nautilus and you start downloading a file from Epiphany into that folder, Nautilus will realize the new file and show it immediately without requiring a manual refresh.<br /><br />How to monitor the file system depends on the operating system. There are basically two approaches: polling and asynchronous notifications. Polling is suboptimal because the notifications are usually delayed. Asynchronous notifications are tied to the operating system: Linux provides <a href="http://en.wikipedia.org/wiki/Inotify">inotify</a>, NetBSD provides <a href="http://en.wikipedia.org/wiki/Kqueue">kqueue</a> and other systems provide their own APIs.<span style="display: block;" id="formatbar_Buttons"><span class="on down" style="display: block;" id="formatbar_CreateLink" title="Link" onmouseover="ButtonHoverOn(this);" onmouseout="ButtonHoverOff(this);" onmouseup="" onmousedown="CheckFormatting(event);FormatbarButton('richeditorframe', this, 8);ButtonMouseDown(this);"><img src="/images/2010-04-20-blank.gif" alt="Link" class="gl_link" border="0" /></span></span><br />In the past, Gnome monitored the file system by a combination of <a href="http://oss.sgi.com/projects/fam/">FAM</a>, a system-level service that provides an API to file system monitoring, and GNOME VFS, a high-level layer that hides the interaction with FAM. This approach was good in spirit (client/server separation) but didn't work well:<br /><ul><li>FAM is abandoned.<br /></li><li>Does not support kqueue out of the box.</li><li>FAM runs as root.<br /></li><li>FAM is too hard to set up: it requires rpcbind, an addition to <tt>/etc/services</tt>, a sysctl tweak, and the configuration of a system-level daemon.</li></ul>To solve some of these problems, a drop-in replacement for FAM was started. <a href="http://people.gnome.org/%7Eveillard/gamin/">Gamin</a>, as it is known, still does not fix everything:<br /><ul><li>Gamin is abandoned.</li><li>Supports kqueue out of the box, but does not work very well.</li><li>Actually, Gamin itself does not work. Running the tests provided by the distfile in a modern Linux system results in several test failures.<br /></li></ul>Anyway. Did you notice the <span style="font-style: italic;">abandoned</span> pattern above?  This is important: in the new world order, Gnome does not use FAM any more.<br /><br />The new structure to monitor files is: the low-level glib library provides the gio module, which has some file system monitoring APIs. The GVFS module provides higher level abstractions to file system management, and relies on gio for file system monitoring. There is no more GNOME VFS any more.<br /><br />The <span style="font-style: italic;">key</span> point is: gio uses inotify directly; no abstraction layers in between. FAM support is still there for platforms without inotify, but as it is not used in Linux any more, it rots. Linux developers will never experience what it is to have a system that needs to use FAM to get this functionality to work.<br /><br />At last, let's look at the status of all this in NetBSD:<br /><ul><li>The FAM package was <a href="/2004/10/fam-and-kqueue.html">patched to support kqueue</a>. Although this kinda works, it is not perfect. Also, as mentioned above, FAM is, I'd say, the package with the hardest installation procedure of the whole Gnome platform.<br /></li><li>The Gamin packages are nicer than the FAM package regarding their configuration. However, when using Gamin instead of FAM, all sorts of bugs appear in Gnome (it actually gets stuck during startup for me). The breakage of the unit tests does not provide any confidence, and the fact that Gamin is abandoned, the idea of fixing it doesn't make me thrive.</li><li>The glib2 package <span style="font-style: italic;">depends</span> on FAM. This is ugly; really ugly. I had to shout WTF when I saw this, seriously.</li><li>Seeing the direction gio/gvfs take, it is obvious that things can only get worse in the future.<br /></li></ul>If time permits, I'm planning to work on improving this whole situation. Ideas include:<br /><ul><li>Splitting the FAM gio module out of the glib2 package. Ideally, this would happen upstream.</li><li>Implement a gio backend for kqueue.</li><li>Check if the core packages still using gnome-vfs have a more recent version that uses gvfs instead and, if so, update them.<br /></li></ul>Can't promise you anything other than, if I get to work on it, I will keep you posted!
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2010\/04\/file-system-monitoring-gnome-and-netbsd.html");
   gaRequest();
 </script>
 <noscript>

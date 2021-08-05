@@ -32,7 +32,7 @@ In C&#43;&#43; you have the following expectation: a finalization method is call
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -45,6 +45,12 @@ In C&#43;&#43; you have the following expectation: a finalization method is call
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/11\/java-finalize-method.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/11\/java-finalize-method.html';
+  </script>
 </head>
 
 
@@ -162,6 +168,24 @@ In C&#43;&#43; you have the following expectation: a finalization method is call
               
               <article>I recently discovered that Java has finalization methods for objects, just like C++. However, they do not behave the same way due to Java's garbage collection.<br /><br />In Java, a finalization method has the following prototype: <tt>protected void finalize();</tt>, which is inherithed from <tt>java.lang.Object</tt>.  This method can do any task it wants to explicitly release resources owned by an object.<br /><br />In C++ you have the following expectation: a finalization method is called whenever the object ceases to exist. That is: when a local object goes out of scope (all of them are deleted when the program shuts down) or when you explicitly delete a region of allocated memory. However, dynamically allocated objects are not automatically deleted when the program exits (you must remember to do it by hand).<br /><br />Java behaves much like C++'s dynamically allocated objects in this regard. If they are not "explicitly" deleted, their finalization method is not executed. And who deletes them? The GC when it feels it has to. This means that you cannot predict in any way when your object will be deleted; in fact, you cannot even know if the destroyer method will be ever executed. This is why Java classes provide methods to deallocate resources on purpose (see the <tt>close</tt> method on any class that affects files).<br /><br />Let's see a little example:<br /><pre>class Test {<br />    protected void finalize() {<br />        System.out.println("Removed");<br />    }<br /><br />    public static void main(String[] args) {<br />        Test c = new Test();<br />    }<br />}</pre>If you build and run this program, it will probably print nothing. The GC doesn't act on shutdown so the object is implicitly removed when the VM closes. Instead, if you try the following, you will probably see something:<br /><pre>class Test {<br />    protected void finalize() {<br />        System.out.println("Removed");<br />    }<br /><br />    public static void main(String[] args) {<br />        for (int i = 0; i < 10000; i++) {<br />             Test c = new Test();<br />        }<br />    }<br />}</pre>It's a pity that destoryers do not work "correctly" (I mean, as in C++'s local variables), because this can make some pieces of code overly complex to control all possible execution flows.<br /><br />And sorry for the long delay in posting. I'm nowadays extremely busy with a university project and have few time for anything else.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -955,10 +979,12 @@ In C&#43;&#43; you have the following expectation: a finalization method is call
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/11\/java-finalize-method.html");
   gaRequest();
 </script>
 <noscript>

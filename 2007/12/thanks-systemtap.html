@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2007\/12\/thanks-systemtap.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2007\/12\/thanks-systemtap.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article>I started this week's work with the idea of instrumenting the spufs module found in Linux/Cell to be able to take some traces of the execution of Cell applications.  At first, I modified that module to emit events at certain key points, which were later registered in a circular queue.  Then, I implemented a file in <tt>/proc</tt> so that a user-space application could read from it and free space from the queue to prevent the loss of events when it was full.<br /><br />That first implementation never worked well, but as I liked how it was evolving, I thought it could be a neat idea to make this "framework" more generic so that other parts of the kernel could use it.  I rewrote everything with this idea in mind and then also modified the regular scheduler and the process-management system calls to also rise events for my trace.  And got it working.<br /><br />But then, I was talking to <a href="http://blogs.nopcode.org/brainstorm/">Brainstorm</a> about his new "Sun Campus Ambassador" position at the University, and during the conversation he mentioned DTrace.  So I asked... "Mmm, that tool could probably simplify all my work; is it there something similar for Linux?".  And yes; yes it is!  Its name, <a href="http://sourceware.org/systemtap/">SystemTap</a>.<br /><br />As the web page says, SystemTap "provides an infrastructure to      simplify the gathering of information about the running Linux         system". You do this by writing small scripts that hook into specific points of the kernel — at the function level, at specific mark points, etc. — and which get executed when the script is processed and installed into the live kernel as a loadable kernel module.<br /><br />With this tool I can discard my several-hundred-long changes to gather traces and replace them with some very, very simple SystemTap scripts.  No need to rebuild the kernel, no need to deal with custom changes to it, no need to rebuild every now and then... neat!<br /><br />Now I'm having problems using the feature that allows to instrument kernel markers, and I need them because otherwise some private functions cannot be instrumented due to compiler optimizations (I think).  OK, I'd expose those functions, but while I'm at it, I think it'd be a good idea to write a decent tapset for spufs that could later be published.  And that prevents me from doing such hacks.<br /><br />But anyway, kudos to the SystemTap developers.  I now understand why everybody is so excited about DTrace.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2007\/12\/thanks-systemtap.html");
   gaRequest();
 </script>
 <noscript>

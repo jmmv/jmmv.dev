@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2011\/03\/kyua-weekly-status-report_27.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2011\/03\/kyua-weekly-status-report_27.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article>This has been a slow week. In the <a href="/2011/03/kyua-weekly-status-report.html">previous report</a>, I set the goal of&nbsp;getting Kyua to run the NetBSD test suite accurately (i.e. to report the same results as atf-run), and this has been accomplished. Actually, the changes required in Kyua to make this happen were minimal, but I got side-tracked fixing issues in NetBSD itself (both in the test suite and in the kernel!). So, the things done:<br /><ul><li>Fixed Kyua to correctly kill any dangling subprocesses of a test case and thus match the behavior of atf-run. This was the only change required to make <a href="http://code.google.com/p/kyua/issues/detail?id=16">issue 16</a> happen: i.e. to get Kyua to report the same results as atf-run for the NetBSD test suite.</li><ul><li>Based on a suggestion from Antti Kantee, an alternative way to handle this would be to not kill any processes and just report the test case as broken if it fails to clean itself up. The rationale being that the runtime engine can kill dangling subprocesses in 99% of the occasions, but not always. The exception are those subprocesses that change their process group. It'd be better to make all cleanups explicit instead of hiding this corner case, as it can lead to confusion. Addressing this will have to wait though, as it is a pretty invasive change.</li><li>Before closing issue 16, I want to implement some integration tests for Kyua to ensure that the whole system behaves as we expect (which is what the NetBSD test suite is currently doing implicitly).</li></ul><li>Kyua is pickier than atf-run: if a cleanup routine of a test case fails or crashes, Kyua will (correctly) report the test case as broken while atf-run will silently ignore this situation. Some NetBSD tests had crashing cleanup parts, so I fixed them.</li><li>Some test programs in NetBSD were leaving unkilled subprocesses behind. These subprocesses are daemons and thus fall out of the scope of what Kyua can detect and kill during the cleanup phase. I mistakenly tracked down the problem to rump, but Antti Kantee kindly <a href="http://mail-index.netbsd.org/tech-kern/2011/03/23/msg010153.html">found the real problem</a> in the kernel (not in rump!).</li><li>As a side effect of processes being left behind, I <a href="http://mail-index.netbsd.org/tech-userlevel/2011/03/23/msg004775.html">extended the functionality of pidfile(3)</a> and implemented pid file support in bozohttpd. &nbsp;This is to make the tests that spawn a bozohttpd in the background more robust, by giving them a way to forcibly kill the server during cleanup.</li><ul><li>These changes are still under review and not committed yet.</li></ul></ul><div>For the upcoming week, I plan to add some basic integration tests to Kyua and release ATF 0.13. I've been running a NetBSD system with the latest ATF code integrated for a while (because Kyua requires it) and things have been working well.</div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2011\/03\/kyua-weekly-status-report_27.html");
   gaRequest();
 </script>
 <noscript>

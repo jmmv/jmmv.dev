@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/12\/multiboot-specification-and-netbsd.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/12\/multiboot-specification-and-netbsd.html';
+  </script>
 </head>
 
 
@@ -158,6 +164,24 @@
               
               <article>In the OS world, each OS comes with its custom boot loader that knows how to load the kernel and how to pass the execution flow to it.  These boot loaders often know very little about other OSes, so if you need a multi-OS environment, you have to install several different boot loaders.  It is often tricky to get them to coexist and, even if you accomplish it, it's still annoying to chainload between them.<br /><br />The <a href="http://www.gnu.org/software/grub/">GRUB</a> developers wrote the <a href="http://www.gnu.org/software/grub/manual/multiboot/">Multiboot specification</a> which aims to solve this problem.  This specification defines an interface between a boot loader and the OS's kernel, so that any Multiboot-compliant boot loader can execute any Multiboot-compliant OS without knowing any of its internal details.  There are several free OSes that already follow this specification, including <a href="http://www.gnu.org/software/hurd/hurd.html">GNU/Hurd</a>, <a href="http://www.forthos.org/">ForthOS</a>, <a href="http://www.atheos.cx/">AtheOS</a> or <a href="http://www.syllable.org/">Syllable</a>.  (I'm sure there are many more.)<br /><br />Although this is i386-specific, I think the idea is quite interesting.  Therefore, I've started adapting the <a href="http://www.NetBSD.org/">NetBSD</a> kernel to this specification.  I'm progressing (very) slowly, mostly because the lack of documentation on boot code, the complexity behind it and some bugs in GRUB!  No matter what, I can boot a kernel directly from GRUB already, although it still lacks configuration (i.e., information about the boot device, memory mappings, etc.).  Leave me some more days and I think it'll be ready :-)<br /><br />What are those bugs in GRUB I said?  The specification reserves some space in the Multiboot header to specify where in memory the image has to be loaded.  This is required for a.out binaries but it is optional for ELF binaries... and optional means that GRUB forgets about it in the ELF case.  Which is a pity because I must pass special information through there.  To the curious ones, the kernel's text is mapped into the <tt>0xc0100000</tt> virtual address, but the boot loader must load it into the physical address <tt>0x00100000</tt> (because paging is not enabled and such high addresses are not available).  Similarly for all the other segments.<br /><br />I also hope to write a little boot(9) manual page as a result of this mini-project, explaining the overall NetBSD boot process (at least under i386).  I'm sure many people could benefit from it.<br /><br /><b>Edit (23:49)</b>: Some typos and grammar incorrections pointed out by Amitai Schlair have been fixed.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -951,10 +975,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/12\/multiboot-specification-and-netbsd.html");
   gaRequest();
 </script>
 <noscript>

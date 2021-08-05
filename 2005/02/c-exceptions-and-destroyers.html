@@ -58,7 +58,7 @@ Trivial, isn&#39;t it? Well, now compile it and run it: you will get a &#34;">
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -71,6 +71,12 @@ Trivial, isn&#39;t it? Well, now compile it and run it: you will get a &#34;">
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/02\/c-exceptions-and-destroyers.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/02\/c-exceptions-and-destroyers.html';
+  </script>
 </head>
 
 
@@ -188,6 +194,24 @@ Trivial, isn&#39;t it? Well, now compile it and run it: you will get a &#34;">
               
               <article><p>If you use exceptions to signal errors in C++, you should be really careful when throwing an exception from inside a class' destroyer function, because you can easily cause an abort trap. Consider the following code:</p>  <pre>struct test {<br />  ~test(void) {<br />      throw int(0);<br />  }<br />};<br /><br />int main(void) {<br />  try {<br />      test t;<br />      throw int(1);<br />  } catch (int e) {<br />  } catch (...) {<br />  }<br /><br />  return 0;<br />}</pre><p></p>  <p>Trivial, isn't it?  Well, now compile it and run it: you will get a "nice" core dump.  However, if you disable the <tt>throw</tt> statement inside <tt>~test</tt>, the problem will go away.  The problem will also disappear if you move <tt>test</tt>'s instantiation outside the try block.</p>  <p>But... why does this happen?  When the <tt>int(1)</tt> exception is thrown, the <tt>t</tt> object has to be destroyed before it can be handled, because its scope has to be cleaned (see how it's placed inside the try block). When this happens, the destroyer function throws a new exception (while we were handling another one), which could produce an infinite loop. Voila, you've got the abort trap.</p>  <p>So be aware when throwing an exception from a destroyer. Simply put, you must make sure that they will not generate exceptions; you have to handle any possible failure from within them.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -981,10 +1005,12 @@ Trivial, isn&#39;t it? Well, now compile it and run it: you will get a &#34;">
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/02\/c-exceptions-and-destroyers.html");
   gaRequest();
 </script>
 <noscript>

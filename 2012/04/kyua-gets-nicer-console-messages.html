@@ -30,7 +30,7 @@ I originally got this idea from Monotone and later implemented it into ATF but, 
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ I originally got this idea from Monotone and later implemented it into ATF but, 
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2012\/04\/kyua-gets-nicer-console-messages.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2012\/04\/kyua-gets-nicer-console-messages.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ I originally got this idea from Monotone and later implemented it into ATF but, 
               
               <article>For the last couple of weeks, particularly during a bunch of long flights, I have been improving the command-line user interface of Kyua by implementing controlled line wrappings on screen boundaries: messages that are too long to fit on the screen are preprocessed and split into multiple lines at word boundaries. This affects informational messages, error messages and, specially, the output of the built-in <tt>help</tt> command.<br /><br />I originally got this idea from Monotone and later implemented it into ATF but, when writing Kyua's code, I decided to postpone its implementation until a later stage. Reusing the code from ATF was not "nice" because the API of the formatting code was quite nasty, and reimplementing this feature during the initial stages of Kyua felt like a waste of time.<br /><br />However, because controlled line wrapping is crucial to having readable built-in help messages, I have had to do this eventually and the time finally came.<br /><br /><b>The ATF approach</b><br /><br />Why did I say that the ATF code for line wrapping was quite nasty? The main reason is that the printing of messages was incredibly tied to their wrapping. All the code in ATF that prints a message to the screen has to deal with the line wrapping itself, which involves dealing with too many presentation details.<br /><br />For example, consider the help routine that prints the table of options and their descriptions. This routine has to calculate the width of the longest option first and then, for every option, output its name, output some padding, and output the description properly refilled so that subsequent lines are properly arranged with respect to the previous one. While this may not sound too bad in writing, it actually is in code.<br /><br />Furthermore, because all this formatting logic is spread out throughout the code, there is no way to perform decent unit testing. The unit testing did some basic tests on input text, but could not validate that more complex constructions were working right.<br /><br /><b>The Kyua approach</b><br /><br />In the Kyua codebase, I decided to take a more declarative and functional approach. Smaller, pure building blocks that can be combined to achieve more complex constructions and that can be easily tested for correctness individually or in combination.<br /><br />I started by implementing a simple <a href="http://code.google.com/p/kyua/source/browse/utils/text/operations.cpp#36">function that takes a paragraph and reformats it to any given length</a>. This simple function alone gives full flexibility to the caller to decide how to later merge this reformatted text with other text: e.g. place a line prefix or bundle such text inside a table cell.<br /><br />The next step was to implement <a href="http://code.google.com/p/kyua/source/browse/utils/text/table.hpp">tables</a>. Code wishing to print, e.g. the collection of options/commands along their descriptions only cares about declaring a table of two columns and N rows; why should it bother about properly lining up the two columns and printing them? It doesn't, hence the table approach. With tables, the caller can just decide which particular column needs to be wrapped if the table does not fit on the screen, and allow the formatting code to do this. Plus, having this higher level constructs means that we can eventually print the textual reports in a nicer, tabulated way (not done yet).<br /><br />And the last step was to mix all these higher level constructs into the&nbsp;<a href="http://code.google.com/p/kyua/source/browse/utils/cmdline/ui.cpp">console frontend class</a>. This class (the <tt>ui</tt>) knows how to query the width of the terminal and knows how to fit certain kinds of text and/or tables within such width. For example, error messages are not tables: they are messages prefixed with the command name; only the message has to be reformatted if it does not fit while the rest of the text has to flow after the command name. Or, for tables, the maximum width of the terminal determines how wide the table can be and thus how much one of its columns has to be refilled.<br /><br />Getting this whole thing right working has proven to be extremely tricky and I'm sure there are still quite a few rough edges to be discovered. That said, it has been fun enough :-) &nbsp;But, after this experience, I certainly don't want to imagine the pain that the writers of HTML/CSS renderers have endured... this text-based table-rendering is <i>trivial</i> compared to what web browsers do!
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ I originally got this idea from Monotone and later implemented it into ATF but, 
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2012\/04\/kyua-gets-nicer-console-messages.html");
   gaRequest();
 </script>
 <noscript>

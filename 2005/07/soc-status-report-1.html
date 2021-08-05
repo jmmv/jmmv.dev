@@ -30,7 +30,7 @@ So... here is a little status report: I started the week reading the I/O chapter
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ So... here is a little status report: I started the week reading the I/O chapter
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/07\/soc-status-report-1.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/07\/soc-status-report-1.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ So... here is a little status report: I started the week reading the I/O chapter
               
               <article><p>During this past week, I've been working a bit on my SoC project; only a bit because I had to prepare the slides for the <a href="http://www.netbsd.org/">NetBSD</a> presentation I'm giving tomorrow at <a href="http://www.partyzipa.com/">Partyzip@</a>.  Fortunately, from now on I won't have anything else to do, so I'll be able to devote all my time to <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">tmpfs</a> :-)</p>  <p>So... here is a little status report: I started the week reading the I/O chapter from the <i>Design and Implementation of the 4.4BSD Operating System</i>.  It was a really interesting read, as I could understand some common concepts in detail.</p>  <p>After that, I started creating a extremely simple skeleton for my new file system. Before doing that, I was tempted to copy a whole existing file system, such as ptyfs, to later modify its code to suit my needs. But I quickly threw away this idea because this could hide some of the learning process.</p>  <p>So I started with some empty files defining the basic structures for tmpfs: a mount structure and a vnode structure. I set all of its members to useless/NULL functions. After that, I got the kernel to build with the code inside it, but it failed miserably to boot (NULL pointers to functions are not good).</p>  <p>To fix this, I had to define some VFS hooks, such as the <tt>vfs_init</tt> one. This solved the panics during boot, but obviously, more panics appeared while trying to mount the file system using a simple <tt>mount_tmpfs(8)</tt> utility. I did the same process: define empty functions for the affected operations rather than using NULL pointers. And I could call <tt>mount(2)</tt> without a crash.</p>  <p>The next logical step was to fill the mount functions with something useful; I based the code structure on the one I read in ptyfs; however, I still doubt about its correctness (it surely lacks stuff).</p>  <p>Now, I can mount the file system (to the point that it appears as mounted when running <tt>mount(8)</tt>).  However, any <tt>sync(2)</tt> operation causes a crash, surely because of the lack of other VFS hooks.</p>  <p>The task next week will be to continue this process, filling functions as needed and possibly starting real work on the file system itself (i.e., how to store the files and directories into memory, etc.).</p>  <p>All the above is explained in detail, although with very compact sentences, into the <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/howto.txt">notes I'm taking</a>.</p>  <p>Oh BTW, Monotone's CVS gateway has caused me some trouble, such as pushing only half of the revisions... I had to finish the process manually, and worst of all, I don't know why it happened. Next time, I'll try to do a manual test before the real operation on a local CVS repository (if I can get one)...</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ So... here is a little status report: I started the week reading the I/O chapter
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/07\/soc-status-report-1.html");
   gaRequest();
 </script>
 <noscript>

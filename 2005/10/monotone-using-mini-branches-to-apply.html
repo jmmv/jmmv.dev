@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/10\/monotone-using-mini-branches-to-apply.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/10\/monotone-using-mini-branches-to-apply.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article><p>The <a href="http://www.venge.net/monotone/">Monotone</a> VCS provides the concept of mini-branches. A mini-branch is a lightweight branch created inside a formal branch whenever a commit causes "conflicts" with the actual contents of the repository. For example, if your working copy is not up to date and you commit something, you will create a new head within the branch (that is, a mini-branch), that you will later need to (possibly manually) merge with the other head to remove the divergence.</p>  <p>Mini-branches can be used to easily apply externally-provided patches to your software project. Consider the following "collapsed" revision subgraph:</p>  <pre>      tag: foo-2.1        tag: foo-3.0<br />         |                   |<br />A -> B -> C -> D -> E -> F -> G -> H -> I -> J</pre><p></p>  <p>As you can see, some development happened in revisions A, B and C, at which point the program was considered stable and the 2.1 release was made. Some time later, and after lots of changes, revision G was tagged as 3.0 and that release was made.</p>  <p>One of this project's users notices a bug in the 2.1 version, tracks it down and fixes it. For whatever reason, he cannot update to 3.0 to see if his changes work with the latest version, so he decides to submit his fix as a patch against 2.1 to the mainstream developers.</p>  <p>So, how do they handle the patch? It will doubtfully apply cleanly to their current code-base, which is far past 3.0. Of course, they can inspect it, adjust it and apply it directly to revision J, but all this process won't be tracked anywhere. Users and developers could later be confused when looking at the original patch and the patch that was really applied — "why were those changes done?".</p>  <p>Here is where mini-branches come to help. The developers ask Monotone to check out a clean copy of C (the same that the user had), ensuring that the patch will apply cleanly. At that point, they apply the fix and commit it to the tree, thus "storing" the original patch file in it. As a result, the revision tree could look like:</p>  <pre>      tag: foo-2.1        tag: foo-3.0<br />         |                   |<br />A -> B -> C -> D -> E -> F -> G -> H -> I -> J<br />                                    K</pre><p></p>  <p>As you can see, the repository now has two heads (J and K) in the same branch (which can be inspected using <tt>monotone heads</tt>). J is a lot farther than K in terms of development, but that doesn't matter to the VCS system. Note that, at this point, the revision K carries the code in 2.1 plus the changes submitted by the user verbatim; they still haven't been modified to apply to J, and J is not affected at all by that commit.</p>  <p>Once this is done, and after inspecting why the patch does not apply, the developer decides to merge the heads (<tt>monotone merge</tt>), thus creating a new revision L that holds all J's code plus the fix added in K:</p>  <pre>      tag: foo-2.1        tag: foo-3.0<br />         |                   |<br />A -> B -> C -> D -> E -> F -> G -> H -> I -> J -> L<br />                                             /<br />                                            /<br />             K -----------------------------'</pre><p></p>  <p>Voila! There is now a single head, L, which holds all your code plus the fix sent by the user. Furthermore, the repository has kept track of all the patching process, storing the original and the modified versions of the changes.</p>  <p>Note that this has assumed that revisions are marked as tags rather than as formal branches. Of course, a similar process could be followed if each version was on its own branch (as done with any other VCS).</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/10\/monotone-using-mini-branches-to-apply.html");
   gaRequest();
 </script>
 <noscript>

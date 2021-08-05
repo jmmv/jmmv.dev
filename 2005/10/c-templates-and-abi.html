@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/10\/c-templates-and-abi.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/10\/c-templates-and-abi.html';
+  </script>
 </head>
 
 
@@ -158,6 +164,24 @@
               
               <article><p>In the <a href="http://www.livejournal.com/users/jmmv/44985.html">previous post</a>, we saw why inlined code is dangerous in a public API. Unfortunately, I carelessly put templates in the same bag in an attempt to generalize the idea too much, giving an incorrect impression of how they work. A reader (<a href="http://www.livejournal.com/users/fellow_traveler/">fellow_traveler</a>) spotted the mistake and here is this new post to clarify what's up with templates and an ABI... if one can relate the two concepts at all.</p>  <p>C++ makes intensive use (or abuse?) of templates to achieve genericity; one can quickly notice this in the STL, where each container is parametrized based on one or more types. Other libraries, such as <a href="http://www.boost.org/">Boost</a>, go further and use templates in a lot of situations where one couldn't have ever imagined so.</p>  <p>In order to understand what goes on with templates, let's remind how they work. A template defines a piece of code (be it a class or a function) that is parametrized by a type given by the developer. The template does not exist as binary code, because, simply put, that is impossible: it lacks type information to be compiled.</p>  <p>Here is a trivial function that returns the sum of two objects whose type is defined by <tt>Type</tt>; we will use it to illustrate some examples below. Also, and to focus on the ABI, let's assume that this code is part of a public library; therefore, it must be placed in a header file (e.g., <tt>foo.hpp</tt>) to be useful to other users (if it were in a <tt>foo.cpp</tt> file, it'd simply be private and not usable outside that file).</p>  <pre>template &lt;class Type&gt;<br />Type<br />add(const Type& p1, const Type&amp; p2)<br />{<br />   return p1 + p2;<br />}</pre><p></p>  <p>When the template is used in someone else's code — in other words, it is instantiated — the compiler grabs the template's source code, fills in the parametrized gaps with the type given by the developer and creates the final object code. For example, given:</p>  <pre>int foo = add&lt;int&gt;(2, 3);<br />float bar = add&lt;float&gt;(2.4, 3.5);</pre><p></p>  <p>The compiler gets the verbatim <tt>add</tt> function's code from the header file, replaces <tt>Type</tt> with <tt>int</tt>, generates the object code for the resulting function and stores it alongside the user's binary.  The same happens with the <tt>float</tt> instance.  Notice how the binary code is <i>not</i> in the library where the template came from, and also notice that the user's binary has gained two new functions, one for each instantiation.</p>  <p>So what happens? Templates cannot take advantage of (binary) shared libraries. Whenever the code in a template changes, the template's user is forced to rebuild his code (if he wants to get the new changes, of course). Imagine that there was a security bug (or any other serious bug) in the template's code: you'd need to make sure to rebuild all its uses to fix the issue, something well-known by users of static binaries.</p>  <p>Of course, the library developer could explicitly instantiate some common types in his library's binary so that the user needn't duplicate the code. This could work in some cases, but as he cannot predict what types will the developer use, this is not a complete solution.</p>  <p>Other developers create templates in a two-layered design. The public template is a very thin wrapper over a private class that achieves genericity by using <tt>void *</tt> types. This way, the public template is unlikely to change, and the developers can safely change their internal code without requiring external rebuilds. I think I saw this in the STL itself, or maybe in <a href="http://www.trolltech.com/">QT</a>, cannot remember.</p>  <p>Summarizing: as my reader said, it makes no sense to talk about templates and ABIs, because a template never has an ABI. It is only an API that, once compiled in third-party code, becomes part of it. I'm now wondering how Java 1.5's templates work or if they suffer from these issues too...</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -951,10 +975,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/10\/c-templates-and-abi.html");
   gaRequest();
 </script>
 <noscript>

@@ -30,7 +30,7 @@ Suppose you have an application that is not linked against libpthread, neither d
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Suppose you have an application that is not linked against libpthread, neither d
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2004\/11\/dynamic-open-of-libpthread-considered.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2004\/11\/dynamic-open-of-libpthread-considered.html';
+  </script>
 </head>
 
 
@@ -160,6 +166,24 @@ Suppose you have an application that is not linked against libpthread, neither d
               
               <article><p>Here goes another portability issue I've met multiple times while packaging software for <a href="http://www.netbsd.org/">NetBSD</a> 2.x, where libpthread has some restrictions that other systems don't seem to have. Simply put, a non-threaded program cannot become threaded at run time, because, if it does, you get a nice "Abort trap". But, how can this happen?</p>  <p>Suppose you have an application that is not linked against libpthread, neither directly nor indirectly (through required libraries). The initialization code used to set up this program doesn't need to care about threads, because it's assumed that they won't be used. Hence you have a non-threaded program. Note that the important part here is <i>the initialization code used to setup the program</i>, not whether the program uses calls to <tt>pthread_*</tt> functions or not.</p>  <p>Now imagine that this non-thread program loads a shared object (be it a library or a plugin) using <tt>dlopen(3)</tt>. This is not by itself a problem. The funny part comes when the shared object being opened is linked against libpthread; that is, threaded code. There you have the "Abort trap". You have loaded threaded code into a non-threaded application. Here is a little example for you to play with:</p>  <pre>#include &lt;dlfcn.h&gt;<br />#include &lt;stdio.h&gt;<br />#include &lt;stdlib.h&gt;  <p>int<br />main(void)<br />{<br />   void *handle;<br /></p><p>    (void)printf("Loading libpthread.son");<br />   handle = dlopen("libpthread.so", RTLD_LAZY);<br />   (void)printf("libpthread.so loadedn");<br />   dlclose(handle);</p><p>    return EXIT_SUCCESS;<br />}</p></pre><p></p>  <p>Can this problem be worked around? Sure. It's as simple as linking the non-threaded application against libpthread (even if it won't make any use of threads), because this library will override the initialization code used to set up the program. I've done this, for example, in the <tt>gtk-query-immodules-2.0</tt> utility that comes with <a href="http://www.gtk.org/">GTK+</a>, because some plugins loaded by it are threaded.</p>  <p>Considering the previous example, doing: <tt>cc test.c ; ./a.out</tt> will produce a crash.  But <tt>cc -lpthread test.c ; ./a.out</tt> will not.  And even <tt>cc test.c ; LD_PRELOAD=/usr/lib/libpthread.so ./a.out</tt> will work too.  Remember?  It's the initialization code that matters, not the amount of threads used by the code.</p>  <p>Now, before thinking this is a bug in NetBSD, let me say that this was a design decision in the libpthread library. I don't remember the rationale behind it, but I guess you should be able to find it <a href="http://www.google.com/">Google</a>ing a bit ;-)</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -953,10 +977,12 @@ Suppose you have an application that is not linked against libpthread, neither d
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2004\/11\/dynamic-open-of-libpthread-considered.html");
   gaRequest();
 </script>
 <noscript>

@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2008\/10\/boostprocess-and-sigchld.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2008\/10\/boostprocess-and-sigchld.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article>For some unknown reason, I'm regaining interest in Boost.Process lately.  I guess many of the people who have written me in the past asking for the status of the library will be happy to hear this, but I can't promise I will stick to coding it for long.  I have to say that I have received compliments from quite a few people...  thanks if you are reading and sorry if I did not reply you at all.<div><br /></div><div>Anyway.  So I downloaded my code and ran the unit tests under Mac OS X to make sure that everything still worked before attempting to do any further coding.  Oops, lots of failures!  All tests spawning a child process broke due to an EINTR received by waitpid(2).  That doesn't look good; it certainly didn't happen before.</div><div><br /></div><div>After these failures, I tried the same thing under Linux to make sure that the failures were not caused by some compatibility issue with Mac OS X.  Oops, failures again! Worrisome.  The curious thing is that the tests <span class="Apple-style-span" style="font-style: italic;">do</span> work in Win32 &mdash; but that can be somewhat expected because all the internal code that does the real work is platform-specific.</div><div><br /></div><div>Curiously, though, running the examples (not the tests, but the sample little programs distributed as part of the library documentation) did not raise any errors. Hence, I tried to run gdb on the actual tests to see if the debugger could shed any light on the failures.  No way.  Debugging the unit tests this way is not easy because Boost.Test does a lot of bookkeeping itself &mdash; yeah, newer versions of the library have cool features for debugging, but they don't work on OS X.  Hmm, so what if I run gdb on the examples? Oh! The problem magically appears again.</div><div><br /></div><div>It has taken me a long while to figure out the problem. Along the process, I have gone through thoughts of memory corruption issues and race conditions. In the end, the response was much simpler: it all turns out to SIGCHLD (as the error code returned by waitpid(2) well said).</div><div><br /></div><div>SIGCHLD is received by a process whenever any of its children change status (e.g. terminates execution). The default behavior of the signal handler for SIGCHLD is to discard the signal. Therefore, when this signal is received, no system calls are aborted because it is effectively discarded. However, it turns out that newer versions of Boost.Test install signal handlers for a lot of signals (all?) to allow the test monitor to capture unmanaged signals and report them as errors. Similarly, gdb also installs a signal handler for SIGCHLD. As a result, Boost.Process does not work when run under gdb or Boost.Test because the blocking system calls in the library do not deal with EINTR, but it actually works for non-test programs run out of the debugger.</div><div><br /></div><div>The first solution I tried was to simply retry the waitpid(2) whenever an EINTR error was received. This fixes the problem when running the tests under gdb. Unfortunately, the test cases are signaled as failed anyway because the test monitor still receives SIGCHLD and considers it a failure.</div><div><br /></div><div>The second solution I have implemented consists on resetting the SIGCHLD handler to its default behavior when Boost.Process spawns a new child and restoring the old SIGCHLD handler when the last child managed by Boost.Process is awaited for.  Eventually, the library could do something useful with the signal, but discarding it seems to be good enough for now.</div><div><br /></div><div>This second solution is the one that is going to stay, probably, unless you have any other suggestion. I still feel it is a bit fragile, but can't think of anything better. For example: what if the user of Boost.Process had already programmed a handler for SIGCHLD? I just think that such a case shouldn't be considered because, after all, if you are using Boost.Process to manage children processes, you shouldn't have to deal with SIGCHLD on your own as long as the library provides a correct abstraction for it.</div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2008\/10\/boostprocess-and-sigchld.html");
   gaRequest();
 </script>
 <noscript>

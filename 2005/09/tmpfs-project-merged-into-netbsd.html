@@ -30,7 +30,7 @@ I&#39;d like to comment now some of the improvements I&#39;ve been doing during 
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ I&#39;d like to comment now some of the improvements I&#39;ve been doing during 
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/09\/tmpfs-project-merged-into-netbsd.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/09\/tmpfs-project-merged-into-netbsd.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ I&#39;d like to comment now some of the improvements I&#39;ve been doing during 
               
               <article><p>After listening to many queries from developers asking when tmpfs could be integrated into <a href="http://www.netbsd.org/">NetBSD</a>, I finally imported the code into the CVS repository. I'm really happy about this :-) Development will be simplified from now on and it will be a lot easier for interested parties to test the code. Please <a href="http://mail-index.netbsd.org/tech-kern/2005/09/10/0004.html">read the announcement</a> for more information.</p>  <p>I'd like to comment now some of the improvements I've been doing during the past days, which mostly addressed optimization. I started by removing the storage of <tt>.</tt> and <tt>..</tt> directory entries from directories, generating them on the fly when requested. This was done for three reasons. First, to remove redundancy: as <tt>.</tt> points to the directory itself, the entry can always be generated; similarly, <tt>..</tt> can be generated from the pointer to the parent directory stored in the nodes. Secondly, to simplify the code: there were multiple assertions to ensure that these entries were correct and there was code to update them on file-system changes; this code was hard to understand and, as you can see, avoidable. Lastly, to reduce memory consumption: this removed around 1KB of storage from each directory (given to a change I've done recently, this gain is lower, because entries are now a lot smaller, but still this saves 40 bytes from each directory).</p>  <p>Then I fixed a long-standing and very important issue: the assignment of unique node numbers and generation numbers to nodes. Among other reasons, this was done to be NFS-friendly. See <a href="http://www.livejournal.com/users/jmmv/42564.html">my previous post on NFS file handles</a> for more details.</p>  <p>At last, I removed fixed-size string buffers from nodes and directory entries, replacing them with dynamically allocated memory from a string pool. Strings are now stored more efficiently and waste far less space. Note that, before this change, each directory entry occupied around 255 bytes and each node took more than 1KB. As an example, the simple creation of 10K empty files previously required around 20MB of memory, whereas it now needs 1.5MB. This should be reduced even more, but, as you can see, this is a lot better than before.</p>  <p>And of course, several bug fixes and miscellaneous improvements were done all around.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ I&#39;d like to comment now some of the improvements I&#39;ve been doing during 
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/09\/tmpfs-project-merged-into-netbsd.html");
   gaRequest();
 </script>
 <noscript>

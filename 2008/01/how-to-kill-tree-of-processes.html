@@ -30,7 +30,7 @@ The root process is stopped by sending a SIGSTOP to it so that it cannot spawn a
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ The root process is stopped by sending a SIGSTOP to it so that it cannot spawn a
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2008\/01\/how-to-kill-tree-of-processes.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2008\/01\/how-to-kill-tree-of-processes.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ The root process is stopped by sending a SIGSTOP to it so that it cannot spawn a
               
               <article><a href="http://julipedia.blogspot.com/2008/01/implementing-timeouts-for-test-cases.html">Yesterday</a> I mentioned the need for a way to kill a tree of processes in order to effectively implement timeouts for test cases.  Let's see how the <a href="http://mtn-host.prjek.net/viewmtn/atf/revision/file/f51b4c7f694ff98e0e303743797eb3cccb6f9ea4/atf/procs.cpp">current algorithm</a> in ATF works:<br /><div><ol><li>The root process is stopped by sending a SIGSTOP to it so that it cannot spawn any new children while being processed.</li><li>Get the whole list of active processes and filter them to only get those that are direct children of the root process.</li><li>Iterate over all the direct children and repeat from 1, recursively.</li><li>Send the real desired signal (typically SIGTERM) to the root process.</li></ol><div>There are two major caveats in the above algorithm. First, point 2. There is no standard way to get the list of processes of a Unix system, so I have had to code three different implementations so far for this trivial requirement: one for NetBSD's KVM, one for Mac OS X's sysctl kern.proc node and one for Linux's procfs.</div><div><br /></div><div>Then, and the worst one, comes in point 4. Some systems (Linux and Mac OS X so far) do not seem to allow one to send a signal to a stopped process. Well, strictly speaking they allow it, but the second signal seems to be simply ignored whereas under NetBSD the process' execution is resumed and the signal is delivered. I do not know which behavior is right.</div><div><br /></div><div>If we cannot send the signal to the stopped process, we can run into a race condition: we have to wake it up by sending a SIGCONT and then deliver the signal, but in between these events the process may have spawned new children that we are not aware of.</div><div><br /></div><div><i>Still</i>, being able to send a signal to a stopped process does not completely resolve the race condition. If we are sending a signal that the user can reprogram (such as SIGTERM), that process may fork another one before exiting, and thus we'd not kill this one.  But... well... this is impossible to resolve with the existing kernel APIs as far as I can tell.</div><div><br /></div><div>One solution to this problem is killing a timed-out test by using SIGKILL instead of SIGTERM. SIGKILL could work on any case because means <i>die immediately</i>, without giving a chance to the process to mess with it. Therefore SIGCONT would not be needed in any case &mash;because you can simply kill a stopped process and it will die immediately as expected&mdash; and the process would not have a chance to spawn any more children after it had been stopped.</div><div><br /></div><div>Blah, after writing this I wonder why I went with all the complexity of dealing with signals that are not SIGKILL... say over-engineering if you want...</div></div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ The root process is stopped by sending a SIGSTOP to it so that it cannot spawn a
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2008\/01\/how-to-kill-tree-of-processes.html");
   gaRequest();
 </script>
 <noscript>

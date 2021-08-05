@@ -30,7 +30,7 @@ I started by adding support for local sockets, which was easy enough to do but c
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ I started by adding support for local sockets, which was easy enough to do but c
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/08\/soc-status-report-6.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/08\/soc-status-report-6.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ I started by adding support for local sockets, which was easy enough to do but c
               
               <article><p>This past week has not been excessively productive because I spent some time dealing with long overdue <a href="http://www.pkgsrc.org/">pkgsrc</a> tasks (mainly updating <a href="http://www.gnome.org/">GNOME</a> to 2.10.2, the latest stable version) and was away from computer more time than usual. Anyway, I have done a bunch of things, although they are not as visible as the work from other weeks (this is, in part, why I felt less productive).</p>  <p>I started by adding support for local sockets, which was easy enough to do but caused panics (specially when switching <tt>/tmp</tt> to tmpfs and starting an X session).</p>  <p>Then I tried to switch memory pools to use anonymous memory, so that all file meta-data was pageable. I did several clumsy tests and, while it mostly worked, the system crashed after intensive usage of the file-system (such as decompressing pkgsrc over it). I had to give this up because I had some other stuff to do (see below) and this was consuming much time.</p>  <p>The next thing I did was to rework the way pools were handled by making them file-system specific and by implementing a tmpfs-specific extension of them. There are several benefits from this change, but the most important one is that tmpfs is now able to control memory usage in a fine-grained manner.</p>  <p>Later on I added NFS support by defining the VFS operations I was missing. This was harder than I thought, mostly because the lack of documentation, but after some time I got something that basically works. There are still some some serious issues, so I'd not call tmpfs as NFS-ready yet. I'm afraid that these problems are not specific to NFS; i.e., NFS is only exposing some real bugs in the code. We'll see.</p>  <p>Related to the previous, I was disappointed to see that I had to modify mountd's code to be able to export tmpfs file-systems. I have some ideas to improve this, thus making mountd file-system independent, but I'll delay them until SoC's deadline has passed.</p>  <p>Furthermore, I cleaned up some parts of the code: split the different vnode operations vectors into different source files (<tt>tmpfs_vnops.c</tt>, <tt>tmpfs_fifoops.c</tt> and <tt>tmpfs_specops.c</tt>) for better readability and to get shorter files, split the main <tt>tmpfs.h</tt> file into several headers, cleaned up inclusions and centralized some code.</p>  <p>At last, I wrote the document describing tmpfs internals. This is in the form of a manual page in the 9th section, and can be found in the CVS. If you want to visualize it, you can run the following command: <tt>groff -Tascii -mdoc tmpfs.9 | less</tt> after fetching the file. It may lack some details, but I feel it is quite complete, though it assumes prior knowledge of how file-systems work within NetBSD.</p>  <p>What I'm going to target this week (after prior agreement with my mentors) is the other so-promised document I've been talking about: a complete document that describes how to write file-systems for NetBSD. I started it yesterday, and it is proving to be very difficult to explain things in a clean and well-structured way (mostly because I want to avoid big code examples without real explanations).</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ I started by adding support for local sockets, which was easy enough to do but c
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/08\/soc-status-report-6.html");
   gaRequest();
 </script>
 <noscript>

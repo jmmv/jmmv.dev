@@ -30,7 +30,7 @@ The tmpfs code is up to the point where I have to start implementing the vnode o
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ The tmpfs code is up to the point where I have to start implementing the vnode o
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/07\/soc-thoughts-about-tmpfs-data.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/07\/soc-thoughts-about-tmpfs-data.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ The tmpfs code is up to the point where I have to start implementing the vnode o
               
               <article><p>The text below is a message I just sent to <a href="http://www.netbsd.org/">NetBSD</a>'s <tt>tech-kern</tt> mailing list.  I'm reproducing it here with better formatting and with some e-mail specific sentences removed.</p>  <p>The tmpfs code is up to the point where I have to start implementing the vnode operations. To do this, I have to decide how to organize the file data in memory as well as all other information needed to manage it.</p>  <p>After thinking about this for a while, it seems that the best way to do this is to follow a layout similar to the one used for existing on-disk file systems. That is, I need:</p>  <ul> <li>A set of nodes that describe files.  These could be like regular inodes.</li> <li>A set of blocks that store file contents. These could store directories as well (i.e., the "file" representing the directory contents.).</li> </ul>  <p>Suppressing the former (merging it with directory contents, thus becoming something like the FAT) means that implementing hard links becomes very complex, so the separation is worth it.</p>  <p>Now, to store these two data structures in memory. Before I started coding, I thought I could use malloc/free to allocate and deallocate blocks of memory on the fly. I.e., when a new block is needed, I do a malloc and use it. When it is useless, I do a free and its associated memory is released.</p>  <p>This is inappropriate because malloc/free operate on wired memory. Furthermore, I guess malloc is an expensive operation and should not be used intensively to avoid its overhead (think about how tmpfs could abuse it).</p>  <p>Therefore, I started reading a bit about UVM, and although I don't understand it very well yet, it seems to me that it is possible to map a region of virtual (unwired) memory and use it at will (just as if you had done a malloc). So, for now, I'm using malloc/free to allocate some (few) memory blocks, and I hope that changing this to use unwired memory will be as easy as doing some call to UVM to request a memory region and use pointers inside it for our own use.</p>  <p>With this in mind, it seems that a good way to map the data structures said before into these memory blocks could be:</p>  <ul> <li>Allocate a memory block of no. nodes * sizeof node.  This could be used to hold all nodes.  It could be handled with a bitmap.</li> <li>Allocate a memory block of no. blocks * sizeof blocks.  As before, with an associated bitmap describing its contents.</li> </ul>  <p>(Note that the number of blocks and nodes is configured by the user at mount time, and is already implemented.)</p>  <p>The advantages of this structure are:</p>  <ul> <li>Access to blocks and nodes is constant time, as they are located in known memory positions (it's a vector).</li> <li>Allocation of blocks and nodes is of linear time due to the location of empty holes in the bitmap. Can be solved with a pool of available entries (at a later time).</li> <li>Deallocation of blocks and nodes is constant time.</li> <li>It's easy to grow (and to some extent, shrink) the file system at will.</li> <li>The implementation is straightforward.</li> <li>It is very similar to traditional Unix file systems, so it will be easy to understand.</li> </ul>  <p>The code in the CVS did exactly this some revisions before HEAD. In a later change, I undid the separation explained here and used blocks for everything. But I'm starting to regret that decision because it will be very complex to store nodes if I don't want to waste much memory.</p>  <p>If you have any better ides, suggestions or you see something wrong in this rationale, please say it! :-)</p>  <p><b>Edit (Jul 20th, 00:00)</b>: Check out the <a href="http://mail-index.netbsd.org/tech-kern/2005/07/19/0000.html">original mail</a> and all its follow ups.  They include very interesting suggestions (such as <a href="http://mail-index.netbsd.org/tech-kern/2005/07/19/0001.html">this one</a>) and expose that my proposal is just wrong (frankly, I could imagine this ;).</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ The tmpfs code is up to the point where I have to start implementing the vnode o
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/07\/soc-thoughts-about-tmpfs-data.html");
   gaRequest();
 </script>
 <noscript>

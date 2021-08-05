@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2008\/03\/problems-booting-debian-on-ps3.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2008\/03\/problems-booting-debian-on-ps3.html';
+  </script>
 </head>
 
 
@@ -158,6 +164,24 @@
               
               <article>I had been running Fedora 8 for a long while on my PlayStation 3, but I got sick every time I had to run a <tt>yum update</tt>: that process was very slow.  Furthermore, I prefer Debian as a Linux distribution due to its administration utilities and strong policies, so I thought to give it a second chance on my PS3.  Second?  Yes, I already installed it a while ago, but given that the Cell SDK is only packaged for Fedora made me switch.  Anyway, as I'm not doing as much Cell development as I thought at home, I don't care any more and want to install something I'll enjoy.  Eventually that'll be NetBSD...<br /><br />So I installed Debian 4.0 using the <a href="http://www.keshi.org/moin/PS3/Debian/Installer">experimental installer</a>.  The process went flawlessly, but I chose to do manual partitioning: I created a 1GB partition for swap as <tt>/dev/ps3da1</tt> and a 9GB ext3 partition for the root file system as <tt>/dev/ps3da2</tt>, in that order.  Then, after installation, I was greeted by an unbootable system: for some reason, kboot failed to mount <tt>/dev/ps3da2</tt> as its root file system and hence it couldn't parse its <tt>kboot.conf</tt>.  Salvaging that situation was easy though: just mount that file system by hand, check the contents of <tt>/etc/kboot.conf</tt> and manually enter the command on the command line.<br /><br />But why was that failing?  I already found this problem some months ago with the first attempt at installing Debian.  And, for what is worth, things worked fine in Fedora 8, and it had the boot loader configuration files in the same place.  After Googling a bit I found no answer, so I opted to read kboot's <tt>init</tt> code.  And there was the explanation: when looking for a root file system, it checks if the file system is marked as active and skips it if not.<br /><br />The solution was to install the <tt>pmac-fdisk</tt> package under Debian, access the partition table of <tt>/dev/ps3d</tt>, mark <tt>/dev/ps3da2</tt> as active, save the changes and reboot to see the system boot automatically.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -951,10 +975,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2008\/03\/problems-booting-debian-on-ps3.html");
   gaRequest();
 </script>
 <noscript>

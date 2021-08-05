@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2008\/01\/implementing-timeouts-for-test-cases.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2008\/01\/implementing-timeouts-for-test-cases.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article>One of the pending to-do entries for ATF 0.4 is (was, mostly) the ability to define a timeout for a test case after which it is forcibly terminated.  The idea behind this feature is to prevent broken tests from stalling the whole test suite run, something that is already needed by the factor(6) tests in NetBSD.  Given that I want to release this version past weekend, I decided to work on this instead of delaying it because... you know, this sounds pretty simple, right? Hah!<div><br /></div><div>What I did first was to implement this feature for C++ test programs and added tests for it.  So far, so good.  It effectively was easy to do: just program an alarm in the test program driver and, when it fires, kill the subprocess that is executing the current test case. Then log an appropriate error message.</div><div><br /></div><div>The tests for this feature deserve some explanation.  What I do is: program a timeout and then make the test case's body sleep for a period of time.  I try different values for the two timers and if the timeout is smaller than the sleeping period, then the test must fail or otherwise there is a problem.</div><div><br /></div><div>The next step was to implement this in the shell interface, and this is where things got tricky.  I did a quick and dirty implementation, and it seemed to make the same tests I added for the C++ interface pass.  However, when running the bootstrap testsuite, it got stalled at the cleanup part.  Upon further investigation, I noticed that there were quite a lot of sleep(1) processes running when the testsuite was stalled, and killing them explicitly let the process continue.  You probably noticed were the problem was already.</div><div><br /></div><div>When writing a shell program, you are forking and executing external utilities constantly, and sleep(1) is one of them.  It turns out that in my specific test case, the shell interpreter is just waiting for the sleep subprocess to finish (whereas in the C++ version everything happens in a single process).  And, <span class="Apple-style-span" style="font-style: italic;">killing a process does not kill its children</span>.  There you go.  My driver was just killing the main process of the test case, but not everything else that was running; hence, it did not die as expected, and things got stalled until the subprocesses also died.</div><div><br /></div><div>Solving this was the fun part. The only effective way to make this work is to kill the test case's main process <i>and</i>, recursively, all of its children. But killing a tree of processes is not an easy thing to do: there is no system interface to do it, there is no portable interface to get a list of children and I'm yet unsure if this can be done without race conditions.  I reserve the explanation of the recursive-kill algorithm I'm using for a future post.</div><div><br /></div><div>After some days of work, I've got this working under Mac OS X and also have got automated tests to ensure that it effectively works (which were the hardest part by far).  But as I foresaw, it fails miserably under NetBSD: the build was broken, which was easy to fix, but now it also fails at runtime, something that I have not diagnosed yet. Aah, the joys of Unix...<br /></div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2008\/01\/implementing-timeouts-for-test-cases.html");
   gaRequest();
 </script>
 <noscript>

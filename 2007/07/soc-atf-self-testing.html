@@ -30,7 +30,7 @@ ATF can test itself because it is possible to define test programs through ATF t
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ ATF can test itself because it is possible to define test programs through ATF t
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2007\/07\/soc-atf-self-testing.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2007\/07\/soc-atf-self-testing.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ ATF can test itself because it is possible to define test programs through ATF t
               
               <article><a href="http://www.netbsd.org/%7Ejmmv/atf/">ATF</a> is a program, and as happens with any application, it must be (automatically) tested to ensure it works according to its specifications.  But as you already know, ATF is a testing framework so... is it possible to automatically test it? Can it test itself?  Should it do it?  The thing is: it can and it should, but things are not so simple.<br /><br />ATF <i>can</i> test itself because it is possible to define test programs through ATF to check the ATF tools and libraries.  ATF <i>should</i> test itself because the resulting test suite will be a great source of example code and because its execution will be on its own a good stress test for the framework.  See the <a href="http://mtn-host.prjek.net/viewmtn/atf/revision/browse/afd5e705f02e7c57495b3a7f346c80d9592a19f3/tests/atf">tests/atf</a> directory to check what I mean; specially, the <a href="http://mtn-host.prjek.net/viewmtn/atf/revision/file/afd5e705f02e7c57495b3a7f346c80d9592a19f3/tests/atf/units/t_fs.cpp">unit tests for the fs module</a>, which I've just committed, are quite nice :-)  (For the record: there currently are 14 test programs in that directory, which account for a total of 60 test cases.)<br /><br />However, ATF should <i>not</i> be tested <i>exclusively</i> by means of itself.  If it did so, any failure (even the most trivial one) in the ATF's code could result in false positives or false negatives during the execution of the test suite, leading to wrong results hard to discover and diagnose.  Imagine, for example, that a subtle bug made the reporting of test failures to appear as test passes.  All tests could start to succeed immediately and nobody could easily notice, surely leading to errors in further modifications.<br /><br />This is why a bootstrapping test suite is required: one that ensures that the most basic functionality of ATF works as expected, but which does not use ATF to run itself.  This additional test suite is already present in the source tree, and is written using GNU Autotest, given that I'm using the GNU Autotools as the build system.  Check the <a href="http://mtn-host.prjek.net/viewmtn/atf/revision/browse/afd5e705f02e7c57495b3a7f346c80d9592a19f3/tests/bootstrap">tests/bootstrap</a> directory to see what all this is about.<br /><br />ATF's self-testing is, probably, the hardest thing I've encountered in this project so far.  It is quite tricky and complex to get right, but it's cool!  Despite being hard, having a complete test suite for ATF is a <i>must</i> so it cannot be left aside.  Would you trust a testing framework if you could not quickly check that it worked as advertised?  I couldn't ;-)
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ ATF can test itself because it is possible to define test programs through ATF t
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2007\/07\/soc-atf-self-testing.html");
   gaRequest();
 </script>
 <noscript>

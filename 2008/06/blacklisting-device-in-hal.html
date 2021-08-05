@@ -30,7 +30,7 @@ Whenever I connect the camera to the machine, HAL detects the new device and the
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Whenever I connect the camera to the machine, HAL detects the new device and the
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2008\/06\/blacklisting-device-in-hal.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2008\/06\/blacklisting-device-in-hal.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ Whenever I connect the camera to the machine, HAL detects the new device and the
               
               <article>I have an old Aiptek mini PenCam 1.3 MPixels, identified by USB vendor 1276 and product 20554.  I want to use this webcam for videoconferencing in the machine I am setting up for this purpose.  This machine carries a Fedora 9 x86_64 installation, as already mentioned in the previous post.<br /><br />Whenever I connect the camera to the machine, HAL detects the new device and then GNOME attempts to "mount" it using gphoto2.  The result is that I get a new device on the desktop referring to the camera, which is pretty nice, but it does not work at all: accessing it raises an unexpected error and thus the photos stored in the webcam cannot be seen.<br /><br />Anyway, I do not care about the photo capabilities of this camera, just about its ability to stream video.  Hence, I installed the <tt>gspca</tt> and <tt>kmod-gspca</tt> packages from the <a href="http://rpm.livna.org/">livna</a> repositories and, according to the <a href="http://mxhaard.free.fr/spca5xx.html">gspca</a> driver, my camera is, supposedly, fully supported.<br /><br />Unfortunately, I was not able to get the <tt>/dev/video</tt> device: it didn't exist, even with the kernel modules loaded.  After some manual investigation on the console (so that gphoto2 couldn't get in the way), I found that the video device really appears but vanishes as soon as gphoto2 attempts to access the camera.  I suspect it is not possible to use the photo and video capabilities of the camera at once with the current drivers.<br /><br />So, how to avoid this problem?  I had to tell HAL to omit this device, so that GNOME did not get any notification of its existance and therefore the interface did not attempt to mount the camera using gphoto2.  However, there is few documentation on how to do this, so I had to resort to reading the files in <tt>/usr/share/hal/fdi/</tt> and guess what to do.<br /><br />I ended up creating a <tt>10-broken-cameras.fdi</tt> file in <tt>/etc/hal/fdi/preprobe/</tt> with the following contents:<pre>&lt;?xml version="1.0" encoding="UTF-8"?&gt;<br /><br />&lt;deviceinfo version="0.2"&gt;<br /> &lt;device&gt;<br />  &lt;match key="usb.vendor_id" int="1276"&gt;<br />   &lt;match key="usb.product_id" int="20554"&gt;<br />    &lt;merge key="info.ignore" type="bool"&gt;true&lt;/merge&gt;<br />   &lt;/match&gt;<br />  &lt;/match&gt;<br /> &lt;/device&gt;<br />&lt;/deviceinfo&gt;</pre>What this code snippet does is match the camera device using some of the properties that are attached to it and, once there is a match, appends the <tt>info.ignore</tt> property to the device description to tell HAL to not use this device any more.  In order to set up the matching of a device, you can see the full list of properties of all device descriptors using the <tt>hal-device</tt> command.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ Whenever I connect the camera to the machine, HAL detects the new device and the
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2008\/06\/blacklisting-device-in-hal.html");
   gaRequest();
 </script>
 <noscript>

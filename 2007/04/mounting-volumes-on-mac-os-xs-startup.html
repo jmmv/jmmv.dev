@@ -30,7 +30,7 @@ In order to keep disk usage to the minimum, I share the project&#39;s disk image
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ In order to keep disk usage to the minimum, I share the project&#39;s disk image
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2007\/04\/mounting-volumes-on-mac-os-xs-startup.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2007\/04\/mounting-volumes-on-mac-os-xs-startup.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ In order to keep disk usage to the minimum, I share the project&#39;s disk image
               
               <article>As I mentioned yesterday, I have a couple of disk images in my Mac OS X machine that hold NetBSD's and pkgsrc's source code.  I also have some virtual machines in Parallels that need to use these project's files.<br /><br />In order to keep disk usage to the minimum, I share the project's disk images with the virtual machines by means of NFS. (See <a href="http://mactechnotes.blogspot.com/2005/09/mac-os-x-as-nfs-server.html">Mac OS X as an NFS Server</a> for more details.)  But in doing so, a problem appears: the NFS daemon is started as part of the system's boot process, long before I can manually mount the disk images.  As a result, the NFS daemon — more specifically, <tt>mountd</tt> — cannot see the exported directories and assumes that their corresponding export entries are invalid.  This effectively means that, after mounting the images, I have to manually send a HUP signal to <tt>mountd</tt> to refresh its export list.<br /><br />A little research will tell you that it is trivial to mount disk volumes on login by dragging their icon to the <i>Login items</i> section of the <i>Accounts</i> preference panel:<br /><br /><a href="http://4.bp.blogspot.com/_xLbGV919cEE/Rhu_LnSUW4I/AAAAAAAAAAk/tasOA5x7tFY/s1600-h/login-images.png"><img style="margin: 0px auto 10px; display: block; text-align: center; cursor: pointer;" src="/images/2007-04-10-login-images.png" /></a><br /><i>But</i>... that doesn't solve the problem.  If you do that, the images will be mounted when you <i>log in</i>, and that happens long after the system has spawned the NFS daemons.<br /><br />Ideally, one should be able to list the disk images in <tt>/etc/fstab</tt>, just as is done with any other file system, but that does not work (or I don't know the appropriate syntax).  So how do you resolve the problem?  Or better said, how did I resolve it (because I doubt it's the only solution)?<br /><br />It turns out it was not trivial: you need to manually write a new startup script that mounts the images for you on system startup.  In order to do that, start by creating the <tt>/Library/StartupItems/DiskImages</tt> directory; this will hold the startup script as well as the necessary meta-data to tell the system what to do with it.<br /><br />Then create the real script within that directory and name it <tt>DiskImages</tt>:<pre>#! /bin/sh<br /><br />#<br /># DiskImages startup script<br />#<br /><br />. /etc/rc.common<br /><br />basePath="/Library/StartupItems/DiskImages"<br /><br />StartService() {<br />   hdiutil attach -nobrowse <br />       /Users/jmmv/Projects/NetBSD.dmg<br />   hdiutil attach -nobrowse <br />       /Users/jmmv/Projects/pkgsrc.dmg<br />}<br /><br />StopService() {<br />   true<br />}<br /><br />RestartService() {<br />   true<br />}<br /><br />RunService "$1"</pre>Don't forget to grant the executable permission to that script with <tt>chmod +x DiskImages</tt>.<br /><br />At last, create the <tt>StartupParameters.plist</tt> file, also in that directory, and put the following in it:<pre>{<br />   Description = "Automatic attachment of disk images";<br />   OrderPreference = "First";<br />   Uses = ("Disks");<br />}</pre>And that's it!  Reboot and those exported directories contained within images will be properly recognized by the NFS daemon.<br /><br />I'm wondering if there is a better way to resolve the issue, but so far this seems to work.  Now... mmm... a UI to create and manage this script could be sweet.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ In order to keep disk usage to the minimum, I share the project&#39;s disk image
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2007\/04\/mounting-volumes-on-mac-os-xs-startup.html");
   gaRequest();
 </script>
 <noscript>

@@ -30,7 +30,7 @@ The idea is to &#34;configure&#34; programs at run time to let them access the v
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ The idea is to &#34;configure&#34; programs at run time to let them access the v
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2004\/07\/my-solution-for-shared-directories.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2004\/07\/my-solution-for-shared-directories.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ The idea is to &#34;configure&#34; programs at run time to let them access the v
               
               <article><p>The previous post explained a problem in pkgviews WRT directories used by a program where other packages can install files; the most typical example are directories holding plugins. It also outlined two possible solutions, or better said, workarounds. I'll explain my solution here, which is already implemented but waiting for approval.</p>  <p>The idea is to "configure" programs at <i>run time</i> to let them access the view from where they are executed. This is very easy to do: we just have to patch all programs that have this problem so that they use a global environment variable, say <tt>PKG_VIEWBASE</tt>, that points to the root directory of the view being used. Picking the XMMS example again, the program could be modified to search for its input plugins from <tt>${PKG_VIEWBASE}/lib/Input</tt>, falling back to its depot directory if the variable is not set.</p>  <p>You may now think: "but hey, I have to manually set an environment variable before running programs!". True. But this can be worked around by changing the semantics of pkgviews a bit. That is, instead of creating symlinks for executables, we'd have to create wrappers. The task of these small wrappers is simply to set up the environment variable and then launch the real program.</p>  <p>For example, to make it clearer, <tt>/usr/pkg/bin/xmms</tt> could be this piece of code:</p>  <pre>#!/bin/sh <p>PKG_VIEWBASE=/usr/pkg; export PKG_VIEWBASE</p> <p>/usr/pkg/packages/xmms-1.2.10/bin/xmms "$@"</p></pre><p></p>  <p>As you can see, this script also has hardcoded paths in it, but these were written when the package was added to the view. If I want to add XMMS to another view after its installation, I can easily do it, and the appropiate wrapper will be generated <i>on the fly</i> with the right paths.</p>  <p>You may argue that adding a new variable is not needed in some cases, as programs provide their own way to specify the location of files at run time (for example, <tt>PKG_CONFIG_PATH</tt> in pkgconfig). I know; this is why these wrappers can be easily extended (on a package basis) to override more environment variables (like this one), which simplifies maintenance in such programs (less patches).</p>  <p>Nice, eh? ;-) As I said, this is already implemented and works well for me. When I've got an 'Ok' from one of the main developers of pkgviews, I'll start fixing all programs (basically, GNOME) to use the new environment variable.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ The idea is to &#34;configure&#34; programs at run time to let them access the v
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2004\/07\/my-solution-for-shared-directories.html");
   gaRequest();
 </script>
 <noscript>

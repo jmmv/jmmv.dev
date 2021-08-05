@@ -30,7 +30,7 @@ Here comes a little briefing on the three fronts in which I made progress. (This
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Here comes a little briefing on the three fronts in which I made progress. (This
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2013\/11\/three-productive-days-on-kyua-front.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2013\/11\/three-productive-days-on-kyua-front.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ Here comes a little briefing on the three fronts in which I made progress. (This
               
               <article><p>This being Thanksgiving week in the U.S. and Google giving us Thursday and Friday off, I decided to take Monday to Wednesday off as well to spend some time hacking on Kyua &mdash; yes, finally, after months of being inactive.  And what a three productive days!</p> <p>Here comes a little briefing on the three fronts in which I made progress.  (This puts on hold the <a href="http://julipedia.meroh.net/search/label/header-files">header files</a> series until next Monday... but most of you are probably away anyway.  Enjoy the holidays if they apply to you!)</p> <p><b>Updated Kyua packages for Fedora</b></p> <p>The first thing I tackled, which was long overdue, was the update of the <tt>kyua-cli</tt> package in Fedora past 0.5, fixing along the way the old broken and unbuildable package.  I could not do this update right away when I published 0.6 given that I had to create a package for <tt>kyua-testers</tt> first, and the review for the new spec file got stuck awaiting for a reviewer for quite a while.  But finally, after it got a reviewer assigned, the process blocked on me for way too long.</p> <p>After unblocking <a href="https://bugzilla.redhat.com/show_bug.cgi?id=912816">the review of <tt>kyua-testers</tt></a>, things went quite smoothly.  I submitted the package, fixed the build of <tt>kyua-cli</tt> while upgrading it 0.7, and pushed new binaries for both rawhide and f20.</p> <p><b>FreeBSD, Kyua and TAP</b></p> <p>My next step, according to <a href="https://wiki.freebsd.org/TestSuite">the FreeBSD Test Suite project plan</a>, was to migrate a bunch of the existing tests in <tt>src/tools/regression/</tt> to the new Kyua-based framework to demonstrate how easy this process would be.  The goal was (is) to just <i>move the tests without having to rewrite them using the ATF libraries</i>.  I thought this would be easily done by using the plain tester in Kyua... but I was wrong.</p> <p>The truth is that test programs in <tt>src/tools/regression/</tt> implement the <a href="http://en.wikipedia.org/wiki/Test_Anything_Protocol">Test Anything Protocol</a> and, unfortunately, this protocol <i>does not define the exit status of the test program</i>.  As a result, the plain tester in Kyua is unsuitable to run such tests because it may always report them as passing even when they fail.</p> <p>Seeing how simple the protocol is, I decided to take a stab at implementing a TAP-compliant backend for Kyua.  And, after some work, the prototype morphed into actual usable code able to run (some of) the existing FreeBSD tests.  <a href="https://code.google.com/p/kyua/issues/detail?id=74">The code landed in the main Git repository of Kyua</a> and will be available in the next release (due by sometime next week probably).  You can read some more on this topic on <a href="http://lists.freebsd.org/pipermail/freebsd-testing/2013-November/000095.html">the ongoing thread in <tt>freebsd-testing</tt></a>.</p> <p>But this is not all on this front.  The converted <tt>bin/sh/</tt> tests were getting stuck mysteriously half-way through while the originals weren't.  This was strange given that I had not touched their code and thus the problem had to lie somewhere in Kyua.  The problem was exposed by an attempt to run a login shell within a test, which resulted in the shell trying to handle the controlling session and waiting for it indefinitely given that Kyua was in the foreground (or something like that; I don't know all the details).</p> <p>The solution was simpler than it seemed: just changed the test isolation code to put tests in their own session instead of only in their own process group.  New sessions don't have a controlling terminal by default, so attempts to get access to it from within a test will fail immediately instead of just blocking.  The fix worked just fine (although I'm not fully convinced it's really the right fix yet after reading more about ptys and ttys than I wanted).</p> <p>And that's still not all.  As a result of this, I figured that <a href="https://code.google.com/p/kyua/issues/detail?id=24">I could plug the bootstrap tests into the test suite</a> again after two years of first attempting this and failing.  I believe the issue experienced there was the same one I just fixed.  Enabling the tests was easy, but getting <tt>make distcheck</tt> to pass was <i>incredibly annoying</i> and something that made me waste what seemed hours.</p> <p><b>Lua binding for ATF</b></p> <p>Much to my dismay, Kyua has slowly morphed into a complex beast and <a href="/2012/09/i-dont-really-like-c.html">C++ has <i>not</i> helped in preventing it</a>.  Actually, it is <i>not</i> that the code is <i>that</i> complex, but the build times are <b>unbearably slow</b> to the point of being a major hurdle for development.</p> <p>The idea of rewriting parts of Kyua using Lua had been floating my mind for quite a while given that Lua is already a dependency of Kyua and, really, most of the code would be better written in a higher-level language.  In fact, this is one of the reasons that motivated the split of the complex testing code into <tt>kyua-testers</tt> a year ago.  Other than that, I was not sure how to make any progress on this idea... until yesterday morning, when it occurred to me that scripting report generation would be the solution to allow customizable user reports.</p> <p>But before attempting to rewrite any production code, a prerequisite for it is to have an ATF-compliant testing library for Lua that I can use and trust.  And that's the last thing I've been working on.</p> <p>Coming up with a working prototype wasn't particularly trivial given that my Lua knowledge was close to zero...  but, after a few hours with book in hand and much head-scratching, I got the prototype to a functional state.  To be honest, it was a nice mental exercise given that I had not learned any new languages for a while!  Pretty exciting.</p> <p>With the foundations for this Lua binding in place, moving it forward to a workable product is now relatively easy.  I have no idea yet how I will ship it though.  The simple choice is to make it one more binding in the <tt>atf</tt> package; however: 1) the API is significantly different to the other ATF APIs and 2) ATF should go away eventually... so adding more shiny-new code to this package doesn't seem like a brilliant idea.  The alternative is to ship it separately, but then it's very tempting to dump many utility functions into such package as well.  (Read: I'm really enjoying Lua's simplicity but the base libraries are just too limited by default.  Yes, yes, I know why.)</p> <p>Anyway.  A sneak peek on where things stand at the moment (n.b. code not yet pushed out so highly volatile):</p> <pre>local atf = require("atf")<br /><br />...<br /><br />tc = atf.TestFixture:new("repr")<br /><br />function tc:nil_body()<br />    self:assert_equal("nil", string.repr(nil))<br />end<br /><br />function tc:number_body()<br />    self:assert_equal("3", string.repr(3))<br />    self:assert_equal("-18", string.repr(-18))<br />    self:assert_equal("5.8", string.repr(5.8))<br />end<br /><br />...<br /><br />atf.main{...}</pre> <p>Smells like <a href="http://docs.python.org/2/library/unittest.html">Python's <tt>unittest</tt></a>, doesn't it?  Yes, it does.  After years of using that interface at work, I wish ATF's APIs were similar.</p> <p>Stay tuned...</p> <p>and enjoy the holidays!  But, before leaving: do you have any suggestions on any of the above?</p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ Here comes a little briefing on the three fronts in which I made progress. (This
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2013\/11\/three-productive-days-on-kyua-front.html");
   gaRequest();
 </script>
 <noscript>

@@ -30,7 +30,7 @@ First of all I assumed that setting the LOCAL_CREDS option only affected the nex
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ First of all I assumed that setting the LOCAL_CREDS option only affected the nex
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2006\/08\/more-on-localcreds.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2006\/08\/more-on-localcreds.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ First of all I assumed that setting the LOCAL_CREDS option only affected the nex
               
               <article>One of the problems of learning new stuff based on trial-and-error iterations is that it is very easy to miss important details...  but that's the price to pay when there is no decent documentation available for a given feature.  We saw <a href="http://julipedia.blogspot.com/2006/08/localcreds-socket-credentials.html">yesterday</a> multiple details about <tt>LOCAL_CREDS</tt> socket credentials and, as you may deduce, I missed some.<br /><br />First of all I assumed that setting the <tt>LOCAL_CREDS</tt> option only affected the next received message (I didn't mention this explicitly in the post though).  It turns out that this is incorrect: enabling this option makes the socket transmit credentials information on each message until the option is disabled again.<br /><br />Secondly, setting the <tt>LOCAL_CREDS</tt> option on a server socket (one configured with the <tt>listen(2)</tt> call) results in all sockets created from it through <tt>accept(2)</tt> to also carry the flag enabled.  In other words, it is inherited.<br /><br />These features are interesting because, when using combined, avoid the need for the synchronization protocol outlined in the previous post — in some cases only.  If the credentials are to be transmitted at the very beginning of the connection, the server can follow these steps:<br /><ol><li>Create the server socket and configure it with <tt>bind(2)</tt> and <tt>listen(2)</tt>.</li><li>Before entering the <tt>accept(2)</tt> loop, set the <tt>LOCAL_CREDS</tt> option on the server socket.</li><li>Enter the <tt>accept(2)</tt> loop and start accepting clients.</li><li>For each new client:</li><ol><li>Receive its first message.</li><li>Get the credentials from it.</li><li>Disable the <tt>LOCAL_CREDS</tt> option from the socket used to communicate with that specific client.</li></ol></ol>It couldn't be easier!  This is still different to all other socket credentials methods I know of but can be easily adapted to protocols that were not designed to support <tt>LOCAL_CREDS</tt> (i.e. that do not implement the synchronization explained in the previous post).
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ First of all I assumed that setting the LOCAL_CREDS option only affected the nex
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2006\/08\/more-on-localcreds.html");
   gaRequest();
 </script>
 <noscript>

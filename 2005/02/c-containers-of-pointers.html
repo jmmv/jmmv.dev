@@ -30,7 +30,7 @@ Consider an abstract base class and multiple specializations of it; if you want 
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Consider an abstract base class and multiple specializations of it; if you want 
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/02\/c-containers-of-pointers.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/02\/c-containers-of-pointers.html';
+  </script>
 </head>
 
 
@@ -160,6 +166,24 @@ Consider an abstract base class and multiple specializations of it; if you want 
               
               <article><p>One of the things C++ provides to programmers is that pointers can be avoided in much situations, and IMHO, they should be (specially in public class interfaces). However, there are some times in which pointers must be used.</p>  <p>Consider an abstract base class and multiple specializations of it; if you want to define a container of all these objects, no matter which derived class they belong to, the container must hold the parent's type. But you can't use an object (nor a reference) of this type, basically for two reasons: you can't instantiate one and, even if you could (no abstract members), the derived object could loose all of its specific properties when converted to the parent one.</p>  <p>In the above scenario, you are required to use pointers. And, when doing so, you hit a problem: the operations that are applied to containers will work at the pointer level, not at the object level, so all comparisons will be wrong. Let's clarify this with an example.</p>  <p>Suppose we have a set of pointers to strings and we add several objects to it:</p>  <pre>std::set&lt;std::string*&gt; s;<br />s.insert(new std::string("String 1"));<br />s.insert(new std::string("String 2"));<br />s.insert(new std::string("String 3"));</pre>  <p>We are now asked to check whether "String 2" is part of the set (in this example we are checking for <i>equality</i>).  You can't use the <tt>s.find</tt> operation, because it will compare <tt>pointers</tt> rather than strings; so unless you know the address of the object you are looking for, you won't be able to find it. A solution could be to manually iterate all over the set and check each element against the string we want. Ugly, isn't it?</p>  <p>Fortunately, we can use the standard algorithms, but we will have to construct a custom predicate that, given two pointers, compares their <i>contents</i>.  Our predicate could look like the following (requires the <tt>functional</tt> header):</p>  <pre>template &lt;class T&gt;<br />struct unref_equal_to : public std::binary_function&lt;T, T, bool&gt;<br />{<br />   bool operator()(const T& x, const T&amp; y) const { return *x == *y; }<br />};</pre>  <p>Despite the operator taking two references, it <i>must</i> take pointers (because <tt>T</tt> will have to be a pointer type); otherwise, nasty things will happen.  Then, all it does is apply the <tt>==</tt> (equality) operator on the unreferenced objects and return the result, which will do what we want (in this case, compare the string contents).</p>  <p>Now, how do we apply this predicate to look for a specific string in our previous set?  Easy; we need the <tt>std::find_if</tt> standard algorithm, which takes a predicate as an argument.  Let's see what we'd do:</p>  <pre>std::string what("String 2");<br />std::set&lt;std::string*&gt;::const_iterator i =<br />   std::find_if(s.begin(), s.end(),<br />                std::bind2nd(unref_equal_to&lt;std::string*&gt;(),<br />                &what));<br />if (i != s.end())<br />   std::cout &lt;&lt; "String 2 is part of s!" &lt;&lt; std::endl;</pre><p></p>  <p>Don't let this scare you, specially the <tt>std::bind2nd</tt> part.  This function is used to set the second argument of the <a href="http://www.sgi.com/tech/stl/BinaryFunction.html">binary function</a> we created above (which has some special properties).  OTOH, the <tt>std::find_if</tt> algorithm will take care to fill in the first argument on each iteration it does over the set, so we will get the expected comparisons.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -953,10 +977,12 @@ Consider an abstract base class and multiple specializations of it; if you want 
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/02\/c-containers-of-pointers.html");
   gaRequest();
 </script>
 <noscript>

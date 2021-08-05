@@ -30,7 +30,7 @@ Yesterday, for some unknown reason, I ended up running id(1) with two different 
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Yesterday, for some unknown reason, I ended up running id(1) with two different 
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2007\/11\/fixing-ids-command-line-parsing.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2007\/11\/fixing-ids-command-line-parsing.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ Yesterday, for some unknown reason, I ended up running id(1) with two different 
               
               <article>Today's work: been fixing NetBSD's id(1)'s command line parsing to match the documented syntax.  Let's explain.<br /><br />Yesterday, for some unknown reason, I ended up running id(1) with two different user names as its arguments. Mysteriously, I only got the details for the first user back and no error for the second one. After looking at the manual page and what the GNU implementation did, I realized that the command is only supposed to take a single user or none at all as part of its arguments.<br /><br />OK, so "let's add a simple <tt>argc</tt> check to the code and raise the appropriate error when it is greater than 2".  Yeah, right.  If you look at id(1)'s main routine, you'll find an undecipherable piece of spaghetti code &mdash; have you ever thought about adding multiple <tt>?flag</tt> variables and checking the result of the sum? &mdash; that comes from the fact that id(1)'s code is shared across three different programs: id(1), groups(1) and whoami(1).<br /><br />After spending some time trying to understand the rationale behind the code, I concluded that I could not safely fix the problem as easily as I first thought.  And, most likely, touching the logic in there would most likely result in a regression somewhere else, basically because id(1) has multiple primary, mutually-exclusive options and groups(1) and whoami(1) are supposed to have their own syntax.  Same unsafety as for refactoring it.<br /><br />So what did I do?  Thanks to ATF being already in NetBSD, I spent the day writing tests for all possible usages of the three commands (which was not trivial at all) and, of course, added stronger tests to ensure that the documented command line syntax was enforced by the programs.  After that, I was fairly confident that if I changed the code and all the new tests passed afterwards (specially those that did before), I had not broken it.  So I did the change only after the tests were done.<br /><br />I know it will be hard to "impose" such testing/bug-fixing procedure to other developers, but I would really like them to consider extensive testing... even for obvious changes or for trivial tools such as these ones. You never know when you break something until someone else complains later.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ Yesterday, for some unknown reason, I ended up running id(1) with two different 
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2007\/11\/fixing-ids-command-line-parsing.html");
   gaRequest();
 </script>
 <noscript>

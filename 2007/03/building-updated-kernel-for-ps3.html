@@ -30,7 +30,7 @@ CONFIG_PPC_PS3: This option enables support for the Sony PS3 game console and ot
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ CONFIG_PPC_PS3: This option enables support for the Sony PS3 game console and ot
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2007\/03\/building-updated-kernel-for-ps3.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2007\/03\/building-updated-kernel-for-ps3.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ CONFIG_PPC_PS3: This option enables support for the Sony PS3 game console and ot
               
               <article>The mainstream Linux sources have some support for the PlayStation 3, but it is marked as incomplete.  Trying to boot such a kernel results in a stalled machine, as the kernel configuration option says:<br /><blockquote>CONFIG_PPC_PS3: This option enables support for the Sony PS3 game console and other platforms using the PS3 hypervisor.  Support for this platform is not yet complete, so enabling this will not result in a bootable kernel on a PS3 system.</blockquote>To make things easier, I'd simply have used the Linux sources provided by YellowDog Linux 5 (YDL5), which correspond to a modified 2.6.16 kernel.  However, as I have to do some kernel development on this platform, I objected to using such old sources: when developing for an open source project, it is much better to use the development branch of the code — if available — because custom changes will remain synchronized with mainstream changes.  This means that, if those changes are accepted by the maintainers, it will be a lot easier to later merge them with the upstream code.<br /><br />So, after a bit of fiddling, I found the public kernel branch used to develop for the PS3. It is named <tt>ps3-linux</tt>, is maintained by Geoff Levand and can be found in the kernel's git repository under the project <a href="http://git.kernel.org/?p=linux/kernel/git/geoff/ps3-linux.git;a=summary">linux/kernel/git/geoff/ps3-linux.git</a>.<br />Fetching the code was "interesting".  I was (and still am) a novice to <a href="http://git.or.cz/">git</a>, but fortunately my prior experiences with CVS, Subversion and specially Monotone helped to understand what was going on.<br /><br />Let's now see how to fetch the code, cross-build a custom kernel and install it on the PS3 using YDL5.<br /><br />To checkout the latest code, which at this moment corresponds to a patched Linux 2.6.21-rc3 sources, do this:<br /><br /><tt>$ git clone git://git.kernel.org/pub/scm/linux/kernel/git/geoff/ps3-linux.git ps3-linux</tt><br /><br />This will clone the <tt>ps3-linux</tt> project from the main repository and leave it in a directory with the same name.  You can keep it up to date by running <tt>git pull</tt> within the directory, but I'm not going to talk about git any more today.<br /><br />As I cross-compile the PS3 kernel from a FC6 Intel-based machine with the Cell SDK 2.0, I need to tell it which is the target platform and which is the cross-compiler before being able to build or even configure a kernel.  I manually add these lines to the top-level <tt>Makefile</tt>, but setting them in the environment should work too:<br /><br /><tt>ARCH=powerpc<br /><br />CROSS_COMPILE=ppu-</tt><br /><br />Now you can create a sample configuration file by executing the following command inside the tree:<br /><br /><tt>$ make ps3_defconfig</tt><br /><br />Then proceed to modify the default configuration to your likings.  To ease development, I want my kernels to be as small and easy to install as possible; this reduces the test-build-install-reboot cycle to the minimum (well, not exactly; see below).  Therefore I disable all stuff I do not need, which includes modules support.  Why?  Keeping all the code in a single image will make later installation a lot easier.<br /><br />Once the kernel is configured, it is time to build it.  But before doing so you need to install a helper utility used by the PS3 build code: the <a href="http://dtc.ozlabs.org/">Device Tree Compiler</a> (or dtc).  Fetch its sources from the git repository that appears in that page, run <tt>make</tt> to build it and manually install the <tt>dtc</tt> binary into <tt>/usr/local/bin</tt>.<br /><br />With the above done, just run <tt>make</tt> and wait until your kernel is built.  Then copy the resulting <tt>vmlinux</tt> file to your PS3; I put mine in <tt>/boot/vmlinux-jmerino</tt> to keep its name version-agnostic and specific to my user account.  Note that I do not have to mess with modules as I disabled them; otherwise I'd have to copy them all to the machine — or alternatively set up a NFS root for simplicity as described in <a href="http://www.kernel.org/pub/linux/kernel/people/geoff/cell/ps3-nfs-root-howto.txt">Geoff Levand's HOWTO</a>.<br /><br />To boot the kernel, you should know that the PS3 uses the <tt>kboot</tt> boot loader, a minimal Linux system that chainloads another Linux system by means of the <tt>kexec</tt> functionality.  It is very powerful, but the documentation is scarce.  Your best bet is to mimic the entries already present in the file.  With this in mind, I added the following line to <tt>/etc/kboot.conf</tt>:<br /><br /><tt>jmerino='/dev/sda1:/vmlinux-jmerino root=/dev/sda2 init=/sbin/init 4'</tt><br /><br />I'd much rather fetch the kernel from a TFTP server, but I have not got this to work yet.  Anyway, note that the above line does <i>not</i> specify an <tt>initrd</tt> image, although all the other entries in the file do.  I did this on purpose: the less magic in the boot, the better.  However, bypassing the <tt>initrd</tt> results in a failed boot with:<br /><br /><tt>Warning: Unable to open an initial console.</tt><br /><br />This is because the <tt>/dev</tt> directory on the root partition is unpopulated, as YDL5 uses udev.  Hence the need for an <tt>initrd</tt> image.  Getting a workaround for this is trivial though: just create the minimum necessary devices on the disk — "below udev" &mdash;, as shown below.<br /><br /><tt># mount --bind / /mnt<br /><br /># MAKEDEV -d /mnt/dev console zero null<br /><br /># umount /mnt</tt><br /><br />And that's it!  Your new, fresh and custom kernel is ready to be executed.  Reboot the PS3, wait for the <tt>kboot</tt> prompt and type your configuration name (<tt>jmerino</tt> in my case).  If all goes fine, the kernel should boot and then start userland initialization.<br /><br />Thanks go to the guys at the <a href="https://ozlabs.org/mailman/listinfo/cbe-oss-dev">cbe-oss-dev</a> mailing list for <a href="http://ozlabs.org/pipermail/cbe-oss-dev/2007-March/001314.html">helping me</a> in building the kernel and solving the missing console problem.<br /><br /><b>Update (23:01)</b>: Added a link to a NFS-root tutorial.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ CONFIG_PPC_PS3: This option enables support for the Sony PS3 game console and ot
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2007\/03\/building-updated-kernel-for-ps3.html");
   gaRequest();
 </script>
 <noscript>

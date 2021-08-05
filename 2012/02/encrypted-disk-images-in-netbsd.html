@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2012\/02\/encrypted-disk-images-in-netbsd.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2012\/02\/encrypted-disk-images-in-netbsd.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article>When I joined the NetBSD Board of Directors, I was trusted with access to private information and one of the prerequisites for downloading such data was to be able to store it safely: i.e. inside an encrypted volume. I initially went the easy route by putting the data in my laptop, which already uses FileVault 2 to encrypt the whole disk. But soon after, I decided that it would be nicer to put this data in my NetBSD home server, which is the machine that is perpetually connected to IRC and thus the one I use to log into the weekly meetings.<br /><br />At that point, I was faced with the "challenge" to set up an encrypted volume under NetBSD. I knew of the existence of <i>cgd(4): cryptographic disk driver</i>&nbsp;but had never used it. It really is not that hard, but there are a bunch of manual steps involved so I've been meaning to document them for almost a year already.<br /><br />Because my home server is a NetBSD/macppc and reinstalling the system is quite a nightmare, I did not want to go through the hassle of repartitioning the disk just to have an encrypted partition of 1GB. The choice was to create a disk image instead, store it in <tt>/secure.img</tt> and mount it on <tt>/secure</tt>. Let's see how to do this.<br /><br />The first step is to create the disk image itself and "loop-mount" it (in Linux terms). We do this the traditional way, by creating an empty file and setting up a <i>vnd(4): vnode disk driver</i> device to access it:<br /><pre># dd if=/dev/zero of=/secure.img bs=1m count=1024<br /># vnconfig -c /dev/vnd2 /secure.img</pre>The next step is to configure a new cgd(4) device. This block-level device is a layer placed on top of a regular storage device, and is in charge of encrypting the data to the lower-level device transparently. cgdconfig(8), the tool used to configure cgd(4) devices, stores control information on a device basis under <tt>/etc/cgd/</tt>. The control information can be generated as follows:<br /><pre># cgdconfig -g -o /etc/cgd/vnd2c aes-cbc 192</pre>This creates the <tt>/etc/cgd/vnd2c</tt> configuration file, which you can choose to inspect now. With the file in place, configuring the cryptographic device for the first time is easy:<br /><pre># cgdconfig cgd0 /dev/vnd2c</pre>This command will inspect the underlying <tt>/dev/vnd2c</tt> device looking for a signature indicating that the volume is valid and already encrypted. Because the volume is still empty, the tool will proceed to ask us for an encryption key to initialize the volume. We enter our key, wait a couple of seconds, and <tt>/dev/cgd0</tt> will be ready to be used as a regular disk device. With that in mind, we can proceed to create a new file system and mount it on the desired location:<br /><pre># newfs -O 2 /dev/rcgd0c<br /># mkdir /secure<br /># mount /dev/cgd0c /secure</pre>To simplify access to the device for your users, I did something like this:<br /><pre># user=your-user-name<br /># mkdir /secure/${user}<br /># chown ${user}:users /secure/${user}<br /># chmod 700 /secure/${user}<br /># ln -s /home/${user}/secure /secure/${user}</pre>And we are done. Now, depending on the situation, we could choose to get <tt>/secure</tt> automatically mounted during boot, but that would involve having to type the decryption key. This is OK for a laptop, but not for a headless home server. Because I don't really need to have this secure device mounted all the time, I have the following script in <tt>/root/secure.sh</tt> that I can use to mount and unmount the device at will:<br /><pre>#! /bin/sh<br /><br />set -e -x<br /><br />case "${1:-mount}" in<br />mount)<br />    vnconfig -c /dev/vnd2 /secure.img<br />    cgdconfig cgd0 /dev/vnd2c<br />    fsck -y /dev/cgd0c<br />    mount /dev/cgd0c /secure<br />    ;;<br />unmount)<br />    umount /secure<br />    cgdconfig -u cgd0<br />    vnconfig -u /dev/vnd2<br />    ;;<br />esac</pre>Be aware that cgdconfig(1) has many more options!  Take a look at the manual page and choose the ones that best suit your use case.<br /><br />Random idea: instead of using a vnd(4) device, plug in a USB stick and use that instead for your secure data! &nbsp;(I actually do this too to back up sensitive information like private keys.)
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2012\/02\/encrypted-disk-images-in-netbsd.html");
   gaRequest();
 </script>
 <noscript>

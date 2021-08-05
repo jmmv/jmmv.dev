@@ -30,7 +30,7 @@ First of all, I added several other VFS hooks needed to avoid crashes due to nul
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ First of all, I added several other VFS hooks needed to avoid crashes due to nul
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/07\/soc-status-report-2.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/07\/soc-status-report-2.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ First of all, I added several other VFS hooks needed to avoid crashes due to nul
               
               <article><p>After several days since the <a href="http://www.livejournal.com/users/jmmv/37705.html">previous status report</a>, it's time for a new one. During the past week, I've improved several aspects of the existing code, without adding many new stuff.</p>  <p>First of all, I added several other VFS hooks needed to avoid crashes due to null pointers and completed the code up to the point where the file system can be mounted and unmounted (the latter was more difficult than I thought).</p>  <p>Then I also added code to manage the root node of the file system so that that information can be used where needed and completed the <tt>statvfs</tt> hook. This required the addition of multiple configurable parameters (ownership, size of the filesystem, etc.) into the mount arguments structure, which resulted in many different changes in the <tt>mount_tmpfs(8)</tt> utility.  I feel some of the code implemented in this utility could go into <tt>libutil</tt>, but I won't touch that (yet) ;-)</p>  <p>Furthermore, and as the code is starting to be "usable", I added some regression tests following the existing structure in <a href="http://www.netbsd.org/">NetBSD</a>.  I guess they will need to be refactored soon because of the <a href="http://netbsd-soc.sourceforge.net/projects/regress/">regress</a> NetBSD-SoC project, but they do the job for now.  The <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">project's page</a> explains how to run them.</p>  <p>At last, I've read a bit about UVM and memory management to see how to allocate unwired memory blocks. I still don't know yet how that works, so I've tried to organize the code to minimize the amount of changes needed when I learn the correct way to do it (i.e., I'm using <tt>malloc</tt>/<tt>free</tt> now to request a single memory block).</p>  <p>The next step is to design how to organize the file data and meta data into the memory region allocated for the file system. This is the same problem as the design of an on-disk file system, although it's simpler: several details can be omitted, such as redundancy or data placement (well, this last point is questionable, since "fragmentation" can cause more cache/page faults than expected). Doing this is a must now, because it is needed to implement vnode operations.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ First of all, I added several other VFS hooks needed to avoid crashes due to nul
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/07\/soc-status-report-2.html");
   gaRequest();
 </script>
 <noscript>

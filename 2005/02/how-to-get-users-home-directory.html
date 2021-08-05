@@ -32,7 +32,7 @@ What happens if such application is run through sudo or with the setuid bit set?
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -45,6 +45,12 @@ What happens if such application is run through sudo or with the setuid bit set?
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/02\/how-to-get-users-home-directory.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/02\/how-to-get-users-home-directory.html';
+  </script>
 </head>
 
 
@@ -162,6 +168,24 @@ What happens if such application is run through sudo or with the setuid bit set?
               
               <article><p>Many programs need to access the user's home directory to look for files, specially configuration ones. To do that, they usually get the <tt>HOME</tt> environment variable's value and use it to construct the full path. However, if the application is security-sensible, this is probably inappropriate.</p>  <p>What happens if such application is run through <a href="http://www.courtesan.com/sudo/">sudo</a> or with the <tt>setuid</tt> bit set?  Let's see it:</p>  <pre>[dawn jmmv] $ sudo /bin/sh -c 'id -un ; echo ${HOME}'<br />root<br />/home/jmmv</pre><p></p>  <p>Oops! The application with extra privileges is getting the home directory of the unprivileged user! This is a serious problem, because the user could simply create a malicious configuration file (that exec's a third program, for example) and use it with more privileges than he has.</p>  <p>Fortunately, the user's home directory can be guessed using a safer method: that is, by reading its value from the <tt>/etc/passwd</tt> file.  We only need to be careful to get the entry that matches the actual <i>effective</i> user (not the <i>real</i> one).  How'd we do it?</p>  <pre>struct passwd *p = getpwuid(geteuid());<br />(void)printf("Home directory is: n", p->pw_dir);</pre><p></p>  <p>If we now put the above in a little test program and run it, we get:</p>  <pre>[dawn tmp] $ ./a.out<br />Home directory is: /home/jmmv<br />[dawn tmp] $ sudo ./a.out<br />Home directory is: /root</pre><p></p>  <p>Well, I'm not completely sure this is the best way to go (i.e., if there is any way to still get a value decided by the user), but so far I <i>think</i> this is safer than just reading <tt>HOME</tt>'s value.  If anybody knows of any drawbacks, please share!</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -955,10 +979,12 @@ What happens if such application is run through sudo or with the setuid bit set?
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/02\/how-to-get-users-home-directory.html");
   gaRequest();
 </script>
 <noscript>

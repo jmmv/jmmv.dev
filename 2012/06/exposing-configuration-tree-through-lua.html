@@ -30,7 +30,7 @@ One goal in the design of the configuration file was to make its contents a simp
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ One goal in the design of the configuration file was to make its contents a simp
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2012\/06\/exposing-configuration-tree-through-lua.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2012\/06\/exposing-configuration-tree-through-lua.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ One goal in the design of the configuration file was to make its contents a simp
               
               <article>In the previous post, I discussed the&nbsp;<a href="/2012/05/type-safe-dynamic-tree-data-type.html">type-safe tree data structure</a>&nbsp;that is now in the Kyua codebase, aimed at representing the configuration of the program. In this post, we'll see how this data structure ties to the parsing of the configuration file.<br /><br />One goal in the design of the configuration file was to make its contents a simple key/value association (i.e. assigning values to predetermined configuration variables). Of course, the fact that the configuration file is just a Lua script means that additional constructions (conditionals, functions, etc.) can be used to compute these values before assignment, but in the end all we want to have is a collection of values for known keys. The tree data structure does exactly the latter: maintain the mapping of keys to values, and ensuring that only a set of "valid" keys can be set. But, as a data structure, it does not contain any of the "logic" involved in computing those values: that is the job of the script.<br /><br />Now, consider that we have the possible following syntaxes in the configuration file:<br /><br /><tt>simple_variable = "the value"</tt><br /><tt>complex.nested.variable = "some other value"</tt><br /><br />These assignments map, exactly, to a <tt>tree::set()</tt> function call: the name of the key is passed as the first argument to <tt>tree::set()</tt> and the value is passed as the second argument. (Let's omit types for simplicity.) What we want to do is modify the Lua environment so that these assignments are possible, and that when such assignments happen, the internal tree object gets updated with the new values.<br /><br />In order to achieve this, the configuration library <a href="http://code.google.com/p/kyua/source/browse/utils/config/lua_module.cpp">modifies the Lua environment</a> as follows:<br /><ul><li>The <tt>newindex</tt> metatable method of <tt>_G</tt> is overridden so that an assignment causes a direct call to the <tt>set</tt> method of the referenced key.  The key name is readily available in the <tt>newindex</tt> arguments, so no further magic is needed.  This handles the case of "<tt>a = b</tt>" (top-level variables).</li><li>The <tt>index</tt> metatable method of <tt>_G</tt> is overridden so that, if the indexed element is not found, a new table is generated and injected into <tt>_G</tt>.  This new table has a metatable of its own that performs the same operations as the <tt>newindex</tt> and <tt>index</tt> herein described.  This handles the case of "<tt>a.b = c</tt>", as this trick causes the intermediate tables (in this case "<tt>a</tt>") to be transparently created.</li><li>Each of the tables created by <tt>index</tt> has a "key" metatable field that contains the fully qualified key of the node the table corresponds to.  This is necessary to be able to construct the full key to pass to the <tt>set</tt> method.</li><li>There is further magic to ensure that values pre-populated in the tree (aka default values) can be queried from within Lua, and that variables can be set more than once. These details are uninteresting though.</li></ul>At the moment, we deny setting variables that have not been pre-defined in the tree structure, which means that if the user wants to define auxiliary variables or functions, these must be declared <tt>local</tt> to prevent calling into the <tt>_G</tt> hooks. This is quite nice, but we may need to change this later on if we want to export the standard Lua modules to the configuration files.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ One goal in the design of the configuration file was to make its contents a simp
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2012\/06\/exposing-configuration-tree-through-lua.html");
   gaRequest();
 </script>
 <noscript>

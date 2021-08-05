@@ -30,7 +30,7 @@ Basically, the testing procedure works like this:Spawn a complete tree of proces
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Basically, the testing procedure works like this:Spawn a complete tree of proces
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2008\/01\/testing-process-tree-killing-algorithm.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2008\/01\/testing-process-tree-killing-algorithm.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ Basically, the testing procedure works like this:Spawn a complete tree of proces
               
               <article>Now that you know the procedure to <a href="http://julipedia.blogspot.com/2008/01/how-to-kill-tree-of-processes.html">kill a process tree</a>, I can explain how the automated tests for this feature work. In fact, writing the tests is what was harder due to all the race conditions that popped up and due to my rusty knowledge of tree algorithms.<div><br /><div><div>Basically, the testing procedure works like this:</div><div><ol><li>Spawn a complete tree of processes based on a configurable degree D and height H.</li><li>Make each child tell the root process its PID so that the root process can have a list of all its children, be them direct or indirect, for control purposes.</li><li>Wait until all children have reported their PID and are ready to be killed.</li><li>Execute the kill-tree algorithm on the root process.</li><li>Wait until the children have died.</li><li>Check that none of the PIDs gathered in point 2 are still alive (which could be, but reparented to init(8) if they were not properly killed). If some are, the recursive kill failed.</li></ol><div>The tricky parts were 3 and 5.</div><div><br /></div><div>In point 3, we have to wait until all children have been spawned. Doing so for direct children is easy because we spawned them, but indirect ones are a bit more difficult. What I do is create a pipe for each of the children that will be spawned (because given D and H I can know how many nodes there will be) and then each child uses the appropriate pipe to report its PID to the parent when it has finished initialization and thus is ready to be safely killed. The parent then just reads from all the pipes and gets all the PIDs.</div><div><br /></div><div>But what do I mean with <span class="Apple-style-span" style="font-style: italic;">safely killed</span>? Preliminary versions of the code just ran through the children's code and then exited, leaving them in zombie status. This worked in some situations but broke in others. I had to change this to block all children in a wait loop and then, when killed, take care to do a correct wait for all of its respective children, if any. This made sure that all children remained valid until the attempt to kill them.</div><div><br /></div><div>In point 5, we have to wait until the direct children have returned so that we can be sure that the signals were delivered and processed before attempting to see if there is any process left. (Yes, if the algorithm fails to kill them we will be stalled at that point.) Given that each children can be safely killed as explained above, this wait will do a recursive wait along all the process tree making sure that everything is cleaned up before we do the final checks for non-killed PIDs.</div><div><br /></div><div>This all sounds very simple and, in fact, looking at the <a href="http://mtn-host.prjek.net/viewmtn/atf/revision/file/03762dcd82a309a543d67178f61d53c0a1bed985/tests/atf/units/t_procs.cpp">final code</a> it is.  But it certainly was not easy at all to write, basically because the code grew in ugly ways and the algorithms were much more complex than they ought to be.</div></div></div></div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ Basically, the testing procedure works like this:Spawn a complete tree of proces
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2008\/01\/testing-process-tree-killing-algorithm.html");
   gaRequest();
 </script>
 <noscript>

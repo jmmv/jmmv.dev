@@ -32,7 +32,7 @@ Fetching and keeping the source tree up to date: interacting with CVS is still t
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -45,6 +45,12 @@ Fetching and keeping the source tree up to date: interacting with CVS is still t
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2012\/07\/introducing-sysbuild-for-netbsd.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2012\/07\/introducing-sysbuild-for-netbsd.html';
+  </script>
 </head>
 
 
@@ -163,6 +169,24 @@ Fetching and keeping the source tree up to date: interacting with CVS is still t
               
               <article>NetBSD's build system is close to awesome: after checking a source tree out from CVS on virtually any Unix-like operating sytem, building a full NetBSD release for any of the supported platforms is as simple as running the <tt>build.sh</tt> script with the right arguments.<br /><br />There are, however, a few things that would deserve automation in this process, but that are not in <tt>build.sh</tt>'s domain to solve. These are:<br /><ul><li><span style="background-color: white;">Fetching and keeping the source tree up to date: interacting with CVS is still the responsibility of the user.</span></li><li><span style="background-color: white;">Simplifying the call to <tt>build.sh</tt>: this script takes a ton of arguments, and running it by hand quickly becomes "annoying". It would be nice if all the desired values to its arguments where stored elsewhere and picked up automatically. (<tt>mk.conf</tt> may not always be the right choice.)</span></li><li><span style="background-color: white;">Plugging into your crontab(5) for easy periodic rebuilds of NetBSD, <i>with proper reporting of failures</i>. Upgrading a live system from source is a major supported mechanism (particularly for NetBSD-current), so having a way to keep fresh release files around is welcome.</span></li><li>Performing such daily rebuilds of NetBSD as a dedicated unprivileged user.</li></ul><div>To anybody familiar with NetBSD, it is obvious that all the above items are "simple enough" to solve one by one; however, doing them by hand <i>gets old very quickly</i> — machines exist to make our life easier, don't they? I know I am not the only one that has custom local wrapper scripts around <tt>build.sh</tt>, and I also know that my scripts were ad-hoc, ugly and non-reusable. (Also, of course, anybody new to NetBSD will certainly not find any of the above trivial, but that's secondary.)</div><div><br /></div><div>To this end, I have written a script that automates all the aforementioned steps in a single tool, driven by configuration files that specify what to do. <b>Enter <tt>sysbuild</tt>.</b></div><div><br /></div><h2> My setup</h2><div>These days, my main NetBSD development box is a virtual machine. For a couple of years, I have been carrying around this virtual machine across machines and slowly tuning its configuration to suit my needs. The way I work is the following:</div><div><span style="background-color: white;"><br /></span></div><div><span style="background-color: white;">I keep a read-write copy of the sources under my home directory, which is the one I use for my development work. This copy is accompanied by&nbsp;</span><span style="background-color: white;">a script in my home directory that, given a machine type, updates the sources and rebuilds NetBSD for that machine type, using a known directory layout within my home directory.</span></div><div><span style="background-color: white;"><br /></span></div><div><span style="background-color: white;">I also&nbsp;</span><span style="background-color: white;">keep a read-only copy of the sources under <tt>/usr/src</tt>, checked out from anoncvs.&nbsp;</span><span style="background-color: white;">This copy is used by the dedicated "builder" system user to perform dedicated rebuilds of NetBSD.&nbsp;</span><span style="background-color: white;">The "builder" user also has a custom script (but different than the other one!) that updates <tt>/usr/src</tt>, rebuilds NetBSD for the machine types I am interested in, records full logs to files and places the build results into a shared network drive. Lastly, t</span><span style="background-color: white;">he dedicated "builder" user has a cron job that runs the previous script overnight.</span></div><div><span style="background-color: white;"><br /></span></div><div><div>The purpose of this dual setup is to always have a fresh release build somewhere in the system, built from pristine sources, while at the same time allowing me to do my development work in a tree that I could break at any time.</div></div><div><br /></div><div>Unfortunately, the size of the virtual disk of my development box has become too small for my current needs, and in order to fix this I prefer to start afresh. The thought of having to set up this whole scheme all over again, <i>by hand</i>, is what triggered the creation of <tt>sysbuild</tt>.</div><div><br /></div><h2> Getting started</h2><div><tt>sysbuild</tt> lives in pkgsrc under the <a href="http://cvsweb.netbsd.org/bsdweb.cgi/pkgsrc/sysutils/sysbuild/?only_with_tag=MAIN">pkgsrc/sysutils/sysbuild</a> directory. This package provides the main script, tests, sample configuration files and the extensive manual page. Installing the script is as easy as installing any other package, and I would recommend reading its documentation now.</div><div><br /></div><div>Once installed, <tt>sysbuild</tt> should be ready to use out of the box assuming that you have write access to <tt>/usr/src</tt>. Simply typing <tt>sysbuild build</tt> from anywhere in the system will cause the source tree to be updated and a release for your current platform to be built.</div><div><br /></div><div>If you wish to customize the behavior of <tt>sysbuild</tt>, copy <tt>/usr/pkg/etc/sysbuild/default.conf</tt> to <tt>~/.sysbuild/default.conf</tt> and edit the latter. The tool will pick it up on the next execution and use your new configuration settings. You can, of course, manage a variety of configurations in case you want to do different builds (say -current and 6.x).</div><div><br /></div><h2> Setting up a daily cron job</h2><div>The&nbsp;<a href="http://cvsweb.netbsd.org/bsdweb.cgi/pkgsrc/sysutils/sysbuild-user/?only_with_tag=MAIN" style="background-color: white;">pkgsrc/sysutils/sysbuild-user</a><span style="background-color: white;">&nbsp;package is a convenience bundle that manages a "sysbuild" unprivileged user in the system and installs a sample crontab to perform the desired periodic rebuilds of NetBSD. This crontab uses the <tt>sysbuild4cron</tt> script, which is a very simple utility to run <tt>sysbuild</tt>, store its output in a file, and send an error report any time the execution fails.</span></div><div><span style="background-color: white;"><br /></span></div><div><span style="background-color: white;">Simply installing the package will cause the creation of the "sysbuild" user and the configuration of this sample cron job. Follow the instructions provided by the package in its <tt>MESSAGE</tt> file to tune the behavior of any of these.</span></div><div><span style="background-color: white;"><br /></span></div><h2> <span style="background-color: white;">Concluding trivia</span></h2><div><span style="background-color: white;">Yes, these scripts are extremely tied to my particular workflow and use cases, although I don't think my needs are that special. However, I have attempted to come up with a generic-enough script and configuration file to allow the addition of new features.</span></div><div><span style="background-color: white;"><br /></span></div><div><span style="background-color: white;">You may notice that <tt>sysbuild</tt>'s version is 2.0 and not 1.0. While preparing the script for addition to <tt>pkgsrc</tt>, <tt>cvs add</tt> barfed that I was re-adding previously-deleted files. Uh hum, what a surprise! Upon reading the CVS log of the package's <tt>Makefile</tt>, I found that 10 years ago <a href="http://mail-index.netbsd.org/netbsd-users/2002/11/15/0003.html">I already wrote</a> this exact same script and that two years after <a href="http://mail-index.netbsd.org/tech-pkg/2004/05/19/0001.html">it got deleted</a> because it stopped working. I had completely forgotten about this! However, seeing <tt>pkg_comp</tt>'s messy code (which was written around the same time), I imagine that the previous implementation of this idea was messy; I don't dare to look at the previous code.</span></div><div><span style="background-color: white;"><br /></span></div><div><span style="background-color: white;">Enjoy!</span></div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -956,10 +980,12 @@ Fetching and keeping the source tree up to date: interacting with CVS is still t
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2012\/07\/introducing-sysbuild-for-netbsd.html");
   gaRequest();
 </script>
 <noscript>

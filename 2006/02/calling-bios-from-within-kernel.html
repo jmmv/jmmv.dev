@@ -30,7 +30,7 @@ The BIOS (Basic Input/Output System) is the PCs &#34;firmware&#34;. It initializ
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ The BIOS (Basic Input/Output System) is the PCs &#34;firmware&#34;. It initializ
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2006\/02\/calling-bios-from-within-kernel.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2006\/02\/calling-bios-from-within-kernel.html';
+  </script>
 </head>
 
 
@@ -160,6 +166,24 @@ The BIOS (Basic Input/Output System) is the PCs &#34;firmware&#34;. It initializ
               
               <article>NetBSD/i386's <a href="http://netbsd.gw.com/cgi-bin/man-cgi?bioscall++NetBSD-current">bioscall(9)</a> trampoline is one of those interesting and tricky things you come across from time to time when reading kernel code.  This apparently simple kernel function lets the caller execute BIOS functions and retrieve their results.<br /><br />The BIOS (<i>Basic Input/Output System</i>) is the PCs "firmware".  It initializes the hardware, starts the boot process (in a primitive way) and provides a set of utility functions in the form of software interrupts.  These interrupts can be used by applications to do tasks such as reading disk sectors, gathering information about the hardware or switching the video mode, among many other things.  This "library" is what concerns us now.<br /><br />x86 processors start their operation in real mode (MMU-less, 16-bit addressing) for compatibility reasons with the 8086.  As the BIOS contains the very first code executed by the system, it has to be callable from real mode.  The BIOS cannot either switch to protected mode due to compatibility reasons again: all the boot code is real mode code (not to mention some legacy OSes such as DOS).  This means that all the functions it offers to applications <i>were</i> designed to be called from real mode and with 16-bit addressing.  (N.B.  I'm not sure if this is completely true; the BIOS could provide 32-bit functions to be executed in protected mode, but anyway this is not what we are interested in now.)<br /><br />Sometimes, these functions can be a very useful resource for the operating system, specially before it has set up its own device drivers.  But... virtually all OS kernels now work in protected mode with 32-bit addressing.  In such configuration, it's impossible to call real mode code because of its 16-bit addressing and its direct access to the hardware.<br /><br />So is it impossible to use those functions once the kernel has started?  Of course not.  But only if the kernel has not thrashed important memory regions nor put the hardware in an unknown status to the BIOS.  (That is, the subset of available operations once the switch has happened is quite limited.)<br /><br />Assuming everything is OK, the kernel can switch back to real mode (non-trivial), issue the call to the BIOS function, grab the results, return to protected mode and feed those results (if any) to the caller.  And you guessed right, this is what bioscall(9) does in an automated way.  The manual page contains some more details and sample codes.<br /><br />By the way, the <a href="http://www.intel.com/technology/efi/">EFI</a> (Extensible Firmware Interface) is Intel's replacement for the BIOS.  All these compatibility issues should be gone, something that is certainly good to make the i386 platform better and free it from obsolete design issues.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -953,10 +977,12 @@ The BIOS (Basic Input/Output System) is the PCs &#34;firmware&#34;. It initializ
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2006\/02\/calling-bios-from-within-kernel.html");
   gaRequest();
 </script>
 <noscript>

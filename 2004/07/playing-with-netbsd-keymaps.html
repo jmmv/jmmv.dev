@@ -30,7 +30,7 @@ Keymaps are specific to each platform (just think that keyboards are different).
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Keymaps are specific to each platform (just think that keyboards are different).
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2004\/07\/playing-with-netbsd-keymaps.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2004\/07\/playing-with-netbsd-keymaps.html';
+  </script>
 </head>
 
 
@@ -160,6 +166,24 @@ Keymaps are specific to each platform (just think that keyboards are different).
               
               <article><p>Having configured my mac68k to boot with NetBSD, I wasn't very surprised to see that it doesn't have an Spanish keymap. So... first task, write one. Yeah, I could get used to the <tt>us</tt> mapping, but hey, I want to hack the sources ;-)</p>  <p>Keymaps are specific to each platform (just think that keyboards are different). Furthermore (and if I'm not too confused), some platforms use kernel keymaps while others use userland ones; if you ask me, the way to go is userland. Anyway I've only modified i386 and mac68k maps, which are both in-kernel, so this is what I'm going to explain.</p>  <p>To get started, take a look to the <tt><a href="http://cvsweb.netbsd.org/bsdweb.cgi/src/sys/dev/pckbport/wskbdmap_mfii.c?rev=HEAD&content-type=text/x-cvsweb-markup">sys/dev/pckbport/wskbdmap_mfii.c</a></tt> file, which is used in the i386 platform, among others. It's quite complete (as i386 is the most extended platform); I've used it as a reference to create the Spanish keymap for mac68k. As you can see, the only complete map is <tt>us</tt>; all others just override the bits that differ from it. This saves space and keeps common keycodes centralized in just one table.</p>  <p>Ok, so let's go to the file that defines keymaps for mac68k, <tt><a href="http://cvsweb.netbsd.org/bsdweb.cgi/src/sys/arch/mac68k/dev/akbdmap.h?rev=HEAD&content-type=text/x-cvsweb-markup">sys/arch/mac68k/dev/akbdmap.h</a></tt>. Notice that its structure is very similar to the one described in the previous paragraph. I just had to add a new array overriding the keys that don't match the <tt>us</tt> keyboard.  While at it, I also modified the later as it lacked some extra keys (insert, delete, etc.).</p>  <p>How did I guess which keycodes correspond to those undefined keys? Well, it was "easy": I created a small program that reads from <tt>/dev/wskbd0</tt> and prints each key press/release event together with its keycode (very easy; if you have doubts, check out <a href="http://cvsweb.netbsd.org/bsdweb.cgi/src/usr.sbin/wsmoused/">wsmoused</a>'s sources, which does the same but for the mouse device).</p>  <p>Now you know the basics.  If your keymap is not supported, it can be a good reason to start hacking! ;-)</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -953,10 +977,12 @@ Keymaps are specific to each platform (just think that keyboards are different).
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2004\/07\/playing-with-netbsd-keymaps.html");
   gaRequest();
 </script>
 <noscript>

@@ -30,7 +30,7 @@ I imported all our photos in iPhoto but the difference in their timestamps made 
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ I imported all our photos in iPhoto but the difference in their timestamps made 
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2007\/04\/fixing-exif-date-information.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2007\/04\/fixing-exif-date-information.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ I imported all our photos in iPhoto but the difference in their timestamps made 
               
               <article>Back in February, some friends and I spent a week visiting Punta Cana.  We made a lot of photos there but, when we came back, we realized that most of us (not all!) forgot to adjust our camera's date to the foreign timezone, which was 5 hours behind of ours.<br /><br />I imported all our photos in iPhoto but the difference in their timestamps made all images appear unsorted in the main view; this was very annoying.  So I wondered if the EXIF information embedded in them could be easily fixed.  It turns out it is possible, but the tools to do so — or at least the one I used — leave a lot to be desired: it was not exactly trivial to resolve the problem.<br /><br />In order to modify the EXIF information, I installed the free <a href="http://libexif.sourceforge.net/">libexif</a> library alongside a very simple frontend to it named <tt>exif</tt>, distributed from the same page.  To painlessly get this in Mac OS X, just use the <tt>graphics/exif</tt> package in <a href="http://www.pkgsrc.org/">pkgsrc</a>.<br /><br />Then I had to see which fields I wanted to modify in each photo.  This can be accomplished with the <tt>exif --tag &lt;photo-name.jpg&gt;</tt> command, which shows all tags currently attached to the photo and their corresponding values.  Skimming through the resulting list, it is easy to spot which fields correspond to date information.  I specifically picked up <tt>0x0132</tt>, <tt>0x9003</tt> and <tt>0x9004</tt>, but some of them may not exist in your images.<br /><br />With this information at hand, I wrote a little script that looped over all affected photos and, for each tag, adjusted it to the new value.  It goes as follows:<pre>#!/bin/sh<br /><br />while [ $# -gt 0 ]; do<br />    file=$1; shift<br /><br />    for tag in 0x0132 0x9003 0x9004; do<br />        date=$(exif --tag=${tag} $file | grep Value | <br />               cut -d ' ' -f 4-)<br />        date=$(perl adjust.pl "${date}")<br />        exif --tag=${tag} --ifd=0 --set-value="${date}" ${file}<br />        mv ${file}.modified.jpeg ${file}<br />    done<br />done</pre>The magic to subtract five hours to each date is hidden in the <tt>adjust.pl</tt> script, which looks like this:<pre>($date, $time) = split / /, $ARGV[0];<br /><br />($year, $month, $day) = split /:/, $date;<br />($hour, $min, $sec) = split /:/, $time;<br />$amount = 5;<br />if ($hour >= $amount) {<br />    $hour -= $amount;<br />} else {<br />    $hour = $hour - $amount + 24;<br />    if ($day == 1) {<br />        $day = 31;<br />        $month -= 1;<br />    } else {<br />        $day -= 1;<br />    }<br />}<br /><br />printf "%04d:%02d:%02d %02d:%02d:%02dn",<br />        $year, $month, $day, $hour, $min, $sec;</pre>I know the code is really crappy but it did the job just fine!
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ I imported all our photos in iPhoto but the difference in their timestamps made 
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2007\/04\/fixing-exif-date-information.html");
   gaRequest();
 </script>
 <noscript>

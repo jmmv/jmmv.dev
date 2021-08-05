@@ -30,7 +30,7 @@ Unfortunately, things do not work out of the box when installing GNOME from sour
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Unfortunately, things do not work out of the box when installing GNOME from sour
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2006\/03\/gnome-and-dbus-daemon.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2006\/03\/gnome-and-dbus-daemon.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ Unfortunately, things do not work out of the box when installing GNOME from sour
               
               <article>It is a fact that <a href="http://www.freedesktop.org/wiki/Software/dbus">dbus</a> is becoming popular and that many parts of GNOME are starting to use it.  Nowadays, some applications even fail to start if dbus is not present (e.g. epiphany).<br /><br />Unfortunately, things do not work out of the box when installing GNOME from sources &mdash; or when using an "uncustomized" OS; see below &mdash; because there is nothing in GNOME that launches a dbus-daemon session at startup.  Therefore, the user is forced to either:<ul><li>Change his <tt>~/.xinitrc</tt> to do <tt>exec dbus-launch gnome-session</tt> instead of the traditional <tt>exec gnome-session</tt>.</li><li>Edit his gdm configuration files to launch dbus-daemon before gnome-session.</li></ul>As you can see, both "solutions" are cumbersome because they break the previous behavior and because they require the user to take extra steps to get things working.<br /><br />Of course, in the disordered Linux world, distributions such as Ubuntu or Fedora Core include customized and rather complex X startup scripts that launch dbus-daemon during a session setup.  Non-dbus-enabled systems (such as NetBSD) could ship modified gdm packages to avoid this problem, but users could still hit a problem when using the traditional startx or other session managers such as xdm or kdm.<br /><br />I do not need to mention that some systems (e.g. NetBSD again) will not ever include &mdash; unless things change dramatically &mdash; a call to dbus-daemon in their standard X11 scripts.<br /><br />A possible solution is to modify the gnome-session utility to spawn a dbus-daemon process on its own, just as it does with gconf or gnome-keyring.  This way the user needn't remember to start dbus on his own as the GNOME session manager will do it automatically.  With this in place, GNOME magically works again in these dbus-agnostic systems.<br /><br />And yes, this solution is already implemented.  It has kept me busy for two days but you can find the code in <a href="http://bugzilla.gnome.org/show_bug.cgi?id=336237">bug 336327</a>.  I hope to get some positive feedback and integrate it into pkgsrc until an official gnome-session release does it (if ever).  If it is not integrated... well, I guess I'll have to go the gdm-patching route.<br /><br />By the way, I have to say this: more than 300 lines of C code to do something that can be achieved in less than 10 lines of shell script...  people seem to like to make their lives more complex than need be ;-)
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ Unfortunately, things do not work out of the box when installing GNOME from sour
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2006\/03\/gnome-and-dbus-daemon.html");
   gaRequest();
 </script>
 <noscript>

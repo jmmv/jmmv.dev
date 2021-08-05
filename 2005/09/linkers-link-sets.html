@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/09\/linkers-link-sets.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/09\/linkers-link-sets.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article><p>I don't know about other linkers, but GNU ld provides a very useful feature: <i>link sets</i>.  A link set is a list of symbols constructed during <i>link time</i> which can then be inspected in regular code. This is very interesting in situations when you want to initialize several subsystems from a centralized place but don't know which of these will be available; that is, you don't know which ones will be in the final binary.</p>  <p>To illustrate this feature, let's see how NetBSD manages file system initialization. In NetBSD, you can configure which file systems you want in your kernel binary and which not. Each file system has a <tt>vfs_init</tt> hook that must be called during system initialization but... how to do this in a clean and extensible way? For a moment, imagine we didn't have link sets. In this case, NetBSD would need a function similar to the following:</p>  <pre>void<br />init_file_systems(void)<br />{<br />#ifdef UFS<br />   ufs_init();<br />#endif <p>#ifdef MSDOSFS<br />   msdosfs_init();<br />#endif </p><p>...</p>#ifdef TMPFS<br />   tmpfs_init();<br />#endif<br />}</pre><p></p>  <p>Isn't this ugly? Very much, although one might support the visual ugliness. However, the real problem is that, in order to add a new file system, you need to edit other parts of the system; this might seem acceptable in an open source project, but what if the initialization code was closed source? You couldn't add your file system. This clearly goes against extensibility.</p>  <p>Using link sets, this problem goes away: each independent module is able to add itself to a global list of symbols. Continuing our file systems example, take a look to the <tt>vfsinit</tt> function in <tt>kern/vfs_init.c</tt>.  The first thing you see there is the declaration (<tt>__link_set_decl</tt>) of a new link set, called <tt>vfsops</tt>, that will hold pointers to <tt>struct vfsops</tt> objects.  Then, the code uses the <tt>__link_set_foreach</tt> construction to iterate over the list, correctly initializing all the file systems.  The following is an extract of this, with <i>many</i> details removed:</p>  <pre>void<br />vfsinit(void)<br />{<br />   __link_set_decl(vfsops, struct vfsops);<br />   struct vfsops * const *vfsp;  /* Iterator */<br /><br />   __link_set_foreach(vfsp, vfsops) {<br />       (*vfsp)-&gt;vfs_init();<br />   }<br />}</pre><p></p>  <p>At last, how does a module add itself to the link set?  Using the <tt>__link_set_add_data</tt> operation, which takes the name of the link set as its first argument and the object to be added as the second one.  E.g.:</p>  <pre>struct vfsops barops = {<br />   ...<br />   ufs_init,<br />   ...<br />};<br />__link_set_add_data(vfsops, barops);</pre><p></p>  <p>As you can see, using link sets the kernel does not need to know at all which file systems are compiled into it, yet the initialization code will be executed.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/09\/linkers-link-sets.html");
   gaRequest();
 </script>
 <noscript>

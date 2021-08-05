@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2009\/03\/making-atf-compiler-aware.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2009\/03\/making-atf-compiler-aware.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article>For a long time, ATF has shipped with <a href="http://portal.pc.ac.upc.edu/viewmtn/atf/revision/browse/92e15dcd3de700ceaf558c43ed9de90e3c7d20d5/tests/build">build-time tests for its own header files</a> to ensure that these files are self-contained and can be included from other sources without having to manually pull in obscure dependencies. However, the way I wrote these tests was a hack since the first day: I use automake to generate a temporary library that builds small source files, each one including one of the public header files. This approach works but has two drawbacks. First, if you do not have the source tree, you cannot reproduce these tests -- and one of ATF's major features is the ability to install tests and reproduce them even if you install from binaries, remember? And second, it's not reusable: I now find myself needing to do this exact same thing in another project... what if I could just use ATF for it?<br /><br />Even if the above were not an issue, build-time checks are a nice thing to have in virtually every project that installs libraries. You need to make sure that the installed library is linkable to new source code and, currently, there is no easy way to do this. As a matter of fact, <a href="http://cvsweb.netbsd.org/bsdweb.cgi/src/regress/include/?only_with_tag=MAIN">the NetBSD tree has such tests</a> and they haven't been migrated to ATF for a reason.<br /><br />I'm trying to implement this in ATF at the moment. However, running the compiler in a transparent way is a tricky thing. Which compiler do you execute? Which flags do you need to pass? How do you provide a portable-enough interface for the callers?<br /><br />The approach I have in mind involves caching the same compiler and flags used to build ATF itself and using those as defaults anywhere ATF needs to run the compiler itself. Then, make ATF provide some helper check functions that call the compiler for specific purposes and hide all the required logic inside them. That should work, I expect. Any better ideas?
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2009\/03\/making-atf-compiler-aware.html");
   gaRequest();
 </script>
 <noscript>

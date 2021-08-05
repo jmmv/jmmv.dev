@@ -32,7 +32,7 @@ I really want to get to explaining the nitty-gritty details of the implementatio
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -45,6 +45,12 @@ I really want to get to explaining the nitty-gritty details of the implementatio
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2012\/05\/rethinking-kyuas-configuration-system.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2012\/05\/rethinking-kyuas-configuration-system.html';
+  </script>
 </head>
 
 
@@ -163,6 +169,24 @@ I really want to get to explaining the nitty-gritty details of the implementatio
               
               <article>In the&nbsp;<a href="/2012/05/kyuas-configuration-system-showing-its.html">previous blog post</a>, I described the problems that the implementation of the Kyua configuration file parsing and in-memory representation posed. I also hinted that some new code was coming and, after weeks of work, I'm happy to say that it has <a href="http://code.google.com/p/kyua/source/detail?r=275a6bb6101d8c9ae2f0290cac6c294ac040aeab">just landed in the tree</a>!<br /><div><br />I really want to get to explaining the nitty-gritty details of the implementation, but I'll keep these for later. Let's focus first on what the goals for the new configuration module were, as these drove a lot of the implementation details:</div><div><ul><li><b>Key/value pairs representation</b>: The previous configuration system did this already, and it is a pretty good form for a configuration file because it is a simple, understandable and widespread format. Note that I have not said anything yet about the <i>types</i>&nbsp;of the values.</li><li><b>Tree-like representation</b>: The previous configuration schema grouped test-suite specific properties under a "test_suites" map while it left internal run-time properties in the global namespace. The former is perfect and the latter was done just for simplicity. I want to move towards a tree of properties to give context to each of them so that they can be grouped semantically (e.g. <i>kyua.report.*</i>, <i>kyua.runtime.*</i>, etc.). The new code has not changed the structure of the properties yet (to remain compatible with previous files), but it adds very simple support to change this in the shortcoming future.</li><li><b>Single-place parsing and validation</b>: A configuration file is an external representation of a set of properties. This data is read (parsed) once and converted into an in-memory representation. All validation of the values of the properties must happen at this stage, and <i>not when the properties are queried</i>. The reason is that validation of external values must be consistent and has to happen in a controlled location (so that errors can all be reported at the same time).<br />I have seen code in other projects where the configuration file is stored in memory as a set of key/value string pairs and parsing to other types (such as integers, etc.) is delayed until the values are used. The result is that, if a property is queried more than once, the validation will be implemented in different forms, each with its own bugs, which will result in dangerous inconsistencies.</li><li><b>Type safety</b>: This is probably the trickiest bit. Every configuration node must be stored in the type that makes most sense for its value. For example: a timeout in seconds is an integer, so the in-memory representation must be an integer. Or another example: the type describing the "unprivileged user" is a data structure that maps to a system user, yet the configuration file just specifies either a username or a UID.<br />Keeping strict type validation in the code is interesting because it helps to ensure that parsing and validation happen in just a single place: whenever the configuration file is read, every property will have to be converted to its in-memory type, and this means that the validation can only happen at that particular time. <i>Once the data is in memory, we can and have to assume that it is valid</i>. Additionally, strict types ensure that the code querying such properties uses the values as intended, without having to do additional magic to map them to other types.</li><li><b>Extensibility</b>: Parsing a configuration file is a very generic concept, yet the previous code made the mistake of tying this logic with the specific details of Kyua configuration files. A goal of the new code has been to write a library that parses configuration files, and allows the Kyua-specific code to define the schema of the configuration file separately. (No, the library is not shipped separately at this point; it's placed in its own <i>utils::config</i> module.)</li></ul><div>With all this code in place, there are a bunch of things that can now be easily implemented. Consider the following:</div></div><div><ul><li>Properties to define the timeout of test cases depending on their size (long-standing <a href="http://code.google.com/p/kyua/issues/detail?id=5">issue 5</a>).</li><li>Properties to tune the UI behavior: width of the screen, whether to use color or not (no, there is no color support yet), etc.</li><li>Properties to configure how reports look like "by default": if you generate reports of any form frequently, it is very likely that you will want them to look the same every time and hence you will want to define the report settings once in the configuration file.</li><li>Hooks: one of the reasons for using Lua-based configuration files was to allow providing extra customization abilities to the user. Kyua could theoretically call back into Lua code to perform particular actions, and such actions could be explicitly stated by the user in the form of Lua functions. Neither the current configuration code nor Kyua has support for hooks, but the new implementation makes it rather easy to add them.</li></ul><div>And that's all for today. Now that you know what the current code is trying to achieve and why, we will be able to look at how the implementation does all this in the next posts.</div></div>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -956,10 +980,12 @@ I really want to get to explaining the nitty-gritty details of the implementatio
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2012\/05\/rethinking-kyuas-configuration-system.html");
   gaRequest();
 </script>
 <noscript>

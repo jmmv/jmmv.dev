@@ -30,7 +30,7 @@ Up until now vnd(4) used the vnode&#39;s bmap and strategy operations to access 
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -43,6 +43,12 @@ Up until now vnd(4) used the vnode&#39;s bmap and strategy operations to access 
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2006\/11\/making-vnd4-work-with-tmpfs.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2006\/11\/making-vnd4-work-with-tmpfs.html';
+  </script>
 </head>
 
 
@@ -161,6 +167,24 @@ Up until now vnd(4) used the vnode&#39;s bmap and strategy operations to access 
               
               <article>vnd(4) is the virtual disk driver found in NetBSD. It provides a disk-like interface to files which allows you to treat them as if they were disks. This is useful, for example, when a file holds a file system image (e.g. the typical ISO-9660 files) and you want to inspect its contents.<br /><br />Up until now vnd(4) used the vnode's <tt>bmap</tt> and <tt>strategy</tt> operations to access the backing file. These operate at the block-level and therefore do not involve any system-wide caches; this is why they were used (see below).  Unfortunately, some file systems (e.g. tmpfs and smbfs) do not implement these operations so vnd could not work with files stored inside them.<br /><br />One of the possible fixes to resolve this problem was to make vnd(4) use the regular <tt>read</tt> and <tt>write</tt> operations; these act on a higher (byte) level and are so fundamental that must be implemented by all file systems.  The disadvantage is that all data that flows through these two methods ends up in the buffer cache.  (If I understand it correctly, this is problematic because vnd itself will also push a copy of the same data into the cache thus ending up with duplicates in there.)<br /><br />Despite that minor problem, I believe it is better to have vnd(4) working in all cases even if that involves some performance penalty in some situations (which can be fixed anyway by implementing the missing operations later on). So this is what I have done: vnd(4) will now use read and write for those files stored in file systems where <tt>bmap</tt> and <tt>strategy</tt> are not available and continue to use the latter two if they are present (as it has always done).<br /><br />Some more information can be found in the <a href="http://mail-index.netbsd.org/source-changes/2006/11/09/0032.html">CVS commit</a> and its corresponding <a href="http://www.netbsd.org/cgi-bin/query-pr-single.pl?number=34882">bug report</a>.
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -954,10 +978,12 @@ Up until now vnd(4) used the vnode&#39;s bmap and strategy operations to access 
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2006\/11\/making-vnd4-work-with-tmpfs.html");
   gaRequest();
 </script>
 <noscript>

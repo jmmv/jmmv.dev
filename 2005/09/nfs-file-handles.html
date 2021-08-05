@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2005\/09\/nfs-file-handles.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2005\/09\/nfs-file-handles.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article><p>NFS uses a structure called a <i>file handle</i> to uniquely identify exported files. When a client requests to access a file, the server constructs a file handle that identifies it; from this point on, this identifier will be used in all communications between the server and the client to access that specific file. (Look at the <tt>fs_vptofh</tt> and <tt>fs_fhtovp</tt> hooks in <a href="http://www.netbsd.org/">NetBSD</a>'s VFS layer to see how this mapping works.)</p>  <p>In order to identify a file univocally, you need three things: the file-system identifier (i.e., something unique to each mount point), the node number (e.g., the inode number in FFS terminology) and a generation number. It is clear why the first two are needed, but the generation number may be confusing. In order to explain this last concept, let's see an example:</p>  <p>Suppose you have a file using the 1234 inode of the root file-system; let's call this <tt>foo</tt>.  Now, you delete <tt>foo</tt> and create a new file, called <tt>bar</tt>, which ends up <i>reusing</i> the 1234 inode. These two files are clearly different, but they could look the same from the point of view of a file handle if you used the file-system number and the inode number exclusively. Therefore, we need a third component, the generation number, that makes these two files different. This component is incremented each time an inode is reused for a different file.</p>  <p>So far, so good. But now we get to the ugly part: given a file-system number, a node number and a generation number, you can generate a file handle that refers to any file within the exported file-system. If these values were available to everybody, a malicious client could easily generate file handles to access files he is not allowed to touch. This is why the generation number is hidden to user space: if you apply <tt>stat(2)</tt> to a file, you'll always get a zero value in the <tt>st_gen</tt> field (some systems may return the correct number if you are root).  Similarly, the <tt>getfh(2)</tt> system call is restricted to the super-user.</p>  <p>But can't a user guess the generation number? Yes, he can. This is why they are often generated based on a random seed, which makes the guessing difficult. See <tt>fsirand(8)</tt> for more information.</p>  <p>All this explains why there is no such thing as exporting a subtree in the NFS world. When you export a directory from a file-system, you are implicitly exporting the whole mount point because malicious file handles could be used to access files outside the subtree.</p>  <p>Thanks go to William Studenmund for explaining me this during <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">tmpfs</a> development.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2005\/09\/nfs-file-handles.html");
   gaRequest();
 </script>
 <noscript>

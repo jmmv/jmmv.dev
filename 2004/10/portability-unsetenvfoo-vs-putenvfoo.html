@@ -28,7 +28,7 @@
   <link rel="alternate" type="application/rss+xml"
         title="Julio Merino (jmmv.dev)" href="/feed.xml" />
 
-  <link rel="stylesheet" href="/sass/main.min.3e5c0cc4c57a3983d9ae1fb3d01e468c726607d3c33cc39b5edfd6ff06e7cef2.css">
+  <link rel="stylesheet" href="/sass/main.min.df39b1351d7f4caa441874d81e63a8d67f4c6023d1955e7747b57a5370f21d5d.css">
   <link rel="stylesheet" href="/css/chroma.css">
 
   <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
@@ -41,6 +41,12 @@
     <script src="/js/html5shiv-3.7.2.min.js"></script>
     <script src="/js/respond-1.4.2.min.js"></script>
   <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_REL_PATH = '\/2004\/10\/portability-unsetenvfoo-vs-putenvfoo.html';
+    const PAGE_PATH = 'https:\/\/jmmv.dev\/2004\/10\/portability-unsetenvfoo-vs-putenvfoo.html';
+  </script>
 </head>
 
 
@@ -159,6 +165,24 @@
               
               <article><p>(This happened last Friday, but I've had not enough time to write about it.)  After fixing the <a href="http://www.livejournal.com/users/jmmv/16778.html">Evolution Data Server crashes</a> (let's call it E-D-S for simplicity), I noticed a strange problem caused by it. The GNOME Clock applet showed the right local time before it was clicked, but, after the calendar was shown (by clicking on the text), the time got changed to UTC and there was no way to reverse it (other than killing the applet).</p>  <p>How strange.  My first action was to verify that I had selected the right timezone in <a href="http://www.blogger.com/post-edit.g?blogID=17885055&postID=112947216520182836">Evolution</a>'s configuration; no problems here. So "it must be another problem in E-D-S", I thought. Ok... "let's debug it; it's going to be fun".</p>  <p>I started by looking at the applet's source code to see how it gathered the local time: it uses the localtime(3) function provided by libc; "Hmm, interesting; E-D-S is corrupting the results of a libc function". Took a quick look at its manpage, and saw that its behavior was affected by the <tt>tzname</tt> global variable and by the <tt>TZ</tt> environment variable. So it was fair to think that E-D-S was modifying one of these two variables in an unexpected way. The problem was to locate where this was happening, specially because <a href="http://www.gnu.org/software/gdb/">GNU GDB</a> doesn't work very well with threaded applications in <a href="http://www.netbsd.org/">NetBSD</a>.</p>  <p>I tried to grep E-D-S sources to look for a <tt>tzname</tt> variable (but I didn't bother to look for <tt>TZ</tt>; stupid me). I didn't find what I was looking for, though I saw multiple functions in the libical library that dealt with timezones. Hmm... the GNOME Clock applet was using them. So, I took its sources and added several printf(3)s before and after calls to the timezone-related functions, showing the value returned by localtime(3). After multiple tries, I located the function with side effects: <tt>icaltime_as_timet_with_zone</tt>.</p>  <p>Went to E-D-S sources again, searched for this function and found some suspicious code:</p>  <pre>/* Set TZ to UTC and use mktime to convert to a time_t. */<br />old_tz = set_tz ("UTC");<br />t = mktime (&stm);<br />unset_tz (old_tz);</pre>  <p>The next step was to look for the <tt>set_tz</tt> function in the same file and check what it was doing.  Effectively, it was changing the <tt>TZ</tt> environment variable, using putenv(3) function.  Looking at the <tt>unset_tz</tt> function confirmed my predictions.  This simple line of code:</p>  <pre>putenv("TZ"); /* Delete from environment */</pre>  <p>was the guilty one (I had met this problem before in some other program that I can't remember now, so this is why I know without other tests). "Aha! I've got you, little bug!", I thought (locating and fixing a bug is a good sensation ;-). Let's see why this was a problem.</p>  <p>putenv("FOO") <i>deletes</i> a variable from the environment in some systems (like Linux).  However, on others (such as NetBSD), it does <i>nothing</i>, leaving the environment unmodified.</p>  <p>The solution is to use <tt>unsetenv("FOO")</tt> on systems that have it, because it behaves in a deterministic way. However, if this function does not exist, putenv(3) is probably the only way to go, hoping that it will do the right thing.</p>  <p>This bug is reported <a href="http://bugzilla.ximian.com/show_bug.cgi?id=68695">here</a>.</p><p class="mobile-post"></p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-8">
+                <p><i>(Experimental)</i> What did you think about this article?</p>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-2">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
             </div>
           </div>
 
@@ -952,10 +976,12 @@
 <script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
 </script>
 
 <script>
-  saveRequest("e8da9f62-b7ac-4fe9-bf20-7c527199a376", "https:\/\/jmmv.dev\/2004\/10\/portability-unsetenvfoo-vs-putenvfoo.html");
   gaRequest();
 </script>
 <noscript>
