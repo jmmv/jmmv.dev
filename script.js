@@ -227,15 +227,24 @@ function loadVotes() {
             if (this.status == 200) {
                 response = JSON.parse(this.responseText);
 
+                var zeroVotes = true;
                 if (response.votes.ThumbsUp == null) {
                     $('#thumbs-up-count').text(0);
                 } else {
                     $('#thumbs-up-count').text(response.votes.ThumbsUp);
+                    zeroVotes = false;
                 }
                 if (response.votes.ThumbsDown == null) {
                     $('#thumbs-down-count').text(0);
                 } else {
                     $('#thumbs-down-count').text(response.votes.ThumbsDown);
+                    zeroVotes = false;
+                }
+
+                if (zeroVotes) {
+                    $('#first-vote').text('Be the first one to vote!');
+                } else {
+                    $('#first-vote').text('');
                 }
 
                 if (response.client_reaction == null) {
