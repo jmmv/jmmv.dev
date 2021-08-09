@@ -2,8 +2,7 @@
 // Copyright 2021 Julio Merino
 
 // Base URL of the API service.
-// const API_BASE_URL = 'https://api.jmmv.dev/api';
-const API_BASE_URL = 'http://localhost:7071/api';
+const API_BASE_URL = 'https://api.jmmv.dev/api';
 
 // SITE_ID and PAGE_PATH must be defined by the caller.
 const GA_ID = 'UA-63557333-1';
