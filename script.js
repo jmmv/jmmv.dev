@@ -199,6 +199,11 @@ function vote(reaction, buttonId, counterId) {
         if (this.readyState == 4) {
             VOTING = false;
             loadVotes();
+
+            if (reaction == 'ThumbsUp') {
+                $('#vote-request').text("Thank you! Please spread the word and share this post " +
+                    "elsewhere!");
+            }
         }
     }
     xmlHttp.open("POST", makeVoteURL(clientId).href, true);
