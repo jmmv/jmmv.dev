@@ -151,7 +151,7 @@ This new 0.6 release is super-exciting for three reasons:
         <h1>EndBASIC 0.6 release announcement</h1>
 
         <p>February 19, 2021 &middot;
-        About 8 minutes
+        About 7 minutes
         &middot;
         Tags:
         <a class="text-reset" href="/tags/endbasic">endbasic</a>, <a class="text-reset" href="/tags/programming">programming</a>, <a class="text-reset" href="/tags/release">release</a>, <a class="text-reset" href="/tags/rust">rust</a></p>
@@ -184,22 +184,7 @@ This new 0.6 release is super-exciting for three reasons:
 <p>But stick around and continue reading if you are interested in many more details about these major changes 😉</p>
 <h1 id="gpio-support-for-the-raspbery-pi">GPIO support for the Raspbery Pi</h1>
 <p>Let&rsquo;s begin this release walk-through with the flashy stuff:</p>
-<div class="container">
-  <div class="row">
-    <div class="col-md-6">
-      <figure>
-        <img src="/images/2021-02-19-monkmakes-kit-open.jpg" width="100%" />
-        <figcaption>How it started on Feb 1st: a Monk Makes Project Box 1 and no experience with GPIO nor connecting hardware to the Raspberry Pi.</figcaption>
-      </figure>
-    </div>
-    <div class="col-md-6">
-      <figure>
-        <img src="/images/2021-02-19-rpi3-and-endbasic.jpg" width="100%" />
-        <figcaption>How it was going on Feb 15th: a prerelease build of EndBASIC 0.6 showing its GPIO interface on this same machine.</figcaption>
-      </figure>
-    </div>
-  </div>
-</div>
+<!-- raw HTML omitted -->
 <p>I started this month of February with no clue on how to program the Raspberry Pi&rsquo;s hardware. I had had this little machine for years now, mostly for <a href="https://retropie.org.uk/">RetroPie</a>, but it wasn&rsquo;t until last month that I got the idea of using EndBASIC to leverage its hardware features. After all, quick rewards is what EndBASIC is all about, and flashing LEDs qualifies as such. I quickly ordered the first beginner&rsquo;s kit I could find with good reviews (a <a href="http://www.monkmakes.com/pi_box_1.html">Monk Makes Project Box 1</a>) and followed some of its sample circuits. Soon after, I was on my way to prototyping GPIO access from EndBASIC.</p>
 <p>Adding GPIO support was way more frustrating than originally anticipated. At first, I started using <a href="https://github.com/rust-embedded/rust-sysfs-gpio">a crate that relies on sysfs</a> to manipulate the GPIO pins, but then found out that this crate is ancient (wouldn&rsquo;t run as non-root), and that <a href="https://www.kernel.org/doc/Documentation/gpio/sysfs.txt">GPIO via sysfs is deprecated</a> and going away. I picked up <a href="https://github.com/rust-embedded/gpio-cdev">the next best crate for GPIO</a>, which uses the character device interface&hellip; and things worked, but I then discovered that a trivial button wouldn&rsquo;t function as easily as it did with the Python libraries.</p>
 <p>As it turns out, the trivial button push examples shown in the official projects rely on the Raspberry Pi&rsquo;s built-in pull-up and pull-down resistors. Their use is abstracted away in the <a href="https://gpiozero.readthedocs.io/en/stable/">gpiozero Python libraries</a> so, even though you think you are operating with GPIO alone, you are actually doing much more. This extra hardware is &ldquo;out of band&rdquo; of GPIO and requires dedicated handling, which this generic crate I picked didn&rsquo;t have. So I ended up having to find an alternative specifically for the Raspberry Pi and <a href="https://github.com/golemparts/rppal">RPPAL</a> came along the way. Unfortunately, this crate is not portable so I had to add build-time Cargo features to make its use conditional, which in turn makes installation more fragile. Sigh.</p>
@@ -220,10 +205,7 @@ This new 0.6 release is super-exciting for three reasons:
 <span class="w">    </span><span class="kr">SLEEP</span><span class="w"> </span><span class="mf">0.01</span>
 <span class="kr">WEND</span>
 </code></pre></div><p>The Raspberry Pi has many more hardware features than GPIO, and even GPIO on its own can be more complicated than what I showed above. So the next challenge for EndBASIC is: getting SPI support in place so that I can drive this little LCD display and get some scrolling banner on it:</p>
-<figure>
-  <img src="/images/2021-02-19-rpi3-with-display.jpg">
-  <figcaption>Raspberry Pi 3 with a Waveshare LCD hat showing its builtin demo program. Future EndBASIC versions should have the necessary features to program this type of hardware.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <h1 id="multidimensional-array-support">Multidimensional array support</h1>
 <p>Another core feature in this release is support for multidimensional arrays. I had previously envisioned that I would need this to support GPIO by exposing the pins as a memory-mapped array, so I did invest the time to write this feature upfront. In the end I took a very different path for GPIO but arrays are interesting and necessary anyway.</p>
 <p>The primary difficulty in adding arrays was that the syntax to index arrays and to call functions is ambiguous. You see: BASIC uses a notation like <code>values(x, y)</code> to express what you&rsquo;d write as <code>values[x][y]</code> in pretty much any other language (note the use of parenthesis, not brackets). This, combined with the way functions were previously handled in the expression parser, made it very hard to properly handle this syntax without a general rewrite. Things were even worse when trying to disambiguate array assignments from builtin calls. Compare the array assignment <code>values(x) = y</code> vs. the <code>PRINT (x)</code> call: the parser has to wait until it sees the equal sign to decide what type of statement this is.</p>
@@ -245,16 +227,10 @@ This new 0.6 release is super-exciting for three reasons:
 <p>The last major change in this release, which isn&rsquo;t a change in the code per se, is that this is the first release to ship with prebuilt binaries for the most common platforms. These binaries are automatically built on GitHub Actions and are automatically published to the release page.</p>
 <p>Why add binary releases now? In fact, very few people have installed EndBASIC on their machine as far as I can tell: the online web interface is so much more convenient. But GPIO changes the rules of the game. If you want to use this feature, you now need to have EndBASIC on a Raspberry Pi, and building it there can be too slow. Plus you need to remember to use <code>--features=rpi</code>. Downloading a prebuilt binary for a casual look (which is what most people are doing right now anyway) is much easier.</p>
 <p>As you can deduce from the rest of this post, this wasn&rsquo;t trivial either. GitHub Actions are great and all, but configuring any remote service like this, without the ability to iterate locally, is painful:</p>
-<figure>
-  <img src="/images/2021-02-19-release-setup-failures.jpg">
-  <figcaption>Common process of setting up a remote service without being able to test changes locally. If you have ever found yourself in a similar situation, know that you are not alone.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>It doesn&rsquo;t help at all that a lot of the GitHub Actions involved are scarcely documented, have interfaces that try to do too much at once (thus being bad for composability), and that the officially-looking ones I started with are unmaintained and deprecated.</p>
 <p>Anyhow. Things are working now and it&rsquo;s incredibly exciting to see automation that builds the release binaries and drafts a GitHub release entry as soon as I push the right Git tag.</p>
-<figure>
-  <img src="/images/2021-02-19-release-setup-working.jpg">
-  <figcaption>Snapshot of the first successful run of the release publishing workflow.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <h1 id="feedback-please">Feedback, please!</h1>
 <p>EndBASIC&rsquo;s primary goal continues to be to offer a simplified, self-contained, retro-looking environment with which to learn programming concepts. Features that offer quick visual reward are a priority, and this new area of controlling hardware seems to fit the bill well. (Be aware that I&rsquo;m currently favoring breath of features over depth to see what sticks and what doesn&rsquo;t, so my plans might change&hellip;)</p>
 <p>As for the future, think about a &ldquo;boot to EndBASIC&rdquo; image for the Raspberry Pi that drops you into the interpreter within a few seconds and that includes built-in instructions and sample code for cool projects. Think about this environment being able to connect to a common server so that you can share your creations with other people, and maybe host &ldquo;email-like&rdquo; messages&mdash;all within the same textual interface.</p>
@@ -437,11 +413,11 @@ This new 0.6 release is super-exciting for three reasons:
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (19)
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (20)
         <ul id="archive-year-2021" class="collapse">
         
           
-          <li><a href="/archive.html#2021-08">August 2021</a> (1)</li>
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
         
           
           <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>

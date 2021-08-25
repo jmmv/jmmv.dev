@@ -220,18 +220,12 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <li>The local unsandboxed spawn now has to run through completion, even if that takes a long time or a lot of local resources (think battery!).</li>
 </ol>
 <p>Which, in a picture, looks like this:</p>
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-29.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_34">Slide 29</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>Not great. The real problem here is the local <em>unsandboxed</em> strategy. If we were using the sandboxed strategy, all would be good because we&rsquo;d only take the <a href="/2019/12/bazel-dynamic-execution-output-locking.html">output lock</a> once the local spawn finished execution. But because we do <em>not</em> use sandboxing for performance reasons, we take the lock right away.</p>
 <p>What if we could <strong>remove</strong> the output lock?</p>
 <p>What if, instead, we could make the local strategy run free and make the remote branch actively cancel the local branch when it is ready to put the outputs in place?</p>
 <p>Then, we would make as much progress as possible on each branch and stop it at the last minute:</p>
-<figure>
-  <img src="/images/2019-12-12-bazel-dynamic-execution-30.svg" class="with-border">
-  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_202">Slide 30</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>Great, but it turns out that this &ldquo;simple&rdquo; idea has been very difficult to implement. Let&rsquo;s see why.</p>
 <p>The first step was to refactor the dynamic strategy to not use the output lock. What we need instead is for each branch to cancel each other right before writing to the output tree. I like calling this &ldquo;cross-cancellations&rdquo; and you can compare this to coöperative vs. preëmptive scheduling: using a lock is akin to the former while issuing cancellations is akin to the latter.</p>
 <p>But implementing cross-cancellations was such an intrusive change that I did not feel comfortable rolling it out without a flag. And, well, because the change was so extensive, I actually <a href="https://source.bazel.build/bazel/+/0bf5bbd90f3fd702fc838d9a144b599ad0490c4d">forked</a> the implementation because the flag would have made the majority of the code conditional. This is why we now have the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/LegacyDynamicSpawnStrategy.java;l=71;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>LegacyDynamicSpawnStrategy</code></a> and the <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/DynamicSpawnStrategy.java;l=74;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>DynamicSpawnStrategy</code></a>. You can pick which one to use with the <code>--[no]legacy_spawn_strategy</code> flag, and my plan is to remove the legacy one at some point this year, of course.</p>
@@ -417,11 +411,11 @@ Bazel dynamic execution</b> series</a>.</i></p>
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (19)
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (20)
         <ul id="archive-year-2021" class="collapse">
         
           
-          <li><a href="/archive.html#2021-08">August 2021</a> (1)</li>
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
         
           
           <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>

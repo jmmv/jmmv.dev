@@ -168,10 +168,7 @@
 <p>Easy, right? Yes, there is nothing more to it than this! But to keep you entertained, let me cover a bunch of different examples to see how this plays out in practice.</p>
 <h1 id="application-menus-via-menu-in-debian">Application menus (via &ldquo;menu&rdquo; in Debian)</h1>
 <p>Quick: how is Debian able to automatically register new programs in the application menus displayed by pretty much any window manager? See, for example, this screenshot using the default Fluxbox configuration:</p>
-<figure>
-  <img src="/images/2020-08-19-debian-menus-fluxbox.png" width="100%">
-  <figcaption>Debian application menus in fluxbox.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>Generating menu entries might seem like a no-brainer today, but automatically updating these was a major difficulty years ago&mdash;and still is for some environments like Fluxbox. And I bet that&rsquo;s why you might have never stopped to think about how this actually works, have you? 😉</p>
 <p>To explain how this works, we have to travel back in time. Around the late 90s, we had a bunch of independent window managers and Gnome and KDE were still in their infancy. Each of these windowing systems had its own file format to represent application menus&mdash;yet Debian, somehow, was able to display up-to-date information about all available applications.</p>
 <p>If you were designing Debian&rsquo;s packaging system back in the day, how would you have achieved this? Stop and think for a minute before continuing.</p>
@@ -185,10 +182,7 @@ debian:~&gt;
 <p>Debian&rsquo;s <code>menu</code> package is all good and dandy, but it is system-specific and, to my surprise, it doesn&rsquo;t seem to be widely used any longer within Debian any more.</p>
 <p>Note that the reason I&rsquo;m picking on Debian is, simply put, because I understand how it works. I&rsquo;m sure other major systems like Fedora have their own mechanism to achieve these same results&hellip; but I did not research how they work for this article. Which reminds me that, in the early 2000s, I came up with my own solution to this problem for NetBSD with <a href="http://menu2wm.sourceforge.net/">menu2wm</a>. Luckily, I concluded that this was a dead end due to what we are about to see, but I&rsquo;m not sure why I decided to shut down the code repositories!</p>
 <p>Anyhow. Let&rsquo;s switch gears to modern menu generation as used in KDE:</p>
-<figure>
-  <img src="/images/2020-08-19-debian-menus-kde.png" width="100%">
-  <figcaption>Debian application menus in KDE showing the Dolphin file manager under the System category.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>The way this works is by using <code>/usr/share/applications/</code> as a database of menu entries. Each package that wants to register an entry in the system menus installs a <code>.desktop</code> file under this directory. These are very popular as my rather limited Debian installation shows:</p>
 <pre><code>debian:/usr/share/applications&gt; ls -1 | wc -l
 240
@@ -211,10 +205,7 @@ dolphin: /usr/share/applications/org.kde.dolphin.desktop
 debian:~&gt;
 </code></pre><p>Desktop environments monitor this directory for changes (via <a href="https://en.wikipedia.org/wiki/Inotify">inotify</a> or <a href="https://en.wikipedia.org/wiki/Kqueue">kqueue</a>, for example) and are able to reflect software additions and removals almost instantaneously.</p>
 <p>But back then, Freedesktop was primarily about interoperability between KDE and Gnome, not arbitrary window managers as far as I understand it. So the question is: are <code>.desktop</code> files usable outside of these two major desktops? And the answer is: indeed they are! In fact, let&rsquo;s look at a few examples to see how they all look relatively similar:</p>
-<figure>
-  <img src="/images/2020-08-19-debian-menus-wmaker.png" width="100%">
-  <figcaption>Debian application menus in WindowMaker showing the Dolphin file manager under the System category.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>In WindowMaker&rsquo;s case, we can find that it recognizes <code>.desktop</code> entries by means of an auxiliary tool called <code>wmmenugen</code> that parses them and outputs entries for WindowMaker&rsquo;s root menu:</p>
 <pre><code>debian:~&gt; grep -B 2 wmmenugen /usr/share/WindowMaker/menu.hook
     Applications,
@@ -222,10 +213,7 @@ debian:~&gt;
     &quot;|| wmmenugen -parser:xdg /usr/share/applications/&quot;
 debian:~&gt;
 </code></pre><p>Note also how the menu entry for our sample <strong>Dolphin</strong> program shows up exactly under the <strong>System</strong> submenu, just like KDE placed it. But is this categorization always the same? Not really:</p>
-<figure>
-  <img src="/images/2020-08-19-debian-menus-icewm.png" width="100%">
-  <figcaption>Debian application menus in IceWM showing the Dolphin file manager under the System category but further nested under a File subcategory.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>In IceWM&rsquo;s case, <strong>Dolphin</strong> also shows up under the <strong>System</strong> submenu, but it is further nested under a <strong>File</strong> subsubmenu. Why? I&rsquo;m not sure given that the <code>File</code> literal doesn&rsquo;t even appear in the <code>org.kde.dolphin.desktop</code> file manager, but we can continue looking around.</p>
 <p>If we poke through the default configuration for IceWM, we see that this window manager also comes with a helper tool to generate menu entries: <code>icewm-menu-fdo</code>. We can trivially invoke it from the command line to see what it outputs:</p>
 <pre><code>debian:~&gt; icewm-menu-fdo | grep -A 1 -B 1 Dolphin
@@ -234,10 +222,7 @@ prog &quot;Dolphin&quot; system-file-manager dolphin
 }
 debian:~&gt;
 </code></pre><p>But we still don&rsquo;t have our answer about that <strong>File</strong> subsubmenu. We could probably search for the <code>icewm-menu-fdo</code> code to see what it does, but instead let&rsquo;s look at one more window manager. Awesome shows the same <strong>Dolphin</strong> entry under a submenu titled <strong>System Tools</strong>, not <strong>System</strong> as we had seen until now:</p>
-<figure>
-  <img src="/images/2020-08-19-debian-menus-awesome.png" width="100%">
-  <figcaption>Debian application menus in awesome showing the Dolphin file manager under the System Tools category.</figcaption>
-</figure>
+<!-- raw HTML omitted -->
 <p>The plot thickens. I suppose the difference in menu names is because the tools generating the menus have a builtin mapping to match the <code>Categories</code> specified in the <code>.desktop</code> file to the specific layout they want to expose.</p>
 <p>Awesome makes this easy to check because it seems to implement all <code>.desktop</code> file parsing in its Lua configuration, so we can comb through the logic without having to hunt for the source code. In particular, we can look at the <code>/usr/share/awesome/lib/menubar/menu_gen.lua</code> and <code>/usr/share/awesome/lib/freedesktop/menu.lua</code> files to chase how this works. And if we run a quick search:</p>
 <pre><code>debian:/usr/share/awesome/lib&gt; grep -A 1 -r 'System Tools'
@@ -491,11 +476,11 @@ debian:/tmp/repo&gt;
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (19)
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (20)
         <ul id="archive-year-2021" class="collapse">
         
           
-          <li><a href="/archive.html#2021-08">August 2021</a> (1)</li>
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
         
           
           <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
