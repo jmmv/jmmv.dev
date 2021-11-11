@@ -213,7 +213,10 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <p>Simply put, dynamic execution is implemented as &ldquo;just&rdquo; one more <a href="/2019/12/bazel-strategies.html">strategy</a> called <code>dynamic</code>. The dynamic strategy, however, is different from all others because it does <em>not</em> have a corresponding spawn runner. Instead, the <code>dynamic</code> strategy <em>wraps</em> two different strategies: one for local execution and one for remote execution.</p>
 <p>But which strategies does it wrap? Well, that&rsquo;s configurable via the <code>--dynamic_local_strategy</code> and <code>--dynamic_remote_strategy</code> flags, which behave in the same manner as <code>--strategy</code> but affect the different code paths within the dynamic scheduler for specific action mnemonics. Their defaults are <code>sandboxed</code> and <code>remote</code>, respectively.</p>
 <p>With that in mind, the <em>conceptual</em> behavior of the <code>dynamic</code> strategy is simple:</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2019-12-12-bazel-dynamic-execution-15.svg" class="with-border">
+  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g75d82a8b7c_0_423">Slide 15</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
+</figure>
 <p>As you can see from the figure, the dynamic strategy delegates execution of the spawn given to it at <code>exec()</code> time to the remote and local strategies at once and then waits for their completion. Whichever strategy terminates first wins, and the other is stopped. This all happens inside <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/LegacyDynamicSpawnStrategy.java;l=236;drc=42b3be219e6f15aaf69d8de2edf925a2725151cb"><code>LegacyDynamicSpawnStrategy#exec</code></a> by means of Java&rsquo;s <a href="https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/ExecutorService.html#invokeAny(java.util.Collection)"><code>Executor#invokeAny</code></a> primitive.</p>
 <p><code>invokeAny</code> is an executor method that takes two futures, schedules them to run, and polls for their completion. When one finishes, <code>invokeAny</code> actively cancels the other future (which, as we will see later, is where a lot of the difficulties lie). And as you can imagine, what these futures do is execute the <code>exec()</code> method of the wrapped strategies.</p>
 <p>An important and easy thing to notice in the figure above is how the number of jobs and the local resource tracking play together. Because we want to benefit from the massive parallelism of remote execution, we must configure <code>--jobs</code> to a high value (think hundreds) so that we have enough threads entering the dynamic strategy that can delegate to the remote strategy. But allowing all those threads to also delegate to the local strategy would overwhelm the local machine&hellip; so those are gated on checking that there are sufficient local resources left.</p>
@@ -365,6 +368,8 @@ Bazel dynamic execution</b> series</a>.</i></p>
 
     <ul>
       
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
         <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
       
         <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
@@ -383,8 +388,6 @@ Bazel dynamic execution</b> series</a>.</i></p>
       
         <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
       
-        <li class="indent-wrapped-lines"><a href="/2020/04/hello-endbasic.html">Hello, EndBASIC!</a></li>
-      
       <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
     </ul>
   </div>
@@ -398,8 +401,11 @@ Bazel dynamic execution</b> series</a>.</i></p>
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (20)
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (21)
         <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (1)</li>
         
           
           <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>

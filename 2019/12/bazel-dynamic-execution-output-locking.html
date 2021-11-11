@@ -147,7 +147,7 @@ You might think, however, that because we assume that both strategies are equiva
         <h1>Output conflicts and dynamic execution</h1>
 
         <p>December 27, 2019 &middot;
-        About 3 minutes
+        About 4 minutes
         &middot;
         Tags:
         <a class="text-reset" href="/tags/bazel">bazel</a>, <a class="text-reset" href="/tags/sandboxfs">sandboxfs</a></p>
@@ -213,7 +213,10 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <p>You might think, however, that because we assume that both strategies are equivalent and will write the same contents to disk<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>, this is not problematic. But, in fact, it <em>can</em> be, because file creations/writes are not atomic. So we need some form of mutual exclusion in place to avoid races.</p>
 <p>As you can imagine, the simplest form of mutual exclusion is a lock. So&hellip; drumroll&hellip; that&rsquo;s precisely what the now-legacy dynamic scheduler implements: <strong>a lock per spawn on the output tree</strong>. Concurrent branches of the same spawn must grab a lock immediately before writing to the output tree. You can see this in practice in <a href="https://source.bazel.build/bazel/+/master:src/main/java/com/google/devtools/build/lib/dynamic/LegacyDynamicSpawnStrategy.java;l=397;drc=fefb9d29c047e23cb81d739f229eb12fdd466342"><code>LegacyDynamicSpawnStrategy#lockOutputFiles</code></a>, which is a lambda that gets passed to the delegate strategies to grab the lock when they are ready to mutate the output tree.</p>
 <p>Conceptually, this looks like the following (note the red boxes):</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2019-12-12-bazel-dynamic-execution-22.svg" class="with-border">
+  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_117">Slide 22</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
+</figure>
 <p>Let&rsquo;s look at each branch separately:</p>
 <ul>
 <li>
@@ -227,7 +230,10 @@ Bazel dynamic execution</b> series</a>.</i></p>
 <p>But&hellip; as you may remember, sandboxing can be <em>very</em> slow, like <a href="https://blog.bazel.build/2018/04/13/preliminary-sandboxfs-support.html">3x slow on macOS</a>&mdash;and for our Google-internal iOS builds, sandboxing very much exposes such slowdowns. Hence we &ldquo;temporarily&rdquo; disabled sandboxing years ago for <em>interactive</em> builds (and hence my personal interest in <a href="https://github.com/bazelbuild/sandboxfs/">sandboxfs</a>).</p>
 <p>Consequently, we had to make dynamic execution work with local unsandboxed actions. These are trickier: the local strategy runs subprocesses directly on the output tree. And as subprocesses go, there is &ldquo;nothing&rdquo; you can do to tell when and where they end up writing. Therefore, for any local unsandboxed action, Bazel must grab the lock <em>upfront</em> before executing anything.</p>
 <p>We end up with a model like the following (note the new branch at the bottom compared to the earlier figure):</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2019-12-12-bazel-dynamic-execution-24.svg" class="with-border">
+  <figcaption><a href="https://docs.google.com/presentation/d/1wcNYZjyTvBw7uUNwWpBLQ6OGD1qXo11vPmf4EVA9U3M/edit#slide=id.g6c1882f97b_1_87">Slide 24</a> of my talk on dynamic execution for BazelCon 2019</figcaption>
+</figure>
 <p>Which works reasonably well in the sense that dynamic execution delivers good performance&hellip; when networking conditions are perfect. Mind you, this is precisely the environment for which the dynamic strategy <a href="/2019/12/bazel-dynamic-execution-introduction.html">was originally written</a>: Google-internal builds that have traditionally been remote-only and that run from high-end workstations with super-fast local networking.</p>
 <p>But that&rsquo;s not always the case, and thus tweaking the dynamic strategy to support standalone execution uncovered other deficiencies that we had to address.</p>
 <p>We will look at the two major flaws behind this implementation in upcoming posts. To get your brain started: what happens if we get stuck fetching outputs from the remote side? And what happens if we are unusually slow to notice remote cache hits?</p>
@@ -384,6 +390,8 @@ Bazel dynamic execution</b> series</a>.</i></p>
 
     <ul>
       
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
         <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
       
         <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
@@ -402,8 +410,6 @@ Bazel dynamic execution</b> series</a>.</i></p>
       
         <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
       
-        <li class="indent-wrapped-lines"><a href="/2020/04/hello-endbasic.html">Hello, EndBASIC!</a></li>
-      
       <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
     </ul>
   </div>
@@ -417,8 +423,11 @@ Bazel dynamic execution</b> series</a>.</i></p>
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (20)
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (21)
         <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (1)</li>
         
           
           <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>

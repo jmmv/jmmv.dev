@@ -147,7 +147,7 @@ Let me tell you the story of this final boss.">
         <h1>The final boss: Bazel&#39;s own JNI code</h1>
 
         <p>October 9, 2020 &middot;
-        About 12 minutes
+        About 13 minutes
         &middot;
         Tags:
         <a class="text-reset" href="/tags/bazel">bazel</a>, <a class="text-reset" href="/tags/bug">bug</a></p>
@@ -183,7 +183,10 @@ C  [libvfs.dylib+0x136cd0]  __cxx_global_var_init+0x30
 C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 </code></pre><p>In the stack trace above, you can see how control flow jumps back and forth between two different shared libraries (<code>dylib</code>s in this post, as I&rsquo;m focusing on macOS), and how the calls that cross the boundaries are all within Abseil.</p>
 <p>Now, you might think: that should be fine. If the two shared libraries we have above, <code>libvfs.dylib</code> and <code>libnetwork.dylib</code>, call into another common one, Abseil, the dynamic linker will not load the common library twice. And you&rsquo;d be right&hellip; except&hellip; Bazel and Google love building static binaries. There is no <code>libabsl.dylib</code> in there: the <code>absl</code> symbols are <strong>duplicated</strong> across the two shared libraries. Visually, here is what we had in the executable:</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2020-10-09-blaze-on-mac-jni-before.svg">
+  <figcaption>Interaction between Blaze's Java code and the JNI libraries it pulls in on a macOS system. Note how the three separate JNI libraries that we load from Java are all able to reuse the foundational libraries provided by macOS because they are dynamically linked in... but Abseil shows up twice because it was statically linked into two separate shared libraries.</figcaption>
+</figure>
 <p>And thereby lies the problem: Blaze on Mac was pulling in three separate <code>dylib</code>s, two of which bundled Abseil and conflicted at runtime. This, in turn, was blocking the submission of the optimization to Abseil I mentioned, which was supposed to bring significant improvements Google-wide. Time was of essence to fix this issue. (Except it wasn&rsquo;t because the author of the change found a different way to write their code and avoid the issue, but the issue had already gotten my interest.)</p>
 <h1 id="the-basics-behind-jni">The basics behind JNI</h1>
 <p>Before getting into how to resolve this issue, let&rsquo;s pause for a second to understand what&rsquo;s involved in getting JNI code to work with Bazel.</p>
@@ -256,7 +259,10 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 </li>
 </ul>
 <p>Simply put, the design I envisioned is depicted in the following diagram:</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2020-10-09-blaze-on-mac-jni-after.svg">
+  <figcaption>Interaction between Blaze's Java code and the single JNI library after my changes in a macOS system. Note that what we want is a single `dylib` that embeds all separate libraries at build time so that the compiler can weed out duplicate symbols. It is OK if this `dylib` still depends on other shared libraries, as the dynamic linker knows how to handle those.</figcaption>
+</figure>
 <p>Simple, huh? We want a single shared library that bundles all individual native libraries at build time to remove duplicate symbols. We want to load that single library at runtime. And we want the contents of this library to support Google-internal extensions when building Blaze inside of Google, and to remain Google-agnostic when building Bazel outside.</p>
 <p>Now, the question was: how do we get here, given all the many corner cases we have to deal with?</p>
 <h1 id="steps-towards-the-solution">Steps towards the solution</h1>
@@ -433,6 +439,8 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 
     <ul>
       
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
         <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
       
         <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
@@ -451,8 +459,6 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
       
         <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
       
-        <li class="indent-wrapped-lines"><a href="/2020/04/hello-endbasic.html">Hello, EndBASIC!</a></li>
-      
       <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
     </ul>
   </div>
@@ -466,8 +472,11 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (20)
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (21)
         <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (1)</li>
         
           
           <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>

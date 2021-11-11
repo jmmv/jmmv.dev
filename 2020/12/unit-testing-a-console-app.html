@@ -163,7 +163,10 @@
             <div class="col">
               
               <article><p>The most notable feature in <a href="/2020/11/endbasic-0.3.html">EndBASIC 0.3</a> is its new full-screen console-based text editor. It took longer than I wanted to start developing this, in part because I was busy moving, and in part because I <em>dreaded the thought of having to unit test the text editor</em>. (Yes, EndBASIC is a personal project and I develop it in my free time, but that doesn&rsquo;t mean I don&rsquo;t want it to be properly engineered!)</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2020-12-08-endbasic-welcome.gif">
+  <figcaption>The text editor we will be unit-testing, in action.</figcaption>
+</figure>
 <p>In the end, I rolled up my sleeves, got to work, and achieved reasonable test coverage. In fact, the tests have already paid off by uncovering various bugs and inefficiencies, so the effort was well-spent. Developing these tests was non-trivial, though, so here is an overview on <em>why</em> it is worthwhile to unit-test a full-screen console app and <em>how</em> to go about it.</p>
 <blockquote>
 <p>The key insight, unsurprisingly, is to <strong>design for testability</strong>. I knew I wanted to unit-test the text editor from the beginning, so I had to come up with a design that allowed for this. Retrofitting tests into code that never considered testing is very difficult.</p>
@@ -175,7 +178,10 @@
 <p>On Unix-like systems, the application writes special collections of bytes, known as <strong>escape sequences</strong>, to stdout. How the escape sequences look like and what they mean depends completely on what stdout is attached to. Again, if stdout is attached to a file, these sequences mean nothing more than a sequence of bytes. Contrariwise, if stdout is attached to a terminal, then the terminal interprets them and performs certain actions.</p>
 <p>The most obvious escape sequence you can think of is the line terminator, or <code>\n</code>. On its own, <code>\n</code> is nothing more than ASCII byte 10. But when the terminal sees this byte, the terminal knows that it has to advance the cursor to the next line <em>and</em> move it to the first column. But the semantics of what <code>\n</code> does vary across systems: Windows interprets <code>\n</code> as <em>just</em> moving the cursor one line down, not rolling it back go the first column.</p>
 <p>There are more complex escape sequences, of course. This is why you can trivially (assuming you know what terminal type you are talking to) embed escape sequences in <code>printf</code> or <code>echo -e</code> invocations to control how things look like. You essentially use escape sequences as a way to mark up the text:</p>
-<!-- raw HTML omitted -->
+<figure>
+  <img src="/images/2020-12-08-escape-sequences.png">
+  <figcaption>Two `printf(1)` command invocations showing how escape sequences change the color of the printed text.</figcaption>
+</figure>
 <p>For completeness, I&rsquo;ll also mention that the terminal emulator is usually in the kernel, which is what allows you to have full-screen text apps in the text mode console, but it can also be implemented in <em>hardware</em> (where the concept originated), and thus also in user space, which is what graphical programs like <code>xterm</code> used to do before PTYs (and is why they are called terminal <em>emulators</em>).</p>
 <p>If you haven&rsquo;t connected the dots yet, this is precisely what the ancient <code>TERM</code> environment variable is about: it tells the console applications what specific terminal it is talking to so that the application itself can generate the correct escape sequences to control it. Nowadays, the <a href="https://en.wikipedia.org/wiki/ANSI_escape_code">ANSI escape sequences</a> are almost universal, but they weren&rsquo;t always. <code>terminfo</code>/<code>termcap</code> and <code>(n)curses</code> are libraries to abstract all these details away and offer the programmer a generic console-manipulation interface that works across <code>TERM</code> variants.</p>
 <p>This is all about Unix though. On Windows, things are different (and my knowledge is very limited). Command-line applications communicate with the Console Window Host (<code>conhost.exe</code>) by means of <code>ioctl</code>-like calls. In other words: console manipulation happens out of band and isn&rsquo;t part of what goes into stdout. Or at least that&rsquo;s the only way it used to be: the new console host supports ANSI escape sequences too, presumably to facilitate interop with WSL.</p>
@@ -502,6 +508,8 @@
 
     <ul>
       
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
         <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
       
         <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
@@ -520,8 +528,6 @@
       
         <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
       
-        <li class="indent-wrapped-lines"><a href="/2020/04/hello-endbasic.html">Hello, EndBASIC!</a></li>
-      
       <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
     </ul>
   </div>
@@ -535,8 +541,11 @@
     
       <li>
         
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (20)
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (21)
         <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (1)</li>
         
           
           <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
