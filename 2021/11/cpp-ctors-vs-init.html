@@ -145,7 +145,7 @@
         <h1>Constructors and evil initializers in C&#43;&#43;</h1>
 
         <p>November 24, 2021 &middot;
-        About 7 minutes
+        About 8 minutes
         &middot;
         Tags:
         <a class="text-reset" href="/tags/c&#43;&#43;">c&#43;&#43;</a>, <a class="text-reset" href="/tags/readability">readability</a></p>
@@ -162,7 +162,7 @@
           <div class="row">
             <div class="col">
               
-              <article><p>One of the three key tenets of Object Oriented Programming (OOP) is <strong>encapsulation</strong>: objects contain a state that, when observed from the outside, is always internally-consistent. To illustrate this, suppose you have a class to represent a rectangle, and that this class tracks the rectangle&rsquo;s dimensions as well as its area:</p>
+              <article><p>One of the three key tenets of Object Oriented Programming (OOP) is <strong>encapsulation</strong>: objects contain a state that, when observed from the outside, is always internally-consistent. To illustrate this, suppose you have a class to represent a rectangle<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>, and that this class tracks the rectangle&rsquo;s dimensions as well as its area:</p>
 <div class="highlight"><pre class="chroma"><code class="language-cpp" data-lang="cpp"><span class="k">class</span> <span class="nc">Rectangle</span> <span class="p">{</span>
     <span class="kt">int</span> <span class="n">width</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">area</span><span class="p">;</span>
 
@@ -242,7 +242,7 @@
   <div class="card-body">
     <h5 class="card-title">@jmmv on August 4th, 2021 &middot; Replying to @awesomekling</h5>
     <p class="card-text"><b>Making invalid states irrepresentable is probably the best thing one can do to improve reliability when designing a new piece of code. It's a difficult mentality shift though!</b></p>
-    29 likes &middot; 5 retweets &middot; <a href="https://twitter.com/jmmv/status/1423040474974015494" class="card-link">Go to Twitter thread</a>
+    30 likes &middot; 5 retweets &middot; <a href="https://twitter.com/jmmv/status/1423040474974015494" class="card-link">Go to Twitter thread</a>
   </div>
 </div>
 <p>Unfortunately, by separating construction from initialization like we did above, we have gone against this principle. Yes, we had to do it because of the constraints of our environment, but it&rsquo;d be best if we didn&rsquo;t have to violate a core tenet of OOP.</p>
@@ -256,19 +256,19 @@
     <span class="p">}</span>
 
 <span class="k">public</span><span class="o">:</span>
-    <span class="k">static</span> <span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Rectangle</span><span class="o">&gt;</span> <span class="n">create</span><span class="p">(</span><span class="kt">int</span> <span class="n">w</span><span class="p">,</span> <span class="kt">int</span> <span class="n">h</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">static</span> <span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Rectangle</span><span class="o">&gt;</span> <span class="n">create</span><span class="p">(</span><span class="kt">int</span> <span class="n">w</span><span class="p">,</span> <span class="kt">int</span> <span class="n">h</span><span class="p">)</span> <span class="p">{</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">w</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="o">||</span> <span class="n">h</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-            <span class="k">return</span> <span class="n">null</span><span class="p">;</span>
+            <span class="k">return</span> <span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">;</span>
         <span class="p">}</span>
-        <span class="k">return</span> <span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Rectangle</span><span class="o">&gt;</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">);</span>
+        <span class="k">return</span> <span class="nf">Rectangle</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">);</span>
     <span class="p">}</span>
 
     <span class="c1">// ...
 </span><span class="c1"></span><span class="p">};</span>
 </code></pre></div><p>In this version, we have restored the original constructor that does not perform validation. Objects are now always constructed in a complete state, but it&rsquo;s again possible for those objects to contain invalid state: the caller of the constructor could supply invalid values. However, the constructor is now private, so this is sound from an encapsulation perspective; remember that we only must maintain consistency and validity at public interface boundaries.</p>
-<p>All great, but&hellip; with a private constructor, we cannot create instances of our class! To solve this, we can introduce a static factory method that either returns a new <code>Rectangle</code> if the parameters are valid, or a null pointer if the inputs are invalid. With this approach, the public interface of <code>Rectangle</code> is now properly encapsulated again: all objects returned by <code>create()</code> are guaranteed to be valid, and if the parameters are invalid, no object is created at all. (We still have to deal with null-ness though&hellip;)</p>
-<p>Unfortunately, this code is not equivalent to the version that used exceptions. Note that our factory method returns a heap-allocated object and is in full control of the object&rsquo;s creation. This has two problems: first, we have given up on stack-allocated objects because just <a href="/2021/07/cpp-definition-initialization.html">declaring an object on the stack causes its constructor to be called</a>; and, second, it becomes hard to deal with inheritance if some other class wants to extend <code>Rectangle</code>.</p>
-<p>Despite these issues, I&rsquo;ll take this version over violating encapsulation principles anytime&mdash;unless profiling says the use of dynamic memory is performance-critical or other coding issues prevent it.</p>
+<p>All great, but&hellip; with a private constructor, we cannot create instances of our class! To solve this, we can introduce a static factory method that either returns a new <code>Rectangle</code> if the parameters are valid, or an empty object if the inputs are invalid. With this approach, the public interface of <code>Rectangle</code> is now properly encapsulated again: all objects returned by <code>create()</code> are guaranteed to be valid, and if the parameters are invalid, no object is created at all. (We still have to deal with null-ness though&hellip;)</p>
+<p>Unfortunately, this code is not equivalent to the version that used exceptions. Note that our factory method returns a different object type and is in full control of the object&rsquo;s creation. This has a problem when dealing with inheritance, because a subclass of <code>Rectangle</code> cannot use the factory method to perform partial initialization. But this is a minor issue that can be worked around.</p>
+<p>Also note that the use of <code>std::optional</code> is just one possibility here. Alternatives that also work include <code>std::unique_ptr</code>, <code>boost::optional</code>, or <code>absl::StatusOr</code>, to name a few.</p>
 <h1 id="takeaways">Takeaways</h1>
 <p>Here are the key points I&rsquo;d like you to remember from this post:</p>
 <ol>
@@ -292,6 +292,15 @@
 </li>
 </ol>
 <p>One final thought to conclude: the reason I really enjoy writing in Rust is because the language forces you to care about these correctness properties (via the <code>Result&lt;T,E&gt;</code> type in the context of this post). If you don&rsquo;t know Rust but regularly code in C++, I&rsquo;d strongly recommend you to learn Rust as well: you&rsquo;ll change the way you think about structuring your data types and algorithms, and will spot problematic patterns in C++ with ease.</p>
+<p><strong>Edit (2021-11-25):</strong> Updated the static factory method example to return <code>std::optional</code> instead of <code>std::unique_ptr</code> to avoid stack allocations. I had originally used the latter because that&rsquo;s what I most see in the current codebase I work in and rarely experience the former (in C++). Also added a note saying that the <code>Rectangle</code> example is, of course, trivial.</p>
+<section class="footnotes" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn:1" role="doc-endnote">
+<p>The use of a trivial <code>Rectangle</code> class is for illustration purposes only. Of course this example is trivial and there are ways around it. In the real world, think about classes that perform &ldquo;real work&rdquo; and interact with external systems, such as a wrapper around a database connection. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+</ol>
+</section>
 </article>
             </div>
           </div>
