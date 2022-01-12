@@ -10,8 +10,8 @@ LINE_COLOR = 'rgb(0, 60, 100)';
 TIME_WINDOW_START = null;
 TIME_WINDOW_END = null;
 
-// Chart to draw the daily visits on.
-DAILY_VISITS_CHART = null;
+// Chart to draw the daily page views on.
+DAILY_PAGE_VIEWS_CHART = null;
 
 function makeStatsURL() {
     return new URL(API_BASE_URL + "/sites/" + SITE_ID + "/stats");
@@ -43,21 +43,21 @@ function refreshStats() {
         }
 
         var response = JSON.parse(this.responseText);
-        DAILY_VISITS_CHART.data.datasets[0].data = response.daily_visits;
-        DAILY_VISITS_CHART.update();
+        DAILY_PAGE_VIEWS_CHART.data.datasets[0].data = response.daily_page_views;
+        DAILY_PAGE_VIEWS_CHART.update();
     }
     xmlHttp.open("GET", url.href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xmlHttp.send();
 }
 
-function setupStats(dailyVisitsCanvasId) {
-    const ctx = document.getElementById(dailyVisitsCanvasId).getContext('2d');
-    DAILY_VISITS_CHART = new Chart(ctx, {
+function setupStats(dailyPageViewsCanvasId) {
+    const ctx = document.getElementById(dailyPageViewsCanvasId).getContext('2d');
+    DAILY_PAGE_VIEWS_CHART = new Chart(ctx, {
         type: 'line',
         data: {
             datasets: [{
-                label: 'Visits',
+                label: 'Page views',
                 data: [],
                 backgroundColor: LINE_COLOR,
                 borderColor: LINE_COLOR,
@@ -72,7 +72,7 @@ function setupStats(dailyVisitsCanvasId) {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Total visits per day',
+                    text: 'Total page views per day',
                 },
                 legend: {
                     display: false,
