@@ -19,10 +19,22 @@ function makeStatsURL() {
     return new URL(API_BASE_URL + "/sites/" + SITE_ID + "/stats");
 }
 
+function truncateToDay(date) {
+    return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function toUtcTimestamp(date) {
+    return Math.floor((date.getTime() - date.getTimezoneOffset() * 60 * 1000) / 1000);
+}
+
 function setTimeWindow(days) {
     let end = new Date();
-    let start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
-    TIME_WINDOW_START = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    if (days > 0) {
+        // Avoid showing today's data when displaying past data because today's data are still
+        // changing and distorts the metrics.
+        end = new Date(truncateToDay(end).getTime() - 1);
+    }
+    TIME_WINDOW_START = truncateToDay(new Date(end.getTime() - days * 24 * 60 * 60 * 1000));
     TIME_WINDOW_END = end;
 
     refreshStats();
@@ -30,8 +42,8 @@ function setTimeWindow(days) {
 
 function refreshStats() {
     let url = makeStatsURL();
-    url.searchParams.append('time_window_start', Math.floor(TIME_WINDOW_START.getTime() / 1000));
-    url.searchParams.append('time_window_end', Math.floor(TIME_WINDOW_END.getTime() / 1000));
+    url.searchParams.append('time_window_start', toUtcTimestamp(TIME_WINDOW_START));
+    url.searchParams.append('time_window_end', toUtcTimestamp(TIME_WINDOW_END));
 
     var xmlHttp = new XMLHttpRequest();
     xmlHttp.onreadystatechange = function() {
