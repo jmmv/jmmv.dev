@@ -3,15 +3,17 @@
 
 // WARNING: This file requires script.js to be loaded first.
 
-// Primary color used to draw chart lines.  Should match whatever is defined in main.scss.
-LINE_COLOR = 'rgb(0, 60, 100)';
+// Colors used to draw chart lines.  Should match whatever is defined in main.scss.
+LINE_COLOR_1 = 'black';
+LINE_COLOR_2 = 'rgb(0, 60, 100)';
+LINE_COLOR_3 = 'rgb(0, 120, 180)';
 
 // Time window to request from the server.
 TIME_WINDOW_START = null;
 TIME_WINDOW_END = null;
 
-// Chart to draw the daily page views on.
-DAILY_PAGE_VIEWS_CHART = null;
+// Chart to draw the daily page views and visitor counts on.
+DAILY_ACTIVITY_CHART = null;
 
 function makeStatsURL() {
     return new URL(API_BASE_URL + "/sites/" + SITE_ID + "/stats");
@@ -43,24 +45,36 @@ function refreshStats() {
         }
 
         var response = JSON.parse(this.responseText);
-        DAILY_PAGE_VIEWS_CHART.data.datasets[0].data = response.daily_page_views;
-        DAILY_PAGE_VIEWS_CHART.update();
+        DAILY_ACTIVITY_CHART.data.datasets[0].data = response.daily_page_views;
+        DAILY_ACTIVITY_CHART.data.datasets[1].data = response.daily_visitors;
+        DAILY_ACTIVITY_CHART.data.datasets[2].data = response.daily_returning_visitors;
+        DAILY_ACTIVITY_CHART.update();
     }
     xmlHttp.open("GET", url.href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xmlHttp.send();
 }
 
-function setupStats(dailyPageViewsCanvasId) {
-    const ctx = document.getElementById(dailyPageViewsCanvasId).getContext('2d');
-    DAILY_PAGE_VIEWS_CHART = new Chart(ctx, {
+function setupStats(dailyActivityCanvasId) {
+    var ctx = document.getElementById(dailyActivityCanvasId).getContext('2d');
+    DAILY_ACTIVITY_CHART = new Chart(ctx, {
         type: 'line',
         data: {
             datasets: [{
                 label: 'Page views',
                 data: [],
-                backgroundColor: LINE_COLOR,
-                borderColor: LINE_COLOR,
+                backgroundColor: LINE_COLOR_1,
+                borderColor: LINE_COLOR_1,
+            }, {
+                label: 'Visitors',
+                data: [],
+                backgroundColor: LINE_COLOR_2,
+                borderColor: LINE_COLOR_2,
+            }, {
+                label: 'Returning visitors',
+                data: [],
+                backgroundColor: LINE_COLOR_3,
+                borderColor: LINE_COLOR_3,
             }]
         },
         options: {
@@ -72,10 +86,11 @@ function setupStats(dailyPageViewsCanvasId) {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Total page views per day',
+                    text: 'Daily activity',
                 },
                 legend: {
-                    display: false,
+                    display: true,
+                    position: 'right',
                 },
             },
         },
