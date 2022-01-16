@@ -12,8 +12,14 @@ LINE_COLOR_3 = 'rgb(0, 120, 180)';
 TIME_WINDOW_START = null;
 TIME_WINDOW_END = null;
 
+// Total number of entries to request in the top N queries.
+TOP_N_LIMIT = 10;
+
 // Chart to draw the daily page views and visitor counts on.
 DAILY_ACTIVITY_CHART = null;
+
+// Identifier of the table that holds the top viewed pages data.
+TOP_VIEWED_PAGES_TABLE = null;
 
 function makeStatsURL() {
     return new URL(API_BASE_URL + "/sites/" + SITE_ID + "/stats");
@@ -44,6 +50,7 @@ function refreshStats() {
     let url = makeStatsURL();
     url.searchParams.append('time_window_start', toUtcTimestamp(TIME_WINDOW_START));
     url.searchParams.append('time_window_end', toUtcTimestamp(TIME_WINDOW_END));
+    url.searchParams.append('top_n_limit', TOP_N_LIMIT);
 
     var xmlHttp = new XMLHttpRequest();
     xmlHttp.onreadystatechange = function() {
@@ -57,17 +64,25 @@ function refreshStats() {
         }
 
         var response = JSON.parse(this.responseText);
+
         DAILY_ACTIVITY_CHART.data.datasets[0].data = response.daily_page_views;
         DAILY_ACTIVITY_CHART.data.datasets[1].data = response.daily_visitors;
         DAILY_ACTIVITY_CHART.data.datasets[2].data = response.daily_returning_visitors;
         DAILY_ACTIVITY_CHART.update();
+
+        TOP_VIEWED_PAGES_TABLE.children('tbody').empty();
+        response.top_pages_by_views.forEach(function(item) {
+            TOP_VIEWED_PAGES_TABLE.children('tbody:last-child').append(
+                '<tr><td><a href="' + item[0] + '">' + item[0]
+                + '</a></td><td class="text-right">' + item[1] + '</td></tr>')
+        });
     }
     xmlHttp.open("GET", url.href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xmlHttp.send();
 }
 
-function setupStats(dailyActivityCanvasId) {
+function setupStats(dailyActivityCanvasId, topViewedPagesTableId) {
     var ctx = document.getElementById(dailyActivityCanvasId).getContext('2d');
     DAILY_ACTIVITY_CHART = new Chart(ctx, {
         type: 'line',
@@ -107,6 +122,8 @@ function setupStats(dailyActivityCanvasId) {
             },
         },
     });
+
+    TOP_VIEWED_PAGES_TABLE = $('#' + topViewedPagesTableId);
 
     setTimeWindow(30);
 }
