@@ -21,6 +21,12 @@ DAILY_ACTIVITY_CHART = null;
 // Identifier of the table that holds the top viewed pages data.
 TOP_VIEWED_PAGES_TABLE = null;
 
+// Identifier of the table that holds the top referrers data.
+TOP_REFERRERS_TABLE = null;
+
+// Identifier of the table that holds the top countries data.
+TOP_COUNTRIES_TABLE = null;
+
 function makeStatsURL() {
     return new URL(API_BASE_URL + "/sites/" + SITE_ID + "/stats");
 }
@@ -44,6 +50,20 @@ function setTimeWindow(days) {
     TIME_WINDOW_END = end;
 
     refreshStats();
+}
+
+function fillTopNTable(table, data) {
+    table.children('tbody').empty();
+    data.forEach(function(item) {
+        let tdLink = $('<td></td>');
+        tdLink.text(item[0]);
+        let tdCount = $('<td class="text-right"></td>');
+        tdCount.text(item[1]);
+        let tr = $('<tr></tr>');
+        tr.append(tdLink);
+        tr.append(tdCount);
+        table.children('tbody:last-child').append(tr);
+    });
 }
 
 function refreshStats() {
@@ -70,19 +90,17 @@ function refreshStats() {
         DAILY_ACTIVITY_CHART.data.datasets[2].data = response.daily_returning_visitors;
         DAILY_ACTIVITY_CHART.update();
 
-        TOP_VIEWED_PAGES_TABLE.children('tbody').empty();
-        response.top_pages_by_views.forEach(function(item) {
-            TOP_VIEWED_PAGES_TABLE.children('tbody:last-child').append(
-                '<tr><td><a href="' + item[0] + '">' + item[0]
-                + '</a></td><td class="text-right">' + item[1] + '</td></tr>')
-        });
+        fillTopNTable(TOP_VIEWED_PAGES_TABLE, response.top_pages_by_views);
+        fillTopNTable(TOP_REFERRERS_TABLE, response.top_referrers_by_views);
+        fillTopNTable(TOP_COUNTRIES_TABLE, response.top_countries_by_views);
     }
     xmlHttp.open("GET", url.href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xmlHttp.send();
 }
 
-function setupStats(dailyActivityCanvasId, topViewedPagesTableId) {
+function setupStats(
+    dailyActivityCanvasId, topViewedPagesTableId, topReferrersTableId, topCountriesTableId) {
     var ctx = document.getElementById(dailyActivityCanvasId).getContext('2d');
     DAILY_ACTIVITY_CHART = new Chart(ctx, {
         type: 'line',
@@ -124,6 +142,8 @@ function setupStats(dailyActivityCanvasId, topViewedPagesTableId) {
     });
 
     TOP_VIEWED_PAGES_TABLE = $('#' + topViewedPagesTableId);
+    TOP_REFERRERS_TABLE = $('#' + topReferrersTableId);
+    TOP_COUNTRIES_TABLE = $('#' + topCountriesTableId);
 
     setTimeWindow(30);
 }
