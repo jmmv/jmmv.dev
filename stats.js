@@ -30,6 +30,9 @@ TOP_REFERRERS_TABLE = null;
 // Identifier of the table that holds the top countries data.
 TOP_COUNTRIES_TABLE = null;
 
+// Hook to display the stats when they are fully loaded.
+SHOW_STATS = null;
+
 function makeStatsURL() {
     return new URL(API_BASE_URL + "/sites/" + SITE_ID + "/stats");
 }
@@ -76,7 +79,7 @@ function fillTopNTable(table, data) {
 function flattenTopNVotes(data) {
     var output = [];
     data.forEach(function(item) {
-        output.push([item[0], item[1].ThumbsUp, item[1].ThumbsDown]);
+        output.push([item[0], "+" + item[1].ThumbsUp, "-" + item[1].ThumbsDown]);
     });
     return output;
 }
@@ -94,7 +97,7 @@ function refreshStats() {
         }
 
         if (this.status != 200) {
-            console.log("Error fetching stats: " + this.responseText);
+            SHOW_STATS("Error fetching stats: " + this.responseText);
             return;
         }
 
@@ -109,6 +112,8 @@ function refreshStats() {
         fillTopNTable(TOP_VOTED_PAGES_TABLE, flattenTopNVotes(response.top_pages_by_votes));
         fillTopNTable(TOP_REFERRERS_TABLE, response.top_referrers_by_views);
         fillTopNTable(TOP_COUNTRIES_TABLE, response.top_countries_by_views);
+
+        SHOW_STATS(null);
     }
     xmlHttp.open("GET", url.href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
@@ -116,8 +121,21 @@ function refreshStats() {
 }
 
 function setupStats(
+    loadingId, containerId,
     dailyActivityCanvasId, topViewedPagesTableId, topVotedPagesTableId,
     topReferrersTableId, topCountriesTableId) {
+
+    SHOW_STATS = function(error) {
+        if (error == null) {
+            $('#' + loadingId).css("display", "none");
+            $('#' + containerId).css("display", "block");
+        } else {
+            $('#' + loadingId).text(error);
+            $('#' + loadingId).css("display", "block");
+            $('#' + containerId).css("display", "none");
+        }
+    };
+
     var ctx = document.getElementById(dailyActivityCanvasId).getContext('2d');
     DAILY_ACTIVITY_CHART = new Chart(ctx, {
         type: 'line',
@@ -140,6 +158,7 @@ function setupStats(
             }]
         },
         options: {
+            animation: false,
             scales: {
                 y: {
                     beginAtZero: true,
@@ -152,7 +171,7 @@ function setupStats(
                 },
                 legend: {
                     display: true,
-                    position: 'right',
+                    position: 'bottom',
                 },
             },
         },
