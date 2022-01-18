@@ -4,8 +4,8 @@
 // Base URL of the API service.
 const API_BASE_URL = 'https://api.jmmv.dev/api';
 
-// SITE_ID and PAGE_PATH must be defined by the caller.
-const GA_ID = 'UA-63557333-1';
+// The client ID as loaded by loadClientId().
+var CLIENT_ID = null;
 
 function makeRequestsURL() {
     return new URL(API_BASE_URL + "/sites/" + SITE_ID + "/pages/" + PAGE_PATH + "/requests");
@@ -56,11 +56,6 @@ function getCookie(name) {
 }
 
 function setCookie(name, path, value, expiryDays) {
-    if (name != "cookies_allowed" && !cookiesAllowed()) {
-        console.log("Cookies not allowed; not saving " + name);
-        return;
-    }
-
     let date = new Date();
     date.setDate(date.getDate() + expiryDays);
     document.cookie = name + "=" + value + "; path=" + path + "; expires=" + date.toGMTString();
@@ -70,59 +65,33 @@ function deleteCookie(name, path) {
     document.cookie = name + "=" + "; path=" + path + "; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 }
 
-function acceptCookies() {
-    setCookie("cookies_allowed", "/", "true", 365);
+function fingerprintToClientId(confidence, visitorId) {
+    if (confidence < 0.5) {
+        return uuidv4();
+    }
 
-    $("#cookie-notice").css("display", "none");
-
-    $("#cookie-choice").replaceWith($("<p><i>Thank you!</i></p>"));
+    let fp = visitorId.substr(0, 32)
+    while (fp.length < 32) {
+        fp += '0';
+    }
+    return fp.substr(0, 8) + '-' + fp.substr(8, 4) + '-' + fp.substr(12, 4)
+        + '-' + fp.substr(16, 4) + '-' + fp.substr(20, 12);
 }
 
-function rejectCookies() {
-    deleteCookie("client_id", "/");
-
-    // Disallow cookies for only a short period of time.  I'm still building interactive features
-    // to vote on posts and those will need cookies, so make sure any possible returning users get
-    // a chance to see that.
-    setCookie("cookies_allowed", "/", "false", 15);
-
-    // Delete all possible Google Analytics cookies per:
-    // https://developers.google.com/analytics/devguides/collection/analyticsjs/cookie-usage
-    deleteCookie("_ga", "/");
-    deleteCookie("_gid", "/");
-    deleteCookie("_gat", "/");
-    deleteCookie("_dc_gtm_" + GA_ID, "/");
-    deleteCookie("AMP_TOKEN", "/");
-    deleteCookie("_gac_" + GA_ID, "/");
-
-    $("#cookie-choice").replaceWith($("<p><i>Preference saved. If you change your mind, \
-    reload the page to see the options again.</i></p>"));
-}
-
-function cookiesAllowed() {
-    return getCookie("cookies_allowed") != "false";
-}
-
-function handleSaveRequestResponse(response) {
-    $('#request-id').replaceWith(response.request_id);
-
-    if (response['requires_cookies_consent'] && getCookie("cookies_allowed") == null) {
-        $('#cookie-notice').replaceWith(
-            $('<p id="cookie-notice" class="callout callout-warning">This site uses cookies. \
-            <a href="/privacy.html">Learn more</a> or \
-            <a onclick="acceptCookies()" class="btn btn-warning">Accept \
-            and dismiss 🙏</a></p>'));
+function loadClientId(hook) {
+    CLIENT_ID = getCookie("client_id");
+    if (CLIENT_ID == null) {
+        FingerprintJS.load().then(fp => fp.get()).then(function(result) {
+            CLIENT_ID = fingerprintToClientId(result.confidence.score, result.visitorId);
+            hook();
+        });
+    } else {
+        hook();
     }
 }
 
 function saveRequest() {
-    var clientId = getCookie("client_id");
-    if (clientId == null) {
-        clientId = uuidv4();
-        setCookie("client_id", "/", clientId, 365);
-    }
-
-    let data = { client_id: clientId };
+    let data = { client_id: CLIENT_ID };
     if (document.referrer != "") {
         data["referrer"] = document.referrer;
     }
@@ -139,7 +108,10 @@ function saveRequest() {
                     requires_cookies_consent: true,
                 };
             }
-            handleSaveRequestResponse(response);
+
+            if (!response['requires_cookies_consent'] && CLIENT_ID != null) {
+                setCookie("client_id", "/", CLIENT_ID, 365);
+            }
         }
     }
     xmlHttp.open("POST", makeRequestsURL().href, true);
@@ -147,7 +119,7 @@ function saveRequest() {
     xmlHttp.send(JSON.stringify(data));
 }
 
-function deleteVote(clientId, callback) {
+function deleteVote(callback) {
     var xmlHttp = new XMLHttpRequest();
     xmlHttp.onreadystatechange = function() {
         if (this.readyState == 4) {
@@ -158,7 +130,7 @@ function deleteVote(clientId, callback) {
             callback();
         }
     }
-    xmlHttp.open("DELETE", makeVoteURL(clientId).href, true);
+    xmlHttp.open("DELETE", makeVoteURL(CLIENT_ID).href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xmlHttp.send();
 }
@@ -172,19 +144,17 @@ function vote(reaction, buttonId, counterId) {
     }
     VOTING = true;
 
-    var clientId = getCookie("client_id");
-
     if (CURRENT_REACTION == null) {
         // Nothing to delete.
     } else if (CURRENT_REACTION == reaction) {
-        deleteVote(clientId, function() {
+        deleteVote(function() {
             VOTING = false;
             CURRENT_REACTION = null;
             loadVotes();
         });
         return;
     } else if (CURRENT_REACTION != reaction) {
-        deleteVote(clientId, function() {
+        deleteVote(function() {
             VOTING = false;
             CURRENT_REACTION = null;
             vote(reaction, buttonId, counterId);
@@ -206,7 +176,7 @@ function vote(reaction, buttonId, counterId) {
             }
         }
     }
-    xmlHttp.open("POST", makeVoteURL(clientId).href, true);
+    xmlHttp.open("POST", makeVoteURL(CLIENT_ID).href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xmlHttp.send(JSON.stringify(data));
 }
@@ -220,10 +190,8 @@ function voteThumbsDown() {
 }
 
 function loadVotes() {
-    var clientId = getCookie("client_id");
-
     let url = makeVotesURL();
-    url.searchParams.append("client_id", clientId);
+    url.searchParams.append("client_id", CLIENT_ID);
 
     var xmlHttp = new XMLHttpRequest();
     xmlHttp.onreadystatechange = function() {
@@ -277,15 +245,4 @@ function loadVotes() {
     xmlHttp.open("GET", url.href, true);
     xmlHttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xmlHttp.send();
-}
-
-function gaRequest() {
-    if (cookiesAllowed()) {
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){ dataLayer.push(arguments); }
-        gtag('js', new Date());
-        gtag('config', GA_ID);
-    } else {
-        window['ga-disable-' + GA_ID] = true;
-    }
 }
