@@ -124,9 +124,18 @@ function refreshStats() {
 
         var response = JSON.parse(this.responseText);
 
+        var max = 0;
+        for (var i = 0; i < response.page_views.length; i++) {
+            if (response.page_views[i][1] > max) {
+                max = response.page_views[i][1];
+            }
+        }
+        max = ~~(~~((max + 100) / 100) * 100);
+
         DAILY_ACTIVITY_CHART.data.datasets[0].data = response.page_views;
         DAILY_ACTIVITY_CHART.data.datasets[1].data = response.visitors;
         DAILY_ACTIVITY_CHART.data.datasets[2].data = response.returning_visitors;
+        DAILY_ACTIVITY_CHART.options.scales.y.max = max;
         DAILY_ACTIVITY_CHART.update();
 
         fillTopNTable(TOP_VIEWED_PAGES_TABLE, response.top_pages_by_views);
