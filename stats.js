@@ -282,6 +282,8 @@ function setupStats(
         },
         options: {
             animation: false,
+            maintainAspectRatio: false,
+            responsive: true,
             scales: {
                 y: {
                     beginAtZero: true,
@@ -327,6 +329,8 @@ function setupStats(
         },
         options: {
             animation: false,
+            maintainAspectRatio: false,
+            responsive: true,
             scales: {
                 x: {
                     type: 'time',
