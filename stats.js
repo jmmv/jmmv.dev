@@ -76,10 +76,19 @@ function fillTopNTable(table, data) {
             var td;
             if (i == 0) {
                 td = $('<td></td>');
+
+                if (item[i].startsWith('http://') || item[i].startsWith('https://')) {
+                    var a = $('<a></a>');
+                    a.attr('href', item[i]);
+                    a.text(item[i]);
+                    td.append(a);
+                } else {
+                    td.text(item[i]);
+                }
             } else {
                 td = $('<td class="text-right"></td>');
+                td.text(item[i]);
             }
-            td.text(item[i]);
             tr.append(td);
         }
         table.children('tbody:last-child').append(tr);
