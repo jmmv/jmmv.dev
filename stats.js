@@ -77,7 +77,7 @@ function fillTopNTable(table, data) {
             if (i == 0) {
                 td = $('<td></td>');
 
-                if (item[i].startsWith('http://') || item[i].startsWith('https://')) {
+                if (BASE_URL != null && item[i].startsWith(BASE_URL)) {
                     var a = $('<a></a>');
                     a.attr('href', item[i]);
                     a.text(item[i]);
