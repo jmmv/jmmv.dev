@@ -1,1115 +1,629 @@
-<!doctype html>
-<html lang="en"
-      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
-  <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  
-
-  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-
-  <title>Configuration files and .d directories - Julio Merino (jmmv.dev)</title>
-  <meta property="og:title" content="Configuration files and .d directories - Julio Merino (jmmv.dev)">
-
-  
-
-  <meta name="description" content="Have you ever wondered why an increasing number of programs are configured by placing small files in .d directories instead of by just editing a single file? Have you ever wondered why these .d directories seem to proliferate in Linux installations? Read on to understand what these are and why they are useful.">
-  <meta property="og:description" content="Have you ever wondered why an increasing number of programs are configured by placing small files in .d directories instead of by just editing a single file? Have you ever wondered why these .d directories seem to proliferate in Linux installations? Read on to understand what these are and why they are useful.">
-  <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.92.1" />
-
-  <meta property="og:url" content="https://jmmv.dev/2020/08/config-files-vs-directories.html">
-
-  <meta property="og:type" content="blog">
-
-  <link rel="canonical" href="https://jmmv.dev/2020/08/config-files-vs-directories.html">
-  <link rel="alternate" type="application/rss+xml"
-        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
-
-  <link rel="stylesheet" href="/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css">
-  <link rel="stylesheet" href="/css/chroma.css">
-
-  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
-
-  
-  <!--[if lt IE 9]>
-    <script src="/js/html5shiv-3.7.2.min.js"></script>
-    <script src="/js/respond-1.4.2.min.js"></script>
-  <![endif]-->
-
-  <script>
-    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
-    const BASE_URL = 'https:\/\/jmmv.dev\/';
-    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDIwLzA4L2NvbmZpZy1maWxlcy12cy1kaXJlY3Rvcmllcy5odG1s';
-  </script>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<title>Configuration files and .d directories - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Configuration files and .d directories - Julio Merino (jmmv.dev)">
+<meta name=description content="Have you ever wondered why an increasing number of programs are configured by placing small files in .d directories instead of by just editing a single file? Have you ever wondered why these .d directories seem to proliferate in Linux installations? Read on to understand what these are and why they are useful.">
+<meta property="og:description" content="Have you ever wondered why an increasing number of programs are configured by placing small files in .d directories instead of by just editing a single file? Have you ever wondered why these .d directories seem to proliferate in Linux installations? Read on to understand what these are and why they are useful.">
+<meta name=author content="Julio Merino">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2020/08/config-files-vs-directories.html">
+<meta property="og:type" content="blog">
+<link rel=canonical href=https://jmmv.dev/2020/08/config-files-vs-directories.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
+<script src=/js/respond-1.4.2.min.js></script><![endif]-->
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/',PAGE_PATH='aHR0cHM6Ly9qbW12LmRldi8yMDIwLzA4L2NvbmZpZy1maWxlcy12cy1kaXJlY3Rvcmllcy5odG1s'</script>
 </head>
-
-
-  <body>
-    <header class="site-header">
-
+<body>
+<header class=site-header>
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-  <a class="navbar-brand" href="/">
-    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
-    &nbsp;Julio Merino
-  </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse"
-          data-target="#navbarSupportedContent"
-          aria-controls="navbarSupportedContent" aria-expanded="false"
-          aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/about.html" >About</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/essays.html" >Essays</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/resume.html" >Resume</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/software.html" >Software</a>
-          </li>
-        
-      
-    </ul>
-
-    <ul class="navbar-nav mr-4">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/stats.html" >Analytics</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/archive.html" >Archive</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/series.html" >Series</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/tags.html" >Tags</a>
-          </li>
-        
-      
-    </ul>
-
-    <form class="form-inline" method="get" role="search"
-          action="https://www.google.com/search">
-      <div class="input-group">
-        <input type="search" name="query" class="form-control"
-                placeholder="Search" aria-label="Search">
-        <div class="input-group-append">
-          <button type="submit" value="Search" class="btn btn-light">
-            <img src="/octicons/search.svg">
-          </button>
-        </div>
-      </div>
-      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-    </form>
-  </div>
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/stats.html>Analytics</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
 </nav>
-
 </header>
-
-
-    <div class="page-header">
-      <div class="container">
-        <h1>Configuration files and .d directories</h1>
-
-        <p>August 17, 2020 &middot;
-        About 9 minutes
-        &middot;
-        Tags:
-        <a class="text-reset" href="/tags/debian">debian</a>, <a class="text-reset" href="/tags/featured">featured</a>, <a class="text-reset" href="/tags/netbsd">netbsd</a>, <a class="text-reset" href="/tags/unix">unix</a></p>
-
-        
-      </div>
-    </div>
-
-    <div class="container">
-      <div class="row">
-        <div class="col-md-9">
-          <div class="row">
-            <div class="col">
-              
-              <article><p>Have you ever wondered why an increasing number of programs are configured by placing small files in <code>.d</code> directories instead of by just editing a single file?</p>
-<p>Have you ever wondered why these <code>.d</code> directories seem to proliferate in <del>Unix</del>Linux installations? Because a pretty bare-bones Debian installation (WSL) shows&hellip; a ton of them:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">debian:/etc&gt; ls -ld *.d */*.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">14</span> 22:23 apparmor.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 apt/apt.conf.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> May <span class="m">12</span> 05:57 apt/auth.conf.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> May <span class="m">12</span> 05:57 apt/preferences.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> May <span class="m">12</span> 05:57 apt/sources.list.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 apt/trusted.gpg.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 16:08 bash_completion.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Apr <span class="m">27</span> 13:02 binfmt.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jun  <span class="m">3</span> 14:09 ca-certificates/update.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 cron.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jul  <span class="m">5</span> 12:10 dbus-1/session.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jul  <span class="m">5</span> 12:10 dbus-1/system.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 dhcp/dhclient-enter-hooks.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 dhcp/dhclient-exit-hooks.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jun  <span class="m">3</span>  <span class="m">2019</span> dpkg/dpkg.cfg.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 emacs/site-start.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 exim4/conf.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jun <span class="m">18</span>  <span class="m">2019</span> gss/mech.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 init.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 iproute2/rt_protos.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 iproute2/rt_tables.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Apr <span class="m">27</span> 13:02 kernel/install.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 kernel/postinst.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">14</span> 22:40 ld.so.conf.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 logrotate.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Feb  <span class="m">9</span>  <span class="m">2019</span> modprobe.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 modules-load.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 mysql/conf.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jul  <span class="m">4</span> 08:31 mysql/mariadb.conf.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jan <span class="m">28</span>  <span class="m">2019</span> network/if-down.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jan <span class="m">28</span>  <span class="m">2019</span> network/if-post-down.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jan <span class="m">28</span>  <span class="m">2019</span> network/if-pre-up.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jan <span class="m">28</span>  <span class="m">2019</span> network/if-up.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jan <span class="m">28</span>  <span class="m">2019</span> network/interfaces.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 pam.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 ppp/ip-up.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Jul <span class="m">10</span> 17:04 profile.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 rc0.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 rc1.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 rc2.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 rc3.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 rc4.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 rc5.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug <span class="m">12</span> 18:41 rc6.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 rcS.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Feb <span class="m">26</span>  <span class="m">2019</span> rsyslog.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Feb <span class="m">14</span>  <span class="m">2019</span> security/limits.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Feb <span class="m">14</span>  <span class="m">2019</span> security/namespace.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 sudoers.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 sysctl.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Apr <span class="m">27</span> 13:02 tmpfiles.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Apr <span class="m">27</span> 13:02 udev/hwdb.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Apr <span class="m">27</span> 13:02 udev/rules.d
-drwxr-xr-x <span class="m">1</span> root root <span class="m">4096</span> Aug  <span class="m">9</span> 08:10 update-motd.d
+<div class=page-header>
+<div class=container>
+<h1>Configuration files and .d directories</h1>
+<p>August 17, 2020 &#183;
+About 9 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/debian>debian</a>, <a class=text-reset href=/tags/featured>featured</a>, <a class=text-reset href=/tags/netbsd>netbsd</a>, <a class=text-reset href=/tags/unix>unix</a></p>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
+<article><p>Have you ever wondered why an increasing number of programs are configured by placing small files in <code>.d</code> directories instead of by just editing a single file?</p>
+<p>Have you ever wondered why these <code>.d</code> directories seem to proliferate in <del>Unix</del>Linux installations? Because a pretty bare-bones Debian installation (WSL) shows&mldr; a ton of them:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>debian:/etc&gt; ls -ld *.d */*.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>14</span> 22:23 apparmor.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 apt/apt.conf.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> May <span class=m>12</span> 05:57 apt/auth.conf.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> May <span class=m>12</span> 05:57 apt/preferences.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> May <span class=m>12</span> 05:57 apt/sources.list.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 apt/trusted.gpg.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 16:08 bash_completion.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Apr <span class=m>27</span> 13:02 binfmt.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jun  <span class=m>3</span> 14:09 ca-certificates/update.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 cron.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jul  <span class=m>5</span> 12:10 dbus-1/session.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jul  <span class=m>5</span> 12:10 dbus-1/system.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 dhcp/dhclient-enter-hooks.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 dhcp/dhclient-exit-hooks.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jun  <span class=m>3</span>  <span class=m>2019</span> dpkg/dpkg.cfg.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 emacs/site-start.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 exim4/conf.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jun <span class=m>18</span>  <span class=m>2019</span> gss/mech.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 init.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 iproute2/rt_protos.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 iproute2/rt_tables.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Apr <span class=m>27</span> 13:02 kernel/install.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 kernel/postinst.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>14</span> 22:40 ld.so.conf.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 logrotate.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Feb  <span class=m>9</span>  <span class=m>2019</span> modprobe.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 modules-load.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 mysql/conf.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jul  <span class=m>4</span> 08:31 mysql/mariadb.conf.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jan <span class=m>28</span>  <span class=m>2019</span> network/if-down.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jan <span class=m>28</span>  <span class=m>2019</span> network/if-post-down.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jan <span class=m>28</span>  <span class=m>2019</span> network/if-pre-up.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jan <span class=m>28</span>  <span class=m>2019</span> network/if-up.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jan <span class=m>28</span>  <span class=m>2019</span> network/interfaces.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 pam.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 ppp/ip-up.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Jul <span class=m>10</span> 17:04 profile.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 rc0.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 rc1.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 rc2.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 rc3.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 rc4.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 rc5.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug <span class=m>12</span> 18:41 rc6.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 rcS.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Feb <span class=m>26</span>  <span class=m>2019</span> rsyslog.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Feb <span class=m>14</span>  <span class=m>2019</span> security/limits.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Feb <span class=m>14</span>  <span class=m>2019</span> security/namespace.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 sudoers.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 sysctl.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Apr <span class=m>27</span> 13:02 tmpfiles.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Apr <span class=m>27</span> 13:02 udev/hwdb.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Apr <span class=m>27</span> 13:02 udev/rules.d
+drwxr-xr-x <span class=m>1</span> root root <span class=m>4096</span> Aug  <span class=m>9</span> 08:10 update-motd.d
 debian:/etc&gt;
-</code></pre></div><p>&hellip; while a fresh installation of the more traditional NetBSD barely shows any:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">netbsd:/etc&gt; ls -ld *.d */*.d
-drwxr-xr-x  <span class="m">2</span> root  wheel   <span class="m">512</span> Aug  <span class="m">9</span> 07:43 fonts/conf.d
-drwxr-xr-x  <span class="m">2</span> root  wheel   <span class="m">512</span> Aug  <span class="m">9</span> 18:54 pam.d
-drwxr-xr-x  <span class="m">2</span> root  wheel   <span class="m">512</span> Aug  <span class="m">9</span> 07:43 rc.conf.d
-drwxr-xr-x  <span class="m">2</span> root  wheel  <span class="m">2560</span> Aug  <span class="m">9</span> 18:54 rc.d
-drwxr-xr-x  <span class="m">4</span> root  wheel   <span class="m">512</span> Aug  <span class="m">9</span> 07:43 saslc.d
+</code></pre></div><p>&mldr; while a fresh installation of the more traditional NetBSD barely shows any:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>netbsd:/etc&gt; ls -ld *.d */*.d
+drwxr-xr-x  <span class=m>2</span> root  wheel   <span class=m>512</span> Aug  <span class=m>9</span> 07:43 fonts/conf.d
+drwxr-xr-x  <span class=m>2</span> root  wheel   <span class=m>512</span> Aug  <span class=m>9</span> 18:54 pam.d
+drwxr-xr-x  <span class=m>2</span> root  wheel   <span class=m>512</span> Aug  <span class=m>9</span> 07:43 rc.conf.d
+drwxr-xr-x  <span class=m>2</span> root  wheel  <span class=m>2560</span> Aug  <span class=m>9</span> 18:54 rc.d
+drwxr-xr-x  <span class=m>4</span> root  wheel   <span class=m>512</span> Aug  <span class=m>9</span> 07:43 saslc.d
 netbsd:/etc&gt;
 </code></pre></div><p>What&rsquo;s up with that? The reason is simple:</p>
 <blockquote>
 <p><strong>Supporting configuration updates as part of first-class package management.</strong></p>
 </blockquote>
 <p>But why do <code>.d</code> directories help? Let&rsquo;s first look at a couple of examples to understand how these directories work and then we&rsquo;ll get into the why.</p>
-<h1 id="an-example-sysctlconf-and-sysctld">An example: sysctl.conf and sysctl.d</h1>
+<h1 id=an-example-sysctlconf-and-sysctld>An example: sysctl.conf and sysctl.d</h1>
 <p>To understand how configuration directories work, let&rsquo;s look at a particular example that exists across the two systems we are looking at. That is the mechanism to apply <code>sysctl</code> configuration changes.</p>
-<p>For those not familiar with it, <code>sysctl</code> is a tool <em>and</em> an interface to tune kernel-level settings. On Linux, the <a href="https://netbsd.gw.com/cgi-bin/man-cgi?sysctl+8"><code>sysctl(8)</code> tool</a> is a simple wrapper over the contents of <code>/proc/sys/</code>, but on NetBSD it&rsquo;s a direct client to the kernel&rsquo;s <a href="https://netbsd.gw.com/cgi-bin/man-cgi?sysctl+3"><code>sysctl(3)</code> API</a>. For a sneak peek of what these kernel settings involve, type <code>sysctl -a</code> to get a list of all available knobs and their current values.</p>
+<p>For those not familiar with it, <code>sysctl</code> is a tool <em>and</em> an interface to tune kernel-level settings. On Linux, the <a href=https://netbsd.gw.com/cgi-bin/man-cgi?sysctl+8><code>sysctl(8)</code> tool</a> is a simple wrapper over the contents of <code>/proc/sys/</code>, but on NetBSD it&rsquo;s a direct client to the kernel&rsquo;s <a href=https://netbsd.gw.com/cgi-bin/man-cgi?sysctl+3><code>sysctl(3)</code> API</a>. For a sneak peek of what these kernel settings involve, type <code>sysctl -a</code> to get a list of all available knobs and their current values.</p>
 <p>Because <code>sysctl</code> offers access to tuning kernel-level knobs for the whole system, it seems natural to have a mechanism to configure those at system boot time. After all, if you want to modify how e.g. the virtual memory subsystem works, you will want do that during the early stages of the system&rsquo;s boot process.</p>
 <p>Looking at a NetBSD system, here is what we have:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">netbsd:/etc&gt; ls -l sysctl*
--rw-r--r--  <span class="m">1</span> root  wheel  <span class="m">797</span> Oct <span class="m">12</span>  <span class="m">2018</span> sysctl.conf
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>netbsd:/etc&gt; ls -l sysctl*
+-rw-r--r--  <span class=m>1</span> root  wheel  <span class=m>797</span> Oct <span class=m>12</span>  <span class=m>2018</span> sysctl.conf
 netbsd:/etc&gt;
-</code></pre></div><p>In this scenario, all kernel settings must be put in the single <code>/etc/sysctl.conf</code> text file, which is then trivially read at boot time by the <a href="http://cvsweb.netbsd.org/bsdweb.cgi/src/etc/rc.d/sysctl?rev=1.13&amp;content-type=text/x-cvsweb-markup&amp;only_with_tag=MAIN"><code>/etc/rc.d/sysctl</code> script</a>. Both human administrators and automated processes have to update this single file if they want to effect change on <code>sysctl</code> settings at boot time.</p>
+</code></pre></div><p>In this scenario, all kernel settings must be put in the single <code>/etc/sysctl.conf</code> text file, which is then trivially read at boot time by the <a href="http://cvsweb.netbsd.org/bsdweb.cgi/src/etc/rc.d/sysctl?rev=1.13&content-type=text/x-cvsweb-markup&only_with_tag=MAIN"><code>/etc/rc.d/sysctl</code> script</a>. Both human administrators and automated processes have to update this single file if they want to effect change on <code>sysctl</code> settings at boot time.</p>
 <p>Let&rsquo;s compare this to a what Debian system has:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell">debian:/etc&gt; ls -l sysctl*
--rw-r--r-- <span class="m">1</span> root root <span class="m">2351</span> May <span class="m">31</span>  <span class="m">2018</span> sysctl.conf
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>debian:/etc&gt; ls -l sysctl*
+-rw-r--r-- <span class=m>1</span> root root <span class=m>2351</span> May <span class=m>31</span>  <span class=m>2018</span> sysctl.conf
 
 sysctl.d:
 total 4K
-lrwxrwxrwx <span class="m">1</span> root root  <span class="m">14</span> Apr <span class="m">27</span> 13:02 99-sysctl.conf -&gt; ../sysctl.conf
--rw-r--r-- <span class="m">1</span> root root <span class="m">639</span> May <span class="m">31</span>  <span class="m">2018</span> README.sysctl
--rw-r--r-- <span class="m">1</span> root root <span class="m">324</span> May <span class="m">31</span>  <span class="m">2018</span> protect-links.conf
+lrwxrwxrwx <span class=m>1</span> root root  <span class=m>14</span> Apr <span class=m>27</span> 13:02 99-sysctl.conf -&gt; ../sysctl.conf
+-rw-r--r-- <span class=m>1</span> root root <span class=m>639</span> May <span class=m>31</span>  <span class=m>2018</span> README.sysctl
+-rw-r--r-- <span class=m>1</span> root root <span class=m>324</span> May <span class=m>31</span>  <span class=m>2018</span> protect-links.conf
 debian:/etc&gt;
-</code></pre></div><p>We still have the traditional <code>/etc/sysctl.conf</code> file but we <em>also</em> have an <code>/etc/sysctl.d/</code> subdirectory. In this case, the <a href="https://www.freedesktop.org/software/systemd/man/systemd-sysctl.service.html"><code>systemd-sysctl</code> boot service</a>&mdash;because it <em>had</em> to be systemd, of course&mdash;iterates over all files under <code>/etc/sysctl.d/</code> <em>in lexicographical order</em> and applies their settings.</p>
+</code></pre></div><p>We still have the traditional <code>/etc/sysctl.conf</code> file but we <em>also</em> have an <code>/etc/sysctl.d/</code> subdirectory. In this case, the <a href=https://www.freedesktop.org/software/systemd/man/systemd-sysctl.service.html><code>systemd-sysctl</code> boot service</a>&mdash;because it <em>had</em> to be systemd, of course&mdash;iterates over all files under <code>/etc/sysctl.d/</code> <em>in lexicographical order</em> and applies their settings.</p>
 <p>Note that I did <em>not</em> mention <code>/etc/sysctl.conf</code> and that&rsquo;s because <code>systemd-sysctl</code> couldn&rsquo;t care less about it. That file location exists for the administrator&rsquo;s convenience as the traditional place to perform manual edits. But the way <code>systemd-sysctl</code> finds this file is thanks to its <code>/etc/sysctl.d/99-sysctl.conf</code> symlink. The <code>99</code> prefix is important, as this causes the administrator-controlled file to sort after all others. In this way, its contents override any other settings that might have been put under the <code>sysctl.d</code> directory by automated tools.</p>
 <p>But that&rsquo;s not the only way configuration directories interact with their corresponding legacy file.</p>
-<h1 id="another-example-ldsoconf-and-ldsoconfd">Another example: ld.so.conf and ld.so.conf.d</h1>
+<h1 id=another-example-ldsoconf-and-ldsoconfd>Another example: ld.so.conf and ld.so.conf.d</h1>
 <p>In our previous example, we saw that the <code>/etc/sysctl.conf</code> file on a Debian system exists purely for the convenience of the administrator. The system does not care about this file directly so its existence in this specific location might as well be removed.</p>
 <p>The alternative is to go the complete opposite route: keep the configuration file as the primary location for the configuration, but then make this file explicitly include all contents of a subdirectory.</p>
 <p>An obvious example of this behavior is the configuration for the dynamic linker: the <code>ldconfig</code> tool reads the <code>/etc/ld.so.conf</code> file to discover which directories contain dynamic libraries, but is otherwise unaware of the existence of the <code>/etc/ld.so.conf.d/</code> directory. So how is the latter read then? Easy:</p>
-<pre tabindex="0"><code>debian:/etc&gt; cat ld.so.conf
+<pre tabindex=0><code>debian:/etc&gt; cat ld.so.conf
 include /etc/ld.so.conf.d/*.conf
 debian:/etc&gt;
 </code></pre><p>As we can see, <code>/etc/ld.so.conf</code> continues to be the primary file, but it then includes all individual files from the configuration directory. This requires native support in the tool to allow file inclusions and also makes the semantics of glob expansion tool-specific (are they in lexicographic order?).</p>
 <p>Note that, in this case, the administrator has the freedom to append custom configuration directly to <code>/etc/ld.so.conf</code> or to create a new <em>unmanaged</em> file under <code>/etc/ld.so.conf.d/</code> (say, <code>99-zzz.conf</code>).</p>
-<h1 id="the-real-purpose-behind-d-directories">The real purpose behind .d directories</h1>
+<h1 id=the-real-purpose-behind-d-directories>The real purpose behind .d directories</h1>
 <p>Once you start looking, as we did in the first listing, you&rsquo;ll notice that this pattern repeats everywhere: for any given configuration that <em>needs edits from multiple independent sources</em>, you will likely find a traditional configuration file accompanied by a configuration subdirectory.</p>
 <p>So now that we have all necessary knowledge, we are ready to tackle the questions: What are configuration directories for? Why have these configuration directories proliferated? What benefit do they bring? And the answer to them all is the same: <strong>they make automated edits straightforward</strong>, which is important when you want a package manager to perform and <em>own</em> such edits.</p>
 <p>You see: if you have a plain text file and you want to edit it programmatically, you have two options. You can have a parser that understands the format of the file and is able to modify it, but then preserving comments and formatting (both of which are important for configuration!) is difficult. Or you can add comment-like markers to the file and perform unstructured edits, but then those edits break if the user happens to modify the file in an unexpected manner.</p>
 <p>Contrariwise, if you have a directory where you can put individual files in, and the whole configuration is determined to be the logical concatenation of all these files, all of a sudden automated edits become trivial. A package wanting to add new settings to the system will only need to add a new file in that directory, and the package manager will be able to track the provenance of that file. And if you uninstall the package, the package manager will be able to remove its configuration without issues (possibly leaving behind the files if they were manually modified).</p>
-<h1 id="parting-words">Parting words</h1>
+<h1 id=parting-words>Parting words</h1>
 <p>So, are configuration directories better than files?</p>
-<p>Well&hellip; they are <em>different</em>. With directories, we trade the ability to read and modify a single plain text file <em>by hand</em> with a scheme that is maybe-trickier to hand-tune but that is amenable to automated edits. As a consequence, we shift the complexity from a package installer&rsquo;s scripts to the tools that read the configuration.</p>
+<p>Well&mldr; they are <em>different</em>. With directories, we trade the ability to read and modify a single plain text file <em>by hand</em> with a scheme that is maybe-trickier to hand-tune but that is amenable to automated edits. As a consequence, we shift the complexity from a package installer&rsquo;s scripts to the tools that read the configuration.</p>
 <p>And I think this tradeoff is well worth it. A package manager that can track the provenance of almost all files in a system and that can perform automated reconfigurations in a robust manner is a blessing. In particular because, you, as the system administrator, will have increased confidence that the package manager will not revert any &ldquo;<code>99</code>&rdquo; local-only files created on your own. And also, shifting this logic out of the package manager and putting it into the tools ensures consistency across different systems (especially across different Linux distributions).</p>
 <p>One last thought: is this concept of configuration directories restricted to configuration? Nope! As we shall see in the next post, this can be applied to system-wide databases as well.</p>
 </article>
-            </div>
-          </div>
-
-          <div class="container post-votes">
-            <div class="row">
-              <div class="col-md-6">
-                <p id="vote-request">
-                  <b>What did you think about this article?</b><small>
-                  <i>(Experimental)</i></small>
-                  <br/>
-                  <b><span id="first-vote"></span></b>
-                </p>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsUp()"
-                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
-                  (<span id="thumbs-up-count">0</span>)</a>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsDown()"
-                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
-                  (<span id="thumbs-down-count">0</span>)</a>
-              </div>
-            </div>
-
-            <div class="row mt-3">
-              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Configuration&#43;files&#43;and&#43;.d&#43;directories&amp;url=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fconfig-files-vs-directories.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/reddit.png"
-                       alt="Reddit logo"
-                       width="24" height="24">
-                  Share on Reddit
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Configuration&#43;files&#43;and&#43;.d&#43;directories&amp;u=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fconfig-files-vs-directories.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/ycombinator.png"
-                       alt="Hacker News logo"
-                       width="24" height="24">
-                  Share on Hacker News
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Configuration&#43;files&#43;and&#43;.d&#43;directories&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fconfig-files-vs-directories.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
-                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
-                       alt="Twitter logo"
-                       width="24" height="24">
-                  Share on Twitter
-                </a>
-              </div>
-            </div>
-          </div>
-
-          
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md-12 text-center">
-                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-md-10">
-                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-                  <div class="form-group row px-md-4">
-                    <input type="text" name="email"
-                          placeholder="Enter your email"
-                          class="form-control input-sm col-md-9 text-center"/>
-                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
-                  </div>
-                </form>
-              </div>
-              <div class="col-md-1 text-center">
-                <p>
-                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-                  </a>
-                </p>
-              </div>
-              <div class="col-md-1 text-center">
-                <p><a href="/feed.xml"><img
-                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-              </div>
-            </div>
-          </div>
-
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md mr-auto text-left">
-                
-                <span><a href="https://jmmv.dev/2020/08/internships-de-verano.html">&laquo; Previous post</a></span>
-                
-              </div>
-
-              <div class="col-md text-center">
-                <span><a href="/archive.html">All posts</a></span>
-              </div>
-
-              <div class="col-md ml-auto text-right">
-                
-                <span><a href="https://jmmv.dev/2020/08/database-directories.html">Next post &raquo;</a></span>
-                
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-3 sidebar">
-          <div class="row">
-  <div class="col text-center p-2">
-    <p><a href="/about.html" class="clear-link">
-      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
-      <b>Julio Merino</b><br/>
-      Principal Software Engineer<br/>
-      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
-      <small>From Barcelona, living in Seattle</small>
-    </a></p>
-
-    <div class="row">
-      <div class="col-sm-6 text-center">
-        <p>
-          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-6 text-center">
-        <p><a href="/feed.xml"><img
-          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-      </div>
-    </div>
-
-    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-      <div class="form-group">
-        <input type="text" name="email"
-          placeholder="Enter your email"
-          class="form-control input-sm text-center"/>
-        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
-      </div>
-    </form>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Featured posts</h2>
-
-    <ul>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
-      
-      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
-    </ul>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Archive</h2>
-
-    <ul>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2022">2022</a> (1)
-        <ul id="archive-year-2022" class="collapse">
-        
-          
-          <li><a href="/archive.html#2022-01">January 2022</a> (1)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
-        <ul id="archive-year-2021" class="collapse">
-        
-          
-          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
-        <ul id="archive-year-2020" class="collapse">
-        
-          
-          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
-        <ul id="archive-year-2019" class="collapse">
-        
-          
-          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
-        <ul id="archive-year-2018" class="collapse">
-        
-          
-          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
-        <ul id="archive-year-2017" class="collapse">
-        
-          
-          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
-        <ul id="archive-year-2016" class="collapse">
-        
-          
-          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
-        <ul id="archive-year-2015" class="collapse">
-        
-          
-          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
-        <ul id="archive-year-2014" class="collapse">
-        
-          
-          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
-        <ul id="archive-year-2013" class="collapse">
-        
-          
-          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
-        <ul id="archive-year-2012" class="collapse">
-        
-          
-          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
-        <ul id="archive-year-2011" class="collapse">
-        
-          
-          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
-        <ul id="archive-year-2010" class="collapse">
-        
-          
-          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
-        <ul id="archive-year-2009" class="collapse">
-        
-          
-          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
-        <ul id="archive-year-2008" class="collapse">
-        
-          
-          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
-        <ul id="archive-year-2007" class="collapse">
-        
-          
-          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
-        <ul id="archive-year-2006" class="collapse">
-        
-          
-          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
-        <ul id="archive-year-2005" class="collapse">
-        
-          
-          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
-        
-          
-          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
-        
-          
-          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
-        <ul id="archive-year-2004" class="collapse">
-        
-          
-          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
-        
-          
-          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
-        
-          
-          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-    </ul>
-  </div>
+<div class="container post-votes">
+<div class=row>
+<div class=col-md-6>
+<p id=vote-request>
+<b>What did you think about this article?</b><small>
+<i>(Experimental)</i></small>
+<br>
+<b><span id=first-vote></span></b>
+</p>
 </div>
-
-        </div>
-      </div>
-    </div>
-
-    <footer class="container">
-  <div class="row">
-    <div class="col order-2 texr-right">
-      <p class="float-right"><a href="#">Back to top</a></p>
-    </div>
-    <div class="col order-1 mr-auto">
-      <p>Copyright 2004&ndash;2022 Julio Merino</p>
-    </div>
-  </div>
+<div class=col-md-3>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col-md-3>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+<div class="row mt-3">
+<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Configuration+files+and+.d+directories&url=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fconfig-files-vs-directories.html" class="btn btn-outline-primary">
+<img src=/images/badges/reddit.png alt="Reddit logo" width=24 height=24>
+Share on Reddit
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Configuration+files+and+.d+directories&u=https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fconfig-files-vs-directories.html" class="btn btn-outline-primary">
+<img src=/images/badges/ycombinator.png alt="Hacker News logo" width=24 height=24>
+Share on Hacker News
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Configuration+files+and+.d+directories+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2020%2F08%2Fconfig-files-vs-directories.html+%E2%80%94+cc+%40jmmv" class="btn btn-outline-primary">
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt="Twitter logo" width=24 height=24>
+Share on Twitter
+</a>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md-12 text-center">
+<p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+</div>
+</div>
+<div class=row>
+<div class=col-md-10>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class="form-group row px-md-4">
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-md-9 text-center">
+<button type=submit class="btn btn-primary col-md-3">Subscribe</button>
+</div>
+</form>
+</div>
+<div class="col-md-1 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-md-1 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md mr-auto text-left">
+<span><a href=https://jmmv.dev/2020/08/internships-de-verano.html>&#171; Previous post</a></span>
+</div>
+<div class="col-md text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col-md ml-auto text-right">
+<span><a href=https://jmmv.dev/2020/08/database-directories.html>Next post &#187;</a></span>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Principal Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-6 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-6 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
+<li class=indent-wrapped-lines><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
+<li class=indent-wrapped-lines><a href=/2020/10/bye-google-hi-microsoft.html>Farewell, Google; hello, Microsoft!</a></li>
+<li class=indent-wrapped-lines><a href=/2020/08/config-files-vs-directories.html>Configuration files and .d directories</a></li>
+<li class=indent-wrapped-lines><a href=/2020/05/bridging-the-web-gap-endbasic.html>Bridging the web gap in EndBASIC</a></li>
+<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (1)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col order-1 mr-auto">
+<p>Copyright 2004&ndash;2022 Julio Merino</p>
+</div>
+</div>
 </footer>
+<script type=module>
+  import {
+    addAnchorsToHeaders, addElementClasses,
+    loadClientId, saveRequest, setupTracker,
+    loadVotes, voteThumbsUp, voteThumbsDown
+  } from "\/js\/main.44fb4b44ba7c8db41326d54584ce2139180a67a86211d01ffa5d96f6aa1b110a.js";
 
-<script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
-<script src="/js/uuidv4.min.js"></script>
-<script src="/js/fingerprintjs-3.3.2.min.js"></script>
-
-
-<script src="/script.js"></script>
-
-<script>
   addAnchorsToHeaders();
   addElementClasses();
 
+  setupTracker(SITE_ID, PAGE_PATH);
   loadClientId(function() {
     saveRequest();
     loadVotes();
   });
+
+  window.voteThumbsUp = voteThumbsUp;
+  window.voteThumbsDown = voteThumbsDown;
 </script>
-
 <noscript>
-  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzA4L2NvbmZpZy1maWxlcy12cy1kaXJlY3Rvcmllcy5odG1s/stamp.gif" style="display: none;" />
+<img src=https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzA4L2NvbmZpZy1maWxlcy12cy1kaXJlY3Rvcmllcy5odG1s/stamp.gif style=display:none>
 </noscript>
-
-  </body>
+</body>
 </html>

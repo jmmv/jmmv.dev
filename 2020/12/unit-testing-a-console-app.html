@@ -1,191 +1,121 @@
-<!doctype html>
-<html lang="en"
-      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
-  <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  
-
-  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-
-  <title>Unit-testing a console app (a text editor) - Julio Merino (jmmv.dev)</title>
-  <meta property="og:title" content="Unit-testing a console app (a text editor) - Julio Merino (jmmv.dev)">
-
-  
-
-  <meta name="description" content="The most notable feature in EndBASIC 0.3 is its new full-screen console-based text editor. In this post, I describe why it is important and useful to unit-test a console app like this, and I will dive into how to implement unit tests that catch regressions and inefficiencies. Code samples are in Rust, but the concepts presented here are applicable to any language with minimal data abstraction facilities.">
-  <meta property="og:description" content="The most notable feature in EndBASIC 0.3 is its new full-screen console-based text editor. In this post, I describe why it is important and useful to unit-test a console app like this, and I will dive into how to implement unit tests that catch regressions and inefficiencies. Code samples are in Rust, but the concepts presented here are applicable to any language with minimal data abstraction facilities.">
-  <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.92.1" />
-
-  <meta property="og:url" content="https://jmmv.dev/2020/12/unit-testing-a-console-app.html">
-
-  <meta property="og:type" content="blog">
-
-  <link rel="canonical" href="https://jmmv.dev/2020/12/unit-testing-a-console-app.html">
-  <link rel="alternate" type="application/rss+xml"
-        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
-
-  <link rel="stylesheet" href="/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css">
-  <link rel="stylesheet" href="/css/chroma.css">
-
-  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
-
-  
-  <!--[if lt IE 9]>
-    <script src="/js/html5shiv-3.7.2.min.js"></script>
-    <script src="/js/respond-1.4.2.min.js"></script>
-  <![endif]-->
-
-  <script>
-    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
-    const BASE_URL = 'https:\/\/jmmv.dev\/';
-    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEyL3VuaXQtdGVzdGluZy1hLWNvbnNvbGUtYXBwLmh0bWw=';
-  </script>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<title>Unit-testing a console app (a text editor) - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Unit-testing a console app (a text editor) - Julio Merino (jmmv.dev)">
+<meta name=description content="The most notable feature in EndBASIC 0.3 is its new full-screen console-based text editor. In this post, I describe why it is important and useful to unit-test a console app like this, and I will dive into how to implement unit tests that catch regressions and inefficiencies. Code samples are in Rust, but the concepts presented here are applicable to any language with minimal data abstraction facilities.">
+<meta property="og:description" content="The most notable feature in EndBASIC 0.3 is its new full-screen console-based text editor. In this post, I describe why it is important and useful to unit-test a console app like this, and I will dive into how to implement unit tests that catch regressions and inefficiencies. Code samples are in Rust, but the concepts presented here are applicable to any language with minimal data abstraction facilities.">
+<meta name=author content="Julio Merino">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2020/12/unit-testing-a-console-app.html">
+<meta property="og:type" content="blog">
+<link rel=canonical href=https://jmmv.dev/2020/12/unit-testing-a-console-app.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
+<script src=/js/respond-1.4.2.min.js></script><![endif]-->
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/',PAGE_PATH='aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEyL3VuaXQtdGVzdGluZy1hLWNvbnNvbGUtYXBwLmh0bWw='</script>
 </head>
-
-
-  <body>
-    <header class="site-header">
-
+<body>
+<header class=site-header>
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-  <a class="navbar-brand" href="/">
-    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
-    &nbsp;Julio Merino
-  </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse"
-          data-target="#navbarSupportedContent"
-          aria-controls="navbarSupportedContent" aria-expanded="false"
-          aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/about.html" >About</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/essays.html" >Essays</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/resume.html" >Resume</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/software.html" >Software</a>
-          </li>
-        
-      
-    </ul>
-
-    <ul class="navbar-nav mr-4">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/stats.html" >Analytics</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/archive.html" >Archive</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/series.html" >Series</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/tags.html" >Tags</a>
-          </li>
-        
-      
-    </ul>
-
-    <form class="form-inline" method="get" role="search"
-          action="https://www.google.com/search">
-      <div class="input-group">
-        <input type="search" name="query" class="form-control"
-                placeholder="Search" aria-label="Search">
-        <div class="input-group-append">
-          <button type="submit" value="Search" class="btn btn-light">
-            <img src="/octicons/search.svg">
-          </button>
-        </div>
-      </div>
-      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-    </form>
-  </div>
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/stats.html>Analytics</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
 </nav>
-
 </header>
-
-
-    <div class="page-header">
-      <div class="container">
-        <h1>Unit-testing a console app (a text editor)</h1>
-
-        <p>December 8, 2020 &middot;
-        About 15 minutes
-        &middot;
-        Tags:
-        <a class="text-reset" href="/tags/endbasic">endbasic</a>, <a class="text-reset" href="/tags/featured">featured</a>, <a class="text-reset" href="/tags/programming">programming</a>, <a class="text-reset" href="/tags/rust">rust</a></p>
-
-        
-      </div>
-    </div>
-
-    <div class="container">
-      <div class="row">
-        <div class="col-md-9">
-          <div class="row">
-            <div class="col">
-              
-              <article><p>The most notable feature in <a href="/2020/11/endbasic-0.3.html">EndBASIC 0.3</a> is its new full-screen console-based text editor. It took longer than I wanted to start developing this, in part because I was busy moving, and in part because I <em>dreaded the thought of having to unit test the text editor</em>. (Yes, EndBASIC is a personal project and I develop it in my free time, but that doesn&rsquo;t mean I don&rsquo;t want it to be properly engineered!)</p>
+<div class=page-header>
+<div class=container>
+<h1>Unit-testing a console app (a text editor)</h1>
+<p>December 8, 2020 &#183;
+About 15 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/endbasic>endbasic</a>, <a class=text-reset href=/tags/featured>featured</a>, <a class=text-reset href=/tags/programming>programming</a>, <a class=text-reset href=/tags/rust>rust</a></p>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
+<article><p>The most notable feature in <a href=/2020/11/endbasic-0.3.html>EndBASIC 0.3</a> is its new full-screen console-based text editor. It took longer than I wanted to start developing this, in part because I was busy moving, and in part because I <em>dreaded the thought of having to unit test the text editor</em>. (Yes, EndBASIC is a personal project and I develop it in my free time, but that doesn&rsquo;t mean I don&rsquo;t want it to be properly engineered!)</p>
 <figure>
-  <img src="/images/2020-12-08-endbasic-welcome.gif">
-  <figcaption>The text editor we will be unit-testing, in action.</figcaption>
+<img src=/images/2020-12-08-endbasic-welcome.gif>
+<figcaption>The text editor we will be unit-testing, in action.</figcaption>
 </figure>
 <p>In the end, I rolled up my sleeves, got to work, and achieved reasonable test coverage. In fact, the tests have already paid off by uncovering various bugs and inefficiencies, so the effort was well-spent. Developing these tests was non-trivial, though, so here is an overview on <em>why</em> it is worthwhile to unit-test a full-screen console app and <em>how</em> to go about it.</p>
 <blockquote>
 <p>The key insight, unsurprisingly, is to <strong>design for testability</strong>. I knew I wanted to unit-test the text editor from the beginning, so I had to come up with a design that allowed for this. Retrofitting tests into code that never considered testing is very difficult.</p>
 </blockquote>
 <p>As usual, while the specific code I&rsquo;m going to show you is in Rust, you can easily apply these ideas to your favorite language. All you need is a mechanism to express an abstraction layer between your app and the console manipulation code&mdash;and you could do that even in the shell.</p>
-<h1 id="background-escape-sequences">Background: escape sequences</h1>
+<h1 id=background-escape-sequences>Background: escape sequences</h1>
 <p>Command-line applications typically interact with the console by reading from their standard input (stdin) and writing to their standard output (stdout). Both stdin and stdout are &ldquo;streams&rdquo;: you can read from and write to them, but these I/O operations are sequential. The streams do not know anything about where the cursor is or how to change colors or anything like that. And this makes sense because if stdin and stdout are connected to files, what does it mean to &ldquo;clear the screen&rdquo;?</p>
-<p>If that&rsquo;s the case, though, how does a console program manipulate the screen to, for example, clear it and position the cursor at an arbitrary location? Well, the answer is that&hellip; it depends.</p>
+<p>If that&rsquo;s the case, though, how does a console program manipulate the screen to, for example, clear it and position the cursor at an arbitrary location? Well, the answer is that&mldr; it depends.</p>
 <p>On Unix-like systems, the application writes special collections of bytes, known as <strong>escape sequences</strong>, to stdout. How the escape sequences look like and what they mean depends completely on what stdout is attached to. Again, if stdout is attached to a file, these sequences mean nothing more than a sequence of bytes. Contrariwise, if stdout is attached to a terminal, then the terminal interprets them and performs certain actions.</p>
 <p>The most obvious escape sequence you can think of is the line terminator, or <code>\n</code>. On its own, <code>\n</code> is nothing more than ASCII byte 10. But when the terminal sees this byte, the terminal knows that it has to advance the cursor to the next line <em>and</em> move it to the first column. But the semantics of what <code>\n</code> does vary across systems: Windows interprets <code>\n</code> as <em>just</em> moving the cursor one line down, not rolling it back go the first column.</p>
 <p>There are more complex escape sequences, of course. This is why you can trivially (assuming you know what terminal type you are talking to) embed escape sequences in <code>printf</code> or <code>echo -e</code> invocations to control how things look like. You essentially use escape sequences as a way to mark up the text:</p>
 <figure>
-  <img src="/images/2020-12-08-escape-sequences.png">
-  <figcaption>Two `printf(1)` command invocations showing how escape sequences change the color of the printed text.</figcaption>
+<img src=/images/2020-12-08-escape-sequences.png>
+<figcaption>Two `printf(1)` command invocations showing how escape sequences change the color of the printed text.</figcaption>
 </figure>
 <p>For completeness, I&rsquo;ll also mention that the terminal emulator is usually in the kernel, which is what allows you to have full-screen text apps in the text mode console, but it can also be implemented in <em>hardware</em> (where the concept originated), and thus also in user space, which is what graphical programs like <code>xterm</code> used to do before PTYs (and is why they are called terminal <em>emulators</em>).</p>
-<p>If you haven&rsquo;t connected the dots yet, this is precisely what the ancient <code>TERM</code> environment variable is about: it tells the console applications what specific terminal it is talking to so that the application itself can generate the correct escape sequences to control it. Nowadays, the <a href="https://en.wikipedia.org/wiki/ANSI_escape_code">ANSI escape sequences</a> are almost universal, but they weren&rsquo;t always. <code>terminfo</code>/<code>termcap</code> and <code>(n)curses</code> are libraries to abstract all these details away and offer the programmer a generic console-manipulation interface that works across <code>TERM</code> variants.</p>
+<p>If you haven&rsquo;t connected the dots yet, this is precisely what the ancient <code>TERM</code> environment variable is about: it tells the console applications what specific terminal it is talking to so that the application itself can generate the correct escape sequences to control it. Nowadays, the <a href=https://en.wikipedia.org/wiki/ANSI_escape_code>ANSI escape sequences</a> are almost universal, but they weren&rsquo;t always. <code>terminfo</code>/<code>termcap</code> and <code>(n)curses</code> are libraries to abstract all these details away and offer the programmer a generic console-manipulation interface that works across <code>TERM</code> variants.</p>
 <p>This is all about Unix though. On Windows, things are different (and my knowledge is very limited). Command-line applications communicate with the Console Window Host (<code>conhost.exe</code>) by means of <code>ioctl</code>-like calls. In other words: console manipulation happens out of band and isn&rsquo;t part of what goes into stdout. Or at least that&rsquo;s the only way it used to be: the new console host supports ANSI escape sequences too, presumably to facilitate interop with WSL.</p>
 <p>Anyhow. We don&rsquo;t care about how the console is updated from a testing perspective: we want to know how the console changes, but not exactly how that&rsquo;s done by the OS. Therefore, I&rsquo;m going to refer to the escape sequences and/or the <code>ioctl</code>s sent to the console as <strong>console manipulation commands</strong> or <strong>console commands</strong> in the text below.</p>
-<h1 id="what-can-we-test-in-a-tui">What can we test in a TUI?</h1>
+<h1 id=what-can-we-test-in-a-tui>What can we test in a TUI?</h1>
 <p>Testing a full-screen console app&mdash;which some people refer to as a <strong>Text User Interface</strong> or <strong>TUI</strong> for short&mdash;exposes essentially the same difficulties as testing a GUI:</p>
 <blockquote>
 <p>We are trying to write tests for something that <strong>responds to user input</strong>, and every user interaction causes <strong>changes that are inherently visual</strong> and require the human eye for interpretation.</p>
@@ -193,16 +123,16 @@
 <p>Let&rsquo;s break these problems down into pieces and see how we can approach them.</p>
 <p>First and foremost: we have to ensure that the <em>outcome</em> of our input (key presses) has the right effect on the program <em>state</em>. Given that we are testing a text editor, this is easy: we can populate the editor&rsquo;s buffer with some text, let the editor process a set of key presses, and then verify that the contents of the editor&rsquo;s buffer match a golden text. Not very different from other, more traditional tests.</p>
 <p>Second, we need to worry about user input. After all, the TUI is interactive and reacts to user key presses, so our tests will have to drive the TUI. This is easier than dealing with the visual console updates, as all we have to do is represent the sequence of key presses to send to the app and then feed those to it in some way. Again, this is not very different from other tests: we have an algorithm and we inject some input.</p>
-<p>And third, we have to worry about how things look like, which is the most interesting part of this problem. Because, after all&hellip; we can write a test to verify that a piece of code selects the blue color and then clears the screen, but unless we <em>see</em> the result, we don&rsquo;t know if the screen was all emptied with a blue background or not.</p>
-<p>Well, we <em>could</em>. Presumably, we could capture the raw screen contents (or poke at them if we were in the DOS era; <code>0xB8000</code> anyone?) and compare those against golden &ldquo;screenshots&rdquo; after every key press. This would do the trick and would result in tests that are completely decoupled form the way the screen is updated&hellip; which actually sounds like a good idea. The problem with this approach of comparing screen contents is that we would need a terminal emulator to &ldquo;render&rdquo; the console from the console commands that the application emits, and a terminal emulator isn&rsquo;t a trivial piece of software.</p>
+<p>And third, we have to worry about how things look like, which is the most interesting part of this problem. Because, after all&mldr; we can write a test to verify that a piece of code selects the blue color and then clears the screen, but unless we <em>see</em> the result, we don&rsquo;t know if the screen was all emptied with a blue background or not.</p>
+<p>Well, we <em>could</em>. Presumably, we could capture the raw screen contents (or poke at them if we were in the DOS era; <code>0xB8000</code> anyone?) and compare those against golden &ldquo;screenshots&rdquo; after every key press. This would do the trick and would result in tests that are completely decoupled form the way the screen is updated&mldr; which actually sounds like a good idea. The problem with this approach of comparing screen contents is that we would need a terminal emulator to &ldquo;render&rdquo; the console from the console commands that the application emits, and a terminal emulator isn&rsquo;t a trivial piece of software.</p>
 <p>The alternative to this idea of comparing screen <em>contents</em> is to capture the console commands that the app emits and compare those to expectations. This is easier to implement but has different fidelity tradeoffs as we shall see below.</p>
-<h1 id="what-are-tui-tests-good-for">What are TUI tests good for?</h1>
+<h1 id=what-are-tui-tests-good-for>What are TUI tests good for?</h1>
 <p>If we follow the ideas presented above, we will end up with a bunch of tests that inject key presses into the TUI and, for each of them, we will capture which console manipulation commands were emitted and we will compare them against expectations.</p>
-<p>Which&hellip; sounds fragile and not particularly useful, doesn&rsquo;t it? As mentioned earlier, a sequence of commands is meaningless <em>unless we humans see the visual results</em> once a terminal emulator has processed the commands. You could then say that these tests are pointless. But these tests provide three separate benefits:</p>
+<p>Which&mldr; sounds fragile and not particularly useful, doesn&rsquo;t it? As mentioned earlier, a sequence of commands is meaningless <em>unless we humans see the visual results</em> once a terminal emulator has processed the commands. You could then say that these tests are pointless. But these tests provide three separate benefits:</p>
 <ol>
 <li>
 <p><strong>Corner-case and regression validation.</strong> In the scenario we are looking at, a lot of the editor behavior is obvious: if we press the right arrow key, we know that the cursor has to move one position to the right if the line of text permits. If we break the way this works, the breakage will be extremely visible once we do any kind of manual test.</p>
-<p>But&hellip; what happens if the cursor is located in the middle of the last visible line of text, with the viewport scrolled to the right because the line was extremely long, and we press enter to split it? That&rsquo;s not something you usually do, so what&rsquo;s the expected behavior there? We need to make sure that, once this works as we intend, it doesn&rsquo;t unexpectedly break, and we don&rsquo;t want to have to manually verify this every time we change the editor logic.</p>
+<p>But&mldr; what happens if the cursor is located in the middle of the last visible line of text, with the viewport scrolled to the right because the line was extremely long, and we press enter to split it? That&rsquo;s not something you usually do, so what&rsquo;s the expected behavior there? We need to make sure that, once this works as we intend, it doesn&rsquo;t unexpectedly break, and we don&rsquo;t want to have to manually verify this every time we change the editor logic.</p>
 </li>
 <li>
 <p><strong>Behavior documentation.</strong> The collection of test cases for the TUI will serve us as the documentation of all cases we must care about in the code if we are doing any kind of refactoring, for example. As illustrated above, there are a lot of corner cases to deal with, and unless they are tracked somewhere, it&rsquo;s too easy to forget about them.</p>
@@ -214,991 +144,575 @@
 </ol>
 <p>The downside of this testing approach is that, again, we have no visual knowledge of how the screen looks like in the tests. Having the tests is thus insufficient to validate the TUI behavior: if we change the editor code, we will have to manually and visually inspect that our new changes behave accordingly. But the idea is that we will only need to do a minimal check-up for the new behavior once. After that, we can trust that our tests will catch unexpected changes that happen anywhere else.</p>
 <p>Let&rsquo;s get to work by putting these ideas into practice to unit-test the EndBASIC text editor.</p>
-<h1 id="mocking-out-console-input">Mocking out console input</h1>
+<h1 id=mocking-out-console-input>Mocking out console input</h1>
 <p>The first thing we need is an abstraction layer between the editor (the TUI) and the console so that we have a point to hook into I/O operations for testing purposes.</p>
 <p>Fortunately, EndBASIC already had one such abstraction, for two reasons: first, because I designed for testability upfront; and, second, because I intentionally wanted to keep the language&rsquo;s core detached from any console-manipulation specifics (a necessity to support Unix systems, Windows, and the web).</p>
 <p>For console input, this abstraction looks like the following:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">enum</span> <span class="nc">Key</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">ArrowUp</span><span class="p">,</span><span class="w"> </span><span class="n">ArrowDown</span><span class="p">,</span><span class="w"> </span><span class="n">ArrowLeft</span><span class="p">,</span><span class="w"> </span><span class="n">ArrowRight</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">Backspace</span><span class="p">,</span><span class="w"> </span><span class="n">Enter</span><span class="p">,</span><span class="w"> </span><span class="n">Eof</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="n">Char</span><span class="p">(</span><span class="kt">char</span><span class="p">),</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="n">Console</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">read_key</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="n">Key</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>We have a <a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L27"><code>Key</code> enumeration</a> to represent key presses at a high level, independent of their key codes. We have a <a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L101"><code>Console</code> trait</a> (think about this as an abstract base class if you aren&rsquo;t familiar with Rust) to represent console operations in an abstract way. And the <code>Console</code> trait provides a <code>read_key()</code> hook to wait for an individual key press.</p>
-<p>Given this interface, our editor implements <a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/editor.rs#L135">an event loop</a> based on the return value of <code>Console::read_key()</code> and uses the generic <code>Key</code> representation to process either control operations (e.g. moving the cursor) and edit operations (e.g. actual character insertion).</p>
-<p>And given this interface, supplying fake input data to our TUI is trivial. All we need to do is declare a <a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L639"><code>MockConsole</code> implementation</a> with a mock <code>read_key</code> that, for each key press, yields a pre-recorded value taken from a sequence of golden key presses:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">struct</span> <span class="nc">MockConsole</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w">    </span><span class="n">golden_in</span>: <span class="nc">VecDeque</span><span class="o">&lt;</span><span class="n">Key</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Console</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">MockConsole</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">read_key</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="n">Key</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">golden_in</span><span class="p">.</span><span class="n">pop_front</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">            </span><span class="nb">Some</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(</span><span class="n">ch</span><span class="p">),</span><span class="w">
-</span><span class="w">            </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">Ok</span><span class="p">(</span><span class="n">Key</span>::<span class="n">Eof</span><span class="p">),</span><span class="w">
-</span><span class="w">        </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span></code></pre></div><p>Now&hellip; you might think that this is overkill given that there already exist console abstraction layers out there. In fact, EndBASIC already uses <a href="https://github.com/crossterm-rs/crossterm">the <code>crossterm</code> crate</a> to support both Unix and Windows, so presumably this library could offer a way to mock the console for testing. Unfortunately, it doesn&rsquo;t. And even if it did: I needed my own abstraction to keep the language&rsquo;s core minimal and detached from heavy libraries; and I needed to <a href="/2020/05/bridging-the-web-gap-endbasic.html">bypass <code>crossterm</code> in the web (WASM) context</a>, for which it cannot be built.</p>
-<h1 id="capturing-console-output">Capturing console output</h1>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=k>pub</span><span class=w> </span><span class=k>enum</span> <span class=nc>Key</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=n>ArrowUp</span><span class=p>,</span><span class=w> </span><span class=n>ArrowDown</span><span class=p>,</span><span class=w> </span><span class=n>ArrowLeft</span><span class=p>,</span><span class=w> </span><span class=n>ArrowRight</span><span class=p>,</span><span class=w>
+</span><span class=w>    </span><span class=n>Backspace</span><span class=p>,</span><span class=w> </span><span class=n>Enter</span><span class=p>,</span><span class=w> </span><span class=n>Eof</span><span class=p>,</span><span class=w>
+</span><span class=w>    </span><span class=n>Char</span><span class=p>(</span><span class=kt>char</span><span class=p>),</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
+</span><span class=w>
+</span><span class=w></span><span class=k>pub</span><span class=w> </span><span class=k>trait</span><span class=w> </span><span class=n>Console</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>read_key</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=n>Key</span><span class=o>&gt;</span><span class=p>;</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
+</span></code></pre></div><p>We have a <a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L27><code>Key</code> enumeration</a> to represent key presses at a high level, independent of their key codes. We have a <a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L101><code>Console</code> trait</a> (think about this as an abstract base class if you aren&rsquo;t familiar with Rust) to represent console operations in an abstract way. And the <code>Console</code> trait provides a <code>read_key()</code> hook to wait for an individual key press.</p>
+<p>Given this interface, our editor implements <a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/editor.rs#L135>an event loop</a> based on the return value of <code>Console::read_key()</code> and uses the generic <code>Key</code> representation to process either control operations (e.g. moving the cursor) and edit operations (e.g. actual character insertion).</p>
+<p>And given this interface, supplying fake input data to our TUI is trivial. All we need to do is declare a <a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L639><code>MockConsole</code> implementation</a> with a mock <code>read_key</code> that, for each key press, yields a pre-recorded value taken from a sequence of golden key presses:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=k>struct</span> <span class=nc>MockConsole</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w>    </span><span class=n>golden_in</span>: <span class=nc>VecDeque</span><span class=o>&lt;</span><span class=n>Key</span><span class=o>&gt;</span><span class=p>,</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
+</span><span class=w>
+</span><span class=w></span><span class=k>impl</span><span class=w> </span><span class=n>Console</span><span class=w> </span><span class=k>for</span><span class=w> </span><span class=n>MockConsole</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>read_key</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=n>Key</span><span class=o>&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>        </span><span class=k>match</span><span class=w> </span><span class=bp>self</span><span class=p>.</span><span class=n>golden_in</span><span class=p>.</span><span class=n>pop_front</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>            </span><span class=nb>Some</span><span class=p>(</span><span class=n>ch</span><span class=p>)</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=nb>Ok</span><span class=p>(</span><span class=n>ch</span><span class=p>),</span><span class=w>
+</span><span class=w>            </span><span class=nb>None</span><span class=w> </span><span class=o>=&gt;</span><span class=w> </span><span class=nb>Ok</span><span class=p>(</span><span class=n>Key</span>::<span class=n>Eof</span><span class=p>),</span><span class=w>
+</span><span class=w>        </span><span class=p>}</span><span class=w>
+</span><span class=w>    </span><span class=p>}</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
+</span></code></pre></div><p>Now&mldr; you might think that this is overkill given that there already exist console abstraction layers out there. In fact, EndBASIC already uses <a href=https://github.com/crossterm-rs/crossterm>the <code>crossterm</code> crate</a> to support both Unix and Windows, so presumably this library could offer a way to mock the console for testing. Unfortunately, it doesn&rsquo;t. And even if it did: I needed my own abstraction to keep the language&rsquo;s core minimal and detached from heavy libraries; and I needed to <a href=/2020/05/bridging-the-web-gap-endbasic.html>bypass <code>crossterm</code> in the web (WASM) context</a>, for which it cannot be built.</p>
+<h1 id=capturing-console-output>Capturing console output</h1>
 <p>Now that we have put a basic console abstraction in place to read key presses, we can use it to manipulate the console itself too. Let&rsquo;s extend our <code>Console</code> trait with some of the primitives we need for a TUI:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">pub</span><span class="w"> </span><span class="k">trait</span><span class="w"> </span><span class="n">Console</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">clear</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">locate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">row</span>: <span class="kt">u16</span><span class="p">,</span><span class="w"> </span><span class="n">col</span>: <span class="kt">u16</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">write</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">bytes</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=k>pub</span><span class=w> </span><span class=k>trait</span><span class=w> </span><span class=n>Console</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>clear</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=p>()</span><span class=o>&gt;</span><span class=p>;</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>locate</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>,</span><span class=w> </span><span class=n>row</span>: <span class=kt>u16</span><span class=p>,</span><span class=w> </span><span class=n>col</span>: <span class=kt>u16</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=p>()</span><span class=o>&gt;</span><span class=p>;</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>write</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>,</span><span class=w> </span><span class=n>bytes</span>: <span class=kp>&amp;</span><span class=p>[</span><span class=kt>u8</span><span class=p>])</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=p>()</span><span class=o>&gt;</span><span class=p>;</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
 </span></code></pre></div><p>Note that these are &ldquo;high-level&rdquo; primitives: they tell the console <em>what</em> to do, but the caller doesn&rsquo;t care about how that happens. The implementation is free to use ANSI codes wherever possible (maybe via <code>crossterm</code>, maybe not) and direct Windows conhost manipulation calls when not.</p>
-<p>Or, you know, we can implement <a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L625">a recorder</a> that captures those calls for further validation in our tests and does nothing to the real console:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="k">enum</span> <span class="nc">CapturedOut</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="n">Clear</span><span class="p">,</span><span class="w"> </span><span class="n">Locate</span><span class="p">(</span><span class="kt">u16</span><span class="p">,</span><span class="w"> </span><span class="kt">u16</span><span class="p">),</span><span class="w"> </span><span class="n">Write</span><span class="p">(</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="kt">u8</span><span class="o">&gt;</span><span class="p">),</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">struct</span> <span class="nc">MockConsole</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w">    </span><span class="n">captured_out</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">CapturedOut</span><span class="o">&gt;</span><span class="p">,</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="k">impl</span><span class="w"> </span><span class="n">Console</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">MockConsole</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">clear</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">captured_out</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">CapturedOut</span>::<span class="n">Clear</span><span class="p">);</span><span class="w">
-</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">locate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">row</span>: <span class="kt">u16</span><span class="p">,</span><span class="w"> </span><span class="n">column</span>: <span class="kt">u16</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">captured_out</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">CapturedOut</span>::<span class="n">Locate</span><span class="p">(</span><span class="n">row</span><span class="p">,</span><span class="w"> </span><span class="n">column</span><span class="p">));</span><span class="w">
-</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="k">fn</span> <span class="nf">write</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">bytes</span>: <span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span>-&gt; <span class="nc">io</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">captured_out</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">CapturedOut</span>::<span class="n">Write</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">to_owned</span><span class="p">()));</span><span class="w">
-</span><span class="w">        </span><span class="nb">Ok</span><span class="p">(())</span><span class="w">
-</span><span class="w">    </span><span class="p">}</span><span class="w">
-</span><span class="w">    </span><span class="o">..</span><span class="p">.</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
+<p>Or, you know, we can implement <a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L625>a recorder</a> that captures those calls for further validation in our tests and does nothing to the real console:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=k>enum</span> <span class=nc>CapturedOut</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=n>Clear</span><span class=p>,</span><span class=w> </span><span class=n>Locate</span><span class=p>(</span><span class=kt>u16</span><span class=p>,</span><span class=w> </span><span class=kt>u16</span><span class=p>),</span><span class=w> </span><span class=n>Write</span><span class=p>(</span><span class=nb>Vec</span><span class=o>&lt;</span><span class=kt>u8</span><span class=o>&gt;</span><span class=p>),</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
+</span><span class=w>
+</span><span class=w></span><span class=k>struct</span> <span class=nc>MockConsole</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w>    </span><span class=n>captured_out</span>: <span class=nb>Vec</span><span class=o>&lt;</span><span class=n>CapturedOut</span><span class=o>&gt;</span><span class=p>,</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
+</span><span class=w>
+</span><span class=w></span><span class=k>impl</span><span class=w> </span><span class=n>Console</span><span class=w> </span><span class=k>for</span><span class=w> </span><span class=n>MockConsole</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>clear</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=p>()</span><span class=o>&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>        </span><span class=bp>self</span><span class=p>.</span><span class=n>captured_out</span><span class=p>.</span><span class=n>push</span><span class=p>(</span><span class=n>CapturedOut</span>::<span class=n>Clear</span><span class=p>);</span><span class=w>
+</span><span class=w>        </span><span class=nb>Ok</span><span class=p>(())</span><span class=w>
+</span><span class=w>    </span><span class=p>}</span><span class=w>
+</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>locate</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>,</span><span class=w> </span><span class=n>row</span>: <span class=kt>u16</span><span class=p>,</span><span class=w> </span><span class=n>column</span>: <span class=kt>u16</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=p>()</span><span class=o>&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>        </span><span class=bp>self</span><span class=p>.</span><span class=n>captured_out</span><span class=p>.</span><span class=n>push</span><span class=p>(</span><span class=n>CapturedOut</span>::<span class=n>Locate</span><span class=p>(</span><span class=n>row</span><span class=p>,</span><span class=w> </span><span class=n>column</span><span class=p>));</span><span class=w>
+</span><span class=w>        </span><span class=nb>Ok</span><span class=p>(())</span><span class=w>
+</span><span class=w>    </span><span class=p>}</span><span class=w>
+</span><span class=w>
+</span><span class=w>    </span><span class=k>fn</span> <span class=nf>write</span><span class=p>(</span><span class=o>&amp;</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>,</span><span class=w> </span><span class=n>bytes</span>: <span class=kp>&amp;</span><span class=p>[</span><span class=kt>u8</span><span class=p>])</span><span class=w> </span>-&gt; <span class=nc>io</span>::<span class=nb>Result</span><span class=o>&lt;</span><span class=p>()</span><span class=o>&gt;</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>        </span><span class=bp>self</span><span class=p>.</span><span class=n>captured_out</span><span class=p>.</span><span class=n>push</span><span class=p>(</span><span class=n>CapturedOut</span>::<span class=n>Write</span><span class=p>(</span><span class=n>bytes</span><span class=p>.</span><span class=n>to_owned</span><span class=p>()));</span><span class=w>
+</span><span class=w>        </span><span class=nb>Ok</span><span class=p>(())</span><span class=w>
+</span><span class=w>    </span><span class=p>}</span><span class=w>
+</span><span class=w>    </span><span class=o>..</span><span class=p>.</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
 </span></code></pre></div><p>The <code>MockConsole</code> will now hook into all console commands emitted by the editor and record them in a <code>captured_out</code> array that we can later compare against golden data.</p>
-<h1 id="tying-it-all-together">Tying it all together</h1>
-<p>The last piece to make all of this palatable is to use the builder pattern to simplify expressing the test data. I&rsquo;ll not follow my previous <a href="/2020/12/builder-pattern-for-tests.html">suggestion to use the builder pattern to define test scenarios</a> to the letter, but we&rsquo;ll be close enough. The goal is to define our test scenarios in a declarative manner, and also be able to interleave causes (key presses) and effects (console changes) so that it&rsquo;s easy to reason about what&rsquo;s going on.</p>
+<h1 id=tying-it-all-together>Tying it all together</h1>
+<p>The last piece to make all of this palatable is to use the builder pattern to simplify expressing the test data. I&rsquo;ll not follow my previous <a href=/2020/12/builder-pattern-for-tests.html>suggestion to use the builder pattern to define test scenarios</a> to the letter, but we&rsquo;ll be close enough. The goal is to define our test scenarios in a declarative manner, and also be able to interleave causes (key presses) and effects (console changes) so that it&rsquo;s easy to reason about what&rsquo;s going on.</p>
 <p>We need two builders:</p>
 <ul>
 <li>
-<p><a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L736"><code>MockConsoleBuilder</code></a>: A builder to construct the golden input that the <code>MockConsole</code> contains. This builder will let us accumulate input via separate calls using whichever representation makes more sense for the data at hand: either with <code>add_input_chars()</code> to record long sequences of characters without the <code>Key::Char</code> boilerplate or with <code>use_input_keys()</code> to precisely inject <code>Key</code> instances.</p>
+<p><a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/console.rs#L736><code>MockConsoleBuilder</code></a>: A builder to construct the golden input that the <code>MockConsole</code> contains. This builder will let us accumulate input via separate calls using whichever representation makes more sense for the data at hand: either with <code>add_input_chars()</code> to record long sequences of characters without the <code>Key::Char</code> boilerplate or with <code>use_input_keys()</code> to precisely inject <code>Key</code> instances.</p>
 </li>
 <li>
-<p><a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/editor.rs#L297"><code>OutputBuilder</code></a>: A builder to construct the console commands that we expect the <code>MockConsole</code> to capture. Similarly, this will let us accumulate &ldquo;raw&rdquo; <code>CapturedOut</code> commands via <code>add()</code> and will also provide us with higher-level operations that encapsulate common sequences of commands that the editor emits. For example, it&rsquo;s very common for the editor to redraw the whole screen or parts of it, so we encapsulate all commands required to do so behind <code>refresh()</code> and <code>quick_refresh()</code>, respectively.</p>
+<p><a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/editor.rs#L297><code>OutputBuilder</code></a>: A builder to construct the console commands that we expect the <code>MockConsole</code> to capture. Similarly, this will let us accumulate &ldquo;raw&rdquo; <code>CapturedOut</code> commands via <code>add()</code> and will also provide us with higher-level operations that encapsulate common sequences of commands that the editor emits. For example, it&rsquo;s very common for the editor to redraw the whole screen or parts of it, so we encapsulate all commands required to do so behind <code>refresh()</code> and <code>quick_refresh()</code>, respectively.</p>
 </li>
 </ul>
 <p>With these, we are now armed with all necessary knowledge and pieces to put the test cases together.</p>
-<p>To illustrate how the tests might look like, I&rsquo;ve <a href="https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/editor.rs#L424">copy/pasted one of the editor tests</a> verbatim and inserted detailed commentary to guide you through what&rsquo;s going on:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-rust" data-lang="rust"><span class="cp">#[test]</span><span class="w">
-</span><span class="w"></span><span class="k">fn</span> <span class="nf">test_insert_in_empty_file</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
-</span><span class="w">    </span><span class="c1">// Create a builder for the MockConsole and the collection of CapturedOut
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// values we expect.  These two builders let us interleave cause and
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// effect, which makes it easier to understand what&#39;s going on.
-</span><span class="c1"></span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">cb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">MockConsoleBuilder</span>::<span class="n">new</span><span class="p">().</span><span class="n">with_size</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">40</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OutputBuilder</span>::<span class="n">new</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">40</span><span class="p">));</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// The first thing the editor does once it starts is clear the screen,
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// write a status line, and position the cursor: aka a full screen
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// refresh.  This is a very common operation, so instead of cluttering
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// each test case with the details on how this happens, I abstracted it
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// away behind a refresh helper function that inserts these operations
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// into the OutputBuilder.
-</span><span class="c1"></span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="o">&amp;</span><span class="p">[</span><span class="s">&#34;&#34;</span><span class="p">],</span><span class="w"> </span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">));</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// The editor is now up and running, waiting for key presses.  We inject
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// three different letters and then add expectations for each of them:
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// namely, we want to see the letters appear in the terminal, we want to
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// see the status bar to reflect the new position, and we want the cursor
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// to move to a specific location.  This is a faster version of the
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// full-screen refresh, so I abstracted these sequences away behind
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// quick_refresh.
-</span><span class="c1"></span><span class="w">    </span><span class="n">cb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cb</span><span class="p">.</span><span class="n">add_input_chars</span><span class="p">(</span><span class="s">&#34;abc&#34;</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="n">CapturedOut</span>::<span class="n">Write</span><span class="p">(</span><span class="s">b&#34;a&#34;</span><span class="p">.</span><span class="n">to_vec</span><span class="p">()));</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">quick_refresh</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="n">CapturedOut</span>::<span class="n">Write</span><span class="p">(</span><span class="s">b&#34;b&#34;</span><span class="p">.</span><span class="n">to_vec</span><span class="p">()));</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">quick_refresh</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="n">CapturedOut</span>::<span class="n">Write</span><span class="p">(</span><span class="s">b&#34;c&#34;</span><span class="p">.</span><span class="n">to_vec</span><span class="p">()));</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">quick_refresh</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">rowcol</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">));</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// We now have a line of text.  Let&#39;s press enter in its two forms and
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// ensure that the cursor and editor state move accordingly two lines down.
-</span><span class="c1"></span><span class="w">    </span><span class="n">cb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cb</span><span class="p">.</span><span class="n">add_input_keys</span><span class="p">(</span><span class="o">&amp;</span><span class="p">[</span><span class="n">Key</span>::<span class="n">NewLine</span><span class="p">]);</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">quick_refresh</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="n">rowcol</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">));</span><span class="w">
-</span><span class="w">    </span><span class="n">cb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cb</span><span class="p">.</span><span class="n">add_input_keys</span><span class="p">(</span><span class="o">&amp;</span><span class="p">[</span><span class="n">Key</span>::<span class="n">CarriageReturn</span><span class="p">]);</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">quick_refresh</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="n">rowcol</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">));</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// We are at an empty line, so add one final character to it.
-</span><span class="c1"></span><span class="w">    </span><span class="n">cb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cb</span><span class="p">.</span><span class="n">add_input_chars</span><span class="p">(</span><span class="s">&#34;2&#34;</span><span class="p">);</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="n">CapturedOut</span>::<span class="n">Write</span><span class="p">(</span><span class="s">b&#34;2&#34;</span><span class="p">.</span><span class="n">to_vec</span><span class="p">()));</span><span class="w">
-</span><span class="w">    </span><span class="n">ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ob</span><span class="p">.</span><span class="n">quick_refresh</span><span class="p">(</span><span class="n">rowcol</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">rowcol</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">));</span><span class="w">
-</span><span class="w">
-</span><span class="w">    </span><span class="c1">// Our test scenario is ready.  We now call the run_editor helper which
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// constructs the Editor object and connects it to the MockConsole that
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// can be obtained from cb.build().  run_editor then starts the editor,
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// which will update the MockConsole with commands based on the sequence
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// of keys it gets from it.  Once the editor completes, we do two things:
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// we validate that the raw text contents of the editor match the string
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// we pass below, and we compare the captured commands against what we
-</span><span class="c1"></span><span class="w">    </span><span class="c1">// pre-recorded in ob.
-</span><span class="c1"></span><span class="w">    </span><span class="n">run_editor</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;abc\n\n2\n&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">cb</span><span class="p">,</span><span class="w"> </span><span class="n">ob</span><span class="p">);</span><span class="w">
-</span><span class="w"></span><span class="p">}</span><span class="w">
+<p>To illustrate how the tests might look like, I&rsquo;ve <a href=https://github.com/endbasic/endbasic/blob/d282e7cbd66411869324bba4a56860341f6383b9/core/src/editor.rs#L424>copy/pasted one of the editor tests</a> verbatim and inserted detailed commentary to guide you through what&rsquo;s going on:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=cp>#[test]</span><span class=w>
+</span><span class=w></span><span class=k>fn</span> <span class=nf>test_insert_in_empty_file</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span><span class=w>    </span><span class=c1>// Create a builder for the MockConsole and the collection of CapturedOut
+</span><span class=c1></span><span class=w>    </span><span class=c1>// values we expect.  These two builders let us interleave cause and
+</span><span class=c1></span><span class=w>    </span><span class=c1>// effect, which makes it easier to understand what&#39;s going on.
+</span><span class=c1></span><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>cb</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>MockConsoleBuilder</span>::<span class=n>new</span><span class=p>().</span><span class=n>with_size</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>10</span><span class=p>,</span><span class=w> </span><span class=mi>40</span><span class=p>));</span><span class=w>
+</span><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>OutputBuilder</span>::<span class=n>new</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>10</span><span class=p>,</span><span class=w> </span><span class=mi>40</span><span class=p>));</span><span class=w>
+</span><span class=w>
+</span><span class=w>    </span><span class=c1>// The first thing the editor does once it starts is clear the screen,
+</span><span class=c1></span><span class=w>    </span><span class=c1>// write a status line, and position the cursor: aka a full screen
+</span><span class=c1></span><span class=w>    </span><span class=c1>// refresh.  This is a very common operation, so instead of cluttering
+</span><span class=c1></span><span class=w>    </span><span class=c1>// each test case with the details on how this happens, I abstracted it
+</span><span class=c1></span><span class=w>    </span><span class=c1>// away behind a refresh helper function that inserts these operations
+</span><span class=c1></span><span class=w>    </span><span class=c1>// into the OutputBuilder.
+</span><span class=c1></span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>refresh</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>0</span><span class=p>),</span><span class=w> </span><span class=o>&amp;</span><span class=p>[</span><span class=s>&#34;&#34;</span><span class=p>],</span><span class=w> </span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>0</span><span class=p>));</span><span class=w>
+</span><span class=w>
+</span><span class=w>    </span><span class=c1>// The editor is now up and running, waiting for key presses.  We inject
+</span><span class=c1></span><span class=w>    </span><span class=c1>// three different letters and then add expectations for each of them:
+</span><span class=c1></span><span class=w>    </span><span class=c1>// namely, we want to see the letters appear in the terminal, we want to
+</span><span class=c1></span><span class=w>    </span><span class=c1>// see the status bar to reflect the new position, and we want the cursor
+</span><span class=c1></span><span class=w>    </span><span class=c1>// to move to a specific location.  This is a faster version of the
+</span><span class=c1></span><span class=w>    </span><span class=c1>// full-screen refresh, so I abstracted these sequences away behind
+</span><span class=c1></span><span class=w>    </span><span class=c1>// quick_refresh.
+</span><span class=c1></span><span class=w>    </span><span class=n>cb</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>cb</span><span class=p>.</span><span class=n>add_input_chars</span><span class=p>(</span><span class=s>&#34;abc&#34;</span><span class=p>);</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>add</span><span class=p>(</span><span class=n>CapturedOut</span>::<span class=n>Write</span><span class=p>(</span><span class=s>b&#34;a&#34;</span><span class=p>.</span><span class=n>to_vec</span><span class=p>()));</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>quick_refresh</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>1</span><span class=p>),</span><span class=w> </span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>1</span><span class=p>));</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>add</span><span class=p>(</span><span class=n>CapturedOut</span>::<span class=n>Write</span><span class=p>(</span><span class=s>b&#34;b&#34;</span><span class=p>.</span><span class=n>to_vec</span><span class=p>()));</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>quick_refresh</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>2</span><span class=p>),</span><span class=w> </span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>2</span><span class=p>));</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>add</span><span class=p>(</span><span class=n>CapturedOut</span>::<span class=n>Write</span><span class=p>(</span><span class=s>b&#34;c&#34;</span><span class=p>.</span><span class=n>to_vec</span><span class=p>()));</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>quick_refresh</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>3</span><span class=p>),</span><span class=w> </span><span class=n>rowcol</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span><span class=w> </span><span class=mi>3</span><span class=p>));</span><span class=w>
+</span><span class=w>
+</span><span class=w>    </span><span class=c1>// We now have a line of text.  Let&#39;s press enter in its two forms and
+</span><span class=c1></span><span class=w>    </span><span class=c1>// ensure that the cursor and editor state move accordingly two lines down.
+</span><span class=c1></span><span class=w>    </span><span class=n>cb</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>cb</span><span class=p>.</span><span class=n>add_input_keys</span><span class=p>(</span><span class=o>&amp;</span><span class=p>[</span><span class=n>Key</span>::<span class=n>NewLine</span><span class=p>]);</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>quick_refresh</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span><span class=w> </span><span class=mi>0</span><span class=p>),</span><span class=w> </span><span class=n>rowcol</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span><span class=w> </span><span class=mi>0</span><span class=p>));</span><span class=w>
+</span><span class=w>    </span><span class=n>cb</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>cb</span><span class=p>.</span><span class=n>add_input_keys</span><span class=p>(</span><span class=o>&amp;</span><span class=p>[</span><span class=n>Key</span>::<span class=n>CarriageReturn</span><span class=p>]);</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>quick_refresh</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span><span class=w> </span><span class=mi>0</span><span class=p>),</span><span class=w> </span><span class=n>rowcol</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span><span class=w> </span><span class=mi>0</span><span class=p>));</span><span class=w>
+</span><span class=w>
+</span><span class=w>    </span><span class=c1>// We are at an empty line, so add one final character to it.
+</span><span class=c1></span><span class=w>    </span><span class=n>cb</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>cb</span><span class=p>.</span><span class=n>add_input_chars</span><span class=p>(</span><span class=s>&#34;2&#34;</span><span class=p>);</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>add</span><span class=p>(</span><span class=n>CapturedOut</span>::<span class=n>Write</span><span class=p>(</span><span class=s>b&#34;2&#34;</span><span class=p>.</span><span class=n>to_vec</span><span class=p>()));</span><span class=w>
+</span><span class=w>    </span><span class=n>ob</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>ob</span><span class=p>.</span><span class=n>quick_refresh</span><span class=p>(</span><span class=n>rowcol</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span><span class=w> </span><span class=mi>1</span><span class=p>),</span><span class=w> </span><span class=n>rowcol</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span><span class=w> </span><span class=mi>1</span><span class=p>));</span><span class=w>
+</span><span class=w>
+</span><span class=w>    </span><span class=c1>// Our test scenario is ready.  We now call the run_editor helper which
+</span><span class=c1></span><span class=w>    </span><span class=c1>// constructs the Editor object and connects it to the MockConsole that
+</span><span class=c1></span><span class=w>    </span><span class=c1>// can be obtained from cb.build().  run_editor then starts the editor,
+</span><span class=c1></span><span class=w>    </span><span class=c1>// which will update the MockConsole with commands based on the sequence
+</span><span class=c1></span><span class=w>    </span><span class=c1>// of keys it gets from it.  Once the editor completes, we do two things:
+</span><span class=c1></span><span class=w>    </span><span class=c1>// we validate that the raw text contents of the editor match the string
+</span><span class=c1></span><span class=w>    </span><span class=c1>// we pass below, and we compare the captured commands against what we
+</span><span class=c1></span><span class=w>    </span><span class=c1>// pre-recorded in ob.
+</span><span class=c1></span><span class=w>    </span><span class=n>run_editor</span><span class=p>(</span><span class=s>&#34;&#34;</span><span class=p>,</span><span class=w> </span><span class=s>&#34;abc\n\n2\n&#34;</span><span class=p>,</span><span class=w> </span><span class=n>cb</span><span class=p>,</span><span class=w> </span><span class=n>ob</span><span class=p>);</span><span class=w>
+</span><span class=w></span><span class=p>}</span><span class=w>
 </span></code></pre></div><p>And that&rsquo;s it. The editor logic is a driver for the mock console, and thus we get full observability on what&rsquo;s happening to the screen. Remember: this doesn&rsquo;t tell us that what we <em>see</em> is correct, but a quick manual spot check will tell us that it is. And once we know that the visual behavior is good, enshrining it in code will help us represent tricky corner cases and prevent regressions.</p>
 <p>As nice as it sounds, though, these tests do not come for free. Writing this kind of tests is tedious, and updating them is as well. You can go a long way by implementing the <code>Display</code> trait wherever possible and grouping related screen updates behind helper methods (such as <code>quick_refresh</code> above), but even then, understanding what&rsquo;s wrong when the test fails is hard. I can imagine ways of making this better by allowing the tests to pinpoint where things went wrong, but I haven&rsquo;t had a need to build that yet.</p>
 <p>Needless to say, I&rsquo;ll take tedious-but-correct-and-useful test cases over zero test cases every day.</p>
 <p>Let me conclude by repeating what I mentioned in the introduction: writing these tests has been super-valuable in: uncovering bugs in corner-cases; permitting me to clean up a lot of the original code duplication in the editor with confidence; and uncovering inefficiencies such as the editor issuing full refreshes when it should have been doing quick status updates.</p>
 <p>What do you think? Have you seen similar kinds of tests for text console apps? What about graphical apps? Discuss via any of the methods below!</p>
 </article>
-            </div>
-          </div>
-
-          <div class="container post-votes">
-            <div class="row">
-              <div class="col-md-6">
-                <p id="vote-request">
-                  <b>What did you think about this article?</b><small>
-                  <i>(Experimental)</i></small>
-                  <br/>
-                  <b><span id="first-vote"></span></b>
-                </p>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsUp()"
-                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
-                  (<span id="thumbs-up-count">0</span>)</a>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsDown()"
-                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
-                  (<span id="thumbs-down-count">0</span>)</a>
-              </div>
-            </div>
-
-            <div class="row mt-3">
-              <div class="col-md-4 text-center"><a href="https://www.reddit.com/r/rust/comments/k99s49/unittesting_a_rust_console_app_a_text_editor/" class="btn btn-outline-primary">
-                  <img src="/images/badges/reddit.png"
-                       alt="Reddit logo"
-                       width="24" height="24">
-                  Go to Reddit thread
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/item?id=25358087" class="btn btn-outline-primary">
-                  <img src="/images/badges/ycombinator.png"
-                       alt="Hacker News logo"
-                       width="24" height="24">
-                  Go to Hacker News thread
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Unit-testing&#43;a&#43;console&#43;app&#43;%28a&#43;text&#43;editor%29&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Funit-testing-a-console-app.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
-                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
-                       alt="Twitter logo"
-                       width="24" height="24">
-                  Share on Twitter
-                </a>
-              </div>
-            </div>
-          </div>
-
-          
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md-12 text-center">
-                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-md-10">
-                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-                  <div class="form-group row px-md-4">
-                    <input type="text" name="email"
-                          placeholder="Enter your email"
-                          class="form-control input-sm col-md-9 text-center"/>
-                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
-                  </div>
-                </form>
-              </div>
-              <div class="col-md-1 text-center">
-                <p>
-                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-                  </a>
-                </p>
-              </div>
-              <div class="col-md-1 text-center">
-                <p><a href="/feed.xml"><img
-                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-              </div>
-            </div>
-          </div>
-
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md mr-auto text-left">
-                
-                <span><a href="https://jmmv.dev/2020/12/builder-pattern-for-tests.html">&laquo; Previous post</a></span>
-                
-              </div>
-
-              <div class="col-md text-center">
-                <span><a href="/archive.html">All posts</a></span>
-              </div>
-
-              <div class="col-md ml-auto text-right">
-                
-                <span><a href="https://jmmv.dev/2020/12/endbasic-0.4.html">Next post &raquo;</a></span>
-                
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-3 sidebar">
-          <div class="row">
-  <div class="col text-center p-2">
-    <p><a href="/about.html" class="clear-link">
-      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
-      <b>Julio Merino</b><br/>
-      Principal Software Engineer<br/>
-      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
-      <small>From Barcelona, living in Seattle</small>
-    </a></p>
-
-    <div class="row">
-      <div class="col-sm-6 text-center">
-        <p>
-          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-6 text-center">
-        <p><a href="/feed.xml"><img
-          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-      </div>
-    </div>
-
-    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-      <div class="form-group">
-        <input type="text" name="email"
-          placeholder="Enter your email"
-          class="form-control input-sm text-center"/>
-        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
-      </div>
-    </form>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Featured posts</h2>
-
-    <ul>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
-      
-      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
-    </ul>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Archive</h2>
-
-    <ul>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2022">2022</a> (1)
-        <ul id="archive-year-2022" class="collapse">
-        
-          
-          <li><a href="/archive.html#2022-01">January 2022</a> (1)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
-        <ul id="archive-year-2021" class="collapse">
-        
-          
-          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
-        <ul id="archive-year-2020" class="collapse">
-        
-          
-          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
-        <ul id="archive-year-2019" class="collapse">
-        
-          
-          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
-        <ul id="archive-year-2018" class="collapse">
-        
-          
-          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
-        <ul id="archive-year-2017" class="collapse">
-        
-          
-          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
-        <ul id="archive-year-2016" class="collapse">
-        
-          
-          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
-        <ul id="archive-year-2015" class="collapse">
-        
-          
-          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
-        <ul id="archive-year-2014" class="collapse">
-        
-          
-          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
-        <ul id="archive-year-2013" class="collapse">
-        
-          
-          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
-        <ul id="archive-year-2012" class="collapse">
-        
-          
-          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
-        <ul id="archive-year-2011" class="collapse">
-        
-          
-          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
-        <ul id="archive-year-2010" class="collapse">
-        
-          
-          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
-        <ul id="archive-year-2009" class="collapse">
-        
-          
-          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
-        <ul id="archive-year-2008" class="collapse">
-        
-          
-          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
-        <ul id="archive-year-2007" class="collapse">
-        
-          
-          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
-        <ul id="archive-year-2006" class="collapse">
-        
-          
-          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
-        <ul id="archive-year-2005" class="collapse">
-        
-          
-          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
-        
-          
-          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
-        
-          
-          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
-        <ul id="archive-year-2004" class="collapse">
-        
-          
-          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
-        
-          
-          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
-        
-          
-          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-    </ul>
-  </div>
+<div class="container post-votes">
+<div class=row>
+<div class=col-md-6>
+<p id=vote-request>
+<b>What did you think about this article?</b><small>
+<i>(Experimental)</i></small>
+<br>
+<b><span id=first-vote></span></b>
+</p>
 </div>
-
-        </div>
-      </div>
-    </div>
-
-    <footer class="container">
-  <div class="row">
-    <div class="col order-2 texr-right">
-      <p class="float-right"><a href="#">Back to top</a></p>
-    </div>
-    <div class="col order-1 mr-auto">
-      <p>Copyright 2004&ndash;2022 Julio Merino</p>
-    </div>
-  </div>
+<div class=col-md-3>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col-md-3>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+<div class="row mt-3">
+<div class="col-md-4 text-center"><a href=https://www.reddit.com/r/rust/comments/k99s49/unittesting_a_rust_console_app_a_text_editor/ class="btn btn-outline-primary">
+<img src=/images/badges/reddit.png alt="Reddit logo" width=24 height=24>
+Go to Reddit thread
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/item?id=25358087" class="btn btn-outline-primary">
+<img src=/images/badges/ycombinator.png alt="Hacker News logo" width=24 height=24>
+Go to Hacker News thread
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Unit-testing+a+console+app+%28a+text+editor%29+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Funit-testing-a-console-app.html+%E2%80%94+cc+%40jmmv" class="btn btn-outline-primary">
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt="Twitter logo" width=24 height=24>
+Share on Twitter
+</a>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md-12 text-center">
+<p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+</div>
+</div>
+<div class=row>
+<div class=col-md-10>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class="form-group row px-md-4">
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-md-9 text-center">
+<button type=submit class="btn btn-primary col-md-3">Subscribe</button>
+</div>
+</form>
+</div>
+<div class="col-md-1 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-md-1 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md mr-auto text-left">
+<span><a href=https://jmmv.dev/2020/12/builder-pattern-for-tests.html>&#171; Previous post</a></span>
+</div>
+<div class="col-md text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col-md ml-auto text-right">
+<span><a href=https://jmmv.dev/2020/12/endbasic-0.4.html>Next post &#187;</a></span>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Principal Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-6 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-6 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
+<li class=indent-wrapped-lines><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
+<li class=indent-wrapped-lines><a href=/2020/10/bye-google-hi-microsoft.html>Farewell, Google; hello, Microsoft!</a></li>
+<li class=indent-wrapped-lines><a href=/2020/08/config-files-vs-directories.html>Configuration files and .d directories</a></li>
+<li class=indent-wrapped-lines><a href=/2020/05/bridging-the-web-gap-endbasic.html>Bridging the web gap in EndBASIC</a></li>
+<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (1)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col order-1 mr-auto">
+<p>Copyright 2004&ndash;2022 Julio Merino</p>
+</div>
+</div>
 </footer>
+<script type=module>
+  import {
+    addAnchorsToHeaders, addElementClasses,
+    loadClientId, saveRequest, setupTracker,
+    loadVotes, voteThumbsUp, voteThumbsDown
+  } from "\/js\/main.44fb4b44ba7c8db41326d54584ce2139180a67a86211d01ffa5d96f6aa1b110a.js";
 
-<script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
-<script src="/js/uuidv4.min.js"></script>
-<script src="/js/fingerprintjs-3.3.2.min.js"></script>
-
-
-<script src="/script.js"></script>
-
-<script>
   addAnchorsToHeaders();
   addElementClasses();
 
+  setupTracker(SITE_ID, PAGE_PATH);
   loadClientId(function() {
     saveRequest();
     loadVotes();
   });
+
+  window.voteThumbsUp = voteThumbsUp;
+  window.voteThumbsDown = voteThumbsDown;
 </script>
-
 <noscript>
-  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEyL3VuaXQtdGVzdGluZy1hLWNvbnNvbGUtYXBwLmh0bWw=/stamp.gif" style="display: none;" />
+<img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEyL3VuaXQtdGVzdGluZy1hLWNvbnNvbGUtYXBwLmh0bWw=/stamp.gif" style=display:none>
 </noscript>
-
-  </body>
+</body>
 </html>
