@@ -1,702 +1,996 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<title>Series - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="Series - Julio Merino (jmmv.dev)">
-<meta name=description content="Bazel dynamic execution View all posts
-  Date Title Reading time     2019-12-20 Introduction to Bazel&amp;#39;s dynamic execution  3 minutes    2019-12-26 Bazel&amp;#39;s dynamic strategy  3 minutes    2019-12-27 Output conflicts and dynamic execution  4 minutes    2019-12-30 Artifact downloads and dynamic execution  5 minutes    2019-12-31 Lifting the local lock for dynamic execution  4 minutes    2019-12-31 Tree artifacts and transient files  4 minutes     CLI design View all posts">
-<meta property="og:description" content="Bazel dynamic execution View all posts
-  Date Title Reading time     2019-12-20 Introduction to Bazel&amp;#39;s dynamic execution  3 minutes    2019-12-26 Bazel&amp;#39;s dynamic strategy  3 minutes    2019-12-27 Output conflicts and dynamic execution  4 minutes    2019-12-30 Artifact downloads and dynamic execution  5 minutes    2019-12-31 Lifting the local lock for dynamic execution  4 minutes    2019-12-31 Tree artifacts and transient files  4 minutes     CLI design View all posts">
-<meta name=author content="Julio Merino">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/series.html">
-<meta property="og:type" content="blog">
-<link rel=canonical href=https://jmmv.dev/series.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
-<script src=/js/respond-1.4.2.min.js></script><![endif]-->
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/',PAGE_PATH='aHR0cHM6Ly9qbW12LmRldi9zZXJpZXMuaHRtbA=='</script>
-</head>
-<body>
-<header class=site-header>
-<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
-<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/stats.html>Analytics</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class="nav-item active">
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
-</nav>
-</header>
-<div class=page-header>
-<div class=container>
-<h1>Series</h1>
-<p>Topical index of the post series I have run in this site</p>
-</div>
-</div>
-<article class=container>
-<h1 id="Bazel dynamic execution">Bazel dynamic execution</h1>
-<p><strong><a href=/series/bazel-dynamic-execution>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2019-12-20</td>
-<td><a href=/2019/12/bazel-dynamic-execution-introduction.html>Introduction to Bazel's dynamic execution</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2019-12-26</td>
-<td><a href=/2019/12/bazel-dynamic-execution-strategy.html>Bazel's dynamic strategy</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2019-12-27</td>
-<td><a href=/2019/12/bazel-dynamic-execution-output-locking.html>Output conflicts and dynamic execution</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2019-12-30</td>
-<td><a href=/2019/12/bazel-dynamic-execution-download-times.html>Artifact downloads and dynamic execution</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2019-12-31</td>
-<td><a href=/2019/12/bazel-dynamic-execution-local-lockfree.html>Lifting the local lock for dynamic execution</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2019-12-31</td>
-<td><a href=/2019/12/bazel-dynamic-execution-tree-artifacts.html>Tree artifacts and transient files</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-</tbody>
-</table>
-<h1 id="CLI design">CLI design</h1>
-<p><strong><a href=/series/cli-design>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2013-08-12</td>
-<td><a href=/2013/08/cli-design-series-introduction.html>CLI design: Series introduction</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2013-08-15</td>
-<td><a href=/2013/08/cli-design-cli-is-presentation-layer.html>CLI design: The CLI is the presentation layer</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-08-19</td>
-<td><a href=/2013/08/cli-design-error-reporting.html>CLI design: Error reporting</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2013-08-22</td>
-<td><a href=/2013/08/cli-design-requesting-and-offering-help.html>CLI design: Requesting and offering help</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2013-08-26</td>
-<td><a href=/2013/08/cli-design-putting-flags-to-good-use.html>CLI design: Putting flags to good use</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2013-08-29</td>
-<td><a href=/2013/08/cli-design-do-not-reinvent-option.html>CLI design: Do not reinvent option parsing</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-09-02</td>
-<td><a href=/2013/09/cli-design-subcommand-based-interfaces.html>CLI design: Subcommand-based interfaces</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2013-09-05</td>
-<td><a href=/2013/09/cli-design-single-command-interfaces.html>CLI design: Single-command interfaces</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-09-09</td>
-<td><a href=/2013/09/cli-design-handling-output-messages.html>CLI design: Handling output messages</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-09-12</td>
-<td><a href=/2013/09/cli-design-screen-wrapping.html>CLI design: Screen wrapping</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-09-16</td>
-<td><a href=/2013/09/cli-design-consider-interactive-prompts.html>CLI design: Consider interactive prompts twice</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-09-19</td>
-<td><a href=/2013/09/cli-design-series-wrap-up.html>CLI design: Series wrap-up</a></td>
-<td>
-1 minute
-</td>
-</tr>
-</tbody>
-</table>
-<h1 id="Header files">Header files</h1>
-<p><strong><a href=/series/header-files>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2013-11-18</td>
-<td><a href=/2013/11/header-files-series-introduction.html>Header files: Series introduction</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2013-11-21</td>
-<td><a href=/2013/11/header-files-multiple-inclusion.html>Header files: Multiple-inclusion protection</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-11-25</td>
-<td><a href=/2013/11/header-files-self-containment.html>Header files: Self-containment</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-12-02</td>
-<td><a href=/2013/12/header-files-c-ipp-files.html>Header files: C++ ipp files</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2013-12-05</td>
-<td><a href=/2013/12/header-files-avoid-c-using-directives.html>Header files: Avoid C++ 'using' directives</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-12-09</td>
-<td><a href=/2013/12/header-files-poor-mans-replacement-for.html>Header files: Poor man's replacement for modules</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-12-27</td>
-<td><a href=/2013/12/header-files-qualify-your-identifiers.html>Header files: Qualify your identifiers</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2013-12-30</td>
-<td><a href=/2013/12/header-files-poor-compilation-times-in-c.html>Header files: Poor compilation times in C++</a></td>
-<td>
-1 minute
-</td>
-</tr>
-<tr>
-<td>2014-01-01</td>
-<td><a href=/2014/01/header-files-series-wrap-up.html>Header files: Series wrap-up</a></td>
-<td>
-1 minute
-</td>
-</tr>
-</tbody>
-</table>
-<h1 id="ONLamp.com guest posts">ONLamp.com guest posts</h1>
-<p><strong><a href=/series/onlamp.com-guest-posts>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2005-03-31</td>
-<td><a href=/2005/03/making-packager-friendly-software-1.html>Making Packager-Friendly Software (part 1)</a></td>
-<td>
-20 minutes
-</td>
-</tr>
-<tr>
-<td>2005-04-28</td>
-<td><a href=/2005/04/making-packager-friendly-software-2.html>Making Packager-Friendly Software (part 2)</a></td>
-<td>
-15 minutes
-</td>
-</tr>
-<tr>
-<td>2005-10-13</td>
-<td><a href=/2005/10/lightweight-web-serving-with-thttpd.html>Lightweight Web Serving With thttpd</a></td>
-<td>
-11 minutes
-</td>
-</tr>
-<tr>
-<td>2006-05-04</td>
-<td><a href=/2006/05/smart-pointers-in-cxx.html>Smart Pointers in C++</a></td>
-<td>
-17 minutes
-</td>
-</tr>
-<tr>
-<td>2007-03-01</td>
-<td><a href=/2007/03/making-netbsd-multiboot-compatible.html>Making NetBSD Multiboot-Compatible</a></td>
-<td>
-13 minutes
-</td>
-</tr>
-</tbody>
-</table>
-<h1 id="Production software">Production software</h1>
-<p><strong><a href=/series/production-software>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2013-10-10</td>
-<td><a href=/2013/10/production-software-series-introduction.html>Production software: Series introduction</a></td>
-<td>
-1 minute
-</td>
-</tr>
-<tr>
-<td>2013-10-14</td>
-<td><a href=/2013/10/production-software-be-wary-of.html>Production software: Be wary of assertions</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-10-17</td>
-<td><a href=/2013/10/production-software-constants-will-bite.html>Production software: Constants will bite you</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-10-21</td>
-<td><a href=/2013/10/production-software-hide-new-features.html>Production software: Hide new features behind flags</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-10-24</td>
-<td><a href=/2013/10/production-software-logging_24.html>Production software: Logging</a></td>
-<td>
-7 minutes
-</td>
-</tr>
-<tr>
-<td>2013-10-28</td>
-<td><a href=/2013/10/production-software-identifying-your.html>Production software: Identifying your builds</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-10-31</td>
-<td><a href=/2013/10/production-software-series-wrap-up.html>Production software: Series wrap-up</a></td>
-<td>
-1 minute
-</td>
-</tr>
-</tbody>
-</table>
-<h1 id=Readability>Readability</h1>
-<p><strong><a href=/series/readability>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2013-06-03</td>
-<td><a href=/2013/06/readability-series-introduction.html>Readability: Series introduction</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2013-06-06</td>
-<td><a href=/2013/06/readability-blocks-and-variable-scoping.html>Readability: Blocks and variable scoping</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-06-10</td>
-<td><a href=/2013/06/readability-blank-lines-matter.html>Readability: Blank lines matter</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-06-13</td>
-<td><a href=/2013/06/readability-no-abbreviations.html>Readability: No abbreviations</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2013-06-17</td>
-<td><a href=/2013/06/readability-mind-your-typos-and-grammar.html>Readability: Mind your typos and grammar</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2013-06-24</td>
-<td><a href=/2013/06/readability-document-your-types.html>Readability: Document your types</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-06-27</td>
-<td><a href=/2013/06/readability-avoid-comments.html>Readability: Avoid comments</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2013-07-01</td>
-<td><a href=/2013/07/readability-abuse-assertions.html>Readability: Abuse assertions</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-07-04</td>
-<td><a href=/2013/07/readability-dictionaries-are-not-data.html>Readability: Dictionaries are not data types</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2013-07-08</td>
-<td><a href=/2013/07/readability-do-not-abuse-classes-as.html>Readability: Do not abuse classes as global state</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-07-18</td>
-<td><a href=/2013/07/readability-explicitly-state.html>Readability: Explicitly state complementary conditions</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-07-22</td>
-<td><a href=/2013/07/readability-conditionals-as-functions.html>Readability: Conditionals as functions</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-07-25</td>
-<td><a href=/2013/07/readability-don-modify-variables.html>Readability: Don't modify variables</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2013-07-29</td>
-<td><a href=/2013/07/readability-narrow-trycatch-blocks.html>Readability: Narrow try/catch blocks</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2013-08-01</td>
-<td><a href=/2013/08/readability-series-wrap-up.html>Readability: Series wrap-up</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-</tbody>
-</table>
-<h1 id="Rust review">Rust review</h1>
-<p><strong><a href=/series/rust-review>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2018-05-25</td>
-<td><a href=/2018/05/rust-review-introduction.html>Rust review: Introduction</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2018-05-29</td>
-<td><a href=/2018/05/rust-review-immutable-by-default.html>Rust review: Immutable by default</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2018-06-01</td>
-<td><a href=/2018/06/rust-review-borrow-checker.html>Rust review: The borrow checker</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2018-06-05</td>
-<td><a href=/2018/06/rust-review-protect-the-data.html>Rust review: Protect the data</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-<tr>
-<td>2018-06-08</td>
-<td><a href=/2018/06/rust-review-learning-curve.html>Rust review: Learning curve</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2018-06-12</td>
-<td><a href=/2018/06/rust-review-expressions.html>Rust review: Expressions, expressions, expressions</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2018-06-15</td>
-<td><a href=/2018/06/rust-review-match-keyword.html>Rust review: The match keyword</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2018-06-19</td>
-<td><a href=/2018/06/rust-review-book.html>Rust review: The book</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2018-06-22</td>
-<td><a href=/2018/06/rust-review-ecosystem.html>Rust review: The ecosystem</a></td>
-<td>
-4 minutes
-</td>
-</tr>
-<tr>
-<td>2018-07-10</td>
-<td><a href=/2018/07/rust-review-closing-thoughts.html>Rust review: Closing thoughts</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-</tbody>
-</table>
-<h1 id="Shell readability">Shell readability</h1>
-<p><strong><a href=/series/shell-readability>View all posts</a></strong></p>
-<table class=posts-index>
-<thead>
-<tr>
-<th class=post-date>Date</td>
-<th class=post-title>Title</td>
-<th class=post-time>Reading time</td>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>2018-02-26</td>
-<td><a href=/2018/02/shell-readability-main.html>Shell readability: main</a></td>
-<td>
-2 minutes
-</td>
-</tr>
-<tr>
-<td>2018-03-02</td>
-<td><a href=/2018/03/shell-readability-function-parameters.html>Shell readability: function parameters</a></td>
-<td>
-3 minutes
-</td>
-</tr>
-<tr>
-<td>2018-03-09</td>
-<td><a href=/2018/03/shell-readability-strict-mode.html>Shell readability: strict mode</a></td>
-<td>
-6 minutes
-</td>
-</tr>
-<tr>
-<td>2018-03-13</td>
-<td><a href=/2018/03/shell-readability-local.html>Shell readability: local</a></td>
-<td>
-5 minutes
-</td>
-</tr>
-</tbody>
-</table>
-</article>
-<footer class=container>
-<div class=row>
-<div class="col order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col order-1 mr-auto">
-<p>Copyright 2004&ndash;2022 Julio Merino</p>
-</div>
-</div>
-</footer>
-<script type=module>
-  import {
-    addAnchorsToHeaders, addElementClasses,
-    loadClientId, saveRequest, setupTracker,
-    loadVotes, voteThumbsUp, voteThumbsDown
-  } from "\/js\/main.min.9b4dc32b78e2bb1dd00e4f4afa84eeb926ba251f85adddf6d58f1c9130d6a8e1.js";
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+ <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
 
+  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+
+  <title>Series - Julio Merino (jmmv.dev)</title>
+  <meta property="og:title" content="Series - Julio Merino (jmmv.dev)">
+
+  
+
+  <meta name="description" content="Bazel dynamic execution View all posts
+  Date Title Reading time     2019-12-20 Introduction to Bazel&amp;#39;s dynamic execution  3 minutes    2019-12-26 Bazel&amp;#39;s dynamic strategy  3 minutes    2019-12-27 Output conflicts and dynamic execution  4 minutes    2019-12-30 Artifact downloads and dynamic execution  5 minutes    2019-12-31 Lifting the local lock for dynamic execution  4 minutes    2019-12-31 Tree artifacts and transient files  4 minutes     CLI design View all posts">
+  <meta property="og:description" content="Bazel dynamic execution View all posts
+  Date Title Reading time     2019-12-20 Introduction to Bazel&amp;#39;s dynamic execution  3 minutes    2019-12-26 Bazel&amp;#39;s dynamic strategy  3 minutes    2019-12-27 Output conflicts and dynamic execution  4 minutes    2019-12-30 Artifact downloads and dynamic execution  5 minutes    2019-12-31 Lifting the local lock for dynamic execution  4 minutes    2019-12-31 Tree artifacts and transient files  4 minutes     CLI design View all posts">
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.92.1" />
+
+  <meta property="og:url" content="https://jmmv.dev/series.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/series.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const BASE_URL = 'https:\/\/jmmv.dev\/';
+    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi9zZXJpZXMuaHRtbA==';
+  </script>
+</head>
+
+
+  <body>
+    <header class="site-header">
+
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;Julio Merino
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/stats.html" >Analytics</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item active">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="https://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
+</nav>
+
+</header>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Series</h1>
+        
+          <p>Topical index of the post series I have run in this site</p>
+        
+      </div>
+    </div>
+
+    <article class="container">
+      
+
+  <h1 id="Bazel dynamic execution">Bazel dynamic execution</h1>
+  <p><strong><a href="/series/bazel-dynamic-execution">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2019-12-20</td>
+        <td><a href="/2019/12/bazel-dynamic-execution-introduction.html">Introduction to Bazel&#39;s dynamic execution</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2019-12-26</td>
+        <td><a href="/2019/12/bazel-dynamic-execution-strategy.html">Bazel&#39;s dynamic strategy</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2019-12-27</td>
+        <td><a href="/2019/12/bazel-dynamic-execution-output-locking.html">Output conflicts and dynamic execution</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2019-12-30</td>
+        <td><a href="/2019/12/bazel-dynamic-execution-download-times.html">Artifact downloads and dynamic execution</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2019-12-31</td>
+        <td><a href="/2019/12/bazel-dynamic-execution-local-lockfree.html">Lifting the local lock for dynamic execution</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2019-12-31</td>
+        <td><a href="/2019/12/bazel-dynamic-execution-tree-artifacts.html">Tree artifacts and transient files</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+  <h1 id="CLI design">CLI design</h1>
+  <p><strong><a href="/series/cli-design">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2013-08-12</td>
+        <td><a href="/2013/08/cli-design-series-introduction.html">CLI design: Series introduction</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-08-15</td>
+        <td><a href="/2013/08/cli-design-cli-is-presentation-layer.html">CLI design: The CLI is the presentation layer</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-08-19</td>
+        <td><a href="/2013/08/cli-design-error-reporting.html">CLI design: Error reporting</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-08-22</td>
+        <td><a href="/2013/08/cli-design-requesting-and-offering-help.html">CLI design: Requesting and offering help</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-08-26</td>
+        <td><a href="/2013/08/cli-design-putting-flags-to-good-use.html">CLI design: Putting flags to good use</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-08-29</td>
+        <td><a href="/2013/08/cli-design-do-not-reinvent-option.html">CLI design: Do not reinvent option parsing</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-09-02</td>
+        <td><a href="/2013/09/cli-design-subcommand-based-interfaces.html">CLI design: Subcommand-based interfaces</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-09-05</td>
+        <td><a href="/2013/09/cli-design-single-command-interfaces.html">CLI design: Single-command interfaces</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-09-09</td>
+        <td><a href="/2013/09/cli-design-handling-output-messages.html">CLI design: Handling output messages</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-09-12</td>
+        <td><a href="/2013/09/cli-design-screen-wrapping.html">CLI design: Screen wrapping</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-09-16</td>
+        <td><a href="/2013/09/cli-design-consider-interactive-prompts.html">CLI design: Consider interactive prompts twice</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-09-19</td>
+        <td><a href="/2013/09/cli-design-series-wrap-up.html">CLI design: Series wrap-up</a></td>
+        <td>
+          
+            1 minute
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+  <h1 id="Header files">Header files</h1>
+  <p><strong><a href="/series/header-files">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2013-11-18</td>
+        <td><a href="/2013/11/header-files-series-introduction.html">Header files: Series introduction</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-11-21</td>
+        <td><a href="/2013/11/header-files-multiple-inclusion.html">Header files: Multiple-inclusion protection</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-11-25</td>
+        <td><a href="/2013/11/header-files-self-containment.html">Header files: Self-containment</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-12-02</td>
+        <td><a href="/2013/12/header-files-c-ipp-files.html">Header files: C&#43;&#43; ipp files</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-12-05</td>
+        <td><a href="/2013/12/header-files-avoid-c-using-directives.html">Header files: Avoid C&#43;&#43; &#39;using&#39; directives</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-12-09</td>
+        <td><a href="/2013/12/header-files-poor-mans-replacement-for.html">Header files: Poor man&#39;s replacement for modules</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-12-27</td>
+        <td><a href="/2013/12/header-files-qualify-your-identifiers.html">Header files: Qualify your identifiers</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-12-30</td>
+        <td><a href="/2013/12/header-files-poor-compilation-times-in-c.html">Header files: Poor compilation times in C&#43;&#43;</a></td>
+        <td>
+          
+            1 minute
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2014-01-01</td>
+        <td><a href="/2014/01/header-files-series-wrap-up.html">Header files: Series wrap-up</a></td>
+        <td>
+          
+            1 minute
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+  <h1 id="ONLamp.com guest posts">ONLamp.com guest posts</h1>
+  <p><strong><a href="/series/onlamp.com-guest-posts">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2005-03-31</td>
+        <td><a href="/2005/03/making-packager-friendly-software-1.html">Making Packager-Friendly Software (part 1)</a></td>
+        <td>
+          
+            20 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2005-04-28</td>
+        <td><a href="/2005/04/making-packager-friendly-software-2.html">Making Packager-Friendly Software (part 2)</a></td>
+        <td>
+          
+            15 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2005-10-13</td>
+        <td><a href="/2005/10/lightweight-web-serving-with-thttpd.html">Lightweight Web Serving With thttpd</a></td>
+        <td>
+          
+            11 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2006-05-04</td>
+        <td><a href="/2006/05/smart-pointers-in-cxx.html">Smart Pointers in C&#43;&#43;</a></td>
+        <td>
+          
+            17 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2007-03-01</td>
+        <td><a href="/2007/03/making-netbsd-multiboot-compatible.html">Making NetBSD Multiboot-Compatible</a></td>
+        <td>
+          
+            13 minutes
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+  <h1 id="Production software">Production software</h1>
+  <p><strong><a href="/series/production-software">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2013-10-10</td>
+        <td><a href="/2013/10/production-software-series-introduction.html">Production software: Series introduction</a></td>
+        <td>
+          
+            1 minute
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-10-14</td>
+        <td><a href="/2013/10/production-software-be-wary-of.html">Production software: Be wary of assertions</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-10-17</td>
+        <td><a href="/2013/10/production-software-constants-will-bite.html">Production software: Constants will bite you</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-10-21</td>
+        <td><a href="/2013/10/production-software-hide-new-features.html">Production software: Hide new features behind flags</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-10-24</td>
+        <td><a href="/2013/10/production-software-logging_24.html">Production software: Logging</a></td>
+        <td>
+          
+            7 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-10-28</td>
+        <td><a href="/2013/10/production-software-identifying-your.html">Production software: Identifying your builds</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-10-31</td>
+        <td><a href="/2013/10/production-software-series-wrap-up.html">Production software: Series wrap-up</a></td>
+        <td>
+          
+            1 minute
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+  <h1 id="Readability">Readability</h1>
+  <p><strong><a href="/series/readability">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2013-06-03</td>
+        <td><a href="/2013/06/readability-series-introduction.html">Readability: Series introduction</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-06-06</td>
+        <td><a href="/2013/06/readability-blocks-and-variable-scoping.html">Readability: Blocks and variable scoping</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-06-10</td>
+        <td><a href="/2013/06/readability-blank-lines-matter.html">Readability: Blank lines matter</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-06-13</td>
+        <td><a href="/2013/06/readability-no-abbreviations.html">Readability: No abbreviations</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-06-17</td>
+        <td><a href="/2013/06/readability-mind-your-typos-and-grammar.html">Readability: Mind your typos and grammar</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-06-24</td>
+        <td><a href="/2013/06/readability-document-your-types.html">Readability: Document your types</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-06-27</td>
+        <td><a href="/2013/06/readability-avoid-comments.html">Readability: Avoid comments</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-07-01</td>
+        <td><a href="/2013/07/readability-abuse-assertions.html">Readability: Abuse assertions</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-07-04</td>
+        <td><a href="/2013/07/readability-dictionaries-are-not-data.html">Readability: Dictionaries are not data types</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-07-08</td>
+        <td><a href="/2013/07/readability-do-not-abuse-classes-as.html">Readability: Do not abuse classes as global state</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-07-18</td>
+        <td><a href="/2013/07/readability-explicitly-state.html">Readability: Explicitly state complementary conditions</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-07-22</td>
+        <td><a href="/2013/07/readability-conditionals-as-functions.html">Readability: Conditionals as functions</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-07-25</td>
+        <td><a href="/2013/07/readability-don-modify-variables.html">Readability: Don&#39;t modify variables</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-07-29</td>
+        <td><a href="/2013/07/readability-narrow-trycatch-blocks.html">Readability: Narrow try/catch blocks</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2013-08-01</td>
+        <td><a href="/2013/08/readability-series-wrap-up.html">Readability: Series wrap-up</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+  <h1 id="Rust review">Rust review</h1>
+  <p><strong><a href="/series/rust-review">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2018-05-25</td>
+        <td><a href="/2018/05/rust-review-introduction.html">Rust review: Introduction</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-05-29</td>
+        <td><a href="/2018/05/rust-review-immutable-by-default.html">Rust review: Immutable by default</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-06-01</td>
+        <td><a href="/2018/06/rust-review-borrow-checker.html">Rust review: The borrow checker</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-06-05</td>
+        <td><a href="/2018/06/rust-review-protect-the-data.html">Rust review: Protect the data</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-06-08</td>
+        <td><a href="/2018/06/rust-review-learning-curve.html">Rust review: Learning curve</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-06-12</td>
+        <td><a href="/2018/06/rust-review-expressions.html">Rust review: Expressions, expressions, expressions</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-06-15</td>
+        <td><a href="/2018/06/rust-review-match-keyword.html">Rust review: The match keyword</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-06-19</td>
+        <td><a href="/2018/06/rust-review-book.html">Rust review: The book</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-06-22</td>
+        <td><a href="/2018/06/rust-review-ecosystem.html">Rust review: The ecosystem</a></td>
+        <td>
+          
+            4 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-07-10</td>
+        <td><a href="/2018/07/rust-review-closing-thoughts.html">Rust review: Closing thoughts</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+  <h1 id="Shell readability">Shell readability</h1>
+  <p><strong><a href="/series/shell-readability">View all posts</a></strong></p>
+  <table class="posts-index">
+    <thead>
+      <tr>
+        <th class="post-date">Date</td>
+        <th class="post-title">Title</td>
+        <th class="post-time">Reading time</td>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>2018-02-26</td>
+        <td><a href="/2018/02/shell-readability-main.html">Shell readability: main</a></td>
+        <td>
+          
+            2 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-03-02</td>
+        <td><a href="/2018/03/shell-readability-function-parameters.html">Shell readability: function parameters</a></td>
+        <td>
+          
+            3 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-03-09</td>
+        <td><a href="/2018/03/shell-readability-strict-mode.html">Shell readability: strict mode</a></td>
+        <td>
+          
+            6 minutes
+          
+        </td>
+      </tr>
+      
+      <tr>
+        <td>2018-03-13</td>
+        <td><a href="/2018/03/shell-readability-local.html">Shell readability: local</a></td>
+        <td>
+          
+            5 minutes
+          
+        </td>
+      </tr>
+      
+    </tbody>
+  </table>
+
+
+
+    </article>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2022 Julio Merino</p>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
+<script src="/js/uuidv4.min.js"></script>
+<script src="/js/fingerprintjs-3.3.2.min.js"></script>
+
+
+<script src="/script.js"></script>
+
+<script>
   addAnchorsToHeaders();
   addElementClasses();
 
-  setupTracker(SITE_ID, PAGE_PATH);
   loadClientId(function() {
     saveRequest();
     loadVotes();
   });
-
-  window.voteThumbsUp = voteThumbsUp;
-  window.voteThumbsDown = voteThumbsDown;
 </script>
+
 <noscript>
-<img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi9zZXJpZXMuaHRtbA==/stamp.gif" style=display:none>
+  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi9zZXJpZXMuaHRtbA==/stamp.gif" style="display: none;" />
 </noscript>
-</body>
+
+  </body>
 </html>

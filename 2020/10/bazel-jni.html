@@ -1,103 +1,173 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<title>The final boss: Bazel's own JNI code - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="The final boss: Bazel's own JNI code - Julio Merino (jmmv.dev)">
-<meta name=description content="As you might have read elsewhere, I&amp;rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&amp;hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+
+  <title>The final boss: Bazel&#39;s own JNI code - Julio Merino (jmmv.dev)</title>
+  <meta property="og:title" content="The final boss: Bazel&#39;s own JNI code - Julio Merino (jmmv.dev)">
+
+  
+
+  <meta name="description" content="As you might have read elsewhere, I&amp;rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&amp;hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.
 Let me tell you the story of this final boss.">
-<meta property="og:description" content="As you might have read elsewhere, I&amp;rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&amp;hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.
+  <meta property="og:description" content="As you might have read elsewhere, I&amp;rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&amp;hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.
 Let me tell you the story of this final boss.">
-<meta name=author content="Julio Merino">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2020/10/bazel-jni.html">
-<meta property="og:type" content="blog">
-<link rel=canonical href=https://jmmv.dev/2020/10/bazel-jni.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
-<script src=/js/respond-1.4.2.min.js></script><![endif]-->
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/',PAGE_PATH='aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEwL2JhemVsLWpuaS5odG1s'</script>
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.92.1" />
+
+  <meta property="og:url" content="https://jmmv.dev/2020/10/bazel-jni.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/2020/10/bazel-jni.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const BASE_URL = 'https:\/\/jmmv.dev\/';
+    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEwL2JhemVsLWpuaS5odG1s';
+  </script>
 </head>
-<body>
-<header class=site-header>
+
+
+  <body>
+    <header class="site-header">
+
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
-<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/stats.html>Analytics</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;Julio Merino
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/stats.html" >Analytics</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="https://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
 </nav>
+
 </header>
-<div class=page-header>
-<div class=container>
-<h1>The final boss: Bazel's own JNI code</h1>
-<p>October 9, 2020 &#183;
-About 13 minutes
-&#183;
-Tags:
-<a class=text-reset href=/tags/bazel>bazel</a>, <a class=text-reset href=/tags/bug>bug</a></p>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
-<article><p>As you might have <a href=https://twitter.com/jmmv/status/1313196763524689920>read elsewhere</a>, I&rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&mldr; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.</p>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>The final boss: Bazel&#39;s own JNI code</h1>
+
+        <p>October 9, 2020 &middot;
+        About 13 minutes
+        &middot;
+        Tags:
+        <a class="text-reset" href="/tags/bazel">bazel</a>, <a class="text-reset" href="/tags/bug">bug</a></p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div class="row">
+            <div class="col">
+              
+              <article><p>As you might have <a href="https://twitter.com/jmmv/status/1313196763524689920">read elsewhere</a>, I&rsquo;m leaving the Bazel team and Google in about a week. My plan for these last few weeks was to hand things off as cleanly as possible&hellip; but I was also nerd-sniped by a bug that came my way a fortnight ago. Fixing it has been my self-inflicted punishment for leaving, and oh my, it has been painful. Very painful.</p>
 <p>Let me tell you the story of this final boss.</p>
-<h1 id=the-problem>The problem</h1>
-<p>A few weeks ago, an engineer in the <a href=https://abseil.io/>Abseil team</a> approached me because they were trying to do an optimization to their C++ library (<code>absl</code>). Their problem was that <em>all</em> of the tests at Google passed&mldr; except for the tests that verify Blaze (not Bazel) on macOS, which crashed in an obscure way. I didn&rsquo;t have a lot of time to look into the problem myself; but, thankfully, <a href=https://github.com/trybka>trybka@</a>&mdash;one of our C++ experts&mdash;did and noticed what was wrong by paying close attention to a failing stack trace:</p>
-<pre tabindex=0><code>C  [libvfs.dylib+0x1beb24]  absl::DeadlockCheck(absl::Mutex*)+0x114
+<h1 id="the-problem">The problem</h1>
+<p>A few weeks ago, an engineer in the <a href="https://abseil.io/">Abseil team</a> approached me because they were trying to do an optimization to their C++ library (<code>absl</code>). Their problem was that <em>all</em> of the tests at Google passed&hellip; except for the tests that verify Blaze (not Bazel) on macOS, which crashed in an obscure way. I didn&rsquo;t have a lot of time to look into the problem myself; but, thankfully, <a href="https://github.com/trybka">trybka@</a>&mdash;one of our C++ experts&mdash;did and noticed what was wrong by paying close attention to a failing stack trace:</p>
+<pre tabindex="0"><code>C  [libvfs.dylib+0x1beb24]  absl::DeadlockCheck(absl::Mutex*)+0x114
 C  [libvfs.dylib+0x1b9b22]  absl::DebugOnlyDeadlockCheck(absl::Mutex*)+0x32
 C  [libvfs.dylib+0x1b9a4c]  absl::Mutex::Lock()+0x1c
 C  [libvfs.dylib+0x12e67f]  base::internal::VLogSiteManager::UpdateGlobalV(int)+0x1f
@@ -111,45 +181,45 @@ C  [network.dylib+0x54ea74]  absl::flags_internal::FlagRegistrar&lt;int, true&gt
 C  [libvfs.dylib+0x136cd0]  __cxx_global_var_init+0x30
 C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 </code></pre><p>In the stack trace above, you can see how control flow jumps back and forth between two different shared libraries (<code>dylib</code>s in this post, as I&rsquo;m focusing on macOS), and how the calls that cross the boundaries are all within Abseil.</p>
-<p>Now, you might think: that should be fine. If the two shared libraries we have above, <code>libvfs.dylib</code> and <code>libnetwork.dylib</code>, call into another common one, Abseil, the dynamic linker will not load the common library twice. And you&rsquo;d be right&mldr; except&mldr; Bazel and Google love building static binaries. There is no <code>libabsl.dylib</code> in there: the <code>absl</code> symbols are <strong>duplicated</strong> across the two shared libraries. Visually, here is what we had in the executable:</p>
+<p>Now, you might think: that should be fine. If the two shared libraries we have above, <code>libvfs.dylib</code> and <code>libnetwork.dylib</code>, call into another common one, Abseil, the dynamic linker will not load the common library twice. And you&rsquo;d be right&hellip; except&hellip; Bazel and Google love building static binaries. There is no <code>libabsl.dylib</code> in there: the <code>absl</code> symbols are <strong>duplicated</strong> across the two shared libraries. Visually, here is what we had in the executable:</p>
 <figure>
-<img src=/images/2020-10-09-blaze-on-mac-jni-before.svg>
-<figcaption>Interaction between Blaze's Java code and the JNI libraries it pulls in on a macOS system. Note how the three separate JNI libraries that we load from Java are all able to reuse the foundational libraries provided by macOS because they are dynamically linked in... but Abseil shows up twice because it was statically linked into two separate shared libraries.</figcaption>
+  <img src="/images/2020-10-09-blaze-on-mac-jni-before.svg">
+  <figcaption>Interaction between Blaze's Java code and the JNI libraries it pulls in on a macOS system. Note how the three separate JNI libraries that we load from Java are all able to reuse the foundational libraries provided by macOS because they are dynamically linked in... but Abseil shows up twice because it was statically linked into two separate shared libraries.</figcaption>
 </figure>
 <p>And thereby lies the problem: Blaze on Mac was pulling in three separate <code>dylib</code>s, two of which bundled Abseil and conflicted at runtime. This, in turn, was blocking the submission of the optimization to Abseil I mentioned, which was supposed to bring significant improvements Google-wide. Time was of essence to fix this issue. (Except it wasn&rsquo;t because the author of the change found a different way to write their code and avoid the issue, but the issue had already gotten my interest.)</p>
-<h1 id=the-basics-behind-jni>The basics behind JNI</h1>
+<h1 id="the-basics-behind-jni">The basics behind JNI</h1>
 <p>Before getting into how to resolve this issue, let&rsquo;s pause for a second to understand what&rsquo;s involved in getting JNI code to work with Bazel.</p>
 <p>JNI is nothing magical: when you declare a Java function as <code>native</code>, the JVM will transform calls to that function as calls to a C function whose name is derived from the class that contains the <code>native</code> method plus the method&rsquo;s name. For example, if we have <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/java/com/google/devtools/build/lib/unix/NativePosixFiles.java;l=62;drc=50adefb987351eb3612b2e28240cf0d0697fdf5a">a Java function definition</a> like this:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-java data-lang=java><span class=kn>package</span> <span class=nn>com.google.devtools.build.lib.unix</span><span class=o>;</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kn">package</span> <span class="nn">com.google.devtools.build.lib.unix</span><span class="o">;</span>
 
-<span class=kd>public</span> <span class=kd>class</span> <span class=nc>NativePosixFiles</span> <span class=o>{</span>
-    <span class=kd>public</span> <span class=kd>static</span> <span class=kd>native</span> <span class=n>String</span> <span class=nf>readlink</span><span class=o>(</span><span class=n>String</span> <span class=n>path</span><span class=o>)</span> <span class=kd>throws</span> <span class=n>IOException</span><span class=o>;</span>
-<span class=o>}</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">NativePosixFiles</span> <span class="o">{</span>
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">native</span> <span class="n">String</span> <span class="nf">readlink</span><span class="o">(</span><span class="n">String</span> <span class="n">path</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">IOException</span><span class="o">;</span>
+<span class="o">}</span>
 </code></pre></div><p>The JVM will look for <a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/native/unix_jni.cc;l=163;drc=b3f5306a2f403192e03e97fdcd008d7c3afaa98f">a matching C symbol</a> with the following definition. Note how the symbol name encodes the Java package name, the class name, and the method name in a straightforward way (unlike C++&rsquo;s name mangling):</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=k>extern</span> <span class=s>&#34;C&#34;</span> <span class=n>JNIEXPORT</span> <span class=n>jstring</span> <span class=n>JNICALL</span>
-<span class=n>Java_com_google_devtools_build_lib_unix_NativePosixFiles_readlink</span><span class=p>(</span>
-    <span class=n>JNIEnv</span> <span class=o>*</span><span class=n>env</span><span class=p>,</span> <span class=n>jclass</span> <span class=n>clazz</span><span class=p>,</span> <span class=n>jstring</span> <span class=n>path</span><span class=p>)</span>
-<span class=p>{</span>
-    <span class=c1>// Native implementation for the NativePosixFiles#readlink(String) method.
-</span><span class=c1></span><span class=p>}</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="k">extern</span> <span class="s">&#34;C&#34;</span> <span class="n">JNIEXPORT</span> <span class="n">jstring</span> <span class="n">JNICALL</span>
+<span class="n">Java_com_google_devtools_build_lib_unix_NativePosixFiles_readlink</span><span class="p">(</span>
+    <span class="n">JNIEnv</span> <span class="o">*</span><span class="n">env</span><span class="p">,</span> <span class="n">jclass</span> <span class="n">clazz</span><span class="p">,</span> <span class="n">jstring</span> <span class="n">path</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="c1">// Native implementation for the NativePosixFiles#readlink(String) method.
+</span><span class="c1"></span><span class="p">}</span>
 </code></pre></div><p>The way the native function is invoked is irrelevant, but it probably happens via <code>dlsym(3)</code>. The important thing, however, is that the JVM must have access to these symbols in one way or another, and that the lookup must happen at run time.</p>
 <p>In standard Java, the way you do this is by calling <code>System.loadLibrary()</code> or <code>System.load()</code> on the native libraries. The former call searches for a library, using operating system-specific naming schemes, in the directories specified by the <code>java.library.path</code> property. The latter call simply loads the given file, although, surprisingly, the file&rsquo;s base name must also follow the operating system&rsquo;s conventions.</p>
-<p>But Bazel offers another mechanism in the Java rules. By using <a href=https://docs.bazel.build/versions/3.6.0/be/java.html#java_binary.launcher>a custom <strong>Java launcher</strong></a>, you can handle native libraries in a different way, and that&rsquo;s what we do inside Google. We have a launcher that bundles all native libraries of the Java target into a single object, then links that object <em>into</em> the JRE binary, and then attaches the JRE to the JAR to form a &ldquo;self-executable&rdquo; JAR. This final executable does not need to do any <code>System.loadLibrary()</code> calls to manually pull in JNI dependencies: they are all already in the JVM&rsquo;s address space because they were put there at binary link time.</p>
-<p>Very nice&mldr; except we only do that for Blaze on Linux, which means neither Blaze on Mac nor Bazel&mdash;on any platform&mdash;benefit from this. And this is where things get nasty: our internal-only &ldquo;common case&rdquo; is magical, but everything else has grown workarounds to deal with JNI&mldr; and they all have problems.</p>
-<h1 id=initial-assessment-snafu>Initial assessment: SNAFU</h1>
-<p>Here are the many ways we had in Bazel to load the JNI code before any of my changes took place (that is, at or before <a href=https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093>commit <code>e36e9da</code></a>), and the many little details that got in the way of cleaning things up:</p>
+<p>But Bazel offers another mechanism in the Java rules. By using <a href="https://docs.bazel.build/versions/3.6.0/be/java.html#java_binary.launcher">a custom <strong>Java launcher</strong></a>, you can handle native libraries in a different way, and that&rsquo;s what we do inside Google. We have a launcher that bundles all native libraries of the Java target into a single object, then links that object <em>into</em> the JRE binary, and then attaches the JRE to the JAR to form a &ldquo;self-executable&rdquo; JAR. This final executable does not need to do any <code>System.loadLibrary()</code> calls to manually pull in JNI dependencies: they are all already in the JVM&rsquo;s address space because they were put there at binary link time.</p>
+<p>Very nice&hellip; except we only do that for Blaze on Linux, which means neither Blaze on Mac nor Bazel&mdash;on any platform&mdash;benefit from this. And this is where things get nasty: our internal-only &ldquo;common case&rdquo; is magical, but everything else has grown workarounds to deal with JNI&hellip; and they all have problems.</p>
+<h1 id="initial-assessment-snafu">Initial assessment: SNAFU</h1>
+<p>Here are the many ways we had in Bazel to load the JNI code before any of my changes took place (that is, at or before <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093">commit <code>e36e9da</code></a>), and the many little details that got in the way of cleaning things up:</p>
 <ul>
 <li>
 <p>The Google-internal Java launcher for Blaze on Linux. Blaze on Linux needn&rsquo;t worry about JNI at all as its native code is transparently loaded.</p>
 </li>
 <li>
-<p>The <a href=https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/unix/jni/UnixJniLoader.java><code>UnixJniLoader</code> class</a>, which was explicitly called in Bazel from non-Windows platforms and in the Blaze on Mac case.</p>
+<p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/unix/jni/UnixJniLoader.java"><code>UnixJniLoader</code> class</a>, which was explicitly called in Bazel from non-Windows platforms and in the Blaze on Mac case.</p>
 </li>
 <li>
-<p>The <a href=https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/windows/jni/WindowsJniLoader.java><code>WindowsJniLoader</code> class</a>, which was explicitly called in Bazel from the Windows platform.</p>
+<p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/windows/jni/WindowsJniLoader.java"><code>WindowsJniLoader</code> class</a>, which was explicitly called in Bazel from the Windows platform.</p>
 </li>
 <li>
-<p>The <a href=https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/platform/JniLoader.java><code>JniLoader</code> abstract class</a>, which was a more recent attempt at making JNI code loading more transparent but was only used in a bunch of new classes.</p>
+<p>The <a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/main/java/com/google/devtools/build/lib/platform/JniLoader.java"><code>JniLoader</code> abstract class</a>, which was a more recent attempt at making JNI code loading more transparent but was only used in a bunch of new classes.</p>
 </li>
 <li>
 <p>Some arbitrary <code>System.loadLibrary</code> calls throughout the code in places where it was known that JNI was unconditionally required. I&rsquo;m not sure if any of these were in Bazel itself, but the Google-internal modules that required JNI indeed did this&mdash;and they did so, especially, to load the non-public <code>libnetwork.dylib</code> and <code>libvfs.dylib</code>.</p>
@@ -167,15 +237,15 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 <p><a href="https://cs.opensource.google/bazel/bazel/+/e36e9da96b04945ab26210288b3e68f70b7d3093:src/BUILD;l=340">Knowledge in the top-level Bazel binary packaging rules</a> of the JNI libraries to bundle them into the final self-extracting executable, with extra logic to tell the JVM where they are via the <code>java.library.path</code> property.</p>
 </li>
 </ul>
-<p>I&rsquo;m sure I&rsquo;m forgetting some interesting details, but you can see from this list that there are a ton of &ldquo;corner cases&rdquo; to consider in order to clean things up. I mean&mldr; things were really messed up.</p>
+<p>I&rsquo;m sure I&rsquo;m forgetting some interesting details, but you can see from this list that there are a ton of &ldquo;corner cases&rdquo; to consider in order to clean things up. I mean&hellip; things were really messed up.</p>
 <p>There is <em>one</em> thing that did work reasonably well in this design though, and that was the fact that unit tests didn&rsquo;t have to worry about whether their dependencies needed JNI or not. This wasn&rsquo;t bullet-proof though: some tests and build rules <em>did</em> have to know about JNI and had to either disable it with <code>io.bazel.enableJni=0</code> or put the shared libraries in the right place. A very fragile scenario, indeed.</p>
-<h1 id=first-cleanup-attempt>First cleanup attempt</h1>
+<h1 id="first-cleanup-attempt">First cleanup attempt</h1>
 <p>Armed with this knowledge, which was more or less present in my mind before I started but which wasn&rsquo;t complete until I finished, I started trying to tackle the problem.</p>
 <p>IMPORTANT: The key observation to resolve this problem is that, <strong>at build time</strong>, there is zero coupling between building the Java code that defines <code>native</code> methods and building the native C code that supports them. This is bad because neither you nor the compiler can&rsquo;t know if things will work until you run them. This, however, is good because it gives us the freedom to build the native code separately from the Java code, and allows us to glue them together <strong>at run time</strong>.</p>
 <p>My first thought was: let&rsquo;s remove all dependencies from the Java rules to the native libraries. Then, let&rsquo;s add a single <code>cc_library</code> target that generates a single native library by pulling all individual bits as <code>deps</code>. And, finally, let&rsquo;s add a trivial <code>System.loadLibrary</code> statement to Bazel&rsquo;s and Blaze&rsquo;s <code>main</code> function to load their own single artifact.</p>
-<p>I prototyped this solution and was excited by the huge amount of garbage I could remove. The final solution was elegant, very easy to understand, and both Blaze and Bazel both worked&mldr; except&mldr; tests failed left and right. You see: tests don&rsquo;t invoke Bazel&rsquo;s <code>main</code> entry point so they didn&rsquo;t get a chance to load the needed JNI library in this design. I could have littered the test build graph with explicit dependencies on the JNI library and explicit calls to <code>System.loadLibrary</code>, but that would have been awful. I was trying to simplify things, not make them worse!</p>
+<p>I prototyped this solution and was excited by the huge amount of garbage I could remove. The final solution was elegant, very easy to understand, and both Blaze and Bazel both worked&hellip; except&hellip; tests failed left and right. You see: tests don&rsquo;t invoke Bazel&rsquo;s <code>main</code> entry point so they didn&rsquo;t get a chance to load the needed JNI library in this design. I could have littered the test build graph with explicit dependencies on the JNI library and explicit calls to <code>System.loadLibrary</code>, but that would have been awful. I was trying to simplify things, not make them worse!</p>
 <p>So I had to scrap this idea and go back to the drawing board.</p>
-<h1 id=a-better-approach>A better approach</h1>
+<h1 id="a-better-approach">A better approach</h1>
 <p>The two constraints driving my search for a solution were simple:</p>
 <ul>
 <li>
@@ -189,461 +259,877 @@ C  [libvfs.dylib+0x136d79]  _GLOBAL__sub_I_vlog_is_on.cc+0x9
 </ul>
 <p>Simply put, the design I envisioned is depicted in the following diagram:</p>
 <figure>
-<img src=/images/2020-10-09-blaze-on-mac-jni-after.svg>
-<figcaption>Interaction between Blaze's Java code and the single JNI library after my changes in a macOS system. Note that what we want is a single `dylib` that embeds all separate libraries at build time so that the compiler can weed out duplicate symbols. It is OK if this `dylib` still depends on other shared libraries, as the dynamic linker knows how to handle those.</figcaption>
+  <img src="/images/2020-10-09-blaze-on-mac-jni-after.svg">
+  <figcaption>Interaction between Blaze's Java code and the single JNI library after my changes in a macOS system. Note that what we want is a single `dylib` that embeds all separate libraries at build time so that the compiler can weed out duplicate symbols. It is OK if this `dylib` still depends on other shared libraries, as the dynamic linker knows how to handle those.</figcaption>
 </figure>
 <p>Simple, huh? We want a single shared library that bundles all individual native libraries at build time to remove duplicate symbols. We want to load that single library at runtime. And we want the contents of this library to support Google-internal extensions when building Blaze inside of Google, and to remain Google-agnostic when building Bazel outside.</p>
 <p>Now, the question was: how do we get here, given all the many corner cases we have to deal with?</p>
-<h1 id=steps-towards-the-solution>Steps towards the solution</h1>
+<h1 id="steps-towards-the-solution">Steps towards the solution</h1>
 <p>The general thought process was: let&rsquo;s try to isolate all JNI loading logic into a single Java package. Once we have that, we can try to make all other Java code depend on it and not have to worry about native dependencies. And to make that possible, we have to rely on extracting the JNI code from a Java resource instead of relying on the caller correctly preparing the <code>java.library.path</code> property on entry.</p>
 <p>More specifically, here are the steps I took:</p>
 <ol>
 <li>
-<p>Bring clarity into the situation by forcing all JNI load requests to happen via a common code path. The end goal for this was to isolate all JNI code in a single place, making it easier to see how to change it. See <a href=https://cs.opensource.google/bazel/bazel/+/50adefb987351eb3612b2e28240cf0d0697fdf5a>commit <code>50adefb</code></a>.</p>
+<p>Bring clarity into the situation by forcing all JNI load requests to happen via a common code path. The end goal for this was to isolate all JNI code in a single place, making it easier to see how to change it. See <a href="https://cs.opensource.google/bazel/bazel/+/50adefb987351eb3612b2e28240cf0d0697fdf5a">commit <code>50adefb</code></a>.</p>
 </li>
 <li>
-<p>Simplify the way the Windows code paths loaded JNI. This wasn&rsquo;t a necessity as part of this project, but was raised as a suggestion during a code review&mldr; and I like simplicity, so I did it. See <a href=https://cs.opensource.google/bazel/bazel/+/9ce90880ed44885b090304c49098efb51843eae6>commit <code>9ce9088</code></a>.</p>
+<p>Simplify the way the Windows code paths loaded JNI. This wasn&rsquo;t a necessity as part of this project, but was raised as a suggestion during a code review&hellip; and I like simplicity, so I did it. See <a href="https://cs.opensource.google/bazel/bazel/+/9ce90880ed44885b090304c49098efb51843eae6">commit <code>9ce9088</code></a>.</p>
 </li>
 <li>
-<p>Now that we had all callers funneling their JNI requests via the <code>JniLoader</code>, there was no reason to keep the separate <code>UnixJniLoader</code> and <code>WindowsJniLoader</code> classes, so they could be merged. This highlighted some important differences between the two: namely, that Windows relies on the runfiles library clutch to load the JNI code, and that this was only done for testing purposes. Ugly. This had to go, but not yet. See <a href=https://cs.opensource.google/bazel/bazel/+/7128580b1b0f48b8bd1a1f609970b690d9687945>commit <code>7128580</code></a>.</p>
+<p>Now that we had all callers funneling their JNI requests via the <code>JniLoader</code>, there was no reason to keep the separate <code>UnixJniLoader</code> and <code>WindowsJniLoader</code> classes, so they could be merged. This highlighted some important differences between the two: namely, that Windows relies on the runfiles library clutch to load the JNI code, and that this was only done for testing purposes. Ugly. This had to go, but not yet. See <a href="https://cs.opensource.google/bazel/bazel/+/7128580b1b0f48b8bd1a1f609970b690d9687945">commit <code>7128580</code></a>.</p>
 </li>
 <li>
-<p>With the <code>WindowsJniLoader</code> gone, there was no reason to keep the separate <code>windows/jni</code> subpackage in the source tree&mldr; so I merged it into its parent. Again, unnecessary simplification as part of this project, but it was easy enough, so why not? See <a href=https://cs.opensource.google/bazel/bazel/+/d69744dca68f8258762d53a01d8dca3afb7ed2ac>commit <code>d69744d</code></a>.</p>
+<p>With the <code>WindowsJniLoader</code> gone, there was no reason to keep the separate <code>windows/jni</code> subpackage in the source tree&hellip; so I merged it into its parent. Again, unnecessary simplification as part of this project, but it was easy enough, so why not? See <a href="https://cs.opensource.google/bazel/bazel/+/d69744dca68f8258762d53a01d8dca3afb7ed2ac">commit <code>d69744d</code></a>.</p>
 </li>
 <li>
-<p>The key piece of this puzzle was replacing the way we actually look for and find the JNI library. Instead of relying on external actors such as the Bazel client, the bootstrap script, or unit tests to put the JNI library in <code>java.library.path</code>, we should be able to put the library inside a JAR resource and extract it at runtime. And it was possible. With this, all madness was gone and, finally, once and for all, the <code>JniLoader</code> could work by trivially pulling it in as a dependency. See <a href=https://cs.opensource.google/bazel/bazel/+/a2a2f9d5f6befe40f4f1a01931473dc99000de0e>commit <code>a2a2f9d</code></a>.</p>
+<p>The key piece of this puzzle was replacing the way we actually look for and find the JNI library. Instead of relying on external actors such as the Bazel client, the bootstrap script, or unit tests to put the JNI library in <code>java.library.path</code>, we should be able to put the library inside a JAR resource and extract it at runtime. And it was possible. With this, all madness was gone and, finally, once and for all, the <code>JniLoader</code> could work by trivially pulling it in as a dependency. See <a href="https://cs.opensource.google/bazel/bazel/+/a2a2f9d5f6befe40f4f1a01931473dc99000de0e">commit <code>a2a2f9d</code></a>.</p>
 </li>
 <li>
 <p>Modify the Google-internal fork of <code>src/main/native:unix_jni</code> to link in the previous <code>network</code> and <code>vfs</code> targets so that the <code>libunix.dylib</code> becomes the only JNI library we have to load at run time. This change was <em>trivial</em> at this point: just a matter of changing <code>BUILD</code> dependencies and replacing ad-hoc <code>System.loadLibrary()</code> calls with calls to our improved <code>JniLoader.loadJni()</code>. I cannot link to this change because it has no correspondence in Bazel though, given that Bazel hasn&rsquo;t yet suffered from this issue (but it could!).</p>
 </li>
 </ol>
-<p>I like how this sequence highlights the importance of decoupling refactoring and cleanup work from the actual fixes. All of the steps in this list except for the last one were essentially no-ops and only laid the ground work to make the last step simple. And simple it was. Doing the work this way made it much easier for my reviewer to see what was going on and to assess that each step worked correctly. (Mind you, I actually broke the build somewhere in between two steps&mldr; and it was &ldquo;easy&rdquo; enough to fix it because the delta between changes was small.)</p>
+<p>I like how this sequence highlights the importance of decoupling refactoring and cleanup work from the actual fixes. All of the steps in this list except for the last one were essentially no-ops and only laid the ground work to make the last step simple. And simple it was. Doing the work this way made it much easier for my reviewer to see what was going on and to assess that each step worked correctly. (Mind you, I actually broke the build somewhere in between two steps&hellip; and it was &ldquo;easy&rdquo; enough to fix it because the delta between changes was small.)</p>
 <p>And with that, the original bug is now fixed!</p>
-<h1 id=parting-words>Parting words</h1>
-<p>Executing this cleanup has been very frustrating as I briefly mentioned in the opening. Part of the reason is because of the many corner cases that had to be dealt with and how these were not clear upfront. But the other and major part of this came from the fact that Blaze and Bazel have divergent <code>BUILD</code> files in some areas, and ensuring they are all consistent with each other is painful. Throw in long BazelCI turnaround times and the need to get things to work on three different platforms&mldr; and you are in for pain.</p>
+<h1 id="parting-words">Parting words</h1>
+<p>Executing this cleanup has been very frustrating as I briefly mentioned in the opening. Part of the reason is because of the many corner cases that had to be dealt with and how these were not clear upfront. But the other and major part of this came from the fact that Blaze and Bazel have divergent <code>BUILD</code> files in some areas, and ensuring they are all consistent with each other is painful. Throw in long BazelCI turnaround times and the need to get things to work on three different platforms&hellip; and you are in for pain.</p>
 <p>Anyhow. The bug is now fixed. But is what I outlined above the final solution? No, not really. What I&rsquo;ve done is still an ad-hoc solution to Bazel&rsquo;s own build process and use of JNI. Anyone writing and building Java code with Bazel also needs to interact with JNI at some point, and those developers are subject to the same issues I&rsquo;ve described here. I don&rsquo;t think we have a great answer for them yet. In other words: help welcome.</p>
 <p>So long, and thanks for all the fish!</p>
 </article>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class=col-md-6>
-<p id=vote-request>
-<b>What did you think about this article?</b><small>
-<i>(Experimental)</i></small>
-<br>
-<b><span id=first-vote></span></b>
-</p>
-</div>
-<div class=col-md-3>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col-md-3>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-<div class="row mt-3">
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=The+final+boss%3A+Bazel%27s+own+JNI+code&url=https%3A%2F%2Fjmmv.dev%2F2020%2F10%2Fbazel-jni.html" class="btn btn-outline-primary">
-<img src=/images/badges/reddit.png alt="Reddit logo" width=24 height=24>
-Share on Reddit
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=The+final+boss%3A+Bazel%27s+own+JNI+code&u=https%3A%2F%2Fjmmv.dev%2F2020%2F10%2Fbazel-jni.html" class="btn btn-outline-primary">
-<img src=/images/badges/ycombinator.png alt="Hacker News logo" width=24 height=24>
-Share on Hacker News
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=The+final+boss%3A+Bazel%27s+own+JNI+code+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2020%2F10%2Fbazel-jni.html+%E2%80%94+cc+%40jmmv" class="btn btn-outline-primary">
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt="Twitter logo" width=24 height=24>
-Share on Twitter
-</a>
-</div>
-</div>
-</div>
-<div class="container post-links">
-<div class=row>
-<div class="col-md-12 text-center">
-<p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-</div>
-</div>
-<div class=row>
-<div class=col-md-10>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class="form-group row px-md-4">
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-md-9 text-center">
-<button type=submit class="btn btn-primary col-md-3">Subscribe</button>
-</div>
-</form>
-</div>
-<div class="col-md-1 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-md-1 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-</div>
-<div class="container post-links">
-<div class=row>
-<div class="col-md mr-auto text-left">
-<span><a href=https://jmmv.dev/2020/09/bazel-test-streaming-bug.html>&#171; Previous post</a></span>
-</div>
-<div class="col-md text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col-md ml-auto text-right">
-<span><a href=https://jmmv.dev/2020/10/bye-google-hi-microsoft.html>Next post &#187;</a></span>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Principal Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-6 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-6 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=indent-wrapped-lines><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
-<li class=indent-wrapped-lines><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
-<li class=indent-wrapped-lines><a href=/2020/10/bye-google-hi-microsoft.html>Farewell, Google; hello, Microsoft!</a></li>
-<li class=indent-wrapped-lines><a href=/2020/08/config-files-vs-directories.html>Configuration files and .d directories</a></li>
-<li class=indent-wrapped-lines><a href=/2020/05/bridging-the-web-gap-endbasic.html>Bridging the web gap in EndBASIC</a></li>
-<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (1)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col order-1 mr-auto">
-<p>Copyright 2004&ndash;2022 Julio Merino</p>
-</div>
-</div>
-</footer>
-<script type=module>
-  import {
-    addAnchorsToHeaders, addElementClasses,
-    loadClientId, saveRequest, setupTracker,
-    loadVotes, voteThumbsUp, voteThumbsDown
-  } from "\/js\/main.min.9b4dc32b78e2bb1dd00e4f4afa84eeb926ba251f85adddf6d58f1c9130d6a8e1.js";
+            </div>
+          </div>
 
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-6">
+                <p id="vote-request">
+                  <b>What did you think about this article?</b><small>
+                  <i>(Experimental)</i></small>
+                  <br/>
+                  <b><span id="first-vote"></span></b>
+                </p>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=The&#43;final&#43;boss%3A&#43;Bazel%27s&#43;own&#43;JNI&#43;code&amp;url=https%3A%2F%2Fjmmv.dev%2F2020%2F10%2Fbazel-jni.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/reddit.png"
+                       alt="Reddit logo"
+                       width="24" height="24">
+                  Share on Reddit
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=The&#43;final&#43;boss%3A&#43;Bazel%27s&#43;own&#43;JNI&#43;code&amp;u=https%3A%2F%2Fjmmv.dev%2F2020%2F10%2Fbazel-jni.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/ycombinator.png"
+                       alt="Hacker News logo"
+                       width="24" height="24">
+                  Share on Hacker News
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=The&#43;final&#43;boss%3A&#43;Bazel%27s&#43;own&#43;JNI&#43;code&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2020%2F10%2Fbazel-jni.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
+                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
+                       alt="Twitter logo"
+                       width="24" height="24">
+                  Share on Twitter
+                </a>
+              </div>
+            </div>
+          </div>
+
+          
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-10">
+                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+                  <div class="form-group row px-md-4">
+                    <input type="text" name="email"
+                          placeholder="Enter your email"
+                          class="form-control input-sm col-md-9 text-center"/>
+                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
+                  </div>
+                </form>
+              </div>
+              <div class="col-md-1 text-center">
+                <p>
+                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+                  </a>
+                </p>
+              </div>
+              <div class="col-md-1 text-center">
+                <p><a href="/feed.xml"><img
+                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2020/09/bazel-test-streaming-bug.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span><a href="https://jmmv.dev/2020/10/bye-google-hi-microsoft.html">Next post &raquo;</a></span>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col text-center p-2">
+    <p><a href="/about.html" class="clear-link">
+      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
+      <b>Julio Merino</b><br/>
+      Principal Software Engineer<br/>
+      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
+      <small>From Barcelona, living in Seattle</small>
+    </a></p>
+
+    <div class="row">
+      <div class="col-sm-6 text-center">
+        <p>
+          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-6 text-center">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+      <div class="form-group">
+        <input type="text" name="email"
+          placeholder="Enter your email"
+          class="form-control input-sm text-center"/>
+        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
+      
+      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2022">2022</a> (1)
+        <ul id="archive-year-2022" class="collapse">
+        
+          
+          <li><a href="/archive.html#2022-01">January 2022</a> (1)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
+        <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
+        <ul id="archive-year-2020" class="collapse">
+        
+          
+          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
+</div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2022 Julio Merino</p>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
+<script src="/js/uuidv4.min.js"></script>
+<script src="/js/fingerprintjs-3.3.2.min.js"></script>
+
+
+<script src="/script.js"></script>
+
+<script>
   addAnchorsToHeaders();
   addElementClasses();
 
-  setupTracker(SITE_ID, PAGE_PATH);
   loadClientId(function() {
     saveRequest();
     loadVotes();
   });
-
-  window.voteThumbsUp = voteThumbsUp;
-  window.voteThumbsDown = voteThumbsDown;
 </script>
+
 <noscript>
-<img src=https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEwL2JhemVsLWpuaS5odG1s/stamp.gif style=display:none>
+  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEwL2JhemVsLWpuaS5odG1s/stamp.gif" style="display: none;" />
 </noscript>
-</body>
+
+  </body>
 </html>

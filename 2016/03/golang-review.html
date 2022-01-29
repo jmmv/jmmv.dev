@@ -1,129 +1,201 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<title>A look at Go from a newbie's perspective - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="A look at Go from a newbie's perspective - Julio Merino (jmmv.dev)">
-<meta name=description content="I confess I am late to the game: the Go programming language came out in 2009 and I had not had the chance to go all in for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I&amp;rsquo;m truly pleased.
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+
+  <title>A look at Go from a newbie&#39;s perspective - Julio Merino (jmmv.dev)</title>
+  <meta property="og:title" content="A look at Go from a newbie&#39;s perspective - Julio Merino (jmmv.dev)">
+
+  
+
+  <meta name="description" content="I confess I am late to the game: the Go programming language came out in 2009 and I had not had the chance to go all in for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I&amp;rsquo;m truly pleased.
 The project What I set out to build is a read-only caching file system to try to solve the problems I presented in my previous analysis of large builds on SSHFS.">
-<meta property="og:description" content="I confess I am late to the game: the Go programming language came out in 2009 and I had not had the chance to go all in for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I&amp;rsquo;m truly pleased.
+  <meta property="og:description" content="I confess I am late to the game: the Go programming language came out in 2009 and I had not had the chance to go all in for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I&amp;rsquo;m truly pleased.
 The project What I set out to build is a read-only caching file system to try to solve the problems I presented in my previous analysis of large builds on SSHFS.">
-<meta name=author content="Julio Merino">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2016/03/golang-review.html">
-<meta property="og:type" content="blog">
-<link rel=canonical href=https://jmmv.dev/2016/03/golang-review.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
-<script src=/js/respond-1.4.2.min.js></script><![endif]-->
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/',PAGE_PATH='aHR0cHM6Ly9qbW12LmRldi8yMDE2LzAzL2dvbGFuZy1yZXZpZXcuaHRtbA=='</script>
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.92.1" />
+
+  <meta property="og:url" content="https://jmmv.dev/2016/03/golang-review.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/2016/03/golang-review.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const BASE_URL = 'https:\/\/jmmv.dev\/';
+    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDE2LzAzL2dvbGFuZy1yZXZpZXcuaHRtbA==';
+  </script>
 </head>
-<body>
-<header class=site-header>
+
+
+  <body>
+    <header class="site-header">
+
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
-<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/stats.html>Analytics</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;Julio Merino
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/stats.html" >Analytics</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="https://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
 </nav>
+
 </header>
-<div class=page-header>
-<div class=container>
-<h1>A look at Go from a newbie's perspective</h1>
-<p>March 22, 2016 &#183;
-About 10 minutes
-&#183;
-Tags:
-<a class=text-reset href=/tags/featured>featured</a>, <a class=text-reset href=/tags/software>software</a></p>
-<figure class=cover-image>
-<img src=/images/2016-03-22-header.png width=100%>
-</figure>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
-<article><p>I confess I am late to the game: the <a href=https://golang.org/>Go programming language</a> came out in 2009 and I had not had the chance to go <em>all in</em> for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I&rsquo;m truly pleased.</p>
-<h1 id=the-project>The project</h1>
-<p>What I set out to build is a read-only caching file system to try to solve the problems I presented in my previous <a href=/2016/02/sshfs-performance-analysis-for-builds.html>analysis of large builds on SSHFS</a>. The reasons I chose Go are simple: I had to write a low-level system component and, in theory, Go excels at this; I did not want to use plain C; Go had the necessary bindings (for <a href=https://bazil.org/fuse/>FUSE</a> and <a href=https://github.com/mattn/go-sqlite3>SQLite</a>); and, heck, I <em>just</em> wanted to try it out!</p>
-<p>It only took me a little over two days to get a fully-functional implementation of my file system, and this is without having ever written a FUSE-based file system before nor any non-toy Go code. That said, I had previously <a href=http://netbsd-soc.sourceforge.net/projects/tmpfs/>written a kernel file system in 2005</a> and <em>that</em> helped navigating the whole endeavor and tuning the resulting performance.</p>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>A look at Go from a newbie&#39;s perspective</h1>
+
+        <p>March 22, 2016 &middot;
+        About 10 minutes
+        &middot;
+        Tags:
+        <a class="text-reset" href="/tags/featured">featured</a>, <a class="text-reset" href="/tags/software">software</a></p>
+
+        
+        <figure class="cover-image">
+          <img src="/images/2016-03-22-header.png" width="100%">
+          
+        </figure>
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div class="row">
+            <div class="col">
+              
+              <article><p>I confess I am late to the game: the <a href="https://golang.org/">Go programming language</a> came out in 2009 and I had not had the chance to go <em>all in</em> for a real project until two weeks ago. Here is a summary of my experience. Spoiler alert: I&rsquo;m truly pleased.</p>
+<h1 id="the-project">The project</h1>
+<p>What I set out to build is a read-only caching file system to try to solve the problems I presented in my previous <a href="/2016/02/sshfs-performance-analysis-for-builds.html">analysis of large builds on SSHFS</a>. The reasons I chose Go are simple: I had to write a low-level system component and, in theory, Go excels at this; I did not want to use plain C; Go had the necessary bindings (for <a href="https://bazil.org/fuse/">FUSE</a> and <a href="https://github.com/mattn/go-sqlite3">SQLite</a>); and, heck, I <em>just</em> wanted to try it out!</p>
+<p>It only took me a little over two days to get a fully-functional implementation of my file system, and this is without having ever written a FUSE-based file system before nor any non-toy Go code. That said, I had previously <a href="http://netbsd-soc.sourceforge.net/projects/tmpfs/">written a kernel file system in 2005</a> and <em>that</em> helped navigating the whole endeavor and tuning the resulting performance.</p>
 <p>Where is the code you ask? Nowhere yet unfortunately; I hope to make it available once it is ready.</p>
-<h1 id=the-go-language-review>The Go language review</h1>
+<h1 id="the-go-language-review">The Go language review</h1>
 <p>The summary of what follows is simple: after two weeks, I&rsquo;m in love with Go.</p>
-<p>I remember languages people dismiss Go back in 2009 on the grounds that it was a simplistic language without novel concepts&mldr; but there lies its beauty: Go lets you get things done quickly and safely with few performance penalties. I feel I can write much more robust code with Go than with any other comparable language.</p>
+<p>I remember languages people dismiss Go back in 2009 on the grounds that it was a simplistic language without novel concepts&hellip; but there lies its beauty: Go lets you get things done quickly and safely with few performance penalties. I feel I can write much more robust code with Go than with any other comparable language.</p>
 <p><strong>Disclaimer:</strong> Keep in mind that I&rsquo;m still a newbie. I&rsquo;m sure that some of the items below are naïve, incomplete or plain incorrect. If so, please let me know!</p>
-<h2 id=the-good>The good</h2>
+<h2 id="the-good">The good</h2>
 <ul>
 <li>
 <p><strong>Enforced coding style:</strong> You may or may not like Go&rsquo;s coding style (I personally would change a few things), but the fact that it is chosen for you and that <code>gofmt</code> exists beats any personal preferences you may have. No more thinking about tabs vs. spaces; no more thinking about brace placement; no more thinking about the look of your code. <em>It. Just. Does. Not. Matter.</em> Focus on your code&rsquo;s logic and let the machine format it in a consistent manner across the whole Go ecosystem.</p>
 </li>
 <li>
 <p><strong>Explicit error handling:</strong> Yes, the <code>if err != nil { return err }</code> pattern gets old very quickly, but having to explicitly handle errors shows you how hard it is to write robust code.</p>
-<p>You&rsquo;d say that C is similar in this regard, but not really. There are two key differences: the first is that Go functions can return more than one result, which makes it more difficult to ignore the error code if you want to use the actual result; and the second is the <code>defer</code> keyword, which helps avoid leaks in error paths. I personally prefer C++&rsquo;s ability to implement <a href=https://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization>the RAII pattern</a>, but <code>defer</code> is a good compromise.</p>
+<p>You&rsquo;d say that C is similar in this regard, but not really. There are two key differences: the first is that Go functions can return more than one result, which makes it more difficult to ignore the error code if you want to use the actual result; and the second is the <code>defer</code> keyword, which helps avoid leaks in error paths. I personally prefer C++&rsquo;s ability to implement <a href="https://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization">the RAII pattern</a>, but <code>defer</code> is a good compromise.</p>
 <p>Do I miss exceptions? Not really. While exceptions let you keep your main code path clean of error handling, they also relegate error handling to a secondary place. This is OKish if the language has provisions to ensure that exceptions are handled at some point like Java&rsquo;s <code>throws</code> definition, but that&rsquo;s not how the majority of languages work. Just think of how easy is for exceptions leak all the way through the program&rsquo;s entry point in C++ or Python.</p>
 </li>
 <li>
 <p><strong>Strong typing, even for native types:</strong> The fact that the equivalent of C&rsquo;s <code>typedef</code> generates types that can&rsquo;t be implicitly mixed, or the fact that numeric types are not automatically promoted to other types, is a good way to prevent subtle bugs. Having to explicitly convert among types forces you to think about the consequences of doing so: Integer overflow? Check. Sign issues? Check. Precision issues? Check.</p>
 </li>
 <li>
-<p><strong>Builtin profiling with pprof:</strong> The <a href=http://blog.golang.org/profiling-go-programs>pprof profiling tool</a> was invaluable to diagnose performance and memory consumption deficiencies in my caching file system <em>and</em> the libraries I used. What&rsquo;s best is that pprof was also incredibly easy to plug into my program.</p>
+<p><strong>Builtin profiling with pprof:</strong> The <a href="http://blog.golang.org/profiling-go-programs">pprof profiling tool</a> was invaluable to diagnose performance and memory consumption deficiencies in my caching file system <em>and</em> the libraries I used. What&rsquo;s best is that pprof was also incredibly easy to plug into my program.</p>
 <p>Honestly, I&rsquo;m in awe to see that this tooling is open-source because I&rsquo;ve gotten very accustomed to this particular way of debugging at Google.</p>
 </li>
 <li>
-<p><strong>The standard library:</strong> While Go by itself is a decent language, it becomes excellent because of its <a href=https://golang.org/pkg/>extensive standard library</a>. The existence of tooling to implement pretty much anything you want wins over any deficiencies you may think the language has. The same applies to Java, by the way.</p>
+<p><strong>The standard library:</strong> While Go by itself is a decent language, it becomes excellent because of its <a href="https://golang.org/pkg/">extensive standard library</a>. The existence of tooling to implement pretty much anything you want wins over any deficiencies you may think the language has. The same applies to Java, by the way.</p>
 </li>
 <li>
 <p><strong>Simple package management:</strong> Getting started with a piece of code is easy, and pulling in additional dependencies is <em>trivial</em>. I actually do not like the underpinnings of this &ldquo;modern&rdquo; trend of language-specific package management systems, but I must admit that it has been a pleasure to just add new imports, call <code>go get</code>, and have everything up and running in a matter of seconds.</p>
@@ -132,25 +204,25 @@ Tags:
 <p><strong>Build speed:</strong> This item is not tied to my recent experience with Go but is worth mentioning. About two years ago, I built the Go language on my underpowered NetBSD VM. I was expecting horrendously long build times like those of GCC or Clang, but was pleasantly surprised to see that the Go compiler, along with its extensive standard library, compiled in a few minutes.</p>
 </li>
 </ul>
-<h2 id=the-bad>The bad</h2>
+<h2 id="the-bad">The bad</h2>
 <ul>
 <li>
 <p><strong><code>GOPATH</code>:</strong> Sorry but having to modify the environment to get a program to run in the default case is ridiculous in this day and age: things should &ldquo;just work&rdquo; and Go is different. I have mitigated my concerns about this by writing a <code>Makefile</code> that sets things up automatically so I do not have to worry about customizing my environment on a project basis.</p>
 </li>
 <li>
 <p><strong>Package management:</strong> As we saw in the good parts, Go&rsquo;s package management gets the job done but its views on the world are too simplistic. On the one hand, the development environment assumes that you will always want to use the <code>HEAD</code> versions of your dependencies; and on the other hand, the default is to merge the dependencies with your personal code in the same workspace.</p>
-<p>I&rsquo;ve managed to work around the latter by splitting my dependencies in a separate directory and using <code>GOPATH</code> to find them. The excellent article <a href=https://medium.com/@sdboyer/so-you-want-to-write-a-package-manager-4ae9c17d9527#.e666sl8yr>So you want to write a packaging system</a> is a great resource on this topic, and as you read through it, you will realize that it&rsquo;s geared towards revamping Go&rsquo;s package manager.</p>
+<p>I&rsquo;ve managed to work around the latter by splitting my dependencies in a separate directory and using <code>GOPATH</code> to find them. The excellent article <a href="https://medium.com/@sdboyer/so-you-want-to-write-a-package-manager-4ae9c17d9527#.e666sl8yr">So you want to write a packaging system</a> is a great resource on this topic, and as you read through it, you will realize that it&rsquo;s geared towards revamping Go&rsquo;s package manager.</p>
 </li>
 <li>
-<p><strong>The simplistic <code>log</code> module:</strong> It is good that the standard library provides a logging module, but it seems way too simple for anything other than trivial logging. Fortunately, the external <a href=https://github.com/golang/glog><code>glog</code></a> module provides increased functionality such as level-based logging and persistent logging. Therefore, you may say that being able to choose between something simple and something more complex is good, right?!</p>
+<p><strong>The simplistic <code>log</code> module:</strong> It is good that the standard library provides a logging module, but it seems way too simple for anything other than trivial logging. Fortunately, the external <a href="https://github.com/golang/glog"><code>glog</code></a> module provides increased functionality such as level-based logging and persistent logging. Therefore, you may say that being able to choose between something simple and something more complex is good, right?!</p>
 <p>Unfortunately, that&rsquo;s not the case and this is the reason I pinpoint this particular module from the standard library. The real benefits of using <code>glog</code> come when the <em>whole stack</em> uses the same logging infrastructure and principles. Because <code>glog</code> is not the standard module, some Go packages will use it and others will not. As a result, you do not get the full benefits of using <code>glog</code> in your project because most libraries you depend on will not do the same.</p>
 </li>
 <li>
-<p><strong>Mutability by default (aka no <code>const</code> keyword):</strong> Before you say &ldquo;hey, <code>const</code> is currently not present, but if we find the need for it later on, we&rsquo;ll add it!&rdquo;, that&rsquo;s&mldr; not great. The problem with adding a <code>const</code> keyword post-facto is that this is the wrong keyword to add: <em>state should be immutable by default</em>, and what the language should have is a <code>mutable</code> keyword to clearly mark those variables that hold multiple values throughout their lifetime.</p>
+<p><strong>Mutability by default (aka no <code>const</code> keyword):</strong> Before you say &ldquo;hey, <code>const</code> is currently not present, but if we find the need for it later on, we&rsquo;ll add it!&rdquo;, that&rsquo;s&hellip; not great. The problem with adding a <code>const</code> keyword post-facto is that this is the wrong keyword to add: <em>state should be immutable by default</em>, and what the language should have is a <code>mutable</code> keyword to clearly mark those variables that hold multiple values throughout their lifetime.</p>
 <p>The reason I point out this specific language feature is because I&rsquo;ve mentally gotten very accustomed to separating constant vs. mutable variables in code. Reading code that adheres to this strict separation is easy to follow: you can quickly map the immutable state in your mind and then focus on the mutable pieces of the code to understand what&rsquo;s happening. Without these clues, you need extra effort.</p>
 </li>
 </ul>
-<h2 id=the-ugly>The ugly</h2>
+<h2 id="the-ugly">The ugly</h2>
 <ul>
 <li>
 <p><strong>Short identifiers:</strong> A lot of Go code, including the snippets in the documentation, is plagued by extremely short identifiers. Those are used as local variables, function arguments, method receivers, and even structure members. Combined with the heavy use of interfaces, it is hard to read the code: What&rsquo;s a <code>c</code>? And an <code>r</code>? And an <code>s.wg</code>? Yes, there is bad code all around, but when the official language documentation seems to recommend this approach, you can expect that others will follow the apparent recommendation in all cases.</p>
@@ -158,437 +230,853 @@ Tags:
 </li>
 <li>
 <p><strong>Maximum line length:</strong> Even though Go has a predefined coding style, there is no pre-specified maximum line length. While it is great to want to abolish a custom that remains from the punch-card days, keeping code narrow has its benefits: think of two or three side-by-side editors in a small laptop screen.</p>
-<p>This would be a non-issue if editors were able to wrap long code lines in a way that made sense&mdash;just like word processors do with text&mdash;but current editors are terrible at this. So, personally, I will stick to the 80 character limit; I have given 100 a try per more modern recommendations&mldr; but when I opened the code in my laptop and couldn&rsquo;t see two files at once without wrapping, I knew I had to go back to 80.</p>
+<p>This would be a non-issue if editors were able to wrap long code lines in a way that made sense&mdash;just like word processors do with text&mdash;but current editors are terrible at this. So, personally, I will stick to the 80 character limit; I have given 100 a try per more modern recommendations&hellip; but when I opened the code in my laptop and couldn&rsquo;t see two files at once without wrapping, I knew I had to go back to 80.</p>
 </li>
 </ul>
-<h1 id=a-note-on-visual-studio-code>A note on Visual Studio Code</h1>
+<h1 id="a-note-on-visual-studio-code">A note on Visual Studio Code</h1>
 <p>To conclude, let&rsquo;s talk about editors. I&rsquo;ve been a long-time Vim and Emacs user and now decided to give another editor a try. Heresy!</p>
-<p>In fact, some time last year, I started playing with <a href=https://atom.io/>Atom</a> after all the hype around this editor. It really is full-featured, but it also is overwhelming and fragile: overwhelming because there are knobs everywhere and fragile because I had never had an editor throw errors at me routinely during &ldquo;normal&rdquo; operation. (I&rsquo;m sure I can blame some plugin I installed, but still.)</p>
-<p>Soon after, <a href=https://code.visualstudio.com/>Visual Studio Code (VSCode)</a> came out: an open source editor from Microsoft no less. I installed VSCode just to take a look and I found much sought simplicity: just look at the way to configure the editor, which is by adding personal or project-specific overrides to an empty JSON file. I felt I&rsquo;d enjoy this editor more than Atom though I did not have a use for it at the time: <a href=https://medium.com/@jmmv/my-coding-workflow-f26f81235752>most of my development still happens over SSH</a> so VSCode would not fit the bill.</p>
-<p>This experiment with Go gave me the chance to use VSCode, particularly because I was writing the project primarily for OS X (my desktop) and because I wanted an IDE-like experience. As it turns out, VSCode has a pretty good <a href=https://github.com/Microsoft/vscode-go>Go plugin</a>. The reason I wanted IDE integration is because writing code in an unknown language with an unknown standard library is a task that truly benefits from autocompletion and inline syntax validation. I wouldn&rsquo;t have been able to prototype my file system as quickly as I did with a bare editor.</p>
-<p>I know, I know, I could have set up Emacs to do the same thing, but I just wanted to give VSCode a ride. And, mind you, I just took a look at what&rsquo;s involved to set Emacs up for Go and <a href=http://tleyden.github.io/blog/2014/05/22/configure-emacs-as-a-go-editor-from-scratch/>didn&rsquo;t find it pleasing</a>; way too much manual work involved.</p>
+<p>In fact, some time last year, I started playing with <a href="https://atom.io/">Atom</a> after all the hype around this editor. It really is full-featured, but it also is overwhelming and fragile: overwhelming because there are knobs everywhere and fragile because I had never had an editor throw errors at me routinely during &ldquo;normal&rdquo; operation. (I&rsquo;m sure I can blame some plugin I installed, but still.)</p>
+<p>Soon after, <a href="https://code.visualstudio.com/">Visual Studio Code (VSCode)</a> came out: an open source editor from Microsoft no less. I installed VSCode just to take a look and I found much sought simplicity: just look at the way to configure the editor, which is by adding personal or project-specific overrides to an empty JSON file. I felt I&rsquo;d enjoy this editor more than Atom though I did not have a use for it at the time: <a href="https://medium.com/@jmmv/my-coding-workflow-f26f81235752">most of my development still happens over SSH</a> so VSCode would not fit the bill.</p>
+<p>This experiment with Go gave me the chance to use VSCode, particularly because I was writing the project primarily for OS X (my desktop) and because I wanted an IDE-like experience. As it turns out, VSCode has a pretty good <a href="https://github.com/Microsoft/vscode-go">Go plugin</a>. The reason I wanted IDE integration is because writing code in an unknown language with an unknown standard library is a task that truly benefits from autocompletion and inline syntax validation. I wouldn&rsquo;t have been able to prototype my file system as quickly as I did with a bare editor.</p>
+<p>I know, I know, I could have set up Emacs to do the same thing, but I just wanted to give VSCode a ride. And, mind you, I just took a look at what&rsquo;s involved to set Emacs up for Go and <a href="http://tleyden.github.io/blog/2014/05/22/configure-emacs-as-a-go-editor-from-scratch/">didn&rsquo;t find it pleasing</a>; way too much manual work involved.</p>
 <p>Do you Go already?</p>
 </article>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class=col-md-6>
-<p id=vote-request>
-<b>What did you think about this article?</b><small>
-<i>(Experimental)</i></small>
-<br>
-<b><span id=first-vote></span></b>
-</p>
-</div>
-<div class=col-md-3>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col-md-3>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-<div class="row mt-3">
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=A+look+at+Go+from+a+newbie%27s+perspective&url=https%3A%2F%2Fjmmv.dev%2F2016%2F03%2Fgolang-review.html" class="btn btn-outline-primary">
-<img src=/images/badges/reddit.png alt="Reddit logo" width=24 height=24>
-Share on Reddit
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=A+look+at+Go+from+a+newbie%27s+perspective&u=https%3A%2F%2Fjmmv.dev%2F2016%2F03%2Fgolang-review.html" class="btn btn-outline-primary">
-<img src=/images/badges/ycombinator.png alt="Hacker News logo" width=24 height=24>
-Share on Hacker News
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=A+look+at+Go+from+a+newbie%27s+perspective+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2016%2F03%2Fgolang-review.html+%E2%80%94+cc+%40jmmv" class="btn btn-outline-primary">
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt="Twitter logo" width=24 height=24>
-Share on Twitter
-</a>
-</div>
-</div>
-</div>
-<div class="container post-links">
-<div class=row>
-<div class="col-md-12 text-center">
-<p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-</div>
-</div>
-<div class=row>
-<div class=col-md-10>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class="form-group row px-md-4">
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-md-9 text-center">
-<button type=submit class="btn btn-primary col-md-3">Subscribe</button>
-</div>
-</form>
-</div>
-<div class="col-md-1 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-md-1 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-</div>
-<div class="container post-links">
-<div class=row>
-<div class="col-md mr-auto text-left">
-<span><a href=https://jmmv.dev/2016/03/those-pesky-makefiles.html>&#171; Previous post</a></span>
-</div>
-<div class="col-md text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col-md ml-auto text-right">
-<span><a href=https://jmmv.dev/2016/04/vscode.html>Next post &#187;</a></span>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Principal Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-6 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-6 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=indent-wrapped-lines><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
-<li class=indent-wrapped-lines><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
-<li class=indent-wrapped-lines><a href=/2020/10/bye-google-hi-microsoft.html>Farewell, Google; hello, Microsoft!</a></li>
-<li class=indent-wrapped-lines><a href=/2020/08/config-files-vs-directories.html>Configuration files and .d directories</a></li>
-<li class=indent-wrapped-lines><a href=/2020/05/bridging-the-web-gap-endbasic.html>Bridging the web gap in EndBASIC</a></li>
-<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (1)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col order-1 mr-auto">
-<p>Copyright 2004&ndash;2022 Julio Merino</p>
-</div>
-</div>
-</footer>
-<script type=module>
-  import {
-    addAnchorsToHeaders, addElementClasses,
-    loadClientId, saveRequest, setupTracker,
-    loadVotes, voteThumbsUp, voteThumbsDown
-  } from "\/js\/main.min.9b4dc32b78e2bb1dd00e4f4afa84eeb926ba251f85adddf6d58f1c9130d6a8e1.js";
+            </div>
+          </div>
 
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-6">
+                <p id="vote-request">
+                  <b>What did you think about this article?</b><small>
+                  <i>(Experimental)</i></small>
+                  <br/>
+                  <b><span id="first-vote"></span></b>
+                </p>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=A&#43;look&#43;at&#43;Go&#43;from&#43;a&#43;newbie%27s&#43;perspective&amp;url=https%3A%2F%2Fjmmv.dev%2F2016%2F03%2Fgolang-review.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/reddit.png"
+                       alt="Reddit logo"
+                       width="24" height="24">
+                  Share on Reddit
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=A&#43;look&#43;at&#43;Go&#43;from&#43;a&#43;newbie%27s&#43;perspective&amp;u=https%3A%2F%2Fjmmv.dev%2F2016%2F03%2Fgolang-review.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/ycombinator.png"
+                       alt="Hacker News logo"
+                       width="24" height="24">
+                  Share on Hacker News
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=A&#43;look&#43;at&#43;Go&#43;from&#43;a&#43;newbie%27s&#43;perspective&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2016%2F03%2Fgolang-review.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
+                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
+                       alt="Twitter logo"
+                       width="24" height="24">
+                  Share on Twitter
+                </a>
+              </div>
+            </div>
+          </div>
+
+          
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-10">
+                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+                  <div class="form-group row px-md-4">
+                    <input type="text" name="email"
+                          placeholder="Enter your email"
+                          class="form-control input-sm col-md-9 text-center"/>
+                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
+                  </div>
+                </form>
+              </div>
+              <div class="col-md-1 text-center">
+                <p>
+                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+                  </a>
+                </p>
+              </div>
+              <div class="col-md-1 text-center">
+                <p><a href="/feed.xml"><img
+                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2016/03/those-pesky-makefiles.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span><a href="https://jmmv.dev/2016/04/vscode.html">Next post &raquo;</a></span>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col text-center p-2">
+    <p><a href="/about.html" class="clear-link">
+      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
+      <b>Julio Merino</b><br/>
+      Principal Software Engineer<br/>
+      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
+      <small>From Barcelona, living in Seattle</small>
+    </a></p>
+
+    <div class="row">
+      <div class="col-sm-6 text-center">
+        <p>
+          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-6 text-center">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+      <div class="form-group">
+        <input type="text" name="email"
+          placeholder="Enter your email"
+          class="form-control input-sm text-center"/>
+        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
+      
+      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2022">2022</a> (1)
+        <ul id="archive-year-2022" class="collapse">
+        
+          
+          <li><a href="/archive.html#2022-01">January 2022</a> (1)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
+        <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
+        <ul id="archive-year-2020" class="collapse">
+        
+          
+          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
+</div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2022 Julio Merino</p>
+    </div>
+  </div>
+</footer>
+
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
+<script src="/js/uuidv4.min.js"></script>
+<script src="/js/fingerprintjs-3.3.2.min.js"></script>
+
+
+<script src="/script.js"></script>
+
+<script>
   addAnchorsToHeaders();
   addElementClasses();
 
-  setupTracker(SITE_ID, PAGE_PATH);
   loadClientId(function() {
     saveRequest();
     loadVotes();
   });
-
-  window.voteThumbsUp = voteThumbsUp;
-  window.voteThumbsDown = voteThumbsDown;
 </script>
+
 <noscript>
-<img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE2LzAzL2dvbGFuZy1yZXZpZXcuaHRtbA==/stamp.gif" style=display:none>
+  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE2LzAzL2dvbGFuZy1yZXZpZXcuaHRtbA==/stamp.gif" style="display: none;" />
 </noscript>
-</body>
+
+  </body>
 </html>
