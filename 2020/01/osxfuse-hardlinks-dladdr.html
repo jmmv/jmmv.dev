@@ -1,177 +1,107 @@
-<!doctype html>
-<html lang="en"
-      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
-  <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  
-
-  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-
-  <title>The OSXFUSE, hard links, and dladdr puzzle - Julio Merino (jmmv.dev)</title>
-  <meta property="og:title" content="The OSXFUSE, hard links, and dladdr puzzle - Julio Merino (jmmv.dev)">
-
-  
-
-  <meta name="description" content="Hello everyone and welcome to this new decade!
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<title>The OSXFUSE, hard links, and dladdr puzzle - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="The OSXFUSE, hard links, and dladdr puzzle - Julio Merino (jmmv.dev)">
+<meta name=description content="Hello everyone and welcome to this new decade!
 It&amp;rsquo;s already 2020 and I&amp;rsquo;m only 17 days late in writing a first post. I was planning to start with an opinion article, but as its draft is taking longer than I wanted&amp;hellip; I&amp;rsquo;ll present you the story of a recent crazy bug that has kept me busy for the last couple of days.
 Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, install sandboxfs and build Bazel with sandboxfs enabled, like this:">
-  <meta property="og:description" content="Hello everyone and welcome to this new decade!
+<meta property="og:description" content="Hello everyone and welcome to this new decade!
 It&amp;rsquo;s already 2020 and I&amp;rsquo;m only 17 days late in writing a first post. I was planning to start with an opinion article, but as its draft is taking longer than I wanted&amp;hellip; I&amp;rsquo;ll present you the story of a recent crazy bug that has kept me busy for the last couple of days.
 Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, install sandboxfs and build Bazel with sandboxfs enabled, like this:">
-  <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.68.3" />
-
-  <meta property="og:url" content="https://jmmv.dev/2020/01/osxfuse-hardlinks-dladdr.html">
-
-  <meta property="og:type" content="blog">
-
-  <link rel="canonical" href="https://jmmv.dev/2020/01/osxfuse-hardlinks-dladdr.html">
-  <link rel="alternate" type="application/rss+xml"
-        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
-
-  <link rel="stylesheet" href="/sass/main.min.30bb6180f21e371585770b11ddfabc2ee16a197f0e1a8166b2c5337edfffa0f9.css">
-  <link rel="stylesheet" href="/css/chroma.css">
-
-  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
-
-  
-  <!--[if lt IE 9]>
-    <script src="/js/html5shiv-3.7.2.min.js"></script>
-    <script src="/js/respond-1.4.2.min.js"></script>
-  <![endif]-->
-
-  <script>
-    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
-    const BASE_URL = 'https:\/\/jmmv.dev\/';
-    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDIwLzAxL29zeGZ1c2UtaGFyZGxpbmtzLWRsYWRkci5odG1s';
-  </script>
+<meta name=author content="Julio Merino">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2020/01/osxfuse-hardlinks-dladdr.html">
+<meta property="og:type" content="blog">
+<link rel=canonical href=https://jmmv.dev/2020/01/osxfuse-hardlinks-dladdr.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
+<script src=/js/respond-1.4.2.min.js></script><![endif]-->
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/',PAGE_PATH='aHR0cHM6Ly9qbW12LmRldi8yMDIwLzAxL29zeGZ1c2UtaGFyZGxpbmtzLWRsYWRkci5odG1s'</script>
 </head>
-
-
-  <body>
-    <header class="site-header">
-
+<body>
+<header class=site-header>
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-  <a class="navbar-brand" href="/">
-    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
-    &nbsp;Julio Merino
-  </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse"
-          data-target="#navbarSupportedContent"
-          aria-controls="navbarSupportedContent" aria-expanded="false"
-          aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/about.html" >About</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/essays.html" >Essays</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/resume.html" >Resume</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/software.html" >Software</a>
-          </li>
-        
-      
-    </ul>
-
-    <ul class="navbar-nav mr-4">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/stats.html" >Analytics</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/archive.html" >Archive</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/series.html" >Series</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/tags.html" >Tags</a>
-          </li>
-        
-      
-    </ul>
-
-    <form class="form-inline" method="get" role="search"
-          action="https://www.google.com/search">
-      <div class="input-group">
-        <input type="search" name="query" class="form-control"
-                placeholder="Search" aria-label="Search">
-        <div class="input-group-append">
-          <button type="submit" value="Search" class="btn btn-light">
-            <img src="/octicons/search.svg">
-          </button>
-        </div>
-      </div>
-      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-    </form>
-  </div>
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/stats.html>Analytics</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
 </nav>
-
 </header>
-
-
-    <div class="page-header">
-      <div class="container">
-        <h1>The OSXFUSE, hard links, and dladdr puzzle</h1>
-
-        <p>January 17, 2020 &middot;
-        About 13 minutes
-        &middot;
-        Tags:
-        <a class="text-reset" href="/tags/bazel">bazel</a>, <a class="text-reset" href="/tags/fuse">fuse</a>, <a class="text-reset" href="/tags/internals">internals</a>, <a class="text-reset" href="/tags/programming">programming</a>, <a class="text-reset" href="/tags/sandboxfs">sandboxfs</a></p>
-
-        
-      </div>
-    </div>
-
-    <div class="container">
-      <div class="row">
-        <div class="col-md-9">
-          <div class="row">
-            <div class="col">
-              
-              <article><p>Hello everyone and welcome to this new decade!</p>
-<p>It&rsquo;s already 2020 and I&rsquo;m only 17 days late in writing a first post. I was planning to start with an opinion article, but as its draft is taking longer than I wanted&hellip; I&rsquo;ll present you the story of a recent crazy bug that has <a href="https://twitter.com/jmmv/status/1217276457648521216">kept me busy</a> for the last couple of days.</p>
-<h1 id="java-crashes-with-bazel-and-sandboxfs">Java crashes with Bazel and sandboxfs</h1>
-<p>On a machine running macOS Catalina, install <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a> and build Bazel with sandboxfs enabled, like this:</p>
-<pre><code>$ bazel build --experimental_use_sandboxfs --verbose_failures //src:bazel
+<div class=page-header>
+<div class=container>
+<h1>The OSXFUSE, hard links, and dladdr puzzle</h1>
+<p>January 17, 2020 &#183;
+About 13 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/bazel>bazel</a>, <a class=text-reset href=/tags/fuse>fuse</a>, <a class=text-reset href=/tags/internals>internals</a>, <a class=text-reset href=/tags/programming>programming</a>, <a class=text-reset href=/tags/sandboxfs>sandboxfs</a></p>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
+<article><p>Hello everyone and welcome to this new decade!</p>
+<p>It&rsquo;s already 2020 and I&rsquo;m only 17 days late in writing a first post. I was planning to start with an opinion article, but as its draft is taking longer than I wanted&mldr; I&rsquo;ll present you the story of a recent crazy bug that has <a href=https://twitter.com/jmmv/status/1217276457648521216>kept me busy</a> for the last couple of days.</p>
+<h1 id=java-crashes-with-bazel-and-sandboxfs>Java crashes with Bazel and sandboxfs</h1>
+<p>On a machine running macOS Catalina, install <a href=https://github.com/bazelbuild/sandboxfs>sandboxfs</a> and build Bazel with sandboxfs enabled, like this:</p>
+<pre tabindex=0><code>$ bazel build --experimental_use_sandboxfs --verbose_failures //src:bazel
 </code></pre><p>After a little while, observe the following build failure:</p>
-<pre><code>ERROR: /Users/jmmv/os/bazel2/src/main/java/com/google/devtools/build/skyframe/BUILD:18:1: Building src/main/java/com/google/devtools/build/skyframe/libskyframe-objects.jar (6 source files) failed (Segmentation fault): sandbox-exec failed: error executing command
+<pre tabindex=0><code>ERROR: /Users/jmmv/os/bazel2/src/main/java/com/google/devtools/build/skyframe/BUILD:18:1: Building src/main/java/com/google/devtools/build/skyframe/libskyframe-objects.jar (6 source files) failed (Segmentation fault): sandbox-exec failed: error executing command
   (cd /private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2 &amp;&amp; \
   exec env - \
     LC_CTYPE=en_US.UTF-8 \
@@ -184,21 +114,21 @@ Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, insta
 <li>the binary that triggered it: <code>external/remotejdk11_macos/bin/java</code>.</li>
 </ul>
 <p>Wait, what? <strong>The JVM crashed?</strong> And there are no core dumps under <code>/cores</code> even when I have <code>startup --unlimit_coredumps</code> in my <code>~/.bazelrc</code>? Yikes.</p>
-<h1 id="initial-debugging-steps">Initial debugging steps</h1>
-<p>Debugging sandboxfs-related problems is <a href="https://jmmv.dev/2017/10/fighting-execs-sandboxfs-macos.html">always &ldquo;fun&rdquo;</a>. We start with a crash of an arbitrary program and we have to figure out how sandboxfs, or who knows what else in the macOS black box, might have caused it. Combined with the lack of sources for many of the pieces involved and the parallelism introduced by Bazel, we face an interesting reverse-engineering process.</p>
+<h1 id=initial-debugging-steps>Initial debugging steps</h1>
+<p>Debugging sandboxfs-related problems is <a href=https://jmmv.dev/2017/10/fighting-execs-sandboxfs-macos.html>always &ldquo;fun&rdquo;</a>. We start with a crash of an arbitrary program and we have to figure out how sandboxfs, or who knows what else in the macOS black box, might have caused it. Combined with the lack of sources for many of the pieces involved and the parallelism introduced by Bazel, we face an interesting reverse-engineering process.</p>
 <p>The first step in troubleshooting any sandboxing-related failure, be it with sandboxfs or not, is to pass <code>--sandbox_debug</code> to the Bazel invocation. By default, Bazel deletes the sandbox directories immediately after executing an action and also unmounts the sandboxfs instance when the build finishes. When we pass the debugging flag, however, Bazel leaves all files and the sandboxfs instance behind so we can navigate into the directory (<code>/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2</code> from the logs above) and run the failing command by hand (everything after <code>exec</code>&mdash;but not including <code>exec</code> itself to avoid exiting the shell).</p>
 <p>But, surprise! Passing <code>--sandbox_debug</code> makes this specific problem disappear and allows the build to complete. Wait, what again?</p>
 <p>My first thought was that my recent changes to the reconfiguration protocol in sandboxfs were at fault. Maybe the unmap operations of an action were affecting the sandbox of another action, making files disappear from under them. But this was easy to rule out: running with a previous sandboxfs release didn&rsquo;t make a difference.</p>
-<p>Then I thought that we might have a race between the sandbox destruction and the JVM process staying behind (e.g. due to workers)&hellip; but that theory did not hold either. Disabling workers made no difference, which makes sense because they are not sandboxed by default anyway&hellip;</p>
+<p>Then I thought that we might have a race between the sandbox destruction and the JVM process staying behind (e.g. due to workers)&mldr; but that theory did not hold either. Disabling workers made no difference, which makes sense because they are not sandboxed by default anyway&mldr;</p>
 <p>Thinking more about the problem, the only logical conclusion was that a preceding action was at fault, and that its effects were causing the JVM to fail later. To confirm this, I ran the build with <code>--jobs=1</code>, waited until it failed, and then ran it again a few times. And, sure enough, for each incremental build, Bazel was only able to run two Java actions: the first successfully and the second crashing.</p>
 <p>Alright. So now we know that we have two Java actions running consecutively, and whatever the former does impacts the behavior of the latter. This is only true when <code>--sandbox_debug</code> is <strong>not</strong> enabled, which means the problem has to come from the deletion of the first sandbox.</p>
 <p>Maybe the second sandbox had paths pointing into the first sandbox? Unlikely, but that kind of dependency would explain the problem. Here is where I instrumented (<em>cough</em> added <code>printf</code>s <em>cough</em>) Bazel to show the reconfiguration requests sent to sandboxfs. And, of course, the second sandbox had no references to the first sandbox. How could they possibly interfere with each other then?</p>
-<h1 id="a-performance-optimization-in-sandboxfs">A performance optimization in sandboxfs</h1>
+<h1 id=a-performance-optimization-in-sandboxfs>A performance optimization in sandboxfs</h1>
 <p>Let&rsquo;s take a detour from debugging.</p>
 <p>An important thing to know here is that sandboxfs comes with a performance optimization that avoids having to re-read the same toolchains from disk on each action.</p>
 <p>The way this works is the following: when a file is mapped at two different locations within the sandboxfs mount point, sandboxfs preserves the same inode number for the two instances of the file&mdash;hereby simulating hard links. This is done for the duration of the sandboxfs instance, even if a file goes through various map and unmap operations.</p>
 <p>In our particular case, the whole JVM is mapped into each action&rsquo;s subdirectory. If we look into the sandboxfs instance with <code>ls -i</code>, we see something like this:</p>
-<pre><code>25 .../sandboxfs/1/external/remotejdk11_macos/bin/java
+<pre tabindex=0><code>25 .../sandboxfs/1/external/remotejdk11_macos/bin/java
 51 .../sandboxfs/1/external/remotejdk11_macos/lib/libjava.dylib
 [...]
 25 .../sandboxfs/2/external/remotejdk11_macos/bin/java
@@ -207,11 +137,11 @@ Java crashes with Bazel and sandboxfs On a machine running macOS Catalina, insta
 <p>And this is the only kind of sharing that happens across the sandboxes. Is it at fault? It probably is. What if I disabled it?</p>
 <p>I patched the sandboxfs source code to never reuse inodes, and lo and behold, the problem disappeared.</p>
 <p>But why? As far as I can tell, this feature had never been a problem. In fact, Bazel could build itself on top of sandboxfs not long ago. What has changed?</p>
-<h1 id="narrowing-the-problem-down">Narrowing the problem down</h1>
+<h1 id=narrowing-the-problem-down>Narrowing the problem down</h1>
 <p>Let&rsquo;s get back to debugging.</p>
-<p>Up to this point, we know that sandboxfs&rsquo; inode sharing is causing problems&mdash;so we know how to workaround the problem. But why is this a problem? We still have zero information on why this might be causing the JVM to crash.</p>
+<p>Up to this point, we know that sandboxfs' inode sharing is causing problems&mdash;so we know how to workaround the problem. But why is this a problem? We still have zero information on why this might be causing the JVM to crash.</p>
 <p>To continue our debugging session, I ran <code>dtruss</code> over the failing binary:</p>
-<pre><code>[...]
+<pre tabindex=0><code>[...]
 getattrlist(&quot;/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2\0&quot;, 0x112C81158, 0x700000D90120)                 = 0 0
 getattrlist(&quot;/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2/lib\0&quot;, 0x112C81158, 0x700000D90120)             = 0 0
 getattrlist(&quot;/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2/lib/server\0&quot;, 0x112C81158, 0x700000D90120)              = 0 0
@@ -240,13 +170,13 @@ lstat64(&quot;/private/var/tmp\0&quot;, 0x700000E91A80, 0x0)               = 0 0
 lstat64(&quot;/private/var\0&quot;, 0x700000E91A80, 0x0)               = 0 0
 lstat64(&quot;/private\0&quot;, 0x700000E91A80, 0x0)               = 0 0
 getattrlist(&quot;/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/1\0&quot;, 0x7FFF6650C944, 0x700000E933D0)              = -1 Err#2
-</code></pre><p>Which seems to imply a problem during library loading. The binary crashes very quickly after startup, so this seems plausible. Is the bug inside the <code>dyld</code> dynamic loader then? That was my working theory for a while, so I went to <a href="https://opensource.apple.com/">Apple&rsquo;s Open Source portal</a> to find the <code>dyld</code> sources&hellip; but unfortunately they are not available for Catalina. Regardless, I started with the sources from Mojave and found the calls to <code>sysctl</code> shown above, so I was probably in the right location. That said, nothing obvious in the sources.</p>
+</code></pre><p>Which seems to imply a problem during library loading. The binary crashes very quickly after startup, so this seems plausible. Is the bug inside the <code>dyld</code> dynamic loader then? That was my working theory for a while, so I went to <a href=https://opensource.apple.com/>Apple&rsquo;s Open Source portal</a> to find the <code>dyld</code> sources&mldr; but unfortunately they are not available for Catalina. Regardless, I started with the sources from Mojave and found the calls to <code>sysctl</code> shown above, so I was probably in the right location. That said, nothing obvious in the sources.</p>
 <p>But from the log above, note that the last (failing) call has a reference to <code>.../sandboxfs/1</code>. Huh, wait a minute. Why <code>1</code>? We are in sandbox <code>2</code>. Where did that come from?</p>
 <p>Things started clicking now: the second JVM instance is indeed attempting to read a file from the first sandbox&mdash;and that file is deleted after the first action terminates.</p>
 <p>But why is this happening? Running sandboxfs with <code>RUST_LOG=debug</code> to dump all FUSE requests didn&rsquo;t show anything obvious: all operations for each sandbox were self-contained and on the right inodes.</p>
 <p>It took me a while to realize I could run <code>lldb</code> over the failing binary. For some reason, I was thinking that such an early failure&mdash;especially without a core dump&mdash;would prevent all forms of debugging so I spent quite a bit of time looking at the problem via Instruments without much luck.</p>
 <p>Fortunately, though, I eventually tried <code>lldb</code> and <em>that</em> started unlocking doors:</p>
-<pre><code>(lldb) target create &quot;/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2/remotejdk11_macos/bin/java&quot;
+<pre tabindex=0><code>(lldb) target create &quot;/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2/remotejdk11_macos/bin/java&quot;
 Current executable set to '/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2/remotejdk11_macos/bin/java' (x86_64).
 (lldb) run
 Process 31832 launched: '/private/var/tmp/_bazel_jmmv/0db9681485d75d94d76b2f9336cd9468/sandbox/sandboxfs/2/remotejdk11_macos/bin/java' (x86_64)
@@ -260,58 +190,58 @@ libjvm.dylib`os::init_system_properties_values:
     0x1036226fc &lt;+158&gt;: callq  0x1037b5284               ; symbol stub for: strrchr
 Target 0: (java) stopped.
 </code></pre><p>We crash when calling <code>strrchr</code>? Makes zero sense. But inside <code>libjvm.dylib</code>? That&rsquo;s good: at least we are not crashing within <code>dyld</code> as I was originally fearing. A stacktrace doesn&rsquo;t shed much light though:</p>
-<pre><code>* thread #3, stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+<pre tabindex=0><code>* thread #3, stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
   * frame #0: 0x00000001036226f1 libjvm.dylib`os::init_system_properties_values() + 147
     frame #1: 0x000000010373a12a libjvm.dylib`Threads::create_vm(JavaVMInitArgs*, bool*) + 180
     frame #2: 0x00000001034102b5 libjvm.dylib`JNI_CreateJavaVM + 112
     frame #3: 0x0000000100004764 java`JavaMain + 275
     frame #4: 0x00007fff66644e65 libsystem_pthread.dylib`_pthread_start + 148
     frame #5: 0x00007fff6664083b libsystem_pthread.dylib`thread_start + 15
-</code></pre><p>From these, however, we can get the name of the crashing function: <code>os::init_system_properties_values</code>. And OpenJDK is open source, so with a bit of digging I reached <a href="https://github.com/AdoptOpenJDK/openjdk-jdk11/blob/master/src/hotspot/os/bsd/os_bsd.cpp"><code>os_bsd.cpp</code></a>, which indeed calls into <code>strrchr</code> and it&rsquo;s most likely doing so on a <code>nullptr</code> returned by <code>os::jvm_path</code>.</p>
+</code></pre><p>From these, however, we can get the name of the crashing function: <code>os::init_system_properties_values</code>. And OpenJDK is open source, so with a bit of digging I reached <a href=https://github.com/AdoptOpenJDK/openjdk-jdk11/blob/master/src/hotspot/os/bsd/os_bsd.cpp><code>os_bsd.cpp</code></a>, which indeed calls into <code>strrchr</code> and it&rsquo;s most likely doing so on a <code>nullptr</code> returned by <code>os::jvm_path</code>.</p>
 <p>Yet still not enough information. If the process had been easier, I&rsquo;d have rebuilt the JVM with debugging symbols and traced through the debugger&mdash;but it&rsquo;s not easy, so I was left with visual code inspection, which led to nowhere. So then I thought that maybe I could dig further with <code>lldb</code>.</p>
-<p>And indeed I could. I spent a bit of time figuring out <code>lldb</code>'s capabilities, and found that I could disassemble the whole function, dump registers, and print memory positions<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>. It wasn&rsquo;t trivial to make sense of the data because I had to read about x86-64 calling conventions (never had to use them before) and figure out the right incarnation of commands to get to the details I needed. But eventually I got them. I got to the <code>os::dll_address_to_library_name</code> function, which calls into the system&rsquo;s <code>dlattr(3)</code>, and which was returning an invalid path: for the JVM executed from <code>.../sandboxfs/2</code>, the <code>dlinfo.dli_fname</code> field contained a path into <code>.../sandboxfs/1</code>. What the hell.</p>
+<p>And indeed I could. I spent a bit of time figuring out <code>lldb</code>&rsquo;s capabilities, and found that I could disassemble the whole function, dump registers, and print memory positions<sup id=fnref:1><a href=#fn:1 class=footnote-ref role=doc-noteref>1</a></sup>. It wasn&rsquo;t trivial to make sense of the data because I had to read about x86-64 calling conventions (never had to use them before) and figure out the right incarnation of commands to get to the details I needed. But eventually I got them. I got to the <code>os::dll_address_to_library_name</code> function, which calls into the system&rsquo;s <code>dlattr(3)</code>, and which was returning an invalid path: for the JVM executed from <code>.../sandboxfs/2</code>, the <code>dlinfo.dli_fname</code> field contained a path into <code>.../sandboxfs/1</code>. What the hell.</p>
 <p>We can now explain the crash: we get a path to a file that doesn&rsquo;t exist any longer (because the preceding action&rsquo;s sandbox was cleared) and this code is not prepared to deal with such error condition. Boom. But still, why?</p>
-<h1 id="minimal-reproduction-steps">Minimal reproduction steps</h1>
+<h1 id=minimal-reproduction-steps>Minimal reproduction steps</h1>
 <p>At this point I knew where the problem was, but any attempts at further debugging were made annoying by the indirections introduced by Bazel during execution and by the JVM&rsquo;s complex code.</p>
 <p>I wanted a minimal reproduction scenario so I wrote a little program that loads a dynamic library from the current directory, which then calls into <code>dlattr</code> to find its own address. With that, I could map the binary and the library at two locations using sandboxfs and see if the problem arose.</p>
 <p>Here is the minimal reproduction case:</p>
 <ol>
 <li>
-<p>Fetch and install a sandboxfs release from <a href="https://github.com/bazelbuild/sandboxfs">https://github.com/bazelbuild/sandboxfs</a>.</p>
+<p>Fetch and install a sandboxfs release from <a href=https://github.com/bazelbuild/sandboxfs>https://github.com/bazelbuild/sandboxfs</a>.</p>
 </li>
 <li>
 <p>Create <code>addr.c</code>:</p>
-<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="cp">#include</span> <span class="cpf">&lt;dlfcn.h&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
-</span><span class="cp"></span>
-<span class="kt">void</span> <span class="nf">print_self</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">Dl_info</span> <span class="n">dlinfo</span><span class="p">;</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">dladdr</span><span class="p">((</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">print_self</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">dlinfo</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-        <span class="k">if</span> <span class="p">(</span><span class="n">dlinfo</span><span class="p">.</span><span class="n">dli_fname</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
-            <span class="n">printf</span><span class="p">(</span><span class="s">&#34;%p in %s</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="n">print_self</span><span class="p">,</span> <span class="n">dlinfo</span><span class="p">.</span><span class="n">dli_fname</span><span class="p">);</span>
-            <span class="k">return</span><span class="p">;</span>
-        <span class="p">}</span>
-    <span class="p">}</span>
-    <span class="n">printf</span><span class="p">(</span><span class="s">&#34;Not found?</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">);</span>
-<span class="p">}</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c data-lang=c><span class=cp>#include</span> <span class=cpf>&lt;dlfcn.h&gt;</span><span class=cp>
+</span><span class=cp>#include</span> <span class=cpf>&lt;stdio.h&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=kt>void</span> <span class=nf>print_self</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span> <span class=p>{</span>
+    <span class=n>Dl_info</span> <span class=n>dlinfo</span><span class=p>;</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>dladdr</span><span class=p>((</span><span class=kt>void</span><span class=o>*</span><span class=p>)</span><span class=n>print_self</span><span class=p>,</span> <span class=o>&amp;</span><span class=n>dlinfo</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>)</span> <span class=p>{</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>dlinfo</span><span class=p>.</span><span class=n>dli_fname</span> <span class=o>!=</span> <span class=nb>NULL</span><span class=p>)</span> <span class=p>{</span>
+            <span class=n>printf</span><span class=p>(</span><span class=s>&#34;%p in %s</span><span class=se>\n</span><span class=s>&#34;</span><span class=p>,</span> <span class=n>print_self</span><span class=p>,</span> <span class=n>dlinfo</span><span class=p>.</span><span class=n>dli_fname</span><span class=p>);</span>
+            <span class=k>return</span><span class=p>;</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=n>printf</span><span class=p>(</span><span class=s>&#34;Not found?</span><span class=se>\n</span><span class=s>&#34;</span><span class=p>);</span>
+<span class=p>}</span>
 </code></pre></div></li>
 <li>
 <p>Create <code>main.c</code>:</p>
-<div class="highlight"><pre class="chroma"><code class="language-c" data-lang="c"><span class="kt">void</span> <span class="nf">print_self</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c data-lang=c><span class=kt>void</span> <span class=nf>print_self</span><span class=p>(</span><span class=kt>void</span><span class=p>);</span>
 
-<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">print_self</span><span class="p">();</span>
-    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
-<span class="p">}</span>
+<span class=kt>int</span> <span class=nf>main</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span> <span class=p>{</span>
+    <span class=n>print_self</span><span class=p>();</span>
+    <span class=k>return</span> <span class=mi>0</span><span class=p>;</span>
+<span class=p>}</span>
 </code></pre></div></li>
 <li>
 <p>Build the binary and library, making the binary rely on the current directory for the library:</p>
-<pre><code>$ cc -dynamiclib addr.c -o libaddr.dylib
+<pre tabindex=0><code>$ cc -dynamiclib addr.c -o libaddr.dylib
 $ cc main.c -L. -laddr
 </code></pre></li>
 <li>
 <p>Mount a sandboxfs instance exposing these files at two different locations:</p>
-<pre><code>$ mkdir -p /tmp/mnt
+<pre tabindex=0><code>$ mkdir -p /tmp/mnt
 $ sandboxfs \
     --allow=other \
     --mapping=ro:/a/a.out:$(pwd)/a.out \
@@ -322,874 +252,458 @@ $ sandboxfs \
 </code></pre></li>
 <li>
 <p>And finally the fun comes:</p>
-<pre><code>$ ( cd /tmp/mnt/a &amp;&amp; ./a.out )
+<pre tabindex=0><code>$ ( cd /tmp/mnt/a &amp;&amp; ./a.out )
 0x10b788f00 in /private/tmp/mnt/a/libaddr.dylib
 $ ( cd /tmp/mnt/b &amp;&amp; ./a.out )
 0x10aa23f00 in /private/tmp/mnt/a/libaddr.dylib
 </code></pre></li>
 </ol>
-<p>Note how the second invocation reports the path to the library from the first invocation. Tracing the FUSE calls implies that this should not be happening because the calls happen on the right directories and inodes, so that path is coming from who knows where&hellip;</p>
+<p>Note how the second invocation reports the path to the library from the first invocation. Tracing the FUSE calls implies that this should not be happening because the calls happen on the right directories and inodes, so that path is coming from who knows where&mldr;</p>
 <p>I imagined leaving open files behind to cause this kind of trouble, but <code>lsof</code> doesn&rsquo;t report <code>a.out</code> nor <code>libaddr.dylib</code> as open anywhere in the system between the two executions.</p>
-<p>Disabling <code>dyld</code>'s own caches, flushing the kernels file cache via <code>purge</code>, and disabling all FUSE caches at mount time didn&rsquo;t prevent the problem either.</p>
-<p>As a last attempt, I tried to reproduce this by setting up the scenario above using hard links on the &ldquo;real&rdquo; disk (on top of APFS) without luck. I also tried to expose this set up via <a href="https://bindfs.org/">bindfs</a>, but it turns out that bindfs doesn&rsquo;t expose the underlying hardlinks as such&hellip; so no luck in ruling out FUSE.</p>
+<p>Disabling <code>dyld</code>&rsquo;s own caches, flushing the kernels file cache via <code>purge</code>, and disabling all FUSE caches at mount time didn&rsquo;t prevent the problem either.</p>
+<p>As a last attempt, I tried to reproduce this by setting up the scenario above using hard links on the &ldquo;real&rdquo; disk (on top of APFS) without luck. I also tried to expose this set up via <a href=https://bindfs.org/>bindfs</a>, but it turns out that bindfs doesn&rsquo;t expose the underlying hardlinks as such&mldr; so no luck in ruling out FUSE.</p>
 <p>Yet, the only conclusion is that the kernel is tracking this information. And because the problem doesn&rsquo;t show up with APFS, it most likely is the OSXFUSE kext&rsquo;s fault.</p>
-<h1 id="root-cause">Root cause</h1>
-<p>Time to dig into OSXFUSE&rsquo;s kext code&hellip; but having little experience with that, it&rsquo;d have been a time sink for me. Having spent over a day on this, I couldn&rsquo;t justify spending more time on this bug.</p>
+<h1 id=root-cause>Root cause</h1>
+<p>Time to dig into OSXFUSE&rsquo;s kext code&mldr; but having little experience with that, it&rsquo;d have been a time sink for me. Having spent over a day on this, I couldn&rsquo;t justify spending more time on this bug.</p>
 <p>So I sent an email to a coworker that has a lot more experience with this code base and has offered to help with further issues in the past. A day later, I got a very helpful reply. Quoting his diagnosis:</p>
 <blockquote>
 <p>So, the true parameter to the <code>open</code> call in the OSXFUSE kext is a vnode struct (transparent to all kernel code). The kernel finds the relevant vnode struct as a preprocessing step when you do an <code>open()</code> call with a path from userland. In the base case, it finds the vnode by issuing <code>vnop_lookup</code> to the relevant file system for each path component down the path, and fuse ultimately creates the vnode struct for <code>a.out</code>, with its <code>v_parent</code> member pointing to the vnode for the <code>a</code> directory.</p>
-<p>When you then cd to <code>b</code> and run <code>./a.out</code>, the loader in userland does a relative <code>open(&quot;a.out&quot;)</code> as part of bootstrapping the spawned process, before <code>main()</code> runs. The vnode that it finds for this call is the same one as in the first run, with the <code>a</code> dir as its <code>v_parent</code>. I am pretty sure that is due to the vnode cache within the OSXFUSE kext (<code>fuse_node.c/fuse_nodehash.c</code>) ignoring the path and blindly using the inode number. Your <code>dladdr()</code> call then does <code>fcntl(fd, F_GETPATH)</code> on that fd that was opened that way, and that joins the strings by following the vnode chain.</p>
+<p>When you then cd to <code>b</code> and run <code>./a.out</code>, the loader in userland does a relative <code>open("a.out")</code> as part of bootstrapping the spawned process, before <code>main()</code> runs. The vnode that it finds for this call is the same one as in the first run, with the <code>a</code> dir as its <code>v_parent</code>. I am pretty sure that is due to the vnode cache within the OSXFUSE kext (<code>fuse_node.c/fuse_nodehash.c</code>) ignoring the path and blindly using the inode number. Your <code>dladdr()</code> call then does <code>fcntl(fd, F_GETPATH)</code> on that fd that was opened that way, and that joins the strings by following the vnode chain.</p>
 <p>Now, the real FS doesn&rsquo;t seem to support dir hard links. In what is probably the closest APFS analogy to your use case, you would have a file that&rsquo;s a hard link to another, and <code>open()</code> both. APFS appears to replace the <code>v_name</code> on the same vnode object when the 2nd path is looked up, which is not a bulletproof strategy either. If you open both paths on APFS and keep them open, an <code>F_GETPATH</code> on either one will return the path from the later open.</p>
 </blockquote>
 <p>Sad face. There is no easy fix because of the latter paragraph: if we use the same identity and keep the vnode open from two locations at once, they will report ambiguous results no matter what.</p>
 <p>The recommendation I got from this coworker is to get rid of the inode reuse in sandboxfs and instead try to track the file equivalence in some other way. He suggests that the performance penalty won&rsquo;t be large&mdash;and that&rsquo;s something I&rsquo;ll have to measure. For now, I guess I&rsquo;ll implement a flag in sandboxfs to make inode reuse configurable and turn it off by default. Better have slower-but-reliable builds than failing builds.</p>
 <p>The last remaining question is why this has become a problem just now. Has something changed in Catalina? Is Bazel doing something slightly different than before in how it maps the JVM inside the sandbox to tickle this bug? I don&rsquo;t know. Further thoughts welcome.</p>
 <p>Hope you enjoyed this story!</p>
-<section class="footnotes" role="doc-endnotes">
+<section class=footnotes role=doc-endnotes>
 <hr>
 <ol>
-<li id="fn:1" role="doc-endnote">
-<p>This process brought me back to about 20 (?) years ago when I was at our summer house, sitting in front of an old portable 386 with nothing else to do. I used <code>DEBUG.EXE</code> to trace through <code>PACMAN.COM</code>, figure out where the lives counter was, and make it infinite. I really wanted to know what fruits and levels laid ahead, and I got to ☺️. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+<li id=fn:1 role=doc-endnote>
+<p>This process brought me back to about 20 (?) years ago when I was at our summer house, sitting in front of an old portable 386 with nothing else to do. I used <code>DEBUG.EXE</code> to trace through <code>PACMAN.COM</code>, figure out where the lives counter was, and make it infinite. I really wanted to know what fruits and levels laid ahead, and I got to ☺️.&#160;<a href=#fnref:1 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p>
 </li>
 </ol>
 </section>
 </article>
-            </div>
-          </div>
-
-          <div class="container post-votes">
-            <div class="row">
-              <div class="col-md-6">
-                <p id="vote-request">
-                  <b>What did you think about this article?</b><small>
-                  <i>(Experimental)</i></small>
-                  <br/>
-                  <b><span id="first-vote"></span></b>
-                </p>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsUp()"
-                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
-                  (<span id="thumbs-up-count">0</span>)</a>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsDown()"
-                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
-                  (<span id="thumbs-down-count">0</span>)</a>
-              </div>
-            </div>
-
-            <div class="row mt-3">
-              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=The&#43;OSXFUSE%2C&#43;hard&#43;links%2C&#43;and&#43;dladdr&#43;puzzle&amp;url=https%3A%2F%2Fjmmv.dev%2F2020%2F01%2Fosxfuse-hardlinks-dladdr.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/reddit.png"
-                       alt="Reddit logo"
-                       width="24" height="24">
-                  Share on Reddit
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=The&#43;OSXFUSE%2C&#43;hard&#43;links%2C&#43;and&#43;dladdr&#43;puzzle&amp;u=https%3A%2F%2Fjmmv.dev%2F2020%2F01%2Fosxfuse-hardlinks-dladdr.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/ycombinator.png"
-                       alt="Hacker News logo"
-                       width="24" height="24">
-                  Share on Hacker News
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=The&#43;OSXFUSE%2C&#43;hard&#43;links%2C&#43;and&#43;dladdr&#43;puzzle&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2020%2F01%2Fosxfuse-hardlinks-dladdr.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
-                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
-                       alt="Twitter logo"
-                       width="24" height="24">
-                  Share on Twitter
-                </a>
-              </div>
-            </div>
-          </div>
-
-          
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md-12 text-center">
-                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-md-10">
-                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-                  <div class="form-group row px-md-4">
-                    <input type="text" name="email"
-                          placeholder="Enter your email"
-                          class="form-control input-sm col-md-9 text-center"/>
-                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
-                  </div>
-                </form>
-              </div>
-              <div class="col-md-1 text-center">
-                <p>
-                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-                  </a>
-                </p>
-              </div>
-              <div class="col-md-1 text-center">
-                <p><a href="/feed.xml"><img
-                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-              </div>
-            </div>
-          </div>
-
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md mr-auto text-left">
-                
-                <span><a href="https://jmmv.dev/2019/12/bazel-dynamic-execution-tree-artifacts.html">&laquo; Previous post</a></span>
-                
-              </div>
-
-              <div class="col-md text-center">
-                <span><a href="/archive.html">All posts</a></span>
-              </div>
-
-              <div class="col-md ml-auto text-right">
-                
-                <span><a href="https://jmmv.dev/2020/01/system-rewrites-and-tuning.html">Next post &raquo;</a></span>
-                
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-3 sidebar">
-          <div class="row">
-  <div class="col text-center p-2">
-    <p><a href="/about.html" class="clear-link">
-      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
-      <b>Julio Merino</b><br/>
-      Principal Software Engineer<br/>
-      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
-      <small>From Barcelona, living in Seattle</small>
-    </a></p>
-
-    <div class="row">
-      <div class="col-sm-6 text-center">
-        <p>
-          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-6 text-center">
-        <p><a href="/feed.xml"><img
-          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-      </div>
-    </div>
-
-    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-      <div class="form-group">
-        <input type="text" name="email"
-          placeholder="Enter your email"
-          class="form-control input-sm text-center"/>
-        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
-      </div>
-    </form>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Featured posts</h2>
-
-    <ul>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
-      
-      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
-    </ul>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Archive</h2>
-
-    <ul>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2022">2022</a> (1)
-        <ul id="archive-year-2022" class="collapse">
-        
-          
-          <li><a href="/archive.html#2022-01">January 2022</a> (1)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
-        <ul id="archive-year-2021" class="collapse">
-        
-          
-          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
-        <ul id="archive-year-2020" class="collapse">
-        
-          
-          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
-        <ul id="archive-year-2019" class="collapse">
-        
-          
-          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
-        <ul id="archive-year-2018" class="collapse">
-        
-          
-          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
-        <ul id="archive-year-2017" class="collapse">
-        
-          
-          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
-        <ul id="archive-year-2016" class="collapse">
-        
-          
-          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
-        <ul id="archive-year-2015" class="collapse">
-        
-          
-          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
-        <ul id="archive-year-2014" class="collapse">
-        
-          
-          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
-        <ul id="archive-year-2013" class="collapse">
-        
-          
-          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
-        <ul id="archive-year-2012" class="collapse">
-        
-          
-          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
-        <ul id="archive-year-2011" class="collapse">
-        
-          
-          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
-        <ul id="archive-year-2010" class="collapse">
-        
-          
-          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
-        <ul id="archive-year-2009" class="collapse">
-        
-          
-          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
-        <ul id="archive-year-2008" class="collapse">
-        
-          
-          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
-        <ul id="archive-year-2007" class="collapse">
-        
-          
-          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
-        <ul id="archive-year-2006" class="collapse">
-        
-          
-          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
-        <ul id="archive-year-2005" class="collapse">
-        
-          
-          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
-        
-          
-          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
-        
-          
-          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
-        <ul id="archive-year-2004" class="collapse">
-        
-          
-          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
-        
-          
-          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
-        
-          
-          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-    </ul>
-  </div>
+<div class="container post-votes">
+<div class=row>
+<div class=col-md-6>
+<p id=vote-request>
+<b>What did you think about this article?</b><small>
+<i>(Experimental)</i></small>
+<br>
+<b><span id=first-vote></span></b>
+</p>
 </div>
-
-        </div>
-      </div>
-    </div>
-
-    <footer class="container">
-  <div class="row">
-    <div class="col order-2 texr-right">
-      <p class="float-right"><a href="#">Back to top</a></p>
-    </div>
-    <div class="col order-1 mr-auto">
-      <p>Copyright 2004&ndash;2022 Julio Merino</p>
-    </div>
-  </div>
+<div class=col-md-3>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col-md-3>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+<div class="row mt-3">
+<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=The+OSXFUSE%2C+hard+links%2C+and+dladdr+puzzle&url=https%3A%2F%2Fjmmv.dev%2F2020%2F01%2Fosxfuse-hardlinks-dladdr.html" class="btn btn-outline-primary">
+<img src=/images/badges/reddit.png alt="Reddit logo" width=24 height=24>
+Share on Reddit
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=The+OSXFUSE%2C+hard+links%2C+and+dladdr+puzzle&u=https%3A%2F%2Fjmmv.dev%2F2020%2F01%2Fosxfuse-hardlinks-dladdr.html" class="btn btn-outline-primary">
+<img src=/images/badges/ycombinator.png alt="Hacker News logo" width=24 height=24>
+Share on Hacker News
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=The+OSXFUSE%2C+hard+links%2C+and+dladdr+puzzle+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2020%2F01%2Fosxfuse-hardlinks-dladdr.html+%E2%80%94+cc+%40jmmv" class="btn btn-outline-primary">
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt="Twitter logo" width=24 height=24>
+Share on Twitter
+</a>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md-12 text-center">
+<p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+</div>
+</div>
+<div class=row>
+<div class=col-md-10>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class="form-group row px-md-4">
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-md-9 text-center">
+<button type=submit class="btn btn-primary col-md-3">Subscribe</button>
+</div>
+</form>
+</div>
+<div class="col-md-1 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-md-1 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md mr-auto text-left">
+<span><a href=https://jmmv.dev/2019/12/bazel-dynamic-execution-tree-artifacts.html>&#171; Previous post</a></span>
+</div>
+<div class="col-md text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col-md ml-auto text-right">
+<span><a href=https://jmmv.dev/2020/01/system-rewrites-and-tuning.html>Next post &#187;</a></span>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Principal Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-6 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-6 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
+<li class=indent-wrapped-lines><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
+<li class=indent-wrapped-lines><a href=/2020/10/bye-google-hi-microsoft.html>Farewell, Google; hello, Microsoft!</a></li>
+<li class=indent-wrapped-lines><a href=/2020/08/config-files-vs-directories.html>Configuration files and .d directories</a></li>
+<li class=indent-wrapped-lines><a href=/2020/05/bridging-the-web-gap-endbasic.html>Bridging the web gap in EndBASIC</a></li>
+<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (1)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col order-1 mr-auto">
+<p>Copyright 2004&ndash;2022 Julio Merino</p>
+</div>
+</div>
 </footer>
+<script type=module>
+  import {
+    addAnchorsToHeaders, addElementClasses,
+    loadClientId, saveRequest, setupTracker,
+    loadVotes, voteThumbsUp, voteThumbsDown
+  } from "\/js\/main.min.9b4dc32b78e2bb1dd00e4f4afa84eeb926ba251f85adddf6d58f1c9130d6a8e1.js";
 
-<script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
-<script src="/js/uuidv4.min.js"></script>
-<script src="/js/fingerprintjs-3.3.2.min.js"></script>
-
-
-<script src="/script.js"></script>
-
-<script>
   addAnchorsToHeaders();
   addElementClasses();
 
+  setupTracker(SITE_ID, PAGE_PATH);
   loadClientId(function() {
     saveRequest();
     loadVotes();
   });
+
+  window.voteThumbsUp = voteThumbsUp;
+  window.voteThumbsDown = voteThumbsDown;
 </script>
-
 <noscript>
-  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzAxL29zeGZ1c2UtaGFyZGxpbmtzLWRsYWRkci5odG1s/stamp.gif" style="display: none;" />
+<img src=https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzAxL29zeGZ1c2UtaGFyZGxpbmtzLWRsYWRkci5odG1s/stamp.gif style=display:none>
 </noscript>
-
-  </body>
+</body>
 </html>

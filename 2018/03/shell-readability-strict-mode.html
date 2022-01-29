@@ -1,1115 +1,598 @@
-<!doctype html>
-<html lang="en"
-      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
-  <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  
-
-  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-
-  <title>Shell readability: strict mode - Julio Merino (jmmv.dev)</title>
-  <meta property="og:title" content="Shell readability: strict mode - Julio Merino (jmmv.dev)">
-
-  
-
-  <meta name="description" content="Some programming languages have a feature known as strict mode: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell also has something akin to this feature. The &amp;ldquo;strict mode&amp;rdquo; name, however, is unofficial, so you won&amp;rsquo;t find many references to it online.
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<title>Shell readability: strict mode - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Shell readability: strict mode - Julio Merino (jmmv.dev)">
+<meta name=description content="Some programming languages have a feature known as strict mode: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell also has something akin to this feature. The &amp;ldquo;strict mode&amp;rdquo; name, however, is unofficial, so you won&amp;rsquo;t find many references to it online.
 You can enable the shell&amp;rsquo;s strict mode by doing one of the following:">
-  <meta property="og:description" content="Some programming languages have a feature known as strict mode: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell also has something akin to this feature. The &amp;ldquo;strict mode&amp;rdquo; name, however, is unofficial, so you won&amp;rsquo;t find many references to it online.
+<meta property="og:description" content="Some programming languages have a feature known as strict mode: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell also has something akin to this feature. The &amp;ldquo;strict mode&amp;rdquo; name, however, is unofficial, so you won&amp;rsquo;t find many references to it online.
 You can enable the shell&amp;rsquo;s strict mode by doing one of the following:">
-  <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.68.3" />
-
-  <meta property="og:url" content="https://jmmv.dev/2018/03/shell-readability-strict-mode.html">
-
-  <meta property="og:type" content="blog">
-
-  <link rel="canonical" href="https://jmmv.dev/2018/03/shell-readability-strict-mode.html">
-  <link rel="alternate" type="application/rss+xml"
-        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
-
-  <link rel="stylesheet" href="/sass/main.min.30bb6180f21e371585770b11ddfabc2ee16a197f0e1a8166b2c5337edfffa0f9.css">
-  <link rel="stylesheet" href="/css/chroma.css">
-
-  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
-
-  
-  <!--[if lt IE 9]>
-    <script src="/js/html5shiv-3.7.2.min.js"></script>
-    <script src="/js/respond-1.4.2.min.js"></script>
-  <![endif]-->
-
-  <script>
-    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
-    const BASE_URL = 'https:\/\/jmmv.dev\/';
-    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDE4LzAzL3NoZWxsLXJlYWRhYmlsaXR5LXN0cmljdC1tb2RlLmh0bWw=';
-  </script>
+<meta name=author content="Julio Merino">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2018/03/shell-readability-strict-mode.html">
+<meta property="og:type" content="blog">
+<link rel=canonical href=https://jmmv.dev/2018/03/shell-readability-strict-mode.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.1d9e5b2331b8e7e98d06f2a249311b126b656ab4f5759255480bce568fec91b4.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
+<script src=/js/respond-1.4.2.min.js></script><![endif]-->
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/',PAGE_PATH='aHR0cHM6Ly9qbW12LmRldi8yMDE4LzAzL3NoZWxsLXJlYWRhYmlsaXR5LXN0cmljdC1tb2RlLmh0bWw='</script>
 </head>
-
-
-  <body>
-    <header class="site-header">
-
+<body>
+<header class=site-header>
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-  <a class="navbar-brand" href="/">
-    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
-    &nbsp;Julio Merino
-  </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse"
-          data-target="#navbarSupportedContent"
-          aria-controls="navbarSupportedContent" aria-expanded="false"
-          aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/about.html" >About</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/essays.html" >Essays</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/resume.html" >Resume</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/software.html" >Software</a>
-          </li>
-        
-      
-    </ul>
-
-    <ul class="navbar-nav mr-4">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/stats.html" >Analytics</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/archive.html" >Archive</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/series.html" >Series</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/tags.html" >Tags</a>
-          </li>
-        
-      
-    </ul>
-
-    <form class="form-inline" method="get" role="search"
-          action="https://www.google.com/search">
-      <div class="input-group">
-        <input type="search" name="query" class="form-control"
-                placeholder="Search" aria-label="Search">
-        <div class="input-group-append">
-          <button type="submit" value="Search" class="btn btn-light">
-            <img src="/octicons/search.svg">
-          </button>
-        </div>
-      </div>
-      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-    </form>
-  </div>
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/stats.html>Analytics</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
 </nav>
-
 </header>
-
-
-    <div class="page-header">
-      <div class="container">
-        <h1>Shell readability: strict mode</h1>
-
-        <p>March 9, 2018 &middot;
-        About 6 minutes
-        &middot;
-        Tags:
-        <a class="text-reset" href="/tags/featured">featured</a>, <a class="text-reset" href="/tags/readability">readability</a>, <a class="text-reset" href="/tags/shell">shell</a></p>
-
-        
-      </div>
-    </div>
-
-    <div class="container">
-      <div class="row">
-        <div class="col-md-9">
-          <div class="row">
-            <div class="col">
-              
-                
-
-
-
-  
-    
-  
-  
-
-  
-    
-  
-  
-
-  
-    
-  
-  
-
-  
-    
-  
-  
-
-
+<div class=page-header>
+<div class=container>
+<h1>Shell readability: strict mode</h1>
+<p>March 9, 2018 &#183;
+About 6 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/featured>featured</a>, <a class=text-reset href=/tags/readability>readability</a>, <a class=text-reset href=/tags/shell>shell</a></p>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
 <p><i>This article is part number
-
-  3 of the
-
-<a href="/series.html#Shell%20readability"><b>
+3 of the
+<a href=/series.html#Shell%20readability><b>
 Shell readability</b> series</a>.</i></p>
-
-<hr/>
-
-              
-              <article><p>Some programming languages have a feature known as <strong>strict mode</strong>: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell <em>also</em> has something akin to this feature. The &ldquo;strict mode&rdquo; <em>name</em>, however, is unofficial, so you won&rsquo;t find many references to it online.</p>
+<hr>
+<article><p>Some programming languages have a feature known as <strong>strict mode</strong>: a setting that makes the language interpreter disallow certain obviously-broken code that would otherwise work. The simplest examples are JavaScript and Perl but, as it turns out, the shell <em>also</em> has something akin to this feature. The &ldquo;strict mode&rdquo; <em>name</em>, however, is unofficial, so you won&rsquo;t find many references to it online.</p>
 <p>You can enable the shell&rsquo;s strict mode by doing one of the following:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="nb">set</span> -eu            <span class="c1"># For POSIX-compliant shell scripts.</span>
-<span class="nb">set</span> -euo pipefail  <span class="c1"># For scripts that already depend on Bash.</span>
-</code></pre></div><p>In the majority of the cases, prefer the former. The reasons to depend on Bash are few and rare, and I will be skeptical if you claim they apply to you&hellip; but that&rsquo;s something I should cover another day.</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh><span class=nb>set</span> -eu            <span class=c1># For POSIX-compliant shell scripts.</span>
+<span class=nb>set</span> -euo pipefail  <span class=c1># For scripts that already depend on Bash.</span>
+</code></pre></div><p>In the majority of the cases, prefer the former. The reasons to depend on Bash are few and rare, and I will be skeptical if you claim they apply to you&mldr; but that&rsquo;s something I should cover another day.</p>
 <p>The commands above enable three independent options: <code>set -e</code>, <code>set -u</code>, and <code>set -o pipefail</code>. I will cover each in detail in this post, including their downsides. I will also glance over <code>set -x</code> which, while not related to strict mode, is handy to troubleshoot strict mode-related problems. For your convenience:</p>
-<nav id="TableOfContents">
-  <ul>
-    <li><a href="#set--e">set -e</a></li>
-    <li><a href="#set--u">set -u</a></li>
-    <li><a href="#set--o-pipefail-bash-only">set -o pipefail (Bash only)</a></li>
-    <li><a href="#set--x">set -x</a></li>
-    <li><a href="#references">References</a></li>
-  </ul>
+<nav id=TableOfContents>
+<ul>
+<li><a href=#set--e>set -e</a></li>
+<li><a href=#set--u>set -u</a></li>
+<li><a href=#set--o-pipefail-bash-only>set -o pipefail (Bash only)</a></li>
+<li><a href=#set--x>set -x</a></li>
+<li><a href=#references>References</a></li>
+</ul>
 </nav>
-
 <p>Let&rsquo;s proceed, but before, a word of caution.</p>
 <p><strong>WARNING:</strong> Be wary of using this &ldquo;strict mode&rdquo;. While its features sound good on paper, they have plenty of caveats. In my opinion, <strong>you are better off having comprehensive unit and integration tests for your program.</strong> Strict mode is indeed handy, but mostly for simple throw-away scripts.</p>
-<p>Oh, and by the way&hellip; you may disagree, but I feel that the presence of strict mode is an indicator that the language is just flawed. Stay away if you can.</p>
-<h1 id="set--e">set -e</h1>
+<p>Oh, and by the way&mldr; you may disagree, but I feel that the presence of strict mode is an indicator that the language is just flawed. Stay away if you can.</p>
+<h1 id=set--e>set -e</h1>
 <p><strong><code>set -e</code> causes the shell to exit when an unguarded statement evaluates to a false value.</strong> In other words: the script terminates as soon as a command returns a non-zero exit code that was not expected. You can equate this to the way languages with exceptions work: if you throw an exception and don&rsquo;t catch it, the exception bubbles up and the program crashes.</p>
 <p>The tricky thing is to define what an <em>unexpected</em> non-zero exit code is. Consider these as some non-exhaustive examples:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># Bare commands terminate execution if they return non-zero.</span>
-<span class="nb">false</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh><span class=c1># Bare commands terminate execution if they return non-zero.</span>
+<span class=nb>false</span>
 cp /missing-file /tmp
 
-<span class="c1"># Commands protected by a conditional do not terminate execution.</span>
-<span class="k">if</span> false<span class="p">;</span> <span class="k">then</span>
-    <span class="nb">echo</span> <span class="s2">&#34;False&#34;</span>
-<span class="k">else</span>
-    <span class="nb">echo</span> <span class="s2">&#34;True&#34;</span>
-<span class="k">fi</span>
+<span class=c1># Commands protected by a conditional do not terminate execution.</span>
+<span class=k>if</span> false<span class=p>;</span> <span class=k>then</span>
+    <span class=nb>echo</span> <span class=s2>&#34;False&#34;</span>
+<span class=k>else</span>
+    <span class=nb>echo</span> <span class=s2>&#34;True&#34;</span>
+<span class=k>fi</span>
 
-<span class="c1"># Guarded commands do not terminate execution if they evaluate to true.</span>
-cp /this-will-fail /tmp <span class="o">||</span> <span class="nb">echo</span> <span class="s2">&#34;cp failed but continuing anyway...&#34;</span>
+<span class=c1># Guarded commands do not terminate execution if they evaluate to true.</span>
+cp /this-will-fail /tmp <span class=o>||</span> <span class=nb>echo</span> <span class=s2>&#34;cp failed but continuing anyway...&#34;</span>
 
-<span class="c1"># But guarded commands terminate execution if they evaluate to false.</span>
-cp /this-will-fail /tmp <span class="o">||</span> cp /this-fails-too /tmp
+<span class=c1># But guarded commands terminate execution if they evaluate to false.</span>
+cp /this-will-fail /tmp <span class=o>||</span> cp /this-fails-too /tmp
 </code></pre></div><p>The problem is that the set of rules governing the behavior of <code>set -e</code> are obscure, and different shells (even different versions!) handle these rules differently. Here are a few examples of things that might seem fine but that are actually buggy:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh"><span class="c1"># The default arguments are never set because short-circuit evaluation evaluates</span>
-<span class="c1"># this to false.</span>
-<span class="o">[</span> <span class="nv">$#</span> -eq <span class="m">0</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="nb">set</span> -- <span class="s2">&#34;default&#34;</span> <span class="s2">&#34;arguments&#34;</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh><span class=c1># The default arguments are never set because short-circuit evaluation evaluates</span>
+<span class=c1># this to false.</span>
+<span class=o>[</span> <span class=nv>$#</span> -eq <span class=m>0</span> <span class=o>]</span> <span class=o>&amp;&amp;</span> <span class=nb>set</span> -- <span class=s2>&#34;default&#34;</span> <span class=s2>&#34;arguments&#34;</span>
 
-<span class="c1"># The rm call is always run; local clobbers the subshell&#39;s exit code.</span>
-<span class="nb">local</span> <span class="nv">prefix</span><span class="o">=</span><span class="s2">&#34;</span><span class="k">$(</span>get_config_value PREFIX<span class="k">)</span><span class="s2">&#34;</span>
-rm -rf <span class="s2">&#34;</span><span class="si">${</span><span class="nv">prefix</span><span class="si">}</span><span class="s2">/bin&#34;</span>
-</code></pre></div><p>There are many more cases as described in <a href="http://mywiki.wooledge.org/BashFAQ/105">BashFAQ 105</a>, some of which are pretty hard to reason about.</p>
+<span class=c1># The rm call is always run; local clobbers the subshell&#39;s exit code.</span>
+<span class=nb>local</span> <span class=nv>prefix</span><span class=o>=</span><span class=s2>&#34;</span><span class=k>$(</span>get_config_value PREFIX<span class=k>)</span><span class=s2>&#34;</span>
+rm -rf <span class=s2>&#34;</span><span class=si>${</span><span class=nv>prefix</span><span class=si>}</span><span class=s2>/bin&#34;</span>
+</code></pre></div><p>There are many more cases as described in <a href=http://mywiki.wooledge.org/BashFAQ/105>BashFAQ 105</a>, some of which are pretty hard to reason about.</p>
 <p>So, while <code>set -e</code> can be very handy for quick&rsquo;n&rsquo;dirty scripts, I wouldn&rsquo;t really recommend using it for more elaborate ones. Get in the habit of explicitly handling errors and automatically testing error paths.</p>
-<h1 id="set--u">set -u</h1>
+<h1 id=set--u>set -u</h1>
 <p><strong><code>set -u</code> causes the shell to exit with an error when an undefined variable is referenced.</strong> The exceptions are <code>${*}</code> and <code>${@}</code>, which you can refer to at any point: they represent the current function&rsquo;s arguments and these can legitimately be empty.</p>
 <p>A small problem with <code>set -u</code> is that, for example, macOS&rsquo;s ancient <code>/bin/bash</code> contains a bug that causes it to mishandle the special case described above. If your script mentions either <code>${*}</code> or <code>${@}</code> at any point, you are doomed to failure. You may be able to workaround the problem, but the contortions involved have always made me stop using this mode.</p>
-<h1 id="set--o-pipefail-bash-only">set -o pipefail (Bash only)</h1>
+<h1 id=set--o-pipefail-bash-only>set -o pipefail (Bash only)</h1>
 <p>Pipelines evaluate to the exit code of the <em>last</em> command in the pipeline no matter what happened to any of the previous commands in the same pipeline. This is a problem. Consider something like this:</p>
-<div class="highlight"><pre class="chroma"><code class="language-sh" data-lang="sh">grep -v <span class="s2">&#34;</span><span class="si">${</span><span class="nv">user_to_remove</span><span class="si">}</span><span class="s2">&#34;</span> users <span class="se">\ </span>           <span class="c1"># Remove the given user.</span>
-    <span class="p">|</span> sed -e <span class="s2">&#34;/last edit/s/: .*/: </span><span class="si">${</span><span class="nv">date</span><span class="si">}</span><span class="s2">/&#34;</span> <span class="se">\ </span> <span class="c1"># Update timestamp.</span>
-    &gt;users.new <span class="o">||</span> fail <span class="s2">&#34;Failed to remove user&#34;</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh>grep -v <span class=s2>&#34;</span><span class=si>${</span><span class=nv>user_to_remove</span><span class=si>}</span><span class=s2>&#34;</span> users <span class=se>\ </span>           <span class=c1># Remove the given user.</span>
+    <span class=p>|</span> sed -e <span class=s2>&#34;/last edit/s/: .*/: </span><span class=si>${</span><span class=nv>date</span><span class=si>}</span><span class=s2>/&#34;</span> <span class=se>\ </span> <span class=c1># Update timestamp.</span>
+    &gt;users.new <span class=o>||</span> fail <span class=s2>&#34;Failed to remove user&#34;</span>
 mv users.new users
-</code></pre></div><p>This <em>seems</em> good: we modify some input file and save the output to a new file, and only if we don&rsquo;t fail, we update the original. The problem is&hellip; what if <code>grep</code> fails because it cannot open <code>users</code>? <code>grep</code> will print nothing and <code>sed</code> will happily run along with that, reporting success at the end. That&rsquo;s not what we expected, right?</p>
-<p><strong><code>set -o pipefail</code> to the rescue. This option causes the shell to evaluate the pipeline to the first non-zero exit code.</strong> In our example, <code>grep</code>'s error code would &ldquo;win&rdquo; over <code>sed</code>'s successful exit and thus trigger the execution of the <code>fail</code> handler. That&rsquo;s the intended behavior and, arguably, the behavior that should apply all the time.</p>
+</code></pre></div><p>This <em>seems</em> good: we modify some input file and save the output to a new file, and only if we don&rsquo;t fail, we update the original. The problem is&mldr; what if <code>grep</code> fails because it cannot open <code>users</code>? <code>grep</code> will print nothing and <code>sed</code> will happily run along with that, reporting success at the end. That&rsquo;s not what we expected, right?</p>
+<p><strong><code>set -o pipefail</code> to the rescue. This option causes the shell to evaluate the pipeline to the first non-zero exit code.</strong> In our example, <code>grep</code>&rsquo;s error code would &ldquo;win&rdquo; over <code>sed</code>&rsquo;s successful exit and thus trigger the execution of the <code>fail</code> handler. That&rsquo;s the intended behavior and, arguably, the behavior that should apply all the time.</p>
 <p>The only problem is that <code>set -o pipefail</code> is a Bash extension. Unless you depend on Bash already for good reason, you cannot not use this setting.</p>
-<h1 id="set--x">set -x</h1>
+<h1 id=set--x>set -x</h1>
 <p>When you enable strict mode, the shell will inevitably terminate your script in unexpected places—and <em>it won&rsquo;t tell you what happened</em>. It can be very hard to isolate the place where the script stopped execution.</p>
-<p><code>set -x</code> can help here. <strong>When <code>set -x</code> is enabled, the shell echoes every statement it executes to the console</strong> (remember MS-DOS&rsquo; <code>@echo on</code>?). The output can be extremely verbose so you won&rsquo;t want to keep it in the &ldquo;production&rdquo; version of your script, but enabling it transiently is invaluable in finding where your script abruptly exited.</p>
-<h1 id="references">References</h1>
+<p><code>set -x</code> can help here. <strong>When <code>set -x</code> is enabled, the shell echoes every statement it executes to the console</strong> (remember MS-DOS' <code>@echo on</code>?). The output can be extremely verbose so you won&rsquo;t want to keep it in the &ldquo;production&rdquo; version of your script, but enabling it transiently is invaluable in finding where your script abruptly exited.</p>
+<h1 id=references>References</h1>
 <ul>
 <li>
-<p><a href="http://mywiki.wooledge.org/BashFAQ/105">BashFAQ 105</a>: A collection of cases demonstrating that <code>set -e</code> is confusing and strong advocacy for <em>not</em> using <code>set -e</code>. I bought into it a few years ago when I <a href="https://github.com/jmmv/atf/issues/14">disabled <code>set -e</code> from atf-sh</a>.</p>
+<p><a href=http://mywiki.wooledge.org/BashFAQ/105>BashFAQ 105</a>: A collection of cases demonstrating that <code>set -e</code> is confusing and strong advocacy for <em>not</em> using <code>set -e</code>. I bought into it a few years ago when I <a href=https://github.com/jmmv/atf/issues/14>disabled <code>set -e</code> from atf-sh</a>.</p>
 </li>
 <li>
-<p><a href="/2010/01/set-e-and-set-x.html">set -e and set -x</a>: A post of mine from 2010 that covered part of what&rsquo;s explained here. That&rsquo;s one of the most popular posts in this blog by organic search. Let&rsquo;s see if I can oust it with this update!</p>
+<p><a href=/2010/01/set-e-and-set-x.html>set -e and set -x</a>: A post of mine from 2010 that covered part of what&rsquo;s explained here. That&rsquo;s one of the most popular posts in this blog by organic search. Let&rsquo;s see if I can oust it with this update!</p>
 </li>
 <li>
-<p><a href="http://redsymbol.net/articles/unofficial-bash-strict-mode/">Use the Unofficial Bash Strict Mode (Unless You Looove Debugging)</a>: While writing this article, I came across this one. At first sight I thought: &ldquo;hey, this covers exactly what I wanted to describe so no need for me to post!&quot;. But I changed my mind. First, because that article does not cover the downsides of each setting. And second, because that article is conflating <code>IFS</code> with strict mode and it has nothing to do with it. In fact, the examples given in the article about <code>IFS</code> are <em>wrong</em>: note the lack of double quotes around the array expansions, which is precisely why mangling <code>IFS</code> &ldquo;helps&rdquo;.</p>
+<p><a href=http://redsymbol.net/articles/unofficial-bash-strict-mode/>Use the Unofficial Bash Strict Mode (Unless You Looove Debugging)</a>: While writing this article, I came across this one. At first sight I thought: &ldquo;hey, this covers exactly what I wanted to describe so no need for me to post!&rdquo;. But I changed my mind. First, because that article does not cover the downsides of each setting. And second, because that article is conflating <code>IFS</code> with strict mode and it has nothing to do with it. In fact, the examples given in the article about <code>IFS</code> are <em>wrong</em>: note the lack of double quotes around the array expansions, which is precisely why mangling <code>IFS</code> &ldquo;helps&rdquo;.</p>
 </li>
 </ul>
 </article>
-            </div>
-          </div>
-
-          <div class="container post-votes">
-            <div class="row">
-              <div class="col-md-6">
-                <p id="vote-request">
-                  <b>What did you think about this article?</b><small>
-                  <i>(Experimental)</i></small>
-                  <br/>
-                  <b><span id="first-vote"></span></b>
-                </p>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsUp()"
-                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
-                  (<span id="thumbs-up-count">0</span>)</a>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsDown()"
-                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
-                  (<span id="thumbs-down-count">0</span>)</a>
-              </div>
-            </div>
-
-            <div class="row mt-3">
-              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Shell&#43;readability%3A&#43;strict&#43;mode&amp;url=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fshell-readability-strict-mode.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/reddit.png"
-                       alt="Reddit logo"
-                       width="24" height="24">
-                  Share on Reddit
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Shell&#43;readability%3A&#43;strict&#43;mode&amp;u=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fshell-readability-strict-mode.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/ycombinator.png"
-                       alt="Hacker News logo"
-                       width="24" height="24">
-                  Share on Hacker News
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Shell&#43;readability%3A&#43;strict&#43;mode&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fshell-readability-strict-mode.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
-                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
-                       alt="Twitter logo"
-                       width="24" height="24">
-                  Share on Twitter
-                </a>
-              </div>
-            </div>
-          </div>
-
-          
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md-12 text-center">
-                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-md-10">
-                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-                  <div class="form-group row px-md-4">
-                    <input type="text" name="email"
-                          placeholder="Enter your email"
-                          class="form-control input-sm col-md-9 text-center"/>
-                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
-                  </div>
-                </form>
-              </div>
-              <div class="col-md-1 text-center">
-                <p>
-                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-                  </a>
-                </p>
-              </div>
-              <div class="col-md-1 text-center">
-                <p><a href="/feed.xml"><img
-                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-              </div>
-            </div>
-          </div>
-
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md mr-auto text-left">
-                
-                <span><a href="https://jmmv.dev/2018/03/dont-rollback-rollbacks.html">&laquo; Previous post</a></span>
-                
-              </div>
-
-              <div class="col-md text-center">
-                <span><a href="/archive.html">All posts</a></span>
-              </div>
-
-              <div class="col-md ml-auto text-right">
-                
-                <span><a href="https://jmmv.dev/2018/03/shell-readability-local.html">Next post &raquo;</a></span>
-                
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-3 sidebar">
-          <div class="row">
-  <div class="col text-center p-2">
-    <p><a href="/about.html" class="clear-link">
-      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
-      <b>Julio Merino</b><br/>
-      Principal Software Engineer<br/>
-      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
-      <small>From Barcelona, living in Seattle</small>
-    </a></p>
-
-    <div class="row">
-      <div class="col-sm-6 text-center">
-        <p>
-          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-6 text-center">
-        <p><a href="/feed.xml"><img
-          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-      </div>
-    </div>
-
-    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-      <div class="form-group">
-        <input type="text" name="email"
-          placeholder="Enter your email"
-          class="form-control input-sm text-center"/>
-        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
-      </div>
-    </form>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Featured posts</h2>
-
-    <ul>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
-      
-      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
-    </ul>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Archive</h2>
-
-    <ul>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2022">2022</a> (1)
-        <ul id="archive-year-2022" class="collapse">
-        
-          
-          <li><a href="/archive.html#2022-01">January 2022</a> (1)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
-        <ul id="archive-year-2021" class="collapse">
-        
-          
-          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
-        <ul id="archive-year-2020" class="collapse">
-        
-          
-          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
-        <ul id="archive-year-2019" class="collapse">
-        
-          
-          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
-        <ul id="archive-year-2018" class="collapse">
-        
-          
-          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
-        <ul id="archive-year-2017" class="collapse">
-        
-          
-          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
-        <ul id="archive-year-2016" class="collapse">
-        
-          
-          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
-        <ul id="archive-year-2015" class="collapse">
-        
-          
-          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
-        <ul id="archive-year-2014" class="collapse">
-        
-          
-          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
-        <ul id="archive-year-2013" class="collapse">
-        
-          
-          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
-        <ul id="archive-year-2012" class="collapse">
-        
-          
-          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
-        <ul id="archive-year-2011" class="collapse">
-        
-          
-          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
-        <ul id="archive-year-2010" class="collapse">
-        
-          
-          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
-        <ul id="archive-year-2009" class="collapse">
-        
-          
-          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
-        <ul id="archive-year-2008" class="collapse">
-        
-          
-          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
-        <ul id="archive-year-2007" class="collapse">
-        
-          
-          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
-        <ul id="archive-year-2006" class="collapse">
-        
-          
-          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
-        <ul id="archive-year-2005" class="collapse">
-        
-          
-          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
-        
-          
-          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
-        
-          
-          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
-        <ul id="archive-year-2004" class="collapse">
-        
-          
-          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
-        
-          
-          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
-        
-          
-          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-    </ul>
-  </div>
+<div class="container post-votes">
+<div class=row>
+<div class=col-md-6>
+<p id=vote-request>
+<b>What did you think about this article?</b><small>
+<i>(Experimental)</i></small>
+<br>
+<b><span id=first-vote></span></b>
+</p>
 </div>
-
-        </div>
-      </div>
-    </div>
-
-    <footer class="container">
-  <div class="row">
-    <div class="col order-2 texr-right">
-      <p class="float-right"><a href="#">Back to top</a></p>
-    </div>
-    <div class="col order-1 mr-auto">
-      <p>Copyright 2004&ndash;2022 Julio Merino</p>
-    </div>
-  </div>
+<div class=col-md-3>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col-md-3>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+<div class="row mt-3">
+<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Shell+readability%3A+strict+mode&url=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fshell-readability-strict-mode.html" class="btn btn-outline-primary">
+<img src=/images/badges/reddit.png alt="Reddit logo" width=24 height=24>
+Share on Reddit
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Shell+readability%3A+strict+mode&u=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fshell-readability-strict-mode.html" class="btn btn-outline-primary">
+<img src=/images/badges/ycombinator.png alt="Hacker News logo" width=24 height=24>
+Share on Hacker News
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Shell+readability%3A+strict+mode+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fshell-readability-strict-mode.html+%E2%80%94+cc+%40jmmv" class="btn btn-outline-primary">
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt="Twitter logo" width=24 height=24>
+Share on Twitter
+</a>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md-12 text-center">
+<p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+</div>
+</div>
+<div class=row>
+<div class=col-md-10>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class="form-group row px-md-4">
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-md-9 text-center">
+<button type=submit class="btn btn-primary col-md-3">Subscribe</button>
+</div>
+</form>
+</div>
+<div class="col-md-1 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-md-1 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col-md mr-auto text-left">
+<span><a href=https://jmmv.dev/2018/03/dont-rollback-rollbacks.html>&#171; Previous post</a></span>
+</div>
+<div class="col-md text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col-md ml-auto text-right">
+<span><a href=https://jmmv.dev/2018/03/shell-readability-local.html>Next post &#187;</a></span>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Principal Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-6 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-6 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
+<li class=indent-wrapped-lines><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
+<li class=indent-wrapped-lines><a href=/2020/10/bye-google-hi-microsoft.html>Farewell, Google; hello, Microsoft!</a></li>
+<li class=indent-wrapped-lines><a href=/2020/08/config-files-vs-directories.html>Configuration files and .d directories</a></li>
+<li class=indent-wrapped-lines><a href=/2020/05/bridging-the-web-gap-endbasic.html>Bridging the web gap in EndBASIC</a></li>
+<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (1)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col order-1 mr-auto">
+<p>Copyright 2004&ndash;2022 Julio Merino</p>
+</div>
+</div>
 </footer>
+<script type=module>
+  import {
+    addAnchorsToHeaders, addElementClasses,
+    loadClientId, saveRequest, setupTracker,
+    loadVotes, voteThumbsUp, voteThumbsDown
+  } from "\/js\/main.min.9b4dc32b78e2bb1dd00e4f4afa84eeb926ba251f85adddf6d58f1c9130d6a8e1.js";
 
-<script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
-<script src="/js/uuidv4.min.js"></script>
-<script src="/js/fingerprintjs-3.3.2.min.js"></script>
-
-
-<script src="/script.js"></script>
-
-<script>
   addAnchorsToHeaders();
   addElementClasses();
 
+  setupTracker(SITE_ID, PAGE_PATH);
   loadClientId(function() {
     saveRequest();
     loadVotes();
   });
+
+  window.voteThumbsUp = voteThumbsUp;
+  window.voteThumbsDown = voteThumbsDown;
 </script>
-
 <noscript>
-  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE4LzAzL3NoZWxsLXJlYWRhYmlsaXR5LXN0cmljdC1tb2RlLmh0bWw=/stamp.gif" style="display: none;" />
+<img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE4LzAzL3NoZWxsLXJlYWRhYmlsaXR5LXN0cmljdC1tb2RlLmh0bWw=/stamp.gif" style=display:none>
 </noscript>
-
-  </body>
+</body>
 </html>
