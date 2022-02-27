@@ -1,0 +1,722 @@
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<title>Configuring SSH access into WSL (1 and 2) - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Configuring SSH access into WSL (1 and 2) - Julio Merino (jmmv.dev)">
+<meta name=description content="One of the reasons I like macOS is that it is a Unix system. Thanks to this, it&amp;rsquo;s trivial to set up an SSH server to remotely access and administer the machine, which in turn has allowed me to have a nice and powerful desktop computer which I can also leverage when I&amp;rsquo;m on the go.
+Moving to Windows full time, as I briefly touched upon in My story with Windows, required that I could do the same on this platform.">
+<meta property="og:description" content="One of the reasons I like macOS is that it is a Unix system. Thanks to this, it&amp;rsquo;s trivial to set up an SSH server to remotely access and administer the machine, which in turn has allowed me to have a nice and powerful desktop computer which I can also leverage when I&amp;rsquo;m on the go.
+Moving to Windows full time, as I briefly touched upon in My story with Windows, required that I could do the same on this platform.">
+<meta name=author content="Julio Merino">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2022/02/wsl-ssh-access.html">
+<meta property="og:type" content="blog">
+<link rel=canonical href=https://jmmv.dev/2022/02/wsl-ssh-access.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.fcc0c3ac24aaeb89fcb92a6ad071a76e1f7cb4657f630c136e97fd0eda279808.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><!--[if lt IE 9]><script src=/js/html5shiv-3.7.2.min.js></script>
+<script src=/js/respond-1.4.2.min.js></script><![endif]-->
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
+</head>
+<body>
+<header class=site-header>
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
+</nav>
+</header>
+<div class=page-header>
+<div class=container>
+<h1>Configuring SSH access into WSL (1 and 2)</h1>
+<p>February 27, 2022 &#183;
+About 7 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/lab-notes>lab-notes</a>, <a class=text-reset href=/tags/windows>windows</a></p>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
+<article><p>One of the reasons I like macOS is that it is a Unix system. Thanks to this, it&rsquo;s trivial to set up an SSH server to remotely access and administer the machine, which in turn has allowed me to have a nice and powerful desktop computer which I can also leverage when I&rsquo;m on the go.</p>
+<p>Moving to Windows full time, as I briefly touched upon in <a href=/2022/02/my-story-with-windows.html>My story with Windows</a>, required that I could do the same on this platform. I knew that <a href=/2020/10/windows-ssh-access.html>Windows ships with an SSH server</a> and that it works well with VSCode, but I am still much more comfortable developing my side projects on a Unix system. Windows has WSL, which had proven to be sufficient for my needs, but WSL is still a separate environment from Windows&mdash;and the distinction rears its ugly head when trying to remote into the machine.</p>
+<p>So the questions were:</p>
+<ul>
+<li>Could I configure Windows so that incoming SSH connections went to WSL?</li>
+<li>Could VSCode leverage this connection to directly interact with WSL from my laptop when on-the-go?</li>
+<li>Could the SSH server inside WSL start at system boot time, without logging in first?</li>
+</ul>
+<p>As it turns out, the answers are yes in all cases. The process is tricky though and depends on the WSL version in use, so you can take these as my lab notes set this whole ordeal up.</p>
+<p>The goal configuration in this post is to have an SSH server on port 2022 to reach WSL and to have it readily available when the machine boots (because reboots can unfortunately happen at any time &ldquo;thanks to&rdquo; forced OS updates).</p>
+<h1 id=common-steps>Common steps</h1>
+<p>The majority of the configuration process is common between WSL 1 and WSL 2, so let&rsquo;s do those common steps first. Let&rsquo;s start by configuring the SSH server within WSL:</p>
+<ol>
+<li>
+<p>Install WSL and a Linux distribution, and choose whether you want to use version 1 or 2. The instructions here are based on <a href=https://www.microsoft.com/store/productId/9MSVKQC78PK6>Debian</a>.</p>
+</li>
+<li>
+<p>Install the OpenSSH server inside WSL:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh>sudo apt install openssh-server
+</code></pre></div></li>
+<li>
+<p>Configure the port on which the OpenSSH server listens to 2022 and restart the service:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh>sudo sed -i -E <span class=s1>&#39;s,^#?Port.*$,Port 2022,&#39;</span> /etc/ssh/sshd_config
+sudo service ssh restart
+</code></pre></div></li>
+<li>
+<p>Allow your default WSL user to start the SSH server without typing a password:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh>sudo sh -c <span class=s2>&#34;echo &#39;</span><span class=si>${</span><span class=nv>USER</span><span class=si>}</span><span class=s2> ALL=(root) NOPASSWD: /usr/sbin/service ssh start&#39; &gt;/etc/sudoers.d/service-ssh-start&#34;</span>
+</code></pre></div></li>
+<li>
+<p>Verify that the previous works; the command below should not ask for a password:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh>sudo /usr/sbin/service ssh start
+</code></pre></div></li>
+</ol>
+<p>After these steps, WSL should now be reachable from the Windows side via the local interface. Sanity-check that this is the case by running <code>ssh -p 2022 localhost</code> from a PowerShell console and seeing it work.</p>
+<p>Next up, we have to configure the machine so that both WSL and SSH start at boot time. To do this, we will create a scheduled task on Windows to run a custom script that starts the two:</p>
+<ol>
+<li>
+<p>Create a placeholder script to start the SSH server within WSL. I keep this script as <code>%USERPROFILE%\sshd.bat</code> (that is, <code>sshd.bat</code> under my home directory) but you can put it wherever you want:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-batch data-lang=batch><span class=p>@</span><span class=k>echo</span> off
+<span class=c1>rem Contents depend on WSL 1 or 2; will be provided later.</span>
+</code></pre></div></li>
+<li>
+<p>Copy and paste this task configuration into a file on your desktop. The name of the file does not matter; just make sure it carries an <code>.xml</code> extension:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-xml data-lang=xml><span class=cp>&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-16&#34;?&gt;</span>
+<span class=nt>&lt;Task</span> <span class=na>version=</span><span class=s>&#34;1.2&#34;</span> <span class=na>xmlns=</span><span class=s>&#34;http://schemas.microsoft.com/windows/2004/02/mit/task&#34;</span><span class=nt>&gt;</span>
+<span class=nt>&lt;RegistrationInfo&gt;</span>
+    <span class=nt>&lt;Date&gt;</span>2021-12-05T16:32:19.159532<span class=nt>&lt;/Date&gt;</span>
+    <span class=nt>&lt;Author&gt;</span>CHERRY\jmmv<span class=nt>&lt;/Author&gt;</span>
+    <span class=nt>&lt;URI&gt;</span>\Start WSL SSH<span class=nt>&lt;/URI&gt;</span>
+<span class=nt>&lt;/RegistrationInfo&gt;</span>
+<span class=nt>&lt;Triggers&gt;</span>
+    <span class=nt>&lt;BootTrigger&gt;</span>
+    <span class=nt>&lt;Enabled&gt;</span>true<span class=nt>&lt;/Enabled&gt;</span>
+    <span class=nt>&lt;Delay&gt;</span>PT30S<span class=nt>&lt;/Delay&gt;</span>
+    <span class=nt>&lt;/BootTrigger&gt;</span>
+<span class=nt>&lt;/Triggers&gt;</span>
+<span class=nt>&lt;Principals&gt;</span>
+    <span class=nt>&lt;Principal</span> <span class=na>id=</span><span class=s>&#34;Author&#34;</span><span class=nt>&gt;</span>
+    <span class=nt>&lt;UserId&gt;</span>S-0-0-00-0000000000-0000000000-0000000000-0000<span class=nt>&lt;/UserId&gt;</span>
+    <span class=nt>&lt;LogonType&gt;</span>Password<span class=nt>&lt;/LogonType&gt;</span>
+    <span class=nt>&lt;RunLevel&gt;</span>LeastPrivilege<span class=nt>&lt;/RunLevel&gt;</span>
+    <span class=nt>&lt;/Principal&gt;</span>
+<span class=nt>&lt;/Principals&gt;</span>
+<span class=nt>&lt;Settings&gt;</span>
+    <span class=nt>&lt;MultipleInstancesPolicy&gt;</span>IgnoreNew<span class=nt>&lt;/MultipleInstancesPolicy&gt;</span>
+    <span class=nt>&lt;DisallowStartIfOnBatteries&gt;</span>true<span class=nt>&lt;/DisallowStartIfOnBatteries&gt;</span>
+    <span class=nt>&lt;StopIfGoingOnBatteries&gt;</span>true<span class=nt>&lt;/StopIfGoingOnBatteries&gt;</span>
+    <span class=nt>&lt;AllowHardTerminate&gt;</span>true<span class=nt>&lt;/AllowHardTerminate&gt;</span>
+    <span class=nt>&lt;StartWhenAvailable&gt;</span>false<span class=nt>&lt;/StartWhenAvailable&gt;</span>
+    <span class=nt>&lt;RunOnlyIfNetworkAvailable&gt;</span>false<span class=nt>&lt;/RunOnlyIfNetworkAvailable&gt;</span>
+    <span class=nt>&lt;IdleSettings&gt;</span>
+    <span class=nt>&lt;StopOnIdleEnd&gt;</span>true<span class=nt>&lt;/StopOnIdleEnd&gt;</span>
+    <span class=nt>&lt;RestartOnIdle&gt;</span>false<span class=nt>&lt;/RestartOnIdle&gt;</span>
+    <span class=nt>&lt;/IdleSettings&gt;</span>
+    <span class=nt>&lt;AllowStartOnDemand&gt;</span>true<span class=nt>&lt;/AllowStartOnDemand&gt;</span>
+    <span class=nt>&lt;Enabled&gt;</span>true<span class=nt>&lt;/Enabled&gt;</span>
+    <span class=nt>&lt;Hidden&gt;</span>false<span class=nt>&lt;/Hidden&gt;</span>
+    <span class=nt>&lt;RunOnlyIfIdle&gt;</span>false<span class=nt>&lt;/RunOnlyIfIdle&gt;</span>
+    <span class=nt>&lt;WakeToRun&gt;</span>false<span class=nt>&lt;/WakeToRun&gt;</span>
+    <span class=nt>&lt;ExecutionTimeLimit&gt;</span>PT72H<span class=nt>&lt;/ExecutionTimeLimit&gt;</span>
+    <span class=nt>&lt;Priority&gt;</span>7<span class=nt>&lt;/Priority&gt;</span>
+<span class=nt>&lt;/Settings&gt;</span>
+<span class=nt>&lt;Actions</span> <span class=na>Context=</span><span class=s>&#34;Author&#34;</span><span class=nt>&gt;</span>
+    <span class=nt>&lt;Exec&gt;</span>
+    <span class=nt>&lt;Command&gt;</span>C:\Users\youruser\sshd.bat<span class=nt>&lt;/Command&gt;</span>
+    <span class=nt>&lt;/Exec&gt;</span>
+<span class=nt>&lt;/Actions&gt;</span>
+<span class=nt>&lt;/Task&gt;</span>
+</code></pre></div><p>WARNING: Beware that this task definition relies on machine- and user-specific properties, and that I wiped them in the file above. In particular, <code>UserId</code> and <code>Command</code> are wrong for your machine. That&rsquo;s OK. Proceed with these fake values during the initial import.</p>
+</li>
+<li>
+<p>Open the <strong>Task scheduler</strong> tool from the Start menu.</p>
+</li>
+<li>
+<p>Click on the <strong>Import Task&mldr;</strong> action and select the XML file you created.</p>
+</li>
+<li>
+<p>Now edit the task to update the few settings that are machine- and user-dependent.</p>
+<ol>
+<li>
+<p>In the <strong>General</strong> tab, click on <strong>Change User or Group&mldr;</strong> and fix the name of the Windows user that will launch WSL:</p>
+<figure>
+<img src=/images/2022-02-27-start-wsl-task-1.png width=100%>
+<figcaption>Screenshot of the <i>General</i> tab contents in the task configuration.</figcaption>
+</figure>
+</li>
+<li>
+<p>In the <strong>Triggers</strong> tab, you should not have to change anything. Just make sure the trigger is registered as <strong>At startup</strong>:</p>
+<figure>
+<img src=/images/2022-02-27-start-wsl-task-2.png width=100%>
+<figcaption>Screenshot of the <i>Triggers</i> tab contents in the task configuration.</figcaption>
+</figure>
+</li>
+<li>
+<p>In the <strong>Actions</strong> tab, fix the path in the <strong>Start a program</strong> action so that it points to the <code>sshd.bat</code> script you created:</p>
+<figure>
+<img src=/images/2022-02-27-start-wsl-task-3.png width=100%>
+<figcaption>Screenshot of the <i>Actions</i> tab contents in the task configuration.</figcaption>
+</figure>
+</li>
+</ol>
+</li>
+</ol>
+<p>With these steps done, the task is now ready to run at system startup time even if you don&rsquo;t log into your account.</p>
+<p>It&rsquo;s time to populate the <code>sshd.bat</code> script with the actual logic to run WSL and SSH. Its contents vary depending on WSL 1 and WSL 2 because they are vastly different beasts network-wise. You may want to review my post titled <a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a> for details on this topic&mdash;and yes, I still believe WSL 1 is a better model.</p>
+<h1 id=wsl-1-specific-steps>WSL 1-specific steps</h1>
+<p>WSL 1 shares the kernel facilities with Windows so the network interface we see within WSL 1 is the physical network interface of the machine. As a result, the SSH server that is listening on port 2022 within WSL is actually listening on port 2022 of the physical interface. There is nothing extra to do to make this port reachable to outside connections. All we need is to make <code>sshd.bat</code> launch the SSH service.</p>
+<p>Update the <code>%USERPROFILE%\sshd.bat</code> script as follows:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-batch data-lang=batch><span class=p>@</span><span class=k>echo</span> off
+C<span class=p>:</span><span class=nl>\Windows\System32\bash.exe</span><span class=c1> -c &#34;sudo /usr/sbin/service ssh start&#34;</span>
+</code></pre></div><h1 id=wsl-2-specific-steps>WSL 2-specific steps</h1>
+<p>WSL 2 is a well-hidden virtual machine, but it is <em>still</em> a virtual machine&mdash;and the consequences of this design are leaky. The network interface we see within WSL is a virtual interface that does not match the physical interface that Windows manages. Windows does a good job at hiding this fact when operating directly on the local machine (e.g. you can SSH into WSL from <code>localhost</code> and it will work), but attempts to reach WSL from a separate machine will fail.</p>
+<p>To fix this, we need to do a couple of things. First, we have to open up a firewall rule to allow incoming traffic on port 2022. Easy enough with PowerShell:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=nb>New-NetFirewallRule</span> <span class=n>-Name</span> <span class=n>sshd</span> <span class=n>-DisplayName</span> <span class=s1>&#39;OpenSSH Server (sshd) for WSL&#39;</span> <span class=n>-Enabled</span> <span class=n>True</span> <span class=n>-Direction</span> <span class=n>Inbound</span> <span class=n>-Protocol</span> <span class=n>TCP</span> <span class=n>-Action</span> <span class=n>Allow</span> <span class=n>-LocalPort</span> <span class=n>2022</span>
+</code></pre></div><p>And then we have to route incoming traffic on the physical interface to the WSL interface via a &ldquo;port proxy&rdquo; rule. This is made extra complicated because the IP given to the WSL instance is not stable over time, so we need to figure that out dynamically.</p>
+<p>Update the <code>%USERPROFILE%\sshd.bat</code> script as follows:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-batch data-lang=batch><span class=p>@</span><span class=k>echo</span> off
+<span class=k>setlocal</span>
+
+C<span class=p>:</span><span class=nl>\Windows\System32\bash.exe</span><span class=c1> -c &#34;sudo /usr/sbin/service ssh start&#34;</span>
+
+C<span class=p>:</span><span class=nl>\Windows\System32\netsh.exe</span><span class=c1> interface portproxy delete v4tov4 listenport=2022 listenaddress=0.0.0.0 protocol=tcp</span>
+
+<span class=k>for</span> <span class=k>/f</span> <span class=se>%%</span>i <span class=k>in</span> <span class=p>(</span><span class=s1>&#39;wsl hostname -I&#39;</span><span class=p>)</span> <span class=k>do</span> <span class=k>set</span> <span class=nv>IP</span><span class=p>=</span><span class=se>%%</span>i
+C<span class=p>:</span><span class=nl>\Windows\System32\netsh.exe</span><span class=c1> interface portproxy add v4tov4 listenport=2022 listenaddress=0.0.0.0 connectport=2022 connectaddress=%IP%</span>
+
+<span class=k>endlocal</span>
+</code></pre></div><h1 id=client-configuration>Client configuration</h1>
+<p>That&rsquo;s it. If everything went well, WSL should now be reachable via port 2022 from other machines. And if you also enabled Windows' own SSH server&mdash;which you should probably do to have a fallback if the hand-crafted WSL setup fails&mdash;you should be able to reach Windows via port 22.</p>
+<p>Combine that with a few entries in <code>%USERPROFILE%\.ssh\config</code> and <code>~/.ssh/config</code> to trivially reach each system by name and you can then remote into each variant of the system with ease:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain>Host cherry cherry.meroh.net
+Hostname cherry.meroh.net
+Port 2022
+User jmmv
+
+Host cherry-win cherry.meroh.net
+Hostname cherry.meroh.net
+Port 22
+User jmmv
+
+Host cherry-wsl cherry.meroh.net
+Hostname cherry.meroh.net
+Port 2022
+User jmmv
+</code></pre></div><p>The above is especially useful if you use VSCode&rsquo;s Remote SSH extension as you will now be able to pick the target system from the dropdown menu.</p>
+</article>
+</div>
+</div>
+<div class="container post-votes">
+<div class=row>
+<div class="col-lg-4 my-2">
+<div class=row>
+<div class=col>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+</div>
+<div class="col-lg-8 my-2 d-none d-sm-block">
+<div class=row>
+<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Configuring+SSH+access+into+WSL+%281+and+2%29&url=https%3A%2F%2Fjmmv.dev%2F2022%2F02%2Fwsl-ssh-access.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Configuring+SSH+access+into+WSL+%281+and+2%29&u=https%3A%2F%2Fjmmv.dev%2F2022%2F02%2Fwsl-ssh-access.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Configuring+SSH+access+into+WSL+%281+and+2%29+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2022%2F02%2Fwsl-ssh-access.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
+</a>
+</div>
+</div>
+</div>
+</div>
+<div class="row my-4" id=postCommentRow>
+<div class=col>
+<div class=media>
+<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
+<div class="media-body container">
+<form method=post id=newPost>
+<div class=row>
+<div class="col my-1">
+<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentEmail>Your email (optional):</label>
+<input type=text class=form-control type=email id=postCommentEmail>
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
+</div>
+</div>
+<div class=row id=postCommentError style=display:none>
+<div class="col mt-1 alert-danger">
+<p></p>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class=col-sm-9>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<div class=row>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
+<button type=submit class="btn btn-primary col-4">Subscribe</button>
+</div>
+</div>
+</form>
+</div>
+<div class=col-sm-3>
+<div class=row>
+<div class="col px-2 text-center">
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</div>
+<div class="col px-2 text-center">
+<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col mr-auto text-left">
+<span><a href=https://jmmv.dev/2022/02/my-story-with-windows.html>&#171; Previous</a></span>
+</div>
+<div class="col text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col ml-auto text-right">
+<span></span>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar d-none d-md-block">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Principal Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-6 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-6 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
+<li class=indent-wrapped-lines><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
+<li class=indent-wrapped-lines><a href=/2020/10/bye-google-hi-microsoft.html>Farewell, Google; hello, Microsoft!</a></li>
+<li class=indent-wrapped-lines><a href=/2020/08/config-files-vs-directories.html>Configuration files and .d directories</a></li>
+<li class=indent-wrapped-lines><a href=/2020/05/bridging-the-web-gap-endbasic.html>Bridging the web gap in EndBASIC</a></li>
+<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (5)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col-4 order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col-8 order-1 mr-auto">
+<p>Copyright 2004&ndash;2022 Julio Merino</p>
+</div>
+</div>
+</footer>
+<script type=module>
+  import {
+    addAnchorsToHeaders, addElementClasses, CommentsClient, RequestsClient, VotingClient,
+  } from "\/js\/main.206a07fe4c7d1171cc21a07dc6db2b7e7a14041543863c05da8c94d70d31401c.js";
+
+  var requestsClient = new RequestsClient(SITE_ID);
+  requestsClient.saveRequest();
+
+  var votingClient = new VotingClient(SITE_ID);
+  votingClient.loadVotes();
+  window.voteThumbsUp = function() { votingClient.voteThumbsUp(); }
+  window.voteThumbsDown = function() { votingClient.voteThumbsDown(); }
+
+  var commentsClient = new CommentsClient(SITE_ID);
+  commentsClient.loadComments();
+  window.postComment = function(...args) {
+    commentsClient.postComment(...args);
+  };
+
+  addAnchorsToHeaders();
+  addElementClasses();
+</script>
+<noscript>
+<img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIyLzAyL3dzbC1zc2gtYWNjZXNzLmh0bWw=/stamp.gif" style=display:none>
+</noscript>
+</body>
+</html>
