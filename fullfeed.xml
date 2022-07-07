@@ -1,4 +1,108 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 17 Jun 2022 06:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Speeding up autoconf with caching</title><link>https://jmmv.dev/2022/06/autoconf-caching.html</link><pubDate>Fri, 17 Jun 2022 06:30:00 -0700</pubDate><guid>https://jmmv.dev/2022/06/autoconf-caching.html</guid><description>&lt;p>In the recent &lt;a href="/2022/05/remembering-buildtool.html">Remembering Buildtool&lt;/a> post, I described how setting up a cache of configuration checks was an important step in Buildtool&amp;rsquo;s installation process. The goal was to avoid pointless repetitive work on every build by performing such common checks once.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Thu, 07 Jul 2022 07:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Tips on formatting Markdown lists</title><link>https://jmmv.dev/2022/07/markdown-lists.html</link><pubDate>Thu, 07 Jul 2022 07:00:00 -0700</pubDate><guid>https://jmmv.dev/2022/07/markdown-lists.html</guid><description>&lt;p>Lists are a very common construct in technical documents, which is the kind of material I most often write and &lt;em>review&lt;/em>. But getting complex lists to look right is tricky, especially when authoring them in Markdown.&lt;/p>
+&lt;p>The problem with lists starts early on. All Markdown training material will teach you that lists are written like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-markdown" data-lang="markdown">This is an unordered list:
+&lt;span class="k">*&lt;/span> First.
+&lt;span class="k">*&lt;/span> Second.
+&lt;span class="k">*&lt;/span> Third.
+And this is an ordered list:
+&lt;span class="k">1.&lt;/span> First.
+&lt;span class="k">2.&lt;/span> Second.
+&lt;span class="k">3.&lt;/span> Third.
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Looks trivial and easily readable in its textual form, right? Unfortunately, this style quickly breaks down as soon as you have multiple people editing the same document or you start nesting lists and code blocks.&lt;/p>
+&lt;p>From experience, I&amp;rsquo;ve come up with a style of writing lists that ensures they are always correctly and consistently formatted, and that mistakes are trivial to spot at review time. I find myself repeating these tips and their rationale during PR reviews, so here is a full-fledged explanation for posterity&amp;rsquo;s sake.&lt;/p>
+&lt;h1 id="ordered-list-numbers">Ordered list numbers&lt;/h1>
+&lt;p>When working with a large ordered list, keeping items properly numbered is a task that seems impossible. Oftentimes, I&amp;rsquo;ve gotten PRs &lt;em>for new content&lt;/em> where the item numbers were wrong from the get go. Things like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-markdown" data-lang="markdown">&lt;span class="k">1.&lt;/span> First.
+&lt;span class="k">3.&lt;/span> Third already? I guess the item was moved at the last minute.
+&lt;span class="k">2.&lt;/span> Second.
+&lt;span class="k">2.&lt;/span> Second again. Copy/paste error?
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Markdown will happily accept this and will render the list with correct sequential numbering (note: it will fix the numbering, not reorder your items!). But&amp;hellip; do you think this is good? In my opinion, this looks sloppy&amp;mdash;and sloppiness of this kind during a PR review is an indicator that the rest of your change is suspect of more serious problems and deserves thorough scrutiny.&lt;/p>
+&lt;p>The problems don&amp;rsquo;t end with the author having to be more careful though. If you &lt;em>try&lt;/em> to do the right thing and try to keep the list numbers sequential, you&amp;rsquo;ll have cases where a trivial addition to a document will result in a large diff because you had to renumber all subsequent entries. Take a look at this change and try to answer the question of &amp;ldquo;what is this doing?&amp;quot;:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-diff" data-lang="diff">&lt;span class="gd">--- before 2022-07-07 05:50:28.439334000 -0700
+&lt;/span>&lt;span class="gd">&lt;/span>&lt;span class="gi">+++ after 2022-07-07 05:50:48.189334000 -0700
+&lt;/span>&lt;span class="gi">&lt;/span>&lt;span class="gu">@@ -1,3 +1,4 @@
+&lt;/span>&lt;span class="gu">&lt;/span> 1. This item comes first.
+&lt;span class="gd">-2. This item is in the middle.
+&lt;/span>&lt;span class="gd">-3. This item comes last.
+&lt;/span>&lt;span class="gd">&lt;/span>&lt;span class="gi">+2. This item is also in the middle.
+&lt;/span>&lt;span class="gi">+3. This item is in the middle.
+&lt;/span>&lt;span class="gi">+4. This item comes last.
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This patch is simply adding a new item in position 2, but the change had to end up touching two extra unrelated lines. This is hard to review and pollutes the output of &lt;code>git blame&lt;/code> (or whichever equivalent annotation command your VCS provides).&lt;/p>
+&lt;p>The easiest way out of this problem is to &lt;em>not&lt;/em> number your lists sequentially. Instead, always prefix them with &lt;code>1.&lt;/code>, like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-markdown" data-lang="markdown">&lt;span class="k">1.&lt;/span> First.
+&lt;span class="k">1.&lt;/span> Second, really.
+&lt;span class="k">1.&lt;/span> Third. Yes, this works!
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Doing so will free you from having to maintain sequential list numbers and will also keep diffs clean. Going back to our previous example, adding an item in position 2 would look like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-diff" data-lang="diff">&lt;span class="gd">--- before 2022-07-07 05:53:31.549334000 -0700
+&lt;/span>&lt;span class="gd">&lt;/span>&lt;span class="gi">+++ after 2022-07-07 05:53:33.429334000 -0700
+&lt;/span>&lt;span class="gi">&lt;/span>&lt;span class="gu">@@ -1,3 +1,4 @@
+&lt;/span>&lt;span class="gu">&lt;/span> 1. This item comes first.
+&lt;span class="gi">+1. This item is also in the middle.
+&lt;/span>&lt;span class="gi">&lt;/span> 1. This item is in the middle.
+1. This item comes last.
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Clean and to the point.&lt;/p>
+&lt;h1 id="nested-elements">Nested elements&lt;/h1>
+&lt;p>The other problem when formatting lists comes from complex lists that have more than just one paragraph per item or higher-level blocks within them. Inevitably, people new to Markdown will write things like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-markdown" data-lang="markdown">&lt;span class="k">*&lt;/span> This is the first bullet point.
+We try to add a second paragraph, but it may not be within the item.
+&lt;span class="k">*&lt;/span> This is the second bullet point.
+And we want a code block within it, but this is not a code block!
+Neither is this!
+&lt;span class="k">*&lt;/span> This is the third bullet point.
+&lt;span class="k">
+&lt;/span>&lt;span class="k"> &amp;gt; &lt;/span>&lt;span class="ge">And we try to add a blockquote like we added a second paragraph, but fail.
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The above will not be formatted as you expect. The second paragraph in the first list item may or may not end up rendered as a paragraph within the list item. The code blocks in the second list item may or may not be rendered as a code block, but if they are, they will &lt;em>not&lt;/em> be nested. And if you try to nest lists, all bets are off.&lt;/p>
+&lt;p>These problems don&amp;rsquo;t look apparent in the raw Markdown text and they are difficult to spot in document previews unless you pay close attention to the rendering. Most people don&amp;rsquo;t seem to notice when code blocks are wider than they are supposed to be, for example, or when paragraphs are not correctly aligned within their container list items.&lt;/p>
+&lt;p>Plus it&amp;rsquo;s not only about the looks. These formatting mistakes break the &lt;em>semantics&lt;/em> of the document: instead of having a single list with longer individual elements, you end up with &lt;em>two&lt;/em> disjoint lists. I don&amp;rsquo;t have experience with screen readers, but I&amp;rsquo;m pretty sure this poses an accessibility problem.&lt;/p>
+&lt;p>The above problems are fixable, obviously. If we look at the &lt;a href="https://www.markdownguide.org/basic-syntax#adding-elements-in-lists">Adding Elements in Lists&lt;/a> section of the &lt;a href="https://www.markdownguide.org/">Markdown Guide&lt;/a> website, we&amp;rsquo;ll find examples on how to correctly nest elements. Their suggestion is this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-markdown" data-lang="markdown">&lt;span class="k">*&lt;/span> This is the first bullet point.
+This is a second paragraph within the first item.
+&lt;span class="k">*&lt;/span> This is the second bullet point.
+This is a code block within it.
+&lt;span class="k">*&lt;/span> This is the third bullet point.
+&lt;span class="k">
+&lt;/span>&lt;span class="k"> &amp;gt; &lt;/span>&lt;span class="ge">This is a blockquote within it.
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>These work as intended, but to me, they look like a huge mess. If I were reviewing the above, I would have a hard time understanding if the nesting is correct, and to the untrained eye, this just looks wrong. I wouldn&amp;rsquo;t fault anyone coming up with a PR to &amp;ldquo;realign&amp;rdquo; the lines above so that they &amp;ldquo;look&amp;rdquo; correct in their textual form.&lt;/p>
+&lt;p>My suggestion to fix the above is to always indent list item content to multiples of 4 columns, like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-markdown" data-lang="markdown">&lt;span class="k">*&lt;/span> This is the first bullet point.
+This is a continuation paragraph, and it works.
+&lt;span class="k">*&lt;/span> This is the second bullet point.
+With a nested code block.
+&lt;span class="k">*&lt;/span> This is the third bullet point.
+&lt;span class="k">
+&lt;/span>&lt;span class="k"> &amp;gt; &lt;/span>&lt;span class="ge">With a nested blockquote.
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Which works equally well for ordered lists &lt;em>and&lt;/em> lists with multiple levels:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-markdown" data-lang="markdown">&lt;span class="k">*&lt;/span> First bullet point.
+&lt;span class="k">1.&lt;/span> Nested ordered list.
+&lt;span class="k">1.&lt;/span> With multiple items.
+And a code block.
+&lt;span class="k">*&lt;/span> Second bullet point.
+&lt;span class="k">
+&lt;/span>&lt;span class="k"> &amp;gt; &lt;/span>&lt;span class="ge">And a blockquote.
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note how there are 3 spaces after the &lt;code>*&lt;/code> prefixes and 2 spaces after the &lt;code>1.&lt;/code> prefixes. I&amp;rsquo;ll agree that this doesn&amp;rsquo;t look super neat in textual form, but it is &lt;em>consistent&lt;/em>, easy to understand, and works all the time.&lt;/p>
+&lt;h1 id="markdownlint-configuration-for-vscode">markdownlint configuration for VSCode&lt;/h1>
+&lt;p>I strongly recommend everyone that authors Markdown content:&lt;/p>
+&lt;ol>
+&lt;li>to use Visual Studio Code;&lt;/li>
+&lt;li>to install the &lt;a href="https://marketplace.visualstudio.com/items?itemName=DavidAnson.vscode-markdownlint">markdownlint extension&lt;/a>, and&lt;/li>
+&lt;li>to address all squiggly lines that indicate Markdown formatting mistakes.&lt;/li>
+&lt;/ol>
+&lt;p>If you use these tools, you can apply the following configuration entries to enforce the style suggestions given in this post:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="s2">&amp;#34;markdownlint.config&amp;#34;&lt;/span>&lt;span class="err">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nt">&amp;#34;MD007&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="c1">// Unordered list indentation.
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="nt">&amp;#34;indent&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">4&lt;/span>
+&lt;span class="p">},&lt;/span>
+&lt;span class="nt">&amp;#34;MD029&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="c1">// Ordered list item prefix.
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="nt">&amp;#34;style&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;one&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="p">},&lt;/span>
+&lt;span class="nt">&amp;#34;MD030&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="c1">// Spaces after list markers.
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="nt">&amp;#34;ol_single&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">2&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="nt">&amp;#34;ol_multi&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">2&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="nt">&amp;#34;ul_single&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">3&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="nt">&amp;#34;ul_multi&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">3&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>I have yet to set up PR validation automation to run &lt;a href="https://github.com/DavidAnson/markdownlint">markdownlint&lt;/a> directly on the content and fail PR merges on mistakes&amp;hellip; but this is an idea I&amp;rsquo;ve just had as I was writing this 😉&lt;/p></description></item><item><title>Speeding up autoconf with caching</title><link>https://jmmv.dev/2022/06/autoconf-caching.html</link><pubDate>Fri, 17 Jun 2022 06:30:00 -0700</pubDate><guid>https://jmmv.dev/2022/06/autoconf-caching.html</guid><description>&lt;p>In the recent &lt;a href="/2022/05/remembering-buildtool.html">Remembering Buildtool&lt;/a> post, I described how setting up a cache of configuration checks was an important step in Buildtool&amp;rsquo;s installation process. The goal was to avoid pointless repetitive work on every build by performing such common checks once.&lt;/p>
 &lt;p>&lt;a href="https://www.bsdnow.tv/457">Episode 457 of BSD Now&lt;/a> featured my post and Allan Jude wondered how much time would be saved in a bulk build of all FreeBSD packages if we could just do that same kind of caching with GNU Autoconf. And, you know what? It is indeed possible to do so. I had mentioned it en passing in my post but I guess I wasn&amp;rsquo;t clear enough, so let&amp;rsquo;s elaborate!&lt;/p>
 &lt;h1 id="the-problem-autoconfs-slowness">The problem: Autoconf&amp;rsquo;s slowness&lt;/h1>
 &lt;p>The &lt;code>configure&lt;/code> scripts generated by GNU Autoconf are slow, &lt;em>very&lt;/em> slow, to the point where sometimes their execution time is longer than the time it takes to build the package they configure. This is especially true on multi-core systems where these scripts make builds drag along.&lt;/p>
@@ -1266,23 +1370,4 @@ test.txt: Unicode text, UTF-16, little-endian text, with CRLF line terminators
 &lt;p>As I was writing this article, I have found out that &lt;code>wmic.exe&lt;/code> is finally deprecated and that, as of Windows 10 21H2, PowerShell has &lt;a href="https://docs.microsoft.com/en-us/powershell/scripting/learn/ps101/07-working-with-wmi?view=powershell-7.2">native interaction points with WMI&lt;/a>. One less source of inconsistencies but it has taken years to get here!&amp;#160;&lt;a href="#fnref:2" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
 &lt;/li>
 &lt;/ol>
-&lt;/section></description></item><item><title>A year on Windows: Development experience</title><link>https://jmmv.dev/2022/03/a-year-on-windows-devel.html</link><pubDate>Mon, 14 Mar 2022 06:30:00 -0700</pubDate><guid>https://jmmv.dev/2022/03/a-year-on-windows-devel.html</guid><description>&lt;p>We are finally entering the final part of this one-year retrospective by shifting gears into developer-oriented topics.&lt;/p>
-&lt;p>I hadn&amp;rsquo;t touched Windows to write code since 2006 and the development experience has massively changed for the better during the last 6 years. So let&amp;rsquo;s start this part by talking about the crown jewel of development on modern Windows: the WSL + Windows Terminal + VSCode trifecta.&lt;/p>
-&lt;p>For a little bit of context: if you don&amp;rsquo;t know me, I&amp;rsquo;ve spent almost all of my programming years (so far!) on Unix systems, though I do have some experience writing software &lt;em>for&lt;/em> Windows: I wrote a few toys back in the day with Visual Basic 3.0 and created &lt;a href="/software/boost-process.html">Boost.Process&lt;/a> during the Google Summer of Code 2006 program to teach myself some Win32. These days I &lt;em>do&lt;/em> write software &amp;ldquo;for&amp;rdquo; Windows (I work on Azure Storage after all, but that&amp;rsquo;s so infrastructure-y that barely qualifies) yet, for my personal projects, I still continue to develop code that primarily runs on Unix systems.&lt;/p>
-&lt;h1 id="wsl">WSL&lt;/h1>
-&lt;p>WSL, or Windows Subsystem for Linux, brings a real Unix-y interface to Windows (&lt;a href="https://en.wikipedia.org/wiki/Windows_Services_for_UNIX">again&lt;/a>). You can&amp;rsquo;t use this for administration tasks much, &lt;a href="/2020/11/wsl-lost-potential.html">which I still think is a pity&lt;/a>, but it&amp;rsquo;s a very useful environment to support development tasks.&lt;/p>
-&lt;p>In particular, WSL works very well because it &lt;em>is&lt;/em> Linux, which means you can run a regular Debian system and have almost everything work out of the box. Because of this, WSL can sometimes be even more convenient than macOS, which sounded shocking to me when I &lt;a href="https://twitter.com/jmmv/status/1502465715961356293?s=20&amp;amp;t=7B9e9Oo5MmQQn71P_Ap7iQ">said that out loud a couple of days ago&lt;/a>: macOS is truly a Unix system underneath but, unfortunately, you have to bend over backwards to make some stuff work.&lt;/p>
-&lt;p>Recent versions of WSL feel even more transparent than being &amp;ldquo;just a VM&amp;rdquo; because graphical apps started within WSL seamlessly integrate with the Windows desktop. But this integration only goes so far: while I haven&amp;rsquo;t had to fight WSL to run the tools I need, I have had to fight Windows to get &lt;a href="/2022/02/wsl-ssh-access.html">SSH inbound connections into WSL&lt;/a> for example.&lt;/p>
-&lt;p>WSL isn&amp;rsquo;t necessary though. You can, of course, develop directly on Windows, which I occasionally do. However, I often find myself working within WSL because &lt;code>zsh&lt;/code> is still more natural to me than PowerShell, because some auxiliary apps I need run more easily in WSL, and because tools like Git don&amp;rsquo;t integrate that nicely with Windows. &lt;a href="/2020/11/cmdline-args-unix-vs-windows.html">Command-line parsing on Windows is a shit show&lt;/a> that leaks through Unix-native programs like Git.&lt;/p>
-&lt;h1 id="windows-terminal">Windows Terminal&lt;/h1>
-&lt;p>What would WSL be if you didn&amp;rsquo;t have a nice console to interact with it? Ugly and not worthy of a second look. That&amp;rsquo;s what it would be.&lt;/p>
-&lt;p>Windows Terminal brings a modern good-looking console application to Windows. The old console apps, like the Command Prompt or PowerShell, are separate from each other and weren&amp;rsquo;t visually consistent until recently. For this reason, there exist various alternative console applications&amp;mdash;like Cmder and ConEmu&amp;mdash;which are very powerful but, in my opinion, ugly and overly-complex. Windows Terminal, on the other hand, feels simple with its uncluttered UI supporting tabs, nice fonts, profiles, and a flat configuration file.&lt;/p>
-&lt;p>The one thing I don&amp;rsquo;t like about the Windows Terminal&amp;mdash;and this starts to be a recurring theme in these series&amp;mdash;is that launching it takes like forever: &lt;strong>4 seconds&lt;/strong> from a click on the taskbar to getting a PowerShell interpreter on my Surface Go 2. Compare this to launching Terminal.app on macOS or your favorite terminal emulator on a Unix system, all of which are near-instantaneous and make the command line feel like an integral part of the OS. Not so on Windows, and I&amp;rsquo;m not sure why.&lt;/p>
-&lt;h1 id="vscode">VSCode&lt;/h1>
-&lt;p>And what would WSL be if you were restricted to terminal apps or redirected X11 apps with their inconsistent non-native widgets? Not great, let me tell you. Hence VSCode. VSCode is the magical piece of this puzzle that makes WSL truly feel like a great development option.&lt;/p>
-&lt;p>VSCode does its magic by combining the best of the two worlds: a native, blazing-fast local editor (yes, I know, it&amp;rsquo;s Electron) that transparently accesses workspaces on remote (virtual) machines and leverages their power for builds and debugging. I have been a happy user of this editor pretty much since it came out, so my move to Windows is not why I started using it. However, these remote development features against WSL or SSH hosts are what have convinced me that it&amp;rsquo;s one of the best options out there, and is why I like my Surface Go 2 so much: even if its hardware is underpowered, I don&amp;rsquo;t have to worry about it because the real work can happen elsewhere.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2022-03-14-vscode-and-wsl.png" width="100%" style="max-width: 1920px"/>
-&lt;figcaption>VSCode and Windows Terminal side-by-side, connected to a local WSL 2 session for some Rust development.&lt;/figcaption>
-&lt;/figure>
-&lt;p>That&amp;rsquo;s enough for today. Tomorrow, let&amp;rsquo;s build on this post by talking about PowerShell, which isn&amp;rsquo;t on the same level of importance as these three tools but is a major step up from &lt;code>cmd.exe&lt;/code> and a necessity if you are going to use Windows for development.&lt;/p></description></item></channel></rss>
+&lt;/section></description></item></channel></rss>
