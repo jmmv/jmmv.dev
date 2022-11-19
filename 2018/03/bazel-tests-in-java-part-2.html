@@ -1,148 +1,218 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<meta property="twitter:site" content="@jmmv">
-<title>A case for writing Bazel's integration tests in Java, part 2 - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="A case for writing Bazel's integration tests in Java, part 2 - Julio Merino (jmmv.dev)">
-<meta property="twitter:title" content="A case for writing Bazel's integration tests in Java, part 2 - Julio …">
-<meta name=description content="In part 1 of this series, I made the case that you should run away from the shell when writing integration tests for your software and that you should embrace the primary language of your project to write those.
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+
+  <title>A case for writing Bazel&#39;s integration tests in Java, part 2 - Julio Merino (jmmv.dev)</title>
+  <meta property="og:title" content="A case for writing Bazel&#39;s integration tests in Java, part 2 - Julio Merino (jmmv.dev)">
+
+  
+
+  <meta name="description" content="In part 1 of this series, I made the case that you should run away from the shell when writing integration tests for your software and that you should embrace the primary language of your project to write those.
 Depending on the language you are using, doing this will mean significant more work upfront to lay out the foundations for your tests, but this work will pay off. You may also feel that the tests could be more verbose than if they were in shell, though that&amp;rsquo;s not necessarily the case.">
-<meta property="og:description" content="In part 1 of this series, I made the case that you should run away from the shell when writing integration tests for your software and that you should embrace the primary language of your project to write those.
+  <meta property="og:description" content="In part 1 of this series, I made the case that you should run away from the shell when writing integration tests for your software and that you should embrace the primary language of your project to write those.
 Depending on the language you are using, doing this will mean significant more work upfront to lay out the foundations for your tests, but this work will pay off. You may also feel that the tests could be more verbose than if they were in shell, though that&amp;rsquo;s not necessarily the case.">
-<meta property="twitter:description" content="In part 1 of this series, I made the case that you should run away from the shell when writing integration tests for your software and that you should embrace the primary language of your project to …">
-<meta name=author content="Julio Merino">
-<meta property="twitter:creator" content="@jmmv">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2018/03/bazel-tests-in-java-part-2.html">
-<meta property="og:type" content="blog">
-<meta property="twitter:card" content="summary">
-<link rel=canonical href=https://jmmv.dev/2018/03/bazel-tests-in-java-part-2.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.e6bc80a1be92c773c7961a8e97099442cea2dd8ed61958e61cf1436928d991e2.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
-<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.92.2" />
+
+  <meta property="og:url" content="https://jmmv.dev/2018/03/bazel-tests-in-java-part-2.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/2018/03/bazel-tests-in-java-part-2.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/sass/main.min.723838a96cb313367e5aed166b75faaf5b61f6d641c9d5ea50920a91610c18ce.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDE4LzAzL2JhemVsLXRlc3RzLWluLWphdmEtcGFydC0yLmh0bWw=';
+  </script>
 </head>
-<body>
-<header class=site-header>
+
+
+  <body>
+    <header class="site-header">
+
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
-<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;Julio Merino
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/privacy.html" >Privacy</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="https://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
 </nav>
+
 </header>
-<div class=page-header>
-<div class=container>
-<h1>A case for writing Bazel's integration tests in Java, part 2</h1>
-<p>March 19, 2018 &#183;
-About 12 minutes
-&#183;
-Tags:
-<a class=text-reset href=/tags/bazel>bazel</a>, <a class=text-reset href=/tags/google>google</a>, <a class=text-reset href=/tags/sandboxfs>sandboxfs</a>, <a class=text-reset href=/tags/software>software</a></p>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
-<article><p>In <a href=/2018/03/bazel-tests-in-java-part-1.html>part 1 of this series</a>, I made the case that you should <strong>run away from the shell when writing integration tests</strong> for your software and that you should <strong>embrace the primary language of your project</strong> to write those.</p>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>A case for writing Bazel&#39;s integration tests in Java, part 2</h1>
+
+        <p>March 19, 2018 &middot;
+        About 12 minutes
+        &middot;
+        Tags:
+        <a class="text-reset" href="/tags/bazel">bazel</a>, <a class="text-reset" href="/tags/google">google</a>, <a class="text-reset" href="/tags/sandboxfs">sandboxfs</a>, <a class="text-reset" href="/tags/software">software</a></p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div id="cookie-notice"></div>
+
+          <div class="row">
+            <div class="col">
+              
+              <article><p>In <a href="/2018/03/bazel-tests-in-java-part-1.html">part 1 of this series</a>, I made the case that you should <strong>run away from the shell when writing integration tests</strong> for your software and that you should <strong>embrace the primary language of your project</strong> to write those.</p>
 <p>Depending on the language you are using, doing this will mean significant more work upfront to lay out the foundations for your tests, but this work will pay off. You may also <em>feel</em> that the tests could be more verbose than if they were in shell, though that&rsquo;s not necessarily the case.</p>
-<p>In this second part, I&rsquo;ll assume I have already convinced you that using the shell is a horrible idea, and that using another interpreted language is equally bad <em>unless</em> your project is already using that language. Given those, I&rsquo;ll guide you through a case study using the <a href=https://github.com/bazelbuild/sandboxfs>sandboxfs</a> project, present some key design ideas that you should consider, propose a very rudimentary API, and finally cover what the roadmap for Bazel could look like.</p>
+<p>In this second part, I&rsquo;ll assume I have already convinced you that using the shell is a horrible idea, and that using another interpreted language is equally bad <em>unless</em> your project is already using that language. Given those, I&rsquo;ll guide you through a case study using the <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a> project, present some key design ideas that you should consider, propose a very rudimentary API, and finally cover what the roadmap for Bazel could look like.</p>
 <hr>
-<p><strong>A case for writing integration tests in Java: practical aspects</strong><br>
+<p><strong>A case for writing integration tests in Java: practical aspects</strong><br/>
 <em>Fixing Bazel&rsquo;s reliability by treating tests as production-grade code</em></p>
-<nav id=TableOfContents>
-<ul>
-<li><a href=#case-study-sandboxfs>Case study: sandboxfs</a>
-<ul>
-<li><a href=#initial-integration-tests-were-in-shell>Initial integration tests were in shell</a></li>
-<li><a href=#the-tests-could-not-be-open-sourced>The tests could not be open-sourced</a></li>
-<li><a href=#initial-steps-in-the-rewrite-in-go>Initial steps in the rewrite in Go</a></li>
-<li><a href=#gained-benefits>Gained benefits</a></li>
-</ul>
-</li>
-<li><a href=#design-ideas>Design ideas</a>
-<ul>
-<li><a href=#process-execution-and-validation>Process execution and validation</a></li>
-<li><a href=#posix-like-file-and-text-manipulation>POSIX-like file and text manipulation</a></li>
-<li><a href=#work-directory-and-process-isolation>Work directory and process isolation</a></li>
-</ul>
-</li>
-<li><a href=#proof-of-concept>Proof of concept</a></li>
-<li><a href=#how-do-we-get-there>How do we get there?</a></li>
-</ul>
+<nav id="TableOfContents">
+  <ul>
+    <li><a href="#case-study-sandboxfs">Case study: sandboxfs</a>
+      <ul>
+        <li><a href="#initial-integration-tests-were-in-shell">Initial integration tests were in shell</a></li>
+        <li><a href="#the-tests-could-not-be-open-sourced">The tests could not be open-sourced</a></li>
+        <li><a href="#initial-steps-in-the-rewrite-in-go">Initial steps in the rewrite in Go</a></li>
+        <li><a href="#gained-benefits">Gained benefits</a></li>
+      </ul>
+    </li>
+    <li><a href="#design-ideas">Design ideas</a>
+      <ul>
+        <li><a href="#process-execution-and-validation">Process execution and validation</a></li>
+        <li><a href="#posix-like-file-and-text-manipulation">POSIX-like file and text manipulation</a></li>
+        <li><a href="#work-directory-and-process-isolation">Work directory and process isolation</a></li>
+      </ul>
+    </li>
+    <li><a href="#proof-of-concept">Proof of concept</a></li>
+    <li><a href="#how-do-we-get-there">How do we get there?</a></li>
+  </ul>
 </nav>
+
 <hr>
-<h1 id=case-study-sandboxfs>Case study: sandboxfs</h1>
-<p>Before diving into a proof of concept, let&rsquo;s look at a project that just went through this process: <a href=https://github.com/bazelbuild/sandboxfs>sandboxfs</a>.</p>
-<h2 id=initial-integration-tests-were-in-shell>Initial integration tests were in shell</h2>
+<h1 id="case-study-sandboxfs">Case study: sandboxfs</h1>
+<p>Before diving into a proof of concept, let&rsquo;s look at a project that just went through this process: <a href="https://github.com/bazelbuild/sandboxfs">sandboxfs</a>.</p>
+<h2 id="initial-integration-tests-were-in-shell">Initial integration tests were in shell</h2>
 <p>In sandboxfs, we started with integration tests written in shell because of the same fallacy: it was easier to get them running upfront, and the execution of sandboxfs and interaction with the file system would closely resemble what a user would run by hand.</p>
 <p>Unfortunately, in a matter of months, the integration tests became hard to read and hard to maintain. The very simple cases that we first conceived were not sufficient to assess the more difficult corner cases of sandboxfs, and writing such more difficult tests (e.g. testing for race conditions, testing for signal interaction) quickly became cumbersome and just impossible in some cases.</p>
-<h2 id=the-tests-could-not-be-open-sourced>The tests could not be open-sourced</h2>
+<h2 id="the-tests-could-not-be-open-sourced">The tests could not be open-sourced</h2>
 <p>Another problem was that those tests relied on a Google-internal shell testing library. This prevented open-sourcing the tests verbatim.</p>
-<p>A solution to this problem was to rewrite the tests using some other shell testing library. The obvious one was to repurpose what Bazel has (the <code>unittest.bash</code> &ldquo;infrastructure&rdquo;) but the quality of the Bazel shell integration framework is &ldquo;not great&rdquo;. We could have jumped to other shell integration libraries—such as my own <a href=https://github.com/jmmv/shtk>shtk</a>—, but given the unpopularity of shell in general for large-scale coding, such libraries are not actively maintained nor used.</p>
-<h2 id=initial-steps-in-the-rewrite-in-go>Initial steps in the rewrite in Go</h2>
+<p>A solution to this problem was to rewrite the tests using some other shell testing library. The obvious one was to repurpose what Bazel has (the <code>unittest.bash</code> &ldquo;infrastructure&rdquo;) but the quality of the Bazel shell integration framework is &ldquo;not great&rdquo;. We could have jumped to other shell integration libraries—such as my own <a href="https://github.com/jmmv/shtk">shtk</a>—, but given the unpopularity of shell in general for large-scale coding, such libraries are not actively maintained nor used.</p>
+<h2 id="initial-steps-in-the-rewrite-in-go">Initial steps in the rewrite in Go</h2>
 <p>In the end, I chose to rewrite the integration tests in Go, which is the same exact language the rest of the project is written in. So how did it go?</p>
-<p>Well&mldr; at first, writing the initial tests was painful. I had to come up with a lot of infrastructure to start the <code>sandboxfs</code> binary under different test conditions, shut it down cleanly, provide helper methods to test for common conditions, etc.</p>
+<p>Well&hellip; at first, writing the initial tests was painful. I had to come up with a lot of infrastructure to start the <code>sandboxfs</code> binary under different test conditions, shut it down cleanly, provide helper methods to test for common conditions, etc.</p>
 <p>The CLs that added the few first tests usually came with necessary changes to the testing infrastructure to tweak abstractions and to add missing features. A few CLs later, however, the infrastructure solidified. Further CLs added tests and did so exclusively. And further on, we now have pretty sophisticated integration tests because a first-class language like Go has direct access to all operating system facilities.</p>
-<p>You can take a look at the <a href=https://github.com/bazelbuild/sandboxfs/tree/master/integration>sandboxfs/integration directory</a> if you are curious. I personally am not a fan of Go&rsquo;s &ldquo;best practices&rdquo; regarding the structure of tests, but I believe that sticking to the same language as the project&rsquo;s core and sticking to the community-acknowledged best practices is what&rsquo;s best for the project.</p>
-<h2 id=gained-benefits>Gained benefits</h2>
+<p>You can take a look at the <a href="https://github.com/bazelbuild/sandboxfs/tree/master/integration">sandboxfs/integration directory</a> if you are curious. I personally am not a fan of Go&rsquo;s &ldquo;best practices&rdquo; regarding the structure of tests, but I believe that sticking to the same language as the project&rsquo;s core and sticking to the community-acknowledged best practices is what&rsquo;s best for the project.</p>
+<h2 id="gained-benefits">Gained benefits</h2>
 <p>The resulting integration tests are very reliable. Because the tests look pretty-much identical to production code, code reviewers treat them as such and catch the same kind of mistakes you&rsquo;d catch when reviewing the actual project&rsquo;s code. We do not experience test flakiness. We have sophisticated tests that spawn the binary under test after recreating a complex environment around it and abuse the binary in many ways that could be impossible from shell.</p>
-<p>And&mldr; the tests are not more difficult to write than the shell ones. In fact, it is <em>easier</em> to write them because there is no context switch in changing languages. Furthermore, at this point we have a large-enough collection of integration tests that writing a new one is often a matter of finding an existing test that resembles what we have to do and copying it.</p>
+<p>And&hellip; the tests are not more difficult to write than the shell ones. In fact, it is <em>easier</em> to write them because there is no context switch in changing languages. Furthermore, at this point we have a large-enough collection of integration tests that writing a new one is often a matter of finding an existing test that resembles what we have to do and copying it.</p>
 <p>Finally, because we use the same language, things like the project&rsquo;s build infrastructure and IDE interaction are the same for both the project&rsquo;s core and the tests.</p>
-<h1 id=design-ideas>Design ideas</h1>
+<h1 id="design-ideas">Design ideas</h1>
 <p>To make this proposal feasible, we must provide a bunch of process- and file-management primitives that make the test&rsquo;s code concise. These primitives differ from the ones commonly used in unit tests so we need to supply extra ones.</p>
-<h2 id=process-execution-and-validation>Process execution and validation</h2>
+<h2 id="process-execution-and-validation">Process execution and validation</h2>
 <p>The key primitive that we need is a process runner that takes a command in the form that most resembles what the user would type, executes it, and validates a bunch of properties from the execution.</p>
 <p>In particular, we are interested in checking:</p>
 <ul>
@@ -151,67 +221,67 @@ Tags:
 <li>The expected <strong>behavior of the process&rsquo;s stderr</strong>. Same as for the stdout.</li>
 </ul>
 <p>All these checks should be expressible in a single statement. On a failure, the framework has to dump detailed status to the test log: the actual and expected error codes, the actual outputs and how they didn&rsquo;t match the expectations, the work directory contents, etc. Even more: if we want to check the output of a command against a golden file, the framework should print a <em>diff</em> of the output, not just the verbatim copy.</p>
-<p>The oldest prior art that in this area is the <a href=https://www.gnu.org/software/autoconf/manual/autoconf-2.68/html_node/Writing-Testsuites.html#Writing-Testsuites>AT_CHECK macro shipped in GNU Autotest</a>, which offers this functionality via m4 scripts (ugh). This idea was repurposed by myself later on within <a href=https://github.com/jmmv/atf/blob/master/atf-sh/atf-check.cpp>the ATF libraries in 2008</a> and again within the <a href=https://github.com/jmmv/shtk/tree/master/unittest>shtk libraries in 2014</a>.</p>
+<p>The oldest prior art that in this area is the <a href="https://www.gnu.org/software/autoconf/manual/autoconf-2.68/html_node/Writing-Testsuites.html#Writing-Testsuites">AT_CHECK macro shipped in GNU Autotest</a>, which offers this functionality via m4 scripts (ugh). This idea was repurposed by myself later on within <a href="https://github.com/jmmv/atf/blob/master/atf-sh/atf-check.cpp">the ATF libraries in 2008</a> and again within the <a href="https://github.com/jmmv/shtk/tree/master/unittest">shtk libraries in 2014</a>.</p>
 <p>Nowadays, <strong>this primitive is widely used in the FreeBSD and NetBSD integration test suites, which verify most of the command line tools that ship with these operating systems.</strong> These account for hundreds of integration tests.</p>
-<h2 id=posix-like-file-and-text-manipulation>POSIX-like file and text manipulation</h2>
+<h2 id="posix-like-file-and-text-manipulation">POSIX-like file and text manipulation</h2>
 <p>The second class of primitives that we need in our integration test framework are a bunch of calls that make it easy to replicate command-line operations. It&rsquo;s common for integration tests to have to move or copy files around, to change their permissions, to check for text matches, etc. so these operations should be trivial and concise.</p>
 <p>We already have a lot of this functionality in our codebase, but such functionality is buried layers deep due to the common abstraction patterns used in Java. We need to unbury these helper tools by providing thin layers that mimic the standard command-line tools. You can think of this as having a parent <code>IntegrationTest</code> class that offers trivial convenience methods like <code>cp</code>, <code>rmR</code>, <code>mkdirP</code> that, under the hood, delegate to full-blown implementations. Or you can think of using static imports for these helper methods.</p>
-<h2 id=work-directory-and-process-isolation>Work directory and process isolation</h2>
+<h2 id="work-directory-and-process-isolation">Work directory and process isolation</h2>
 <p>The last primitive or concept we need is test case isolation. This is two-fold:</p>
 <p>First, at the file system level. <strong>Each test has to start in a clean empty directory and should be free to modify that directory at will</strong> (which is very common to do while preparing a workspace). This directory ought to be cleaned up automatically upon test termination. (Here you can imagine having a test flag that tells the framework to leave these work directories behind on exit so that the developer can interactively investigate a failed test after-the-fact.)</p>
 <p>There are difficulties in achieving this in Java though, given that one cannot change the current directory of the JVM. It is certainly feasible via JNI and some other magic, but Java might have cached the value of the current working directory and use that for other path manipulation operations (think converting a relative path to absolute). We could hack this. We could encapsulate the concept of the current directory in <code>IntegrationTest</code> and make sure all helper methods respect it. Or we could have a custom test runner that spawns each test case as a subprocess in its own directory (see below).</p>
 <p>And second, at the process level. Integration tests spawn Bazel instances. <strong>To avoid cross-test pollution, we should ensure that all Bazel instances are terminated at the test boundary.</strong></p>
-<p>There is the question on what to do with the test case itself. It&rsquo;s possible to spawn a subprocess for each test case, which has the benefit of transparently having a custom work directory for each and a reliable out-of-bound way to clean that up. This is a different model than most tests and could confuse users because each test will effectively have its own memory space and global variables stop working as one thinks they do&mldr; but sharding effectively already does that, so the concern is minor.</p>
-<h1 id=proof-of-concept>Proof of concept</h1>
+<p>There is the question on what to do with the test case itself. It&rsquo;s possible to spawn a subprocess for each test case, which has the benefit of transparently having a custom work directory for each and a reliable out-of-bound way to clean that up. This is a different model than most tests and could confuse users because each test will effectively have its own memory space and global variables stop working as one thinks they do&hellip; but sharding effectively already does that, so the concern is minor.</p>
+<h1 id="proof-of-concept">Proof of concept</h1>
 <p>To show that integration tests written in Java don&rsquo;t have to be painful to write or maintain (which is a concern I&rsquo;ve heard before), I&rsquo;ve taken a couple of integration tests and converted them to Java using the key primitives outlined above. The goal of this exercise is to <strong>show that Java-based integration tests needn&rsquo;t suffer from the typical verbosity of Java</strong>, not that these are the specific APIs we should use.</p>
 <p>WARNING: The APIs shown here are very rudimentary and just an example of what we could achieve. Since the publication of this document, we have been discussing better mechanisms to implement these concepts but I decided to leave the document &ldquo;as is&rdquo; for publication. The design and implementation of the infrastructure will come separately from this motivational document.</p>
-<p>You can find the proof of concept on my <a href=https://github.com/jmmv/bazel/tree/java-inttests/><code>jmmv/bazel/java-inttests</code></a> branch in GitHub. In there, you will find a new <a href=https://github.com/jmmv/bazel/blob/java-inttests/src/test/java/com/google/devtools/build/lib/integration/PreludeTest.java><code>PreludeTest.java</code></a> file that you can compare line-by-line against <a href=https://github.com/jmmv/bazel/blob/java-inttests/src/test/shell/integration/prelude_test.sh><code>prelude_test.sh</code></a>. You may notice that the Java version is actually 10 lines shorter than the shell one. And under <a href=https://github.com/jmmv/bazel/tree/java-inttests/src/test/java/com/google/devtools/build/lib/integration/util><code>src/test/java/com/google/devtools/build/lib/integration/util/</code></a> you can find a super-simplistic implementation of the APIs proposed above.</p>
+<p>You can find the proof of concept on my <a href="https://github.com/jmmv/bazel/tree/java-inttests/"><code>jmmv/bazel/java-inttests</code></a> branch in GitHub. In there, you will find a new <a href="https://github.com/jmmv/bazel/blob/java-inttests/src/test/java/com/google/devtools/build/lib/integration/PreludeTest.java"><code>PreludeTest.java</code></a> file that you can compare line-by-line against <a href="https://github.com/jmmv/bazel/blob/java-inttests/src/test/shell/integration/prelude_test.sh"><code>prelude_test.sh</code></a>. You may notice that the Java version is actually 10 lines shorter than the shell one. And under <a href="https://github.com/jmmv/bazel/tree/java-inttests/src/test/java/com/google/devtools/build/lib/integration/util"><code>src/test/java/com/google/devtools/build/lib/integration/util/</code></a> you can find a super-simplistic implementation of the APIs proposed above.</p>
 <p>Some things to highlight below.</p>
 <p>The process checking API permits expressing calls to Bazel like this:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-java data-lang=java><span class=c1>// Check that Bazel exits with 0 and that stdout and stderr were empty:
-</span><span class=c1></span><span class=n>run</span><span class=o>(</span><span class=s>&#34;bazel&#34;</span><span class=o>,</span> <span class=s>&#34;build&#34;</span><span class=o>,</span> <span class=s>&#34;//package:foo&#34;</span><span class=o>).</span><span class=na>check</span><span class=o>();</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">// Check that Bazel exits with 0 and that stdout and stderr were empty:
+</span><span class="c1"></span><span class="n">run</span><span class="o">(</span><span class="s">&#34;bazel&#34;</span><span class="o">,</span> <span class="s">&#34;build&#34;</span><span class="o">,</span> <span class="s">&#34;//package:foo&#34;</span><span class="o">).</span><span class="na">check</span><span class="o">();</span>
 
-<span class=c1>// Check that Bazel exits with 0 and ignore stdout and stderr:
-</span><span class=c1></span><span class=n>run</span><span class=o>(</span><span class=s>&#34;bazel&#34;</span><span class=o>,</span> <span class=s>&#34;build&#34;</span><span class=o>,</span> <span class=s>&#34;:gr&#34;</span><span class=o>).</span><span class=na>ignoreStdout</span><span class=o>().</span><span class=na>ignoreStderr</span><span class=o>().</span><span class=na>check</span><span class=o>();</span>
+<span class="c1">// Check that Bazel exits with 0 and ignore stdout and stderr:
+</span><span class="c1"></span><span class="n">run</span><span class="o">(</span><span class="s">&#34;bazel&#34;</span><span class="o">,</span> <span class="s">&#34;build&#34;</span><span class="o">,</span> <span class="s">&#34;:gr&#34;</span><span class="o">).</span><span class="na">ignoreStdout</span><span class="o">().</span><span class="na">ignoreStderr</span><span class="o">().</span><span class="na">check</span><span class="o">();</span>
 
-<span class=c1>// Check that Bazel exits with an error, that stdout was empty, and that
-</span><span class=c1>// stderr contains a specific error:
-</span><span class=c1></span><span class=n>run</span><span class=o>(</span><span class=s>&#34;bazel&#34;</span><span class=o>,</span> <span class=s>&#34;builad&#34;</span><span class=o>,</span> <span class=s>&#34;//pkg&#34;</span><span class=o>)</span>
-    <span class=o>.</span><span class=na>exitStatusIs</span><span class=o>(</span><span class=n>2</span><span class=o>)</span>
-    <span class=o>.</span><span class=na>matchStderr</span><span class=o>(</span><span class=s>&#34;Command &#39;builad&#39; not found&#34;</span><span class=o>)</span>
-    <span class=o>.</span><span class=na>matchStderr</span><span class=o>(</span><span class=s>&#34;Try &#39;bazel help&#39;&#34;</span><span class=o>)</span>
-    <span class=o>.</span><span class=na>check</span><span class=o>();</span>
+<span class="c1">// Check that Bazel exits with an error, that stdout was empty, and that
+</span><span class="c1">// stderr contains a specific error:
+</span><span class="c1"></span><span class="n">run</span><span class="o">(</span><span class="s">&#34;bazel&#34;</span><span class="o">,</span> <span class="s">&#34;builad&#34;</span><span class="o">,</span> <span class="s">&#34;//pkg&#34;</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">exitStatusIs</span><span class="o">(</span><span class="n">2</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">matchStderr</span><span class="o">(</span><span class="s">&#34;Command &#39;builad&#39; not found&#34;</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">matchStderr</span><span class="o">(</span><span class="s">&#34;Try &#39;bazel help&#39;&#34;</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">check</span><span class="o">();</span>
 
-<span class=c1>// Ignore Bazel&#39;s exit status but save the outputs for later processing:
-</span><span class=c1></span><span class=n>run</span><span class=o>(</span><span class=s>&#34;bazel&#34;</span><span class=o>,</span> <span class=s>&#34;--exoblaze&#34;</span><span class=o>,</span> <span class=s>&#34;build&#34;</span><span class=o>,</span> <span class=s>&#34;//foo&#34;</span><span class=o>)</span>
-    <span class=o>.</span><span class=na>ignoreExitStatus</span><span class=o>()</span>
-    <span class=o>.</span><span class=na>saveStdout</span><span class=o>(</span><span class=s>&#34;stdout.txt&#34;</span><span class=o>)</span>
-    <span class=o>.</span><span class=na>saveStderr</span><span class=o>(</span><span class=s>&#34;stderr.txt&#34;</span><span class=o>)</span>
-    <span class=o>.</span><span class=na>check</span><span class=o>();</span>
-<span class=o>...</span> <span class=n>now</span> <span class=n>inspect</span> <span class=n>the</span> <span class=n>contents</span> <span class=n>of</span> <span class=n>stdout</span><span class=o>.</span><span class=na>txt</span> <span class=n>and</span> <span class=n>stderr</span><span class=o>.</span><span class=na>txt</span> <span class=o>...</span>
+<span class="c1">// Ignore Bazel&#39;s exit status but save the outputs for later processing:
+</span><span class="c1"></span><span class="n">run</span><span class="o">(</span><span class="s">&#34;bazel&#34;</span><span class="o">,</span> <span class="s">&#34;--exoblaze&#34;</span><span class="o">,</span> <span class="s">&#34;build&#34;</span><span class="o">,</span> <span class="s">&#34;//foo&#34;</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">ignoreExitStatus</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">saveStdout</span><span class="o">(</span><span class="s">&#34;stdout.txt&#34;</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">saveStderr</span><span class="o">(</span><span class="s">&#34;stderr.txt&#34;</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">check</span><span class="o">();</span>
+<span class="o">...</span> <span class="n">now</span> <span class="n">inspect</span> <span class="n">the</span> <span class="n">contents</span> <span class="n">of</span> <span class="n">stdout</span><span class="o">.</span><span class="na">txt</span> <span class="n">and</span> <span class="n">stderr</span><span class="o">.</span><span class="na">txt</span> <span class="o">...</span>
 </code></pre></div><p>This API should be generic and decoupled from Bazel, but note that our tests should ever only invoke Bazel: running other external tools should be discouraged unless we own them because <strong>any external tool that is invoked is a portability liability</strong>. (Think: the simple act of running, say, an external <code>grep</code> makes the test not easily runnable on Windows.)</p>
 <p>Similarly, tests end up looking like the following:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-java data-lang=java><span class=nd>@RunWith</span><span class=o>(</span><span class=n>JUnit4</span><span class=o>.</span><span class=na>class</span><span class=o>)</span>
-<span class=kd>public</span> <span class=kd>class</span> <span class=nc>ConceptTest</span> <span class=kd>extends</span> <span class=n>IntegrationTest</span> <span class=o>{</span>
-    <span class=nd>@Test</span>
-    <span class=kd>public</span> <span class=kt>void</span> <span class=nf>testSimple</span><span class=o>()</span> <span class=kd>throws</span> <span class=n>Exception</span> <span class=o>{</span>
-        <span class=n>writeFile</span><span class=o>(</span><span class=s>&#34;WORKSPACE&#34;</span><span class=o>,</span> <span class=s>&#34;&#34;</span><span class=o>);</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RunWith</span><span class="o">(</span><span class="n">JUnit4</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">ConceptTest</span> <span class="kd">extends</span> <span class="n">IntegrationTest</span> <span class="o">{</span>
+    <span class="nd">@Test</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">testSimple</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
+        <span class="n">writeFile</span><span class="o">(</span><span class="s">&#34;WORKSPACE&#34;</span><span class="o">,</span> <span class="s">&#34;&#34;</span><span class="o">);</span>
 
-        <span class=c1>// Explicitly depend on the exact things this test needs so that data
-</span><span class=c1></span>        <span class=c1>// dependencies become obvious at the BUILD file level.
-</span><span class=c1></span>        <span class=n>provisionCppRules</span><span class=o>();</span>
+        <span class="c1">// Explicitly depend on the exact things this test needs so that data
+</span><span class="c1"></span>        <span class="c1">// dependencies become obvious at the BUILD file level.
+</span><span class="c1"></span>        <span class="n">provisionCppRules</span><span class="o">();</span>
 
-        <span class=n>mkdirP</span><span class=o>(</span><span class=s>&#34;package&#34;</span><span class=o>);</span>
-        <span class=n>writeFile</span><span class=o>(</span><span class=s>&#34;package/BUILD&#34;</span><span class=o>,</span> <span class=s>&#34;genrule(..., outs = [&#39;test.txt&#39;], ...)&#34;</span><span class=o>);</span>
+        <span class="n">mkdirP</span><span class="o">(</span><span class="s">&#34;package&#34;</span><span class="o">);</span>
+        <span class="n">writeFile</span><span class="o">(</span><span class="s">&#34;package/BUILD&#34;</span><span class="o">,</span> <span class="s">&#34;genrule(..., outs = [&#39;test.txt&#39;], ...)&#34;</span><span class="o">);</span>
 
-        <span class=n>run</span><span class=o>(</span><span class=s>&#34;bazel&#34;</span><span class=o>,</span> <span class=s>&#34;build&#34;</span><span class=o>,</span> <span class=s>&#34;//package&#34;</span><span class=o>)</span>
-            <span class=o>.</span><span class=na>ignoreStdout</span><span class=o>().</span><span class=na>ignoreStderr</span><span class=o>().</span><span class=na>check</span><span class=o>();</span>
-        <span class=n>assertThat</span><span class=o>(</span>
-            <span class=n>grep</span><span class=o>(</span><span class=s>&#34;the test data&#34;</span><span class=o>,</span> <span class=s>&#34;bazel-genfiles/test.txt&#34;</span><span class=o>)).</span><span class=na>isTrue</span><span class=o>();</span>
-    <span class=o>}</span>
-<span class=o>}</span>
+        <span class="n">run</span><span class="o">(</span><span class="s">&#34;bazel&#34;</span><span class="o">,</span> <span class="s">&#34;build&#34;</span><span class="o">,</span> <span class="s">&#34;//package&#34;</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">ignoreStdout</span><span class="o">().</span><span class="na">ignoreStderr</span><span class="o">().</span><span class="na">check</span><span class="o">();</span>
+        <span class="n">assertThat</span><span class="o">(</span>
+            <span class="n">grep</span><span class="o">(</span><span class="s">&#34;the test data&#34;</span><span class="o">,</span> <span class="s">&#34;bazel-genfiles/test.txt&#34;</span><span class="o">)).</span><span class="na">isTrue</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
 </code></pre></div><p>Note how the <code>IntegrationTest</code> base class exposes a bunch of helper functions to simplify the interaction between our test and the file system. Also note how these calls are all &ldquo;loosely typed&rdquo;: while the internals use <code>Path</code>s and <code>File</code>s and whatnot, the thin wrappers in <code>IntegrationTest</code> just deal with <code>String</code>s to make the caller sites succinct. (These bare interfaces are <em>an example</em> and are probably a bad idea in the long run though. They need more design work.)</p>
-<h1 id=how-do-we-get-there>How do we get there?</h1>
+<h1 id="how-do-we-get-there">How do we get there?</h1>
 <p><strong>Rewriting our tests from scratch, in one go, is unfeasible</strong>: we have too many of them and spending time rewriting the code for rewrite&rsquo;s sake is a waste of time. We&rsquo;d better spend our time doing work on Bazel itself.</p>
 <p>We can <strong>only do this incrementally and opportunistically</strong>, at least until we achieve critical mass and introducing new Java-based tests is as easy, if not easier, than adding shell-based tests. At that point, we will naturally prefer using the Java APIs to write the tests and the shell tests will quiesce. Only then we can consider rewriting whatever is left.</p>
 <p>Here is a possible plan with no explicit timeline:</p>
@@ -231,7 +301,7 @@ Tags:
 <p>Rewrite all existing Python-based tests en masse.</p>
 <ul>
 <li>
-<p>Kinda contradicts my statement above but&mldr; there are only 11 test programs in the Bazel case, so this is feasible.</p>
+<p>Kinda contradicts my statement above but&hellip; there are only 11 test programs in the Bazel case, so this is feasible.</p>
 </li>
 <li>
 <p>Getting rid of these allows us to eliminate one of the testing infrastructure variants, thus prevents making the current project structure worse.</p>
@@ -269,466 +339,838 @@ Tags:
 </ol>
 <p>So, what do you say? Shall we make this happen?</p>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-6">
+                <p id="vote-request">
+                  <b>What did you think about this article?</b><small>
+                  <i>(Experimental)</i></small>
+                  <br/>
+                  <b><span id="first-vote"></span></b>
+                </p>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=A&#43;case&#43;for&#43;writing&#43;Bazel%27s&#43;integration&#43;tests&#43;in&#43;Java%2C&#43;part&#43;2&amp;url=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fbazel-tests-in-java-part-2.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/reddit.png"
+                       alt="Reddit logo"
+                       width="24" height="24">
+                  Share on Reddit
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=A&#43;case&#43;for&#43;writing&#43;Bazel%27s&#43;integration&#43;tests&#43;in&#43;Java%2C&#43;part&#43;2&amp;u=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fbazel-tests-in-java-part-2.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/ycombinator.png"
+                       alt="Hacker News logo"
+                       width="24" height="24">
+                  Share on Hacker News
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=A&#43;case&#43;for&#43;writing&#43;Bazel%27s&#43;integration&#43;tests&#43;in&#43;Java%2C&#43;part&#43;2&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fbazel-tests-in-java-part-2.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
+                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
+                       alt="Twitter logo"
+                       width="24" height="24">
+                  Share on Twitter
+                </a>
+              </div>
+            </div>
+          </div>
+
+          
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-10">
+                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+                  <div class="form-group row px-md-4">
+                    <input type="text" name="email"
+                          placeholder="Enter your email"
+                          class="form-control input-sm col-md-9 text-center"/>
+                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
+                  </div>
+                </form>
+              </div>
+              <div class="col-md-1 text-center">
+                <p>
+                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+                  </a>
+                </p>
+              </div>
+              <div class="col-md-1 text-center">
+                <p><a href="/feed.xml"><img
+                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2018/03/bazel-tests-in-java-part-1.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span><a href="https://jmmv.dev/2018/03/stick-to-projects-core-language-in-tests.html">Next post &raquo;</a></span>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col text-center p-2">
+    <p><a href="/about.html" class="clear-link">
+      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
+      <b>Julio Merino</b><br/>
+      Principal Software Engineer<br/>
+      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
+      <small>From Barcelona, living in Seattle</small>
+    </a></p>
+
+    <div class="row">
+      <div class="col-sm-4 text-center">
+        <p>
+          <a rel="me" href="https://mastodon.online/@jmmv">
+            <img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-4 text-center">
+        <p>
+          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-4 text-center">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+      <div class="form-group">
+        <input type="text" name="email"
+          placeholder="Enter your email"
+          class="form-control input-sm text-center"/>
+        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
+      </div>
+    </form>
+  </div>
 </div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
+      
+      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
 </div>
-<div class="container post-links">
-<div class=row>
-<div class="col mr-auto text-left">
-<span><a href=https://jmmv.dev/2018/03/bazel-tests-in-java-part-1.html>&#171; Previous</a></span>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
+        <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
+        <ul id="archive-year-2020" class="collapse">
+        
+          
+          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
 </div>
-<div class="col text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col ml-auto text-right">
-<span><a href=https://jmmv.dev/2018/03/stick-to-projects-core-language-in-tests.html>Next &#187;</a></span>
-</div>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class="col-lg-4 my-2">
-<div class=row>
-<div class=col>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-</div>
-<div class="col-lg-8 my-2 d-none d-sm-block">
-<div class=row>
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=A+case+for+writing+Bazel%27s+integration+tests+in+Java%2C+part+2&url=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fbazel-tests-in-java-part-2.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=A+case+for+writing+Bazel%27s+integration+tests+in+Java%2C+part+2&u=https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fbazel-tests-in-java-part-2.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=A+case+for+writing+Bazel%27s+integration+tests+in+Java%2C+part+2+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2018%2F03%2Fbazel-tests-in-java-part-2.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
-</a>
-</div>
-</div>
-</div>
-</div>
-<div class="row my-4" id=postCommentRow>
-<div class=col>
-<div class=media>
-<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
-<div class="media-body container">
-<form method=post id=newPost>
-<div class=row>
-<div class="col my-1">
-<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentAuthor>Your name (optional):</label>
-<input type=text class=form-control id=postCommentAuthor>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentEmail>Your email (optional):</label>
-<input type=text class=form-control type=email id=postCommentEmail>
-<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
-</div>
-</div>
-<div class=row id=postCommentError style=display:none>
-<div class="col mt-1 alert-danger">
-<p></p>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
-<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
-</div>
-<div class="container post-subscribe">
-<div class=row>
-<div class=col-sm-9>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<div class=row>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
-<button type=submit class="btn btn-primary col-4">Subscribe</button>
-</div>
-</div>
-</form>
-</div>
-<div class=col-sm-3>
-<div class=row>
-<div class="col px-2 text-center">
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar d-none d-md-block">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-6 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-6 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=indent-wrapped-lines><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
-<li class=indent-wrapped-lines><a href=/2022/06/endbasic-0.9.html>EndBASIC 0.9: Run shared demos easily</a></li>
-<li class=indent-wrapped-lines><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
-<li class=indent-wrapped-lines><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
-<li class=indent-wrapped-lines><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
-<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (30)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
-<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
-<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
-<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
-<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
-<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
-<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col-4 order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col-8 order-1 mr-auto">
-<p>Copyright 2004&ndash;2022 Julio Merino</p>
-</div>
-</div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2021 Julio Merino</p>
+    </div>
+  </div>
 </footer>
-<script type=module>
-  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
 
-  var batchClient = new BatchClient(SITE_ID);
-  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-63557333-1"></script>
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
+<script src="/js/uuidv4.min.js"></script>
 
-  window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
-  window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
+<script src="/script.js"></script>
 
-  window.postComment = function(...args) {
-    batchClient.postComment(...args);
-  };
-
+<script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
+</script>
+
+<script>
+  gaRequest();
 </script>
 <noscript>
-<img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE4LzAzL2JhemVsLXRlc3RzLWluLWphdmEtcGFydC0yLmh0bWw=/stamp.gif" style=display:none>
+  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE4LzAzL2JhemVsLXRlc3RzLWluLWphdmEtcGFydC0yLmh0bWw=/stamp.gif" style="display: none;" />
 </noscript>
-</body>
+
+  </body>
 </html>

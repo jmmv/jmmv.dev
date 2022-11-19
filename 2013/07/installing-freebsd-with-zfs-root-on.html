@@ -1,562 +1,1003 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<meta property="twitter:site" content="@jmmv">
-<title>Installing FreeBSD with a ZFS root on a PowerMac G5 - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="Installing FreeBSD with a ZFS root on a PowerMac G5 - Julio Merino (jmmv.dev)">
-<meta property="twitter:title" content="Installing FreeBSD with a ZFS root on a PowerMac G5 - Julio Merino …">
-<meta name=description content="Suppose you have a nice PowerMac G5 big beast around and want to install a modern operating system on it. Suppose that you want FreeBSD to run on it. Suppose that you would like to use ZFS as much as possible, say to use the machine as a NAS.
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+
+  <title>Installing FreeBSD with a ZFS root on a PowerMac G5 - Julio Merino (jmmv.dev)</title>
+  <meta property="og:title" content="Installing FreeBSD with a ZFS root on a PowerMac G5 - Julio Merino (jmmv.dev)">
+
+  
+
+  <meta name="description" content="Suppose you have a nice PowerMac G5 big beast around and want to install a modern operating system on it. Suppose that you want FreeBSD to run on it. Suppose that you would like to use ZFS as much as possible, say to use the machine as a NAS.
 If all of the above apply to you, you have come to the right place! Read on for how I got FreeBSD 10.">
-<meta property="og:description" content="Suppose you have a nice PowerMac G5 big beast around and want to install a modern operating system on it. Suppose that you want FreeBSD to run on it. Suppose that you would like to use ZFS as much as possible, say to use the machine as a NAS.
+  <meta property="og:description" content="Suppose you have a nice PowerMac G5 big beast around and want to install a modern operating system on it. Suppose that you want FreeBSD to run on it. Suppose that you would like to use ZFS as much as possible, say to use the machine as a NAS.
 If all of the above apply to you, you have come to the right place! Read on for how I got FreeBSD 10.">
-<meta property="twitter:description" content="Suppose you have a nice PowerMac G5 big beast around and want to install a modern operating system on it. Suppose that you want FreeBSD to run on it. Suppose that you would like to use ZFS as much as …">
-<meta name=author content="Julio Merino">
-<meta property="twitter:creator" content="@jmmv">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2013/07/installing-freebsd-with-zfs-root-on.html">
-<meta property="og:type" content="blog">
-<meta property="twitter:card" content="summary">
-<link rel=canonical href=https://jmmv.dev/2013/07/installing-freebsd-with-zfs-root-on.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.e6bc80a1be92c773c7961a8e97099442cea2dd8ed61958e61cf1436928d991e2.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
-<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.92.2" />
+
+  <meta property="og:url" content="https://jmmv.dev/2013/07/installing-freebsd-with-zfs-root-on.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/2013/07/installing-freebsd-with-zfs-root-on.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/sass/main.min.723838a96cb313367e5aed166b75faaf5b61f6d641c9d5ea50920a91610c18ce.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDEzLzA3L2luc3RhbGxpbmctZnJlZWJzZC13aXRoLXpmcy1yb290LW9uLmh0bWw=';
+  </script>
 </head>
-<body>
-<header class=site-header>
+
+
+  <body>
+    <header class="site-header">
+
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
-<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;Julio Merino
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/privacy.html" >Privacy</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="https://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
 </nav>
+
 </header>
-<div class=page-header>
-<div class=container>
-<h1>Installing FreeBSD with a ZFS root on a PowerMac G5</h1>
-<p>July 11, 2013 &#183;
-About 4 minutes
-&#183;
-Tags:
-<a class=text-reset href=/tags/freebsd>freebsd</a>, <a class=text-reset href=/tags/mac>mac</a>, <a class=text-reset href=/tags/powerpc>powerpc</a>, <a class=text-reset href=/tags/zfs>zfs</a></p>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
-<article><p>Suppose you have a nice PowerMac G5 big beast around and want to install a modern operating system on it. Suppose that you want FreeBSD to run on it. Suppose that you would like to use ZFS as much as possible, say to use the machine as a NAS.</p> <p>If all of the above apply to you, you have come to the right place! Read on for how I got FreeBSD 10.0-CURRENT with a ZFS root to work on a PowerMac G5. I am pretty sure the instructions here apply to other PowerPC-based machines as well, although the specific details on how to set up the boot loader most likely differ.</p> <p>Note that I performed this procedure from a FreeBSD installation residing on the second drive of the machine. I suppose everything described here can be done in the same manner from the live shell provided by the installer, although the paths and the ordering of the instructions might be slightly different. (Tip: you might want to reserve the first few GB of your drive for a plain FreeBSD installation to use for recovery-purposes only, and you can later use this simplified system to bootstrap the real one as described below.)</p> <hr> <p>The following instructions assume that the disk onto which FreeBSD will be installed is ada0 and that the whole disk is devoted to FreeBSD. In other words: the procedure will <b>wipe all data on ada0</b>; you have been warned.</p> <p>For reference, the disk layout used in the procedure below looks as in the following table. This is based on a 650G hard disk with 6G of RAM:</p> <table style=border-width:1px;border-style:solid;margin-left:auto;margin-right:auto;width:90%> <thead style=font-weight:700> <tr> <td>Index</td> <td>Device</td> <td>Label</td> <td>Type</td> <td>Size</td> </tr> </thead> <tbody> <tr> <td>1</td> <td>ada0s2</td> <td>BOOTSTRAP</td> <td>apple-boot</td> <td>800K</td> </tr> <tr> <td>2</td> <td>ada0s3</td> <td>BOOT</td> <td>freebsd-ufs</td> <td>512M</td> </tr> <tr> <td>3</td> <td>ada0s4</td> <td>SWAP</td> <td>freebsd-swap</td> <td>12G</td> </tr> <tr> <td>4</td> <td>ada0s5</td> <td>ROOT</td> <td>freebsd-zfs</td> <td>Remaining</td> </tr> </tbody></table> <p>The step-by-step instructions:</p> <ol> <li> <p>Initialize the partition table in ada0:</p> <pre>gpart create -s APM ada0</pre></li> <li> <p>Create an <tt>Apple_Bootstrap</tt> partition, a boot partition, a swap partition, and the ZFS pool:</p> <pre>gpart add -l BOOTSTRAP -s 800K -t apple-boot ada0<br>gpart add -l BOOT -s 512M -t freebsd-ufs ada0<br>gpart add -l SWAP -s 12G -t freebsd-swap ada0<br>gpart add -l ROOT -t freebsd-zfs ada0</pre></li> <li> <p>Install the stage one bootloader onto the <tt>BOOTSTRAP</tt> partition:</p> <pre>gpart bootcode -p /boot/boot1.hfs -i 1 ada0</pre></li> <li> <p>Load the ZFS modules:</p> <pre>kldload /boot/kernel/opensolaris.ko<br>kldload /boot/kernel/zfs.ko</pre></li> <li> <p>Create the ZFS pool:</p> <pre>mkdir /boot/zfs<br>zpool create zroot /dev/ad0s5<br>zpool set bootfs=zroot zroot</pre></li> <li> <p>Create any file systems you desire under the new pool. I am only going to separate <tt>/home</tt> in this post to prevent a lot of verbosity. However, the <a href=https://wiki.freebsd.org/RootOnZFS/InstallingFreeBSD>original instructions</a> in which I am basing this post contain a more detailed list on what you might want to split out:</p> <pre>zfs create setuid=false zroot/home</pre></li> <li> <p>Create and mount the <tt>/boot</tt> file system:</p> <pre>newfs /dev/ada0s3<br>mkdir /zroot/boot<br>mount /dev/ada0s3 /zroot/boot</pre></li> <li> <p>Unpack the desired sets:</p> <pre>for s in base docs kernel; do<br>    tar -xzvpf .../${s}.tgz -C /zroot<br>done</pre></li> <li> <p>Create a new <tt>/zroot/etc/rc.conf</tt> with at least the following:</p> <pre>zfs_enable="YES"<br>hostname="your.name.example.com"<br>ifconfig_gem0="DHCP"</pre></li> <li> <p>Create a new <tt>/zroot/boot/loader.conf</tt> with at least the following:</p> <pre>zfs_load="YES"<br>vfs.root.mountfrom="zfs:zroot"</pre></li> <li> <p>Install the ZFS boot cache:</p> <pre>cp /boot/zfs/zpool.cache /zroot/boot/zfs/zpool.cache</pre></li> <li> <p>Perform basic system setup:</p> <pre>chroot /zroot<br># IN THE CHROOT<br>passwd<br>tzsetup<br>cd /etc/mail<br>make aliases<br>exit</pre></li> <li> <p>Create a new <tt>/zroot/etc/fstab</tt> with at least the following (although the <tt>tmp</tt> is optional):</p> <pre># Device    Mountpoint  FStype  Options Dump    Pass#<br>/dev/ada0s3 /boot       ufs     rw      1       1<br>/dev/ada0s4 none        swap    sw      0       0<br>tmpfs       /tmp        tmpfs   rw      0       0</pre></li> <li> <p>Fix up the <tt>/boot</tt> file system. This is <i>horrible</i> but is the best I've gotten so far. The problem is that the <tt>boot.hfs</tt> loader seems to have <tt>/boot/loader</tt> hardcoded in it, which obviously breaks when <tt>/boot</tt> is a separate partition. A symlink of <tt>.</tt> to <tt>boot</tt> does not work, unfortunately. So:</p> <pre>cd /zroot/boot<br>mkdir boot<br>cd boot<br>ln -s ../* .<br>rm loader ; ln ../loader loader</pre></li> <li> <p>Unmount file systems and finish the ZFS setup:</p> <pre>umount /zroot/boot<br>zfs unmount -a<br>zfs set mountpoint=legacy zroot<br>zfs set mountpoint=/home zroot/home</pre></li> <li> <p>Reboot, enter OpenFirmware (Option+Command+O+F) and set up the machine for automatic booting:</p> <pre>setenv auto-boot? true<br>setenv boot-device sd0:2,\:tbxi<br>reset-all</pre></li> </ol> <p>And that should be it! A fully-manual installation of FreeBSD just to get ZFS up and running for the root file system... but I hope you enjoy the results :-)</p> <p>For further reference, here are the original instructions on which the above steps are based:</p> <ul><li><a href=https://wiki.freebsd.org/RootOnZFS/ZFSBootPartition>https://wiki.freebsd.org/RootOnZFS/ZFSBootPartition</a></li><li><a href=http://people.freebsd.org/~nwhitehorn/ppcinstall.txt>http://people.freebsd.org/~nwhitehorn/ppcinstall.txt</a></li></ul>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Installing FreeBSD with a ZFS root on a PowerMac G5</h1>
+
+        <p>July 11, 2013 &middot;
+        About 4 minutes
+        &middot;
+        Tags:
+        <a class="text-reset" href="/tags/freebsd">freebsd</a>, <a class="text-reset" href="/tags/mac">mac</a>, <a class="text-reset" href="/tags/powerpc">powerpc</a>, <a class="text-reset" href="/tags/zfs">zfs</a></p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div id="cookie-notice"></div>
+
+          <div class="row">
+            <div class="col">
+              
+              <article><p>Suppose you have a nice PowerMac G5 big beast around and want to install a modern operating system on it.  Suppose that you want FreeBSD to run on it.  Suppose that you would like to use ZFS as much as possible, say to use the machine as a NAS.</p> <p>If all of the above apply to you, you have come to the right place!  Read on for how I got FreeBSD 10.0-CURRENT with a ZFS root to work on a PowerMac G5.  I am pretty sure the instructions here apply to other PowerPC-based machines as well, although the specific details on how to set up the boot loader most likely differ.</p> <p>Note that I performed this procedure from a FreeBSD installation residing on the second drive of the machine.  I suppose everything described here can be done in the same manner from the live shell provided by the installer, although the paths and the ordering of the instructions might be slightly different.  (Tip: you might want to reserve the first few GB of your drive for a plain FreeBSD installation to use for recovery-purposes only, and you can later use this simplified system to bootstrap the real one as described below.)</p> <hr /> <p>The following instructions assume that the disk onto which FreeBSD will be installed is ada0 and that the whole disk is devoted to FreeBSD.  In other words: the procedure will <b>wipe all data on ada0</b>; you have been warned.</p> <p>For reference, the disk layout used in the procedure below looks as in the following table.  This is based on a 650G hard disk with 6G of RAM:</p> <table style="border-width: 1px; border-style: solid; margin-left: auto; margin-right: auto; width: 90%">  <thead style="font-weight: bold">    <tr>      <td>Index</td>      <td>Device</td>      <td>Label</td>      <td>Type</td>      <td>Size</td>    </tr>  </thead>  <tbody>    <tr>      <td>1</td>      <td>ada0s2</td>      <td>BOOTSTRAP</td>      <td>apple-boot</td>      <td>800K</td>    </tr>    <tr>      <td>2</td>      <td>ada0s3</td>      <td>BOOT</td>      <td>freebsd-ufs</td>      <td>512M</td>    </tr>    <tr>      <td>3</td>      <td>ada0s4</td>      <td>SWAP</td>      <td>freebsd-swap</td>      <td>12G</td>    </tr>    <tr>      <td>4</td>      <td>ada0s5</td>      <td>ROOT</td>      <td>freebsd-zfs</td>      <td>Remaining</td>    </tr>  </tbody></table> <p>The step-by-step instructions:</p> <ol> <li>  <p>Initialize the partition table in ada0:</p>  <pre>gpart create -s APM ada0</pre></li> <li>  <p>Create an <tt>Apple_Bootstrap</tt> partition, a boot partition, a swap partition, and the ZFS pool:</p>  <pre>gpart add -l BOOTSTRAP -s 800K -t apple-boot ada0<br />gpart add -l BOOT -s 512M -t freebsd-ufs ada0<br />gpart add -l SWAP -s 12G -t freebsd-swap ada0<br />gpart add -l ROOT -t freebsd-zfs ada0</pre></li> <li>  <p>Install the stage one bootloader onto the <tt>BOOTSTRAP</tt> partition:</p>  <pre>gpart bootcode -p /boot/boot1.hfs -i 1 ada0</pre></li> <li>  <p>Load the ZFS modules:</p>  <pre>kldload /boot/kernel/opensolaris.ko<br />kldload /boot/kernel/zfs.ko</pre></li> <li>  <p>Create the ZFS pool:</p>  <pre>mkdir /boot/zfs<br />zpool create zroot /dev/ad0s5<br />zpool set bootfs=zroot zroot</pre></li> <li>  <p>Create any file systems you desire under the new pool.  I am only going to separate <tt>/home</tt> in this post to prevent a lot of verbosity.  However, the <a href="https://wiki.freebsd.org/RootOnZFS/InstallingFreeBSD">original instructions</a> in which I am basing this post contain a more detailed list on what you might want to split out:</p>  <pre>zfs create setuid=false zroot/home</pre></li> <li>  <p>Create and mount the <tt>/boot</tt> file system:</p>  <pre>newfs /dev/ada0s3<br />mkdir /zroot/boot<br />mount /dev/ada0s3 /zroot/boot</pre></li> <li>  <p>Unpack the desired sets:</p>  <pre>for s in base docs kernel; do<br />    tar -xzvpf .../${s}.tgz -C /zroot<br />done</pre></li> <li>  <p>Create a new <tt>/zroot/etc/rc.conf</tt> with at least the following:</p>  <pre>zfs_enable="YES"<br />hostname="your.name.example.com"<br />ifconfig_gem0="DHCP"</pre></li> <li>  <p>Create a new <tt>/zroot/boot/loader.conf</tt> with at least the following:</p>  <pre>zfs_load="YES"<br />vfs.root.mountfrom="zfs:zroot"</pre></li> <li>  <p>Install the ZFS boot cache:</p>  <pre>cp /boot/zfs/zpool.cache /zroot/boot/zfs/zpool.cache</pre></li> <li>  <p>Perform basic system setup:</p>  <pre>chroot /zroot<br /># IN THE CHROOT<br />passwd<br />tzsetup<br />cd /etc/mail<br />make aliases<br />exit</pre></li> <li>  <p>Create a new <tt>/zroot/etc/fstab</tt> with at least the following (although the <tt>tmp</tt> is optional):</p>  <pre># Device    Mountpoint  FStype  Options Dump    Pass#<br />/dev/ada0s3 /boot       ufs     rw      1       1<br />/dev/ada0s4 none        swap    sw      0       0<br />tmpfs       /tmp        tmpfs   rw      0       0</pre></li> <li>  <p>Fix up the <tt>/boot</tt> file system.  This is <i>horrible</i> but is the best I've gotten so far.  The problem is that the <tt>boot.hfs</tt> loader seems to have <tt>/boot/loader</tt> hardcoded in it, which obviously breaks when <tt>/boot</tt> is a separate partition.  A symlink of <tt>.</tt> to <tt>boot</tt> does not work, unfortunately.  So:</p>  <pre>cd /zroot/boot<br />mkdir boot<br />cd boot<br />ln -s ../* .<br />rm loader ; ln ../loader loader</pre></li> <li>  <p>Unmount file systems and finish the ZFS setup:</p>  <pre>umount /zroot/boot<br />zfs unmount -a<br />zfs set mountpoint=legacy zroot<br />zfs set mountpoint=/home zroot/home</pre></li> <li>  <p>Reboot, enter OpenFirmware (Option+Command+O+F) and set up the machine for automatic booting:</p>  <pre>setenv auto-boot? true<br />setenv boot-device sd0:2,\:tbxi<br />reset-all</pre></li> </ol> <p>And that should be it!  A fully-manual installation of FreeBSD just to get ZFS up and running for the root file system... but I hope you enjoy the results :-)</p> <p>For further reference, here are the original instructions on which the above steps are based:</p> <ul><li><a href="https://wiki.freebsd.org/RootOnZFS/ZFSBootPartition">https://wiki.freebsd.org/RootOnZFS/ZFSBootPartition</a></li><li><a href="http://people.freebsd.org/~nwhitehorn/ppcinstall.txt">http://people.freebsd.org/~nwhitehorn/ppcinstall.txt</a></li></ul>
 </article>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-6">
+                <p id="vote-request">
+                  <b>What did you think about this article?</b><small>
+                  <i>(Experimental)</i></small>
+                  <br/>
+                  <b><span id="first-vote"></span></b>
+                </p>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Installing&#43;FreeBSD&#43;with&#43;a&#43;ZFS&#43;root&#43;on&#43;a&#43;PowerMac&#43;G5&amp;url=https%3A%2F%2Fjmmv.dev%2F2013%2F07%2Finstalling-freebsd-with-zfs-root-on.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/reddit.png"
+                       alt="Reddit logo"
+                       width="24" height="24">
+                  Share on Reddit
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Installing&#43;FreeBSD&#43;with&#43;a&#43;ZFS&#43;root&#43;on&#43;a&#43;PowerMac&#43;G5&amp;u=https%3A%2F%2Fjmmv.dev%2F2013%2F07%2Finstalling-freebsd-with-zfs-root-on.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/ycombinator.png"
+                       alt="Hacker News logo"
+                       width="24" height="24">
+                  Share on Hacker News
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Installing&#43;FreeBSD&#43;with&#43;a&#43;ZFS&#43;root&#43;on&#43;a&#43;PowerMac&#43;G5&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2013%2F07%2Finstalling-freebsd-with-zfs-root-on.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
+                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
+                       alt="Twitter logo"
+                       width="24" height="24">
+                  Share on Twitter
+                </a>
+              </div>
+            </div>
+          </div>
+
+          
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-10">
+                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+                  <div class="form-group row px-md-4">
+                    <input type="text" name="email"
+                          placeholder="Enter your email"
+                          class="form-control input-sm col-md-9 text-center"/>
+                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
+                  </div>
+                </form>
+              </div>
+              <div class="col-md-1 text-center">
+                <p>
+                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+                  </a>
+                </p>
+              </div>
+              <div class="col-md-1 text-center">
+                <p><a href="/feed.xml"><img
+                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2013/07/readability-do-not-abuse-classes-as.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span><a href="https://jmmv.dev/2013/07/putting-powermac-g5-to-good-use.html">Next post &raquo;</a></span>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col text-center p-2">
+    <p><a href="/about.html" class="clear-link">
+      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
+      <b>Julio Merino</b><br/>
+      Principal Software Engineer<br/>
+      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
+      <small>From Barcelona, living in Seattle</small>
+    </a></p>
+
+    <div class="row">
+      <div class="col-sm-4 text-center">
+        <p>
+          <a rel="me" href="https://mastodon.online/@jmmv">
+            <img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-4 text-center">
+        <p>
+          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-4 text-center">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+      <div class="form-group">
+        <input type="text" name="email"
+          placeholder="Enter your email"
+          class="form-control input-sm text-center"/>
+        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
+      </div>
+    </form>
+  </div>
 </div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
+      
+      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
 </div>
-<div class="container post-links">
-<div class=row>
-<div class="col mr-auto text-left">
-<span><a href=https://jmmv.dev/2013/07/readability-do-not-abuse-classes-as.html>&#171; Previous</a></span>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
+        <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
+        <ul id="archive-year-2020" class="collapse">
+        
+          
+          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
 </div>
-<div class="col text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col ml-auto text-right">
-<span><a href=https://jmmv.dev/2013/07/putting-powermac-g5-to-good-use.html>Next &#187;</a></span>
-</div>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class="col-lg-4 my-2">
-<div class=row>
-<div class=col>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-</div>
-<div class="col-lg-8 my-2 d-none d-sm-block">
-<div class=row>
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Installing+FreeBSD+with+a+ZFS+root+on+a+PowerMac+G5&url=https%3A%2F%2Fjmmv.dev%2F2013%2F07%2Finstalling-freebsd-with-zfs-root-on.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Installing+FreeBSD+with+a+ZFS+root+on+a+PowerMac+G5&u=https%3A%2F%2Fjmmv.dev%2F2013%2F07%2Finstalling-freebsd-with-zfs-root-on.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Installing+FreeBSD+with+a+ZFS+root+on+a+PowerMac+G5+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2013%2F07%2Finstalling-freebsd-with-zfs-root-on.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
-</a>
-</div>
-</div>
-</div>
-</div>
-<div class="row my-4" id=postCommentRow>
-<div class=col>
-<div class=media>
-<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
-<div class="media-body container">
-<form method=post id=newPost>
-<div class=row>
-<div class="col my-1">
-<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentAuthor>Your name (optional):</label>
-<input type=text class=form-control id=postCommentAuthor>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentEmail>Your email (optional):</label>
-<input type=text class=form-control type=email id=postCommentEmail>
-<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
-</div>
-</div>
-<div class=row id=postCommentError style=display:none>
-<div class="col mt-1 alert-danger">
-<p></p>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
-<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
-</div>
-<div class="container post-subscribe">
-<div class=row>
-<div class=col-sm-9>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<div class=row>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
-<button type=submit class="btn btn-primary col-4">Subscribe</button>
-</div>
-</div>
-</form>
-</div>
-<div class=col-sm-3>
-<div class=row>
-<div class="col px-2 text-center">
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar d-none d-md-block">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-6 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-6 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=indent-wrapped-lines><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
-<li class=indent-wrapped-lines><a href=/2022/06/endbasic-0.9.html>EndBASIC 0.9: Run shared demos easily</a></li>
-<li class=indent-wrapped-lines><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
-<li class=indent-wrapped-lines><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
-<li class=indent-wrapped-lines><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
-<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (30)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
-<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
-<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
-<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
-<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
-<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
-<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col-4 order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col-8 order-1 mr-auto">
-<p>Copyright 2004&ndash;2022 Julio Merino</p>
-</div>
-</div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2021 Julio Merino</p>
+    </div>
+  </div>
 </footer>
-<script type=module>
-  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
 
-  var batchClient = new BatchClient(SITE_ID);
-  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-63557333-1"></script>
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
+<script src="/js/uuidv4.min.js"></script>
 
-  window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
-  window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
+<script src="/script.js"></script>
 
-  window.postComment = function(...args) {
-    batchClient.postComment(...args);
-  };
-
+<script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
+</script>
+
+<script>
+  gaRequest();
 </script>
 <noscript>
-<img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDEzLzA3L2luc3RhbGxpbmctZnJlZWJzZC13aXRoLXpmcy1yb290LW9uLmh0bWw=/stamp.gif" style=display:none>
+  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDEzLzA3L2luc3RhbGxpbmctZnJlZWJzZC13aXRoLXpmcy1yb290LW9uLmh0bWw=/stamp.gif" style="display: none;" />
 </noscript>
-</body>
+
+  </body>
 </html>

@@ -1,111 +1,215 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<meta property="twitter:site" content="@jmmv">
-<title>Lightweight Web Serving With thttpd - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="Lightweight Web Serving With thttpd - Julio Merino (jmmv.dev)">
-<meta property="twitter:title" content="Lightweight Web Serving With thttpd - Julio Merino (jmmv.dev)">
-<meta name=description content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
+<!doctype html>
+<html lang="en"
+      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  
+
+  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+
+  <title>Lightweight Web Serving With thttpd - Julio Merino (jmmv.dev)</title>
+  <meta property="og:title" content="Lightweight Web Serving With thttpd - Julio Merino (jmmv.dev)">
+
+  
+
+  <meta name="description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
  The Apache HTTP Server is the most popular web server due to its functionality, stability, and maturity.">
-<meta property="og:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
+  <meta property="og:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
  The Apache HTTP Server is the most popular web server due to its functionality, stability, and maturity.">
-<meta property="twitter:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. …">
-<meta name=author content="Julio Merino">
-<meta property="twitter:creator" content="@jmmv">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2005/10/lightweight-web-serving-with-thttpd.html">
-<meta property="og:type" content="blog">
-<meta property="twitter:card" content="summary">
-<link rel=canonical href=https://jmmv.dev/2005/10/lightweight-web-serving-with-thttpd.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.e6bc80a1be92c773c7961a8e97099442cea2dd8ed61958e61cf1436928d991e2.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
-<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
+  <meta name="author" content="Julio Merino">
+  <meta name="generator" content="Hugo 0.92.2" />
+
+  <meta property="og:url" content="https://jmmv.dev/2005/10/lightweight-web-serving-with-thttpd.html">
+
+  <meta property="og:type" content="blog">
+
+  <link rel="canonical" href="https://jmmv.dev/2005/10/lightweight-web-serving-with-thttpd.html">
+  <link rel="alternate" type="application/rss+xml"
+        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
+
+  <link rel="stylesheet" href="/sass/main.min.723838a96cb313367e5aed166b75faaf5b61f6d641c9d5ea50920a91610c18ce.css">
+  <link rel="stylesheet" href="/css/chroma.css">
+
+  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+
+  
+  <!--[if lt IE 9]>
+    <script src="/js/html5shiv-3.7.2.min.js"></script>
+    <script src="/js/respond-1.4.2.min.js"></script>
+  <![endif]-->
+
+  <script>
+    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
+    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDA1LzEwL2xpZ2h0d2VpZ2h0LXdlYi1zZXJ2aW5nLXdpdGgtdGh0dHBkLmh0bWw=';
+  </script>
 </head>
-<body>
-<header class=site-header>
+
+
+  <body>
+    <header class="site-header">
+
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
-<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
+  <a class="navbar-brand" href="/">
+    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
+    &nbsp;Julio Merino
+  </a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent" aria-expanded="false"
+          aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/about.html" >About</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/essays.html" >Essays</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/resume.html" >Resume</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/software.html" >Software</a>
+          </li>
+        
+      
+    </ul>
+
+    <ul class="navbar-nav mr-4">
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/archive.html" >Archive</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/privacy.html" >Privacy</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/series.html" >Series</a>
+          </li>
+        
+      
+        
+          <li class="nav-item">
+            <a class="nav-link" href="/tags.html" >Tags</a>
+          </li>
+        
+      
+    </ul>
+
+    <form class="form-inline" method="get" role="search"
+          action="https://www.google.com/search">
+      <div class="input-group">
+        <input type="search" name="query" class="form-control"
+                placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button type="submit" value="Search" class="btn btn-light">
+            <img src="/octicons/search.svg">
+          </button>
+        </div>
+      </div>
+      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
+    </form>
+  </div>
 </nav>
+
 </header>
-<div class=page-header>
-<div class=container>
-<h1>Lightweight Web Serving With thttpd</h1>
-<p>October 13, 2005 &#183;
-About 11 minutes
-&#183;
-Tags:
-<a class=text-reset href=/tags/featured>featured</a>, <a class=text-reset href=/tags/onlamp>onlamp</a>, <a class=text-reset href=/tags/unix>unix</a>, <a class=text-reset href=/tags/web>web</a></p>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
+
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Lightweight Web Serving With thttpd</h1>
+
+        <p>October 13, 2005 &middot;
+        About 11 minutes
+        &middot;
+        Tags:
+        <a class="text-reset" href="/tags/featured">featured</a>, <a class="text-reset" href="/tags/onlamp">onlamp</a>, <a class="text-reset" href="/tags/unix">unix</a>, <a class="text-reset" href="/tags/web">web</a></p>
+
+        
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-9">
+          <div id="cookie-notice"></div>
+
+          <div class="row">
+            <div class="col">
+              
+                
+
+
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+  
+    
+  
+  
+
+
 <p><i>This article is part number
-3 of 5 of the completed
-<a href=/series.html#ONLamp.com%20guest%20posts><b>
+
+  3 of the
+
+<a href="/series.html#ONLamp.com%20guest%20posts"><b>
 ONLamp.com guest posts</b> series</a>.</i></p>
+
+<hr/>
+
+              
+              <article><p><em>This article first appeared on this date in O&rsquo;Reilly&rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to <a href="https://web.archive.org/web/20150910024728/http://www.linuxdevcenter.com/pub/a/bsd/2005/10/13/thttpd.html">find a copy</a> in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.</em></p>
 <hr>
-<article><p><em>This article first appeared on this date in O&rsquo;Reilly&rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to <a href=https://web.archive.org/web/20150910024728/http://www.linuxdevcenter.com/pub/a/bsd/2005/10/13/thttpd.html>find a copy</a> in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.</em></p>
-<hr>
-<p>The <a href=http://httpd.apache.org/>Apache HTTP Server</a> is the most popular web server due to its functionality, stability, and maturity. However, this does not make it suitable for all uses: slow machines and embedded systems may have serious problems running it because of its size. Here is where lightweight HTTP servers come into play, as their low-memory footprints deliver decent results without having to swap data back to disk.</p>
+<p>The <a href="http://httpd.apache.org/">Apache HTTP Server</a> is the most popular web server due to its functionality, stability, and maturity. However, this does not make it suitable for all uses: slow machines and embedded systems may have serious problems running it because of its size. Here is where lightweight HTTP servers come into play, as their low-memory footprints deliver decent results without having to swap data back to disk.</p>
 <p>Similarly, these small HTTP servers are suitable to serve static content efficiently so as to allow Apache, mod_perl`, mod_python, or even servlet containers to handle dynamic requests without tying up memory-hungry children to serve small images. In other words, these applications can serve as a complement to your existing full-featured web server, not as a replacement.</p>
-<p>One of these servers is <a href=http://www.acme.com/software/thttpd/>thttpd</a>, a simple, small, portable, fast, and secure HTTP server. Among its features are support for the HTTP/1.1 standard, CGIs, virtual hosts, and IPv6. This article shows how to install and configure this software under <a href=http://www.netbsd.org/>NetBSD</a>. I chose NetBSD not only because it is my preferred OS, but also because it has the ability to run on the most disparate old hardware, where thttpd shows its strengths. I had a Macintosh Performa 630 (a 68LC040 chip at 33MHz) running <a href=http://www.netbsd.org/ports/mac68k>NetBSD/mac68k</a> 2.0 with thttpd on top of it, serving pages to my home network nicely.</p>
-<h1 id=use-cases>Use Cases</h1>
+<p>One of these servers is <a href="http://www.acme.com/software/thttpd/">thttpd</a>, a simple, small, portable, fast, and secure HTTP server. Among its features are support for the HTTP/1.1 standard, CGIs, virtual hosts, and IPv6. This article shows how to install and configure this software under <a href="http://www.netbsd.org/">NetBSD</a>. I chose NetBSD not only because it is my preferred OS, but also because it has the ability to run on the most disparate old hardware, where thttpd shows its strengths. I had a Macintosh Performa 630 (a 68LC040 chip at 33MHz) running <a href="http://www.netbsd.org/ports/mac68k">NetBSD/mac68k</a> 2.0 with thttpd on top of it, serving pages to my home network nicely.</p>
+<h1 id="use-cases">Use Cases</h1>
 <p>I previously mentioned a few use cases for thttpd, but there are several other scenarios in which it may be useful:</p>
 <ul>
 <li>Slow machines: Machines with old hardware that are able to run a Unix-like operating system (such as NetBSD) are often powerful enough to serve static content with thttpd.</li>
@@ -113,16 +217,16 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 <li>Simple requirements: Sometimes you may want to provide web content to the public, but you do not need much of the fancy stuff provided by powerful servers such as Apache. In this case, a lightweight server may be enough for your needs. Furthermore, given their smaller code sizes, they have fewer chances to fail and you can audit their code more easily.</li>
 <li>Serving static content alongside a powerful server: You may have a server running Apache with a load of modules, parsing very complex dynamic pages. These pages often need to include other files, most commonly static images. In this case, thttpd can serve the static data alongside Apache, which will exclusively handle the complex content. There is a section dedicated to this specific use case later.</li>
 </ul>
-<h1 id=installing-thttpd>Installing thttpd</h1>
-<p>Given my choice of NetBSD, I used <a href=http://www.pkgsrc.org/>pkgsrc</a>, the NetBSD Packages System, to install thttpd. However, please note that you don&rsquo;t have to use NetBSD to use pkgsrc, so all the examples given here can apply to other systems with few hassles; otherwise, use your packaging system of choice to get thttpd.</p>
+<h1 id="installing-thttpd">Installing thttpd</h1>
+<p>Given my choice of NetBSD, I used <a href="http://www.pkgsrc.org/">pkgsrc</a>, the NetBSD Packages System, to install thttpd. However, please note that you don&rsquo;t have to use NetBSD to use pkgsrc, so all the examples given here can apply to other systems with few hassles; otherwise, use your packaging system of choice to get thttpd.</p>
 <p>Focusing on pkgsrc, there are two ways to install thttpd: from sources or from binaries. Sources are appropriate if you do not want to use the default settings, you want to configure the build (perhaps with optimization flags), or you need thttpd on a system for which there are no binary packages. On the other hand, binaries are usually fine for all other cases. I&rsquo;ll cover both approaches.</p>
 <p>Assuming you have pkgsrc under <code>/usr/pkgsrc/</code>, installing from sources is trivial:</p>
-<pre tabindex=0><code># cd /usr/pkgsrc/www/thttpd/
+<pre tabindex="0"><code># cd /usr/pkgsrc/www/thttpd/
 # make install &amp;&amp; make clean
 </code></pre><p>If you want to go the binary route, make sure that a prebuilt binary package is available for your platform. (See the NetBSD package FTP site.) In my case, I used NetBSD/i386 2.0 with the latest stable pkgsrc branch, pkgsrc-2005Q2, so the following did the trick:</p>
-<pre tabindex=0><code># PKG_PATH=ftp://ftp.NetBSD.org/pub/NetBSD/packages/pkgsrc-2005Q2/NetBSD-2.0/i386/All pkg_add thttpd
+<pre tabindex="0"><code># PKG_PATH=ftp://ftp.NetBSD.org/pub/NetBSD/packages/pkgsrc-2005Q2/NetBSD-2.0/i386/All pkg_add thttpd
 </code></pre><p>No matter which procedure you choose, you will see something like the following after a successful installation:</p>
-<pre tabindex=0><code>===========================================================================
+<pre tabindex="0"><code>===========================================================================
 Installing files needed by thttpd-2.25bnb3:
 
         /usr/pkg/etc/thttpd.conf
@@ -148,11 +252,11 @@ In order to use makeweb:
 The suggested group is &quot;www&quot;.
 ===========================================================================
 </code></pre><p>Note that the exact output depends on your mk.conf settings. I used all the default settings, so the program installed under <code>/usr/pkg/</code> with its configuration file stored as <code>/usr/pkg/etc/thttpd.conf</code>. Keep the correct paths in mind before proceeding.</p>
-<h1 id=creating-the-server-directory>Creating the Server Directory</h1>
+<h1 id="creating-the-server-directory">Creating the Server Directory</h1>
 <p>Now that the server is installed, it is time to configure it. The very first thing to change is the documents' root directory (<code>DocumentRoot</code>, as Apache httpd calls it). The default is <code>/usr/pkg/share/thttpd/</code>, a far from optimal value in most cases due to its dynamic nature. (Remember that <code>/usr/</code> is often mounted read-only.) A better place is, for example, <code>/home/www/</code>, so change the configuration to use this directory instead. Open the configuration file (<code>/usr/pkg/etc/thttpd.conf</code>) in your favorite editor and change the dir variable to point to the correct directory, like this:</p>
-<pre tabindex=0><code>dir=/home/www
+<pre tabindex="0"><code>dir=/home/www
 </code></pre><p>Once this is done, create the directory itself and a simple page inside it:</p>
-<pre tabindex=0><code># mkdir /home/www
+<pre tabindex="0"><code># mkdir /home/www
 # cat &gt;/home/www/index.html
 &lt;?xml version=&quot;1.0&quot;?&gt;
 &lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Strict//EN&quot;
@@ -169,39 +273,39 @@ The suggested group is &quot;www&quot;.
 &lt;/html&gt;
 ^D
 </code></pre><p>Note that unless you create a default <code>index.html</code> file, people will be able to see the contents of the directory, which may be inappropriate.</p>
-<h1 id=setting-up-permissions>Setting Up Permissions</h1>
+<h1 id="setting-up-permissions">Setting Up Permissions</h1>
 <p>Before running thttpd, which is already possible at this point, it&rsquo;s worthwhile to tighten permissions a bit. As in any networking-aware application, it is a good idea to run it without superuser privileges, aiming to lessen damage to the system in case of attack. Therefore, my goal is to run the server process under a regular user account. Create the <code>www</code> group, to which any webmasters will belong, and the <code>thttpd</code> user, the account that will run the daemon.</p>
-<pre tabindex=0><code># useradd -g nobody -d /home/www thttpd
+<pre tabindex="0"><code># useradd -g nobody -d /home/www thttpd
 # groupadd www
 </code></pre><p>Notice how the <code>thttpd</code> account uses the <code>nobody</code> group: <code>www</code> is a group for web masters; the daemon has no business writing to the documents directory.</p>
 <p>Now that the account is ready, tell thttpd to use it:</p>
-<pre tabindex=0><code># echo user=thttpd &gt;&gt;/usr/pkg/etc/thttpd.conf
+<pre tabindex="0"><code># echo user=thttpd &gt;&gt;/usr/pkg/etc/thttpd.conf
 </code></pre><p>Finally, change the permissions of the documents directory to let any member of the <code>www</code> group modify the files inside it:</p>
-<pre tabindex=0><code># chown -R root:www /home/www/
+<pre tabindex="0"><code># chown -R root:www /home/www/
 # chmod 775 /home/www/
 # chmod 664 /home/www/index.html
-</code></pre><h1 id=enabling-the-server>Enabling the Server</h1>
+</code></pre><h1 id="enabling-the-server">Enabling the Server</h1>
 <p>Now you are ready to start the server, usually by using the provided rc.d script. First, copy this script to the appropriate system directory, <code>/etc/rc.d/</code>, so that it is available at boot time:</p>
-<pre tabindex=0><code># cp /usr/pkg/share/examples/rc.d/thttpd /etc/rc.d/
+<pre tabindex="0"><code># cp /usr/pkg/share/examples/rc.d/thttpd /etc/rc.d/
 </code></pre><p>Once it is in place, enable it. Now is another opportunity to make things a bit better, security-wise: tell the daemon to chroot itself into the documents' root directory after startup. This is easy to do on NetBSD by passing the <code>-r</code> flag to the daemon. With this in mind, modify <code>/etc/rc.conf</code>:</p>
-<pre tabindex=0><code># cat &gt;&gt;/etc/rc.conf
+<pre tabindex="0"><code># cat &gt;&gt;/etc/rc.conf
 echo thttpd=YES
 echo thttpd_flags=-r
 ^D
 </code></pre><p>You&rsquo;re done. Start the server with the command:</p>
-<pre tabindex=0><code># /etc/rc.d/thttpd start
+<pre tabindex="0"><code># /etc/rc.d/thttpd start
 </code></pre><p>Before continuing, it&rsquo;s helpful to verify that everything works correctly. First connect to <code>http://localhost/</code> (note that this link will work only if you run this from the machine on which you installed thttpd), and check that the web page you wrote before appears. Secondly, make sure that the <code>-r</code> flag was effective; you do not want to discover several months later that what you thought was chrooted in fact was not. Check this with help from the <code>fstat</code> command, whose purpose is to show the status of all open files. Search for the root file used by the daemon:</p>
-<pre tabindex=0><code># fstat | grep ^thttpd | grep root
+<pre tabindex="0"><code># fstat | grep ^thttpd | grep root
 thttpd   thttpd      1206 root /home    2351520 drwxrwxr-x 512 r
 </code></pre><p>What the output shows is that the command is being executed under the directory pointed to by the <code>2351520</code> inode, living under the <code>/home</code> filesystem (which is a separate partition). To verify that the inode number belongs to your documents' root directory, use the <code>ls</code> utility:</p>
-<pre tabindex=0><code># ls -lidF /home/www/
+<pre tabindex="0"><code># ls -lidF /home/www/
 2351520 drwxrwxr-x  2 root  www  512 Jun  4 16:35 /home/www/
 </code></pre><p>The number on the first column matches the inode number shown by <code>fstat</code>. This daemon is chrooted inside the appropriate directory.</p>
 <p>Congratulations! The server is now correctly configured and is up and running. But wait&mdash;you&rsquo;re not done yet.</p>
-<h1 id=running-cgi-scripts>Running CGI Scripts</h1>
+<h1 id="running-cgi-scripts">Running CGI Scripts</h1>
 <p>The easiest way to run CGI scripts from within the just-installed server is to disable the chroot feature (by removing the thttpd_flags line from <code>/etc/rc.conf</code>). However, considering all the security advantages the feature brings, this is a bad idea. You can still run CGIs inside the chroot jail, although it is a bit more complicated.</p>
 <p>Create a simple CGI application for testing. Shell scripting is used in order to make explanations easier; you can use any appropriate language you prefer.</p>
-<pre tabindex=0><code># mkdir /home/www/cgi-bin
+<pre tabindex="0"><code># mkdir /home/www/cgi-bin
 # cat &gt;/home/www/cgi-bin/hello.sh
 #!/bin/sh
 
@@ -211,11 +315,11 @@ echo &quot;Hello, world!&quot;
 ^D
 # chmod +x /home/www/cgi-bin/hello.sh
 </code></pre><p>With this in place, add the following form code to the web page you created before, <code>/home/www/index.html</code>:</p>
-<pre tabindex=0><code>&lt;form name=&quot;hello&quot; method=&quot;post&quot; action=&quot;/cgi-bin/hello.sh&quot;&gt;
+<pre tabindex="0"><code>&lt;form name=&quot;hello&quot; method=&quot;post&quot; action=&quot;/cgi-bin/hello.sh&quot;&gt;
   &lt;input type=&quot;submit&quot; value=&quot;Run it!&quot; /&gt;
 &lt;/form&gt;
 </code></pre><p>If you try to access the page and click on the button, thttpd will spit out an error. What happened? The script could not find the shell interpreter, <code>/bin/sh</code>, specified on the first line. (Being chrooted, thttpd considers all paths relative to <code>/home/www/</code>.) To solve this, copy the file, as well as any other required stuff, inside the jail. (It would be a lot easier with a static build of sh.) A simple way to do this is:</p>
-<pre tabindex=0><code># cd /home/www
+<pre tabindex="0"><code># cd /home/www
 # mkdir bin
 # cp /bin/sh bin
 # ldd bin/sh
@@ -230,491 +334,858 @@ bin/sh:
 # mkdir libexec
 # cp /libexec/ld.elf_so libexec
 # chown -R root:wheel bin lib libexec
-</code></pre><p>Depending on the applications you need inside the chroot, things will get more complicated: you may need to create device files, a user database, pipes, and so on. As an exercise, try to make <a href=https://www.perl.org/>Perl</a> work.</p>
+</code></pre><p>Depending on the applications you need inside the chroot, things will get more complicated: you may need to create device files, a user database, pipes, and so on. As an exercise, try to make <a href="https://www.perl.org/">Perl</a> work.</p>
 <p>After putting everything into the correct place, try clicking on the button again and all should be fine: you should receive the &ldquo;Hello, world!&rdquo; message in response.</p>
-<h1 id=virtual-hosts>Virtual Hosts</h1>
+<h1 id="virtual-hosts">Virtual Hosts</h1>
 <p>thttpd supports virtual hosts. Setting them up is extremely easy. The first thing you need to do is make all the domain names you want to serve point to the machine running thttpd. This basically means setting up extra CNAMEs for the main host&rsquo;s name, but that is a DNS-specific task. Refer to your name server&rsquo;s documentation for more information, or ask your DNS administrator to do it for you.</p>
 <p>Having the domain names adjusted accordingly, the next step is to enable support for virtual hosts. Add the vhost option to the configuration file (on a line of its own):</p>
-<pre tabindex=0><code># echo vhost &gt;&gt;/usr/pkg/etc/thttpd.conf
+<pre tabindex="0"><code># echo vhost &gt;&gt;/usr/pkg/etc/thttpd.conf
 </code></pre><p>After adding this option (and restarting the server), the behavior of the documents directory (<code>/home/www/</code>) will change completely: it will no longer hold HTML pages nor any other file. Instead, it will have a set of subdirectories, each one associated to one of the virtual hosts served. The name of each directory is the name of the virtual host&rsquo;s name or IP address. For example, supposing you want to serve web pages for the domains <code>products.example.com</code> and <code>support.example.com</code>, your documents directory could contain:</p>
-<pre tabindex=0><code># ls -lF /home/www/
+<pre tabindex="0"><code># ls -lF /home/www/
 total 4
 drwxr-xr-x  2 root  www  512 Sep  4 22:48 products.example.com/
 drwxr-xr-x  2 root  www  512 Sep  4 22:48 support.example.com/
 </code></pre><p>Yes, it is that simple!</p>
-<h1 id=running-alongside-other-servers>Running Alongside Other Servers</h1>
+<h1 id="running-alongside-other-servers">Running Alongside Other Servers</h1>
 <p>The beginning of the article mentioned that another use of thttpd is to serve static content alongside powerful web servers. The easiest way to do that is to start thttpd on a different port than the other servers, which requires adding an extra line to the configuration file:</p>
-<pre tabindex=0><code># echo port=8080 &gt;&gt;/usr/pkg/etc/thttpd.conf
+<pre tabindex="0"><code># echo port=8080 &gt;&gt;/usr/pkg/etc/thttpd.conf
 </code></pre><p>I assume that if you have done this, it is because you have a full-featured web server in the same machine as thttpd. Therefore, you need to modify the web pages it serves to point to the static content now served under <code>http://localhost:8080/</code>.</p>
-<h1 id=conclusion>Conclusion</h1>
-<p>This article has shown how to install and configure the lightweight thttpd web server on a step-by-step basis. This application has several other features; if you want to learn more, spend some time reading the <a href=http://www.acme.com/software/thttpd/thttpd_man.html>thttpd manual</a> or the accompanying <a href=http://www.acme.com/software/thttpd/notes.html>thttpd notes</a>, which deal with several design decisions&mdash;an interesting read, certainly.</p>
+<h1 id="conclusion">Conclusion</h1>
+<p>This article has shown how to install and configure the lightweight thttpd web server on a step-by-step basis. This application has several other features; if you want to learn more, spend some time reading the <a href="http://www.acme.com/software/thttpd/thttpd_man.html">thttpd manual</a> or the accompanying <a href="http://www.acme.com/software/thttpd/notes.html">thttpd notes</a>, which deal with several design decisions&mdash;an interesting read, certainly.</p>
 <p>Of course, there are many more simple HTTP servers available on the internet. If this one does not fit your needs, there probably is another one that does.</p>
 </article>
-<hr>
-<p><i>This article is part number
-3 of 5 of the completed
-<a href=/series.html#ONLamp.com%20guest%20posts><b>
-ONLamp.com guest posts</b> series</a>.</i></p>
+            </div>
+          </div>
+
+          <div class="container post-votes">
+            <div class="row">
+              <div class="col-md-6">
+                <p id="vote-request">
+                  <b>What did you think about this article?</b><small>
+                  <i>(Experimental)</i></small>
+                  <br/>
+                  <b><span id="first-vote"></span></b>
+                </p>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsUp()"
+                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
+                  (<span id="thumbs-up-count">0</span>)</a>
+              </div>
+              <div class="col-md-3">
+                <a onclick="voteThumbsDown()"
+                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
+                  (<span id="thumbs-down-count">0</span>)</a>
+              </div>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Lightweight&#43;Web&#43;Serving&#43;With&#43;thttpd&amp;url=https%3A%2F%2Fjmmv.dev%2F2005%2F10%2Flightweight-web-serving-with-thttpd.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/reddit.png"
+                       alt="Reddit logo"
+                       width="24" height="24">
+                  Share on Reddit
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Lightweight&#43;Web&#43;Serving&#43;With&#43;thttpd&amp;u=https%3A%2F%2Fjmmv.dev%2F2005%2F10%2Flightweight-web-serving-with-thttpd.html" class="btn btn-outline-primary">
+                  <img src="/images/badges/ycombinator.png"
+                       alt="Hacker News logo"
+                       width="24" height="24">
+                  Share on Hacker News
+                </a>
+              </div>
+              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Lightweight&#43;Web&#43;Serving&#43;With&#43;thttpd&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2005%2F10%2Flightweight-web-serving-with-thttpd.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
+                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
+                       alt="Twitter logo"
+                       width="24" height="24">
+                  Share on Twitter
+                </a>
+              </div>
+            </div>
+          </div>
+
+          
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-10">
+                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+                  <div class="form-group row px-md-4">
+                    <input type="text" name="email"
+                          placeholder="Enter your email"
+                          class="form-control input-sm col-md-9 text-center"/>
+                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
+                  </div>
+                </form>
+              </div>
+              <div class="col-md-1 text-center">
+                <p>
+                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+                  </a>
+                </p>
+              </div>
+              <div class="col-md-1 text-center">
+                <p><a href="/feed.xml"><img
+                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="container post-links">
+            <div class="row">
+              <div class="col-md mr-auto text-left">
+                
+                <span><a href="https://jmmv.dev/2005/10/c-constructors-and-global-data.html">&laquo; Previous post</a></span>
+                
+              </div>
+
+              <div class="col-md text-center">
+                <span><a href="/archive.html">All posts</a></span>
+              </div>
+
+              <div class="col-md ml-auto text-right">
+                
+                <span><a href="https://jmmv.dev/2005/10/articles-lightweight-web-serving-with.html">Next post &raquo;</a></span>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 sidebar">
+          <div class="row">
+  <div class="col text-center p-2">
+    <p><a href="/about.html" class="clear-link">
+      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
+      <b>Julio Merino</b><br/>
+      Principal Software Engineer<br/>
+      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
+      <small>From Barcelona, living in Seattle</small>
+    </a></p>
+
+    <div class="row">
+      <div class="col-sm-4 text-center">
+        <p>
+          <a rel="me" href="https://mastodon.online/@jmmv">
+            <img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-4 text-center">
+        <p>
+          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
+            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+          </a>
+        </p>
+      </div>
+      <div class="col-sm-4 text-center">
+        <p><a href="/feed.xml"><img
+          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
+      </div>
+    </div>
+
+    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
+      <div class="form-group">
+        <input type="text" name="email"
+          placeholder="Enter your email"
+          class="form-control input-sm text-center"/>
+        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
+      </div>
+    </form>
+  </div>
 </div>
+
+<div class="row">
+  <div class="col">
+    <h2>Featured posts</h2>
+
+    <ul>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
+      
+        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
+      
+      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
+    </ul>
+  </div>
 </div>
-<div class="container post-links">
-<div class=row>
-<div class="col mr-auto text-left">
-<span><a href=https://jmmv.dev/2005/10/c-constructors-and-global-data.html>&#171; Previous</a></span>
+
+<div class="row">
+  <div class="col">
+    <h2>Archive</h2>
+
+    <ul>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
+        <ul id="archive-year-2021" class="collapse">
+        
+          
+          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
+        <ul id="archive-year-2020" class="collapse">
+        
+          
+          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
+        <ul id="archive-year-2019" class="collapse">
+        
+          
+          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
+        <ul id="archive-year-2018" class="collapse">
+        
+          
+          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
+        <ul id="archive-year-2017" class="collapse">
+        
+          
+          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
+        <ul id="archive-year-2016" class="collapse">
+        
+          
+          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
+        <ul id="archive-year-2015" class="collapse">
+        
+          
+          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
+        <ul id="archive-year-2014" class="collapse">
+        
+          
+          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
+        <ul id="archive-year-2013" class="collapse">
+        
+          
+          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
+        <ul id="archive-year-2012" class="collapse">
+        
+          
+          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
+        <ul id="archive-year-2011" class="collapse">
+        
+          
+          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
+        <ul id="archive-year-2010" class="collapse">
+        
+          
+          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
+        <ul id="archive-year-2009" class="collapse">
+        
+          
+          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
+        <ul id="archive-year-2008" class="collapse">
+        
+          
+          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
+        <ul id="archive-year-2007" class="collapse">
+        
+          
+          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
+        
+          
+          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
+        
+          
+          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
+        
+          
+          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
+        
+          
+          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
+        <ul id="archive-year-2006" class="collapse">
+        
+          
+          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
+        
+          
+          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
+        
+          
+          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
+        <ul id="archive-year-2005" class="collapse">
+        
+          
+          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
+        
+          
+          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
+        
+          
+          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
+        
+          
+          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
+        
+          
+          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
+        
+          
+          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
+        
+          
+          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
+        
+          
+          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
+        
+        </ul>
+      </li>
+    
+      <li>
+        
+        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
+        <ul id="archive-year-2004" class="collapse">
+        
+          
+          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
+        
+          
+          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
+        
+          
+          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
+        
+          
+          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
+        
+          
+          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
+        
+          
+          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
+        
+        </ul>
+      </li>
+    
+    </ul>
+  </div>
 </div>
-<div class="col text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col ml-auto text-right">
-<span><a href=https://jmmv.dev/2005/10/articles-lightweight-web-serving-with.html>Next &#187;</a></span>
-</div>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class="col-lg-4 my-2">
-<div class=row>
-<div class=col>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-</div>
-<div class="col-lg-8 my-2 d-none d-sm-block">
-<div class=row>
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Lightweight+Web+Serving+With+thttpd&url=https%3A%2F%2Fjmmv.dev%2F2005%2F10%2Flightweight-web-serving-with-thttpd.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Lightweight+Web+Serving+With+thttpd&u=https%3A%2F%2Fjmmv.dev%2F2005%2F10%2Flightweight-web-serving-with-thttpd.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Lightweight+Web+Serving+With+thttpd+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2005%2F10%2Flightweight-web-serving-with-thttpd.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
-</a>
-</div>
-</div>
-</div>
-</div>
-<div class="row my-4" id=postCommentRow>
-<div class=col>
-<div class=media>
-<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
-<div class="media-body container">
-<form method=post id=newPost>
-<div class=row>
-<div class="col my-1">
-<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentAuthor>Your name (optional):</label>
-<input type=text class=form-control id=postCommentAuthor>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentEmail>Your email (optional):</label>
-<input type=text class=form-control type=email id=postCommentEmail>
-<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
-</div>
-</div>
-<div class=row id=postCommentError style=display:none>
-<div class="col mt-1 alert-danger">
-<p></p>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
-<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
-</div>
-<div class="container post-subscribe">
-<div class=row>
-<div class=col-sm-9>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<div class=row>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
-<button type=submit class="btn btn-primary col-4">Subscribe</button>
-</div>
-</div>
-</form>
-</div>
-<div class=col-sm-3>
-<div class=row>
-<div class="col px-2 text-center">
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar d-none d-md-block">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-6 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-6 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=indent-wrapped-lines><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
-<li class=indent-wrapped-lines><a href=/2022/06/endbasic-0.9.html>EndBASIC 0.9: Run shared demos easily</a></li>
-<li class=indent-wrapped-lines><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
-<li class=indent-wrapped-lines><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
-<li class=indent-wrapped-lines><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
-<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
-<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (30)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
-<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
-<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
-<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
-<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
-<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
-<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col-4 order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col-8 order-1 mr-auto">
-<p>Copyright 2004&ndash;2022 Julio Merino</p>
-</div>
-</div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer class="container">
+  <div class="row">
+    <div class="col order-2 texr-right">
+      <p class="float-right"><a href="#">Back to top</a></p>
+    </div>
+    <div class="col order-1 mr-auto">
+      <p>Copyright 2004&ndash;2021 Julio Merino</p>
+    </div>
+  </div>
 </footer>
-<script type=module>
-  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
 
-  var batchClient = new BatchClient(SITE_ID);
-  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-63557333-1"></script>
+<script src="/js/jquery-1.11.2.min.js"></script>
+<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
+<script src="/js/uuidv4.min.js"></script>
 
-  window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
-  window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
+<script src="/script.js"></script>
 
-  window.postComment = function(...args) {
-    batchClient.postComment(...args);
-  };
-
+<script>
   addAnchorsToHeaders();
   addElementClasses();
+
+  saveRequest();
+  loadVotes();
+</script>
+
+<script>
+  gaRequest();
 </script>
 <noscript>
-<img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDA1LzEwL2xpZ2h0d2VpZ2h0LXdlYi1zZXJ2aW5nLXdpdGgtdGh0dHBkLmh0bWw=/stamp.gif" style=display:none>
+  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDA1LzEwL2xpZ2h0d2VpZ2h0LXdlYi1zZXJ2aW5nLXdpdGgtdGh0dHBkLmh0bWw=/stamp.gif" style="display: none;" />
 </noscript>
-</body>
+
+  </body>
 </html>
