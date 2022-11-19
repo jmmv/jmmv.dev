@@ -1,214 +1,110 @@
-<!doctype html>
-<html lang="en"
-      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
-  <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  
-
-  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-
-  <title>Smart Pointers in C&#43;&#43; - Julio Merino (jmmv.dev)</title>
-  <meta property="og:title" content="Smart Pointers in C&#43;&#43; - Julio Merino (jmmv.dev)">
-
-  
-
-  <meta name="description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
- C&#43;&#43;, with its complex and complete syntax, is a very versatile language.">
-  <meta property="og:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
- C&#43;&#43;, with its complex and complete syntax, is a very versatile language.">
-  <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.92.2" />
-
-  <meta property="og:url" content="https://jmmv.dev/2006/05/smart-pointers-in-cxx.html">
-
-  <meta property="og:type" content="blog">
-
-  <link rel="canonical" href="https://jmmv.dev/2006/05/smart-pointers-in-cxx.html">
-  <link rel="alternate" type="application/rss+xml"
-        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
-
-  <link rel="stylesheet" href="/sass/main.min.723838a96cb313367e5aed166b75faaf5b61f6d641c9d5ea50920a91610c18ce.css">
-  <link rel="stylesheet" href="/css/chroma.css">
-
-  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
-
-  
-  <!--[if lt IE 9]>
-    <script src="/js/html5shiv-3.7.2.min.js"></script>
-    <script src="/js/respond-1.4.2.min.js"></script>
-  <![endif]-->
-
-  <script>
-    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
-    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDA2LzA1L3NtYXJ0LXBvaW50ZXJzLWluLWN4eC5odG1s';
-  </script>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<meta property="twitter:site" content="@jmmv">
+<title>Smart Pointers in C++ - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Smart Pointers in C++ - Julio Merino (jmmv.dev)">
+<meta property="twitter:title" content="Smart Pointers in C++ - Julio Merino (jmmv.dev)">
+<meta name=description content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
+ C++, with its complex and complete syntax, is a very versatile language.">
+<meta property="og:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.
+ C++, with its complex and complete syntax, is a very versatile language.">
+<meta property="twitter:description" content="This article first appeared on this date in O&amp;rsquo;Reilly&amp;rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to find a copy in the WayBack Machine. …">
+<meta name=author content="Julio Merino">
+<meta property="twitter:creator" content="@jmmv">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2006/05/smart-pointers-in-cxx.html">
+<meta property="og:type" content="blog">
+<meta property="twitter:card" content="summary">
+<link rel=canonical href=https://jmmv.dev/2006/05/smart-pointers-in-cxx.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.e6bc80a1be92c773c7961a8e97099442cea2dd8ed61958e61cf1436928d991e2.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
+<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
 </head>
-
-
-  <body>
-    <header class="site-header">
-
+<body>
+<header class=site-header>
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-  <a class="navbar-brand" href="/">
-    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
-    &nbsp;Julio Merino
-  </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse"
-          data-target="#navbarSupportedContent"
-          aria-controls="navbarSupportedContent" aria-expanded="false"
-          aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/about.html" >About</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/essays.html" >Essays</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/resume.html" >Resume</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/software.html" >Software</a>
-          </li>
-        
-      
-    </ul>
-
-    <ul class="navbar-nav mr-4">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/archive.html" >Archive</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/privacy.html" >Privacy</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/series.html" >Series</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/tags.html" >Tags</a>
-          </li>
-        
-      
-    </ul>
-
-    <form class="form-inline" method="get" role="search"
-          action="https://www.google.com/search">
-      <div class="input-group">
-        <input type="search" name="query" class="form-control"
-                placeholder="Search" aria-label="Search">
-        <div class="input-group-append">
-          <button type="submit" value="Search" class="btn btn-light">
-            <img src="/octicons/search.svg">
-          </button>
-        </div>
-      </div>
-      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-    </form>
-  </div>
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
 </nav>
-
 </header>
-
-
-    <div class="page-header">
-      <div class="container">
-        <h1>Smart Pointers in C&#43;&#43;</h1>
-
-        <p>May 4, 2006 &middot;
-        About 17 minutes
-        &middot;
-        Tags:
-        <a class="text-reset" href="/tags/cxx">cxx</a>, <a class="text-reset" href="/tags/featured">featured</a>, <a class="text-reset" href="/tags/onlamp">onlamp</a>, <a class="text-reset" href="/tags/programming">programming</a></p>
-
-        
-      </div>
-    </div>
-
-    <div class="container">
-      <div class="row">
-        <div class="col-md-9">
-          <div id="cookie-notice"></div>
-
-          <div class="row">
-            <div class="col">
-              
-                
-
-
-
-  
-    
-  
-  
-
-  
-    
-  
-  
-
-  
-    
-  
-  
-
-  
-    
-  
-  
-
-  
-    
-  
-  
-
-
+<div class=page-header>
+<div class=container>
+<h1>Smart Pointers in C++</h1>
+<p>May 4, 2006 &#183;
+About 17 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/cxx>cxx</a>, <a class=text-reset href=/tags/featured>featured</a>, <a class=text-reset href=/tags/onlamp>onlamp</a>, <a class=text-reset href=/tags/programming>programming</a></p>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
 <p><i>This article is part number
-
-  4 of the
-
-<a href="/series.html#ONLamp.com%20guest%20posts"><b>
+4 of 5 of the completed
+<a href=/series.html#ONLamp.com%20guest%20posts><b>
 ONLamp.com guest posts</b> series</a>.</i></p>
-
-<hr/>
-
-              
-              <article><p><em>This article first appeared on this date in O&rsquo;Reilly&rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to <a href="https://web.archive.org/web/20060615153924/http://www.onlamp.com/pub/a/onlamp/2006/05/04/smart-pointers.html">find a copy</a> in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.</em></p>
+<hr>
+<article><p><em>This article first appeared on this date in O&rsquo;Reilly&rsquo;s ONLamp.com online publication. The content was deleted sometime in 2019 but I was lucky enough to <a href=https://web.archive.org/web/20060615153924/http://www.onlamp.com/pub/a/onlamp/2006/05/04/smart-pointers.html>find a copy</a> in the WayBack Machine. I reformatted the text to fit the style of this site and fixed broken links, but otherwise the content is a verbatim reproduction of what was originally published.</em></p>
 <hr>
 <p>C++, with its complex and complete syntax, is a very versatile language. Because it supports object-oriented capabilities and has powerful object libraries&mdash;such as the STL or Boost&mdash;one can quickly implement robust, high-level systems. On the other hand, thanks to its C roots, C++ allows the implementation of very low-level code. This has advantages but also carries some disadvantages, especially when one attempts to write high-level applications.</p>
 <p>In this article I describe some common pitfalls that appear when manually managing dynamic memory in C++. This leads me to analyze which possible alternatives exist to avoid them, RAII-modeled classes being a good example. And finally, I present smart pointers and a description of some popular ones.</p>
-<h1 id="memory-management">Memory Management</h1>
+<h1 id=memory-management>Memory Management</h1>
 <p>One of the things that C++ inherited from C is its memory management, which C leaves completely as the developer&rsquo;s responsibility. C++ wraps the <code>malloc</code> and <code>free</code> functions inside the <code>new</code> and <code>delete</code> operators, which are otherwise the same. This is good for simplicity and is enough in many scenarios, but it gets in the way when implementing large and high-level applications: memory management is a delicate, tedious, and difficult task, driving the developer away from the real problem at hand. Any bugs in this code tend to be fatal, crashing the program or making it unreliable for long-term usage.</p>
 <p>Why is it so complex? After all, C developers have done it for ages. True&mdash;but look at how many bugs originated in memory mishandling. This task also becomes more complex in C++ due to exceptions. Why is memory management so delicate in C++?</p>
 <ul>
@@ -221,24 +117,24 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 <li>
 <p>If any temporary object is part of the heap, the developer must be careful to deallocate it in all appropriate places (typically in all function exit points). Otherwise, memory will leak, making the program unreliable if it runs for long periods of time.</p>
 <p>As C++ supports exceptions, this task is extra difficult: every single code line can make a function exit. Consider the hypothetical code snippet:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="kt">bool</span>
-<span class="nf">do_something</span><span class="p">(</span><span class="kt">int</span> <span class="n">size</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="kt">char</span><span class="o">*</span> <span class="n">buffer</span><span class="p">;</span>
-    <span class="k">try</span> <span class="p">{</span>
-        <span class="n">buffer</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">char</span><span class="p">[</span><span class="n">size</span><span class="p">];</span>
-    <span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="o">&amp;</span> <span class="n">e</span><span class="p">)</span> <span class="p">{</span>
-        <span class="k">return</span> <span class="nb">false</span><span class="p">;</span>
-    <span class="p">}</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=kt>bool</span>
+<span class=nf>do_something</span><span class=p>(</span><span class=kt>int</span> <span class=n>size</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=kt>char</span><span class=o>*</span> <span class=n>buffer</span><span class=p>;</span>
+    <span class=k>try</span> <span class=p>{</span>
+        <span class=n>buffer</span> <span class=o>=</span> <span class=k>new</span> <span class=kt>char</span><span class=p>[</span><span class=n>size</span><span class=p>];</span>
+    <span class=p>}</span> <span class=k>catch</span> <span class=p>(</span><span class=k>const</span> <span class=n>std</span><span class=o>::</span><span class=n>bad_alloc</span><span class=o>&amp;</span> <span class=n>e</span><span class=p>)</span> <span class=p>{</span>
+        <span class=k>return</span> <span class=nb>false</span><span class=p>;</span>
+    <span class=p>}</span>
 
-    <span class="n">helper</span> <span class="n">h</span><span class="p">(</span><span class="s">&#34;Something&#34;</span><span class="p">);</span>
-    <span class="n">h</span><span class="p">.</span><span class="n">fill</span><span class="p">(</span><span class="n">buffer</span><span class="p">,</span> <span class="n">size</span><span class="p">);</span>
+    <span class=n>helper</span> <span class=n>h</span><span class=p>(</span><span class=s>&#34;Something&#34;</span><span class=p>);</span>
+    <span class=n>h</span><span class=p>.</span><span class=n>fill</span><span class=p>(</span><span class=n>buffer</span><span class=p>,</span> <span class=n>size</span><span class=p>);</span>
 
-    <span class="k">delete</span> <span class="p">[]</span> <span class="n">buffer</span><span class="p">;</span>
-    <span class="k">return</span> <span class="nb">true</span><span class="p">;</span>
-<span class="p">}</span>
+    <span class=k>delete</span> <span class=p>[]</span> <span class=n>buffer</span><span class=p>;</span>
+    <span class=k>return</span> <span class=nb>true</span><span class=p>;</span>
+<span class=p>}</span>
 </code></pre></div><p>This code might look harmless, but it has a potential memory leak&mdash;the error path is not visible, but it certainly exists. If either helper&rsquo;s constructor or its fill method throws an exception, the function will exit without releasing buffer&rsquo;s memory, thus causing a leak. This kind of bug is difficult to discover. Solving it increases the code&rsquo;s complexity because you need extra <code>try</code>/<code>catch</code> constructions. Note that I am not implying that you shouldn&rsquo;t use exceptions, just saying that using them appropriately is hard.</p>
-<p>I recommend you read the article <a href="https://devblogs.microsoft.com/oldnewthing/20050114-00/?p=36693">Cleaner, More Elegant, and Harder to Recognize</a>, posted at <a href="https://devblogs.microsoft.com/oldnewthing/">The Old New Thing</a> weblog. It illustrates this point quite well.</p>
+<p>I recommend you read the article <a href="https://devblogs.microsoft.com/oldnewthing/20050114-00/?p=36693">Cleaner, More Elegant, and Harder to Recognize</a>, posted at <a href=https://devblogs.microsoft.com/oldnewthing/>The Old New Thing</a> weblog. It illustrates this point quite well.</p>
 </li>
 </ul>
 <p>Of course, if you opt to manage memory manually, you can work around these problems by being extremely careful during development. (Note, though, that this extra care means more development time.) In some situations this is the only way to go, because you need full control over what the program is doing (for example, when writing low-level code).</p>
@@ -258,7 +154,7 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 <p>These three reasons, among others, may be why many developers choose not to use a garbage collector. For me, they are more than enough to look for another solution, especially because I don&rsquo;t like to lose portability because of third-party libraries. Yet falling back to manual control is not the best solution either, because it easily leads to the bugs described earlier.</p>
 <p>One of the possible alternatives is to use stack (local) objects rather than heap (dynamic) objects. This is the typical and recommended C++ coding style, not to mention that many APIs enforce it: they receive and return references to local objects instead of pointers to heap objects. However, this scheme is not always applicable; multiple scenarios require the use of dynamically allocated objects.</p>
 <p>What can you do in those cases where dynamic memory is unavoidable? A wise choice is to apply the RAII programming model to dynamically allocated objects, which brings up the well-known smart pointers.</p>
-<h1 id="the-raii-model">The RAII Model</h1>
+<h1 id=the-raii-model>The RAII Model</h1>
 <p>RAII (resource acquisition is initialization) is a programming idiom intended to make code more robust. This model is restricted to object-oriented programming languages that have a predictable object destruction flow: where the developer could deduce, if he wanted to, the exact place at which an object&rsquo;s destructor is called. C++ is one such language, assuming you use no garbage collector.</p>
 <p>The basic principle behind RAII is to wrap dynamic resources&mdash;those that are allocated at some point and deallocated some time later&mdash;inside thin classes that manage them in a transparent way. These classes have several characteristics:</p>
 <ul>
@@ -277,1109 +173,749 @@ ONLamp.com guest posts</b> series</a>.</i></p>
 </ul>
 <p>By using RAII-modeled classes, the developer need not care about explicitly releasing the acquired resources: they will be freed automatically when the instance that manages them goes out of scope. It is important to note that these instances are almost always local variables (they live in the stack or within another object as an attribute); placing them in the heap (thus making them dynamic) makes no sense and could defeat the whole idea behind RAII.</p>
 <p>As an example, consider the <code>std::ofstream</code> class, modeled using RAII. This class has a redundant close method, provided only for cleanliness so as to allow the developer to explicitly tell where the file ceases to be open. If this function never gets called, the file will close as soon as the class&rsquo;s instance goes out of scope. For example:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="kt">int</span>
-<span class="nf">read_something</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=kt>int</span>
+<span class=nf>read_something</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=kt>int</span> <span class=n>value</span><span class=p>;</span>
 
-    <span class="n">std</span><span class="o">::</span><span class="n">ifstream</span> <span class="n">f</span><span class="p">(</span><span class="s">&#34;test.tmp&#34;</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">f</span><span class="p">)</span> <span class="p">{</span>
-        <span class="c1">// First exit point
-</span><span class="c1"></span>        <span class="k">throw</span> <span class="n">no_such_file_exception</span><span class="p">(</span><span class="s">&#34;The file test.tmp does not exist&#34;</span><span class="p">);</span>
-    <span class="p">}</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>ifstream</span> <span class=n>f</span><span class=p>(</span><span class=s>&#34;test.tmp&#34;</span><span class=p>);</span>
+    <span class=k>if</span> <span class=p>(</span><span class=o>!</span><span class=n>f</span><span class=p>)</span> <span class=p>{</span>
+        <span class=c1>// First exit point
+</span><span class=c1></span>        <span class=k>throw</span> <span class=n>no_such_file_exception</span><span class=p>(</span><span class=s>&#34;The file test.tmp does not exist&#34;</span><span class=p>);</span>
+    <span class=p>}</span>
 
-    <span class="n">f</span> <span class="o">&gt;&gt;</span> <span class="n">value</span><span class="p">;</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-        <span class="c1">// Second exit point
-</span><span class="c1"></span>        <span class="k">throw</span> <span class="n">invalid_format_exception</span><span class="p">(</span><span class="s">&#34;The file test.tmp is corrupt&#34;</span><span class="p">);</span>
-    <span class="p">}</span>
+    <span class=n>f</span> <span class=o>&gt;&gt;</span> <span class=n>value</span><span class=p>;</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>value</span> <span class=o>==</span> <span class=mi>0</span><span class=p>)</span> <span class=p>{</span>
+        <span class=c1>// Second exit point
+</span><span class=c1></span>        <span class=k>throw</span> <span class=n>invalid_format_exception</span><span class=p>(</span><span class=s>&#34;The file test.tmp is corrupt&#34;</span><span class=p>);</span>
+    <span class=p>}</span>
 
-    <span class="c1">// Third exit point
-</span><span class="c1"></span>    <span class="k">return</span> <span class="n">value</span><span class="p">;</span>
-<span class="p">}</span>
+    <span class=c1>// Third exit point
+</span><span class=c1></span>    <span class=k>return</span> <span class=n>value</span><span class=p>;</span>
+<span class=p>}</span>
 </code></pre></div><p>The read_something function has at least three exit points, clearly marked in the code using comments. Now notice that there is no difference in f&rsquo;s handling in them. It does not matter whether the object was initialized, or if the code exited prematurely or successfully. The code simply ignores that the object exists, which is possible because <code>std::ifstream</code>&rsquo;s destructor closes the file. Otherwise, the code shown could leak an open file each time it took the second exit point.</p>
-<p>For more information on the RAII programming idiom, I suggest you read <a href="https://www.hackcraft.net/raii/">The RAII Programming Idiom</a> by Jon Hanna; it explains what RAII is in great detail and shows examples in both C++ and VB6.</p>
-<h1 id="smart-pointers">Smart Pointers</h1>
+<p>For more information on the RAII programming idiom, I suggest you read <a href=https://www.hackcraft.net/raii/>The RAII Programming Idiom</a> by Jon Hanna; it explains what RAII is in great detail and shows examples in both C++ and VB6.</p>
+<h1 id=smart-pointers>Smart Pointers</h1>
 <p>A smart pointer is an RAII-modeled class that holds and manages a dynamically allocated chunk of memory. The exact behavior of the smart pointer is defined by its implementation, not by the fact that it is a smart pointer. In other words, a smart pointer is &ldquo;smarter&rdquo; than a raw pointer because it does some tasks automatically on behalf of the user; the tasks it does, however, depend on its specification.</p>
 <p>Smart pointers are also helpful to specify how a pointer behaves based solely on notation. This is very useful when defining an API, because pointers in function signatures typically lead to confusion: Is the pointer an output parameter? Who is in charge of allocating the memory? Who has to release it? Using a smart pointer automatically answers some&mdash;if not all&mdash;of these questions.</p>
 <p>The standard C++ library has a simple smart pointer, useful in many simple situations. However, due to those limitations, third-party libraries provide a wide variety of smart pointers with different features.</p>
-<h1 id="smart-pointers-in-the-standard-c-library">Smart Pointers in the Standard C++ Library</h1>
+<h1 id=smart-pointers-in-the-standard-c-library>Smart Pointers in the Standard C++ Library</h1>
 <p>The standard C++ library comes with a smart pointer called <code>auto_ptr</code>, for &ldquo;automatic pointer.&rdquo; It is very simple and is the least common denominator of smart pointers. No matter what, it is useful to make code more robust in many simple situations.</p>
 <p>The <code>auto_ptr</code> smart pointer owns the object it holds a pointer to. That is, it releases the memory associated to it upon destruction; it does not do any allocation by itself, nor does it keep a reference counter of the memory involved.</p>
-<p>The <code>auto_ptr</code> class overloads the <code>*</code> and <code>-&gt;</code> operators so as to allow transparent access to the dynamic object. To access the raw pointer itself, use the get method. Consider a simple example:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="n">std</span><span class="o">::</span><span class="n">auto_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ptra</span><span class="p">(</span><span class="k">new</span> <span class="kt">int</span><span class="p">(</span><span class="mi">5</span><span class="p">));</span>
+<p>The <code>auto_ptr</code> class overloads the <code>*</code> and <code>-></code> operators so as to allow transparent access to the dynamic object. To access the raw pointer itself, use the get method. Consider a simple example:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=n>std</span><span class=o>::</span><span class=n>auto_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>ptra</span><span class=p>(</span><span class=k>new</span> <span class=kt>int</span><span class=p>(</span><span class=mi>5</span><span class=p>));</span>
 
-<span class="c1">// From now on, the code is safe.  The dynamically allocated
-</span><span class="c1">// integer will be released no matter which execution path we
-</span><span class="c1">// follow.
-</span><span class="c1"></span>
-<span class="o">*</span><span class="n">ptra</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
-<span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="o">*</span><span class="n">ptra</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
-<span class="kt">int</span><span class="o">*</span> <span class="n">ptrb</span> <span class="o">=</span> <span class="n">ptra</span><span class="p">.</span><span class="n">get</span><span class="p">();</span>
-<span class="o">*</span><span class="n">ptrb</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
-<span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="o">*</span><span class="n">ptra</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;, &#34;</span> <span class="o">&lt;&lt;</span> <span class="o">*</span><span class="n">ptrb</span>
-          <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+<span class=c1>// From now on, the code is safe.  The dynamically allocated
+</span><span class=c1>// integer will be released no matter which execution path we
+</span><span class=c1>// follow.
+</span><span class=c1></span>
+<span class=o>*</span><span class=n>ptra</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+<span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=o>*</span><span class=n>ptra</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
+<span class=kt>int</span><span class=o>*</span> <span class=n>ptrb</span> <span class=o>=</span> <span class=n>ptra</span><span class=p>.</span><span class=n>get</span><span class=p>();</span>
+<span class=o>*</span><span class=n>ptrb</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+<span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=o>*</span><span class=n>ptra</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;, &#34;</span> <span class=o>&lt;&lt;</span> <span class=o>*</span><span class=n>ptrb</span>
+          <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
 </code></pre></div><p>It is important to note in the example above that <code>auto_ptr</code>&rsquo;s constructor cannot fail. (It is declared as <code>throws()</code>.) If it could, the code would need to be more complex in order to catch those failures, defeating in part the purpose of the smart pointer.</p>
 <p>The automatic pointer also provides the release method, which detaches itself from the memory object, returning a raw pointer to it. This allows the use of an automatic pointer in a critical section only, falling back to manual management once that delicate code is over. As an example, imagine a function that returns a raw pointer to a dynamically allocated object. This function needs to do multiple initialization tasks and has several exit points if errors happen. You can use an automatic pointer to simplify its code:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="n">foo</span> <span class="o">*</span>
-<span class="nf">get_new_foo</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">std</span><span class="o">::</span><span class="n">auto_ptr</span><span class="o">&lt;</span><span class="n">foo</span><span class="o">&gt;</span> <span class="n">ob</span><span class="p">(</span><span class="k">new</span> <span class="n">foo</span><span class="p">);</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=n>foo</span> <span class=o>*</span>
+<span class=nf>get_new_foo</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>auto_ptr</span><span class=o>&lt;</span><span class=n>foo</span><span class=o>&gt;</span> <span class=n>ob</span><span class=p>(</span><span class=k>new</span> <span class=n>foo</span><span class=p>);</span>
 
-    <span class="c1">// The following two operations can raise an exception.
-</span><span class="c1"></span>    <span class="c1">// We need not care about it thanks to the smart pointer.
-</span><span class="c1"></span>    <span class="n">ob</span><span class="o">-&gt;</span><span class="n">do_something</span><span class="p">();</span>
-    <span class="n">ob</span><span class="o">-&gt;</span><span class="n">do_something_else</span><span class="p">();</span>
+    <span class=c1>// The following two operations can raise an exception.
+</span><span class=c1></span>    <span class=c1>// We need not care about it thanks to the smart pointer.
+</span><span class=c1></span>    <span class=n>ob</span><span class=o>-&gt;</span><span class=n>do_something</span><span class=p>();</span>
+    <span class=n>ob</span><span class=o>-&gt;</span><span class=n>do_something_else</span><span class=p>();</span>
 
-    <span class="c1">// We are done.  The caller is only interested in the raw
-</span><span class="c1"></span>    <span class="c1">// pointer, which we can safely return now.
-</span><span class="c1"></span>    <span class="k">return</span> <span class="n">ob</span><span class="p">.</span><span class="n">release</span><span class="p">();</span>
-<span class="p">}</span>
+    <span class=c1>// We are done.  The caller is only interested in the raw
+</span><span class=c1></span>    <span class=c1>// pointer, which we can safely return now.
+</span><span class=c1></span>    <span class=k>return</span> <span class=n>ob</span><span class=p>.</span><span class=n>release</span><span class=p>();</span>
+<span class=p>}</span>
 </code></pre></div><p>Automatic pointers are not copyable. If the developer attempts to copy an instance of <code>auto_ptr</code>, the object it points to will be transferred to the new smart pointer, invalidating the old one. Therefore, using this class together with STL collections is dangerous; don&rsquo;t do it, because it does not follow the required semantics. Furthermore, if two automatic pointers hold a reference to the same memory object, the behavior is undefined (but typically the application will simply crash).</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="n">std</span><span class="o">::</span><span class="n">auto_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ptra</span><span class="p">(</span><span class="k">new</span> <span class="kt">int</span><span class="p">(</span><span class="mi">5</span><span class="p">));</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=n>std</span><span class=o>::</span><span class=n>auto_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>ptra</span><span class=p>(</span><span class=k>new</span> <span class=kt>int</span><span class=p>(</span><span class=mi>5</span><span class=p>));</span>
 
-<span class="c1">// ptra is valid and can be accessed.
-</span><span class="c1"></span><span class="o">*</span><span class="n">ptra</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+<span class=c1>// ptra is valid and can be accessed.
+</span><span class=c1></span><span class=o>*</span><span class=n>ptra</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
 
-<span class="n">std</span><span class="o">::</span><span class="n">auto_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ptrb</span><span class="p">(</span><span class="n">ptra</span><span class="p">);</span>
+<span class=n>std</span><span class=o>::</span><span class=n>auto_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>ptrb</span><span class=p>(</span><span class=n>ptra</span><span class=p>);</span>
 
-<span class="c1">// ptrb now owns the dynamically allocated integer, so we can
-</span><span class="c1">// access it.
-</span><span class="c1"></span><span class="o">*</span><span class="n">ptrb</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+<span class=c1>// ptrb now owns the dynamically allocated integer, so we can
+</span><span class=c1>// access it.
+</span><span class=c1></span><span class=o>*</span><span class=n>ptrb</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
 
-<span class="c1">// However, ptra is now longer valid; the following crashes the
-</span><span class="c1">// program.
-</span><span class="c1"></span><span class="o">*</span><span class="n">ptra</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+<span class=c1>// However, ptra is now longer valid; the following crashes the
+</span><span class=c1>// program.
+</span><span class=c1></span><span class=o>*</span><span class=n>ptra</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
 
-<span class="c1">// At last, the following has undefined behavior.
-</span><span class="c1"></span><span class="kt">int</span><span class="o">*</span> <span class="n">i</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
-<span class="n">std</span><span class="o">::</span><span class="n">auto_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ptrc</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
-<span class="n">std</span><span class="o">::</span><span class="n">auto_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ptrd</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+<span class=c1>// At last, the following has undefined behavior.
+</span><span class=c1></span><span class=kt>int</span><span class=o>*</span> <span class=n>i</span> <span class=o>=</span> <span class=k>new</span> <span class=kt>int</span><span class=p>(</span><span class=mi>1</span><span class=p>);</span>
+<span class=n>std</span><span class=o>::</span><span class=n>auto_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>ptrc</span><span class=p>(</span><span class=n>i</span><span class=p>);</span>
+<span class=n>std</span><span class=o>::</span><span class=n>auto_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>ptrd</span><span class=p>(</span><span class=n>i</span><span class=p>);</span>
 </code></pre></div><p>To conclude this section, let me add another warning: be aware that you cannot use <code>auto_ptr</code> to hold a reference to an array, because it will not be released properly (that is, <code>delete</code> vs. <code>delete[]</code>). If you need to do this, you have multiple alternatives: wrap the array in some other class of your own, use <code>std::vector</code> instead of an array, or use another smart pointer.</p>
-<h1 id="smart-pointers-in-boost">Smart Pointers in Boost</h1>
-<p>Due to the inherent limitations of the standard <code>auto_ptr</code> class, several third-party C++ libraries provide enhanced smart pointers. <a href="https://www.boost.org/">Boost</a> is no exception. For those who do not know it, Boost is a collection of free, portable, peer-reviewed C++ libraries. These libraries work well with the standard C++ library, following its style and design principles. Some of them may eventually become part of the C++ standard.</p>
-<p>The <a href="https://www.boost.org/doc/libs/1_63_0/libs/smart_ptr/smart_ptr.htm">Boost Smart Pointers</a> library provides six smart pointer templates in three groups: scoped pointers, shared pointers, and intrusive pointers.</p>
+<h1 id=smart-pointers-in-boost>Smart Pointers in Boost</h1>
+<p>Due to the inherent limitations of the standard <code>auto_ptr</code> class, several third-party C++ libraries provide enhanced smart pointers. <a href=https://www.boost.org/>Boost</a> is no exception. For those who do not know it, Boost is a collection of free, portable, peer-reviewed C++ libraries. These libraries work well with the standard C++ library, following its style and design principles. Some of them may eventually become part of the C++ standard.</p>
+<p>The <a href=https://www.boost.org/doc/libs/1_63_0/libs/smart_ptr/smart_ptr.htm>Boost Smart Pointers</a> library provides six smart pointer templates in three groups: scoped pointers, shared pointers, and intrusive pointers.</p>
 <p>Given that the official documentation for the Boost Smart Pointers library is very informative and complete, I have focused the rest of this article on presenting each available smart pointer accompanied by some code examples. If you need to learn more about them, I encourage you to read the official information.</p>
-<h1 id="scoped-pointers">Scoped pointers</h1>
-<p>A scoped pointer owns a dynamically allocated object, much like the standard <code>auto_ptr</code> does. The difference lies in that the scoped pointer is explicitly marked as <a href="https://www.boost.org/doc/libs/1_65_0/libs/core/doc/html/core/noncopyable.html">noncopyable</a>, ensuring that during compilation time the pointer is never copied. It can be seen as a way to give a casual reader of your code a signal that you do not intend for that specific object to leave the local scope (hence the name &ldquo;scoped pointer&rdquo;).</p>
+<h1 id=scoped-pointers>Scoped pointers</h1>
+<p>A scoped pointer owns a dynamically allocated object, much like the standard <code>auto_ptr</code> does. The difference lies in that the scoped pointer is explicitly marked as <a href=https://www.boost.org/doc/libs/1_65_0/libs/core/doc/html/core/noncopyable.html>noncopyable</a>, ensuring that during compilation time the pointer is never copied. It can be seen as a way to give a casual reader of your code a signal that you do not intend for that specific object to leave the local scope (hence the name &ldquo;scoped pointer&rdquo;).</p>
 <p>Boost provides two scoped pointers: <code>scoped_ptr</code> and <code>scoped_array</code>. The former is good for raw pointers, while the latter is useful for dynamic arrays (those allocated with <code>new[]</code>) because they are treated in a slightly different manner. These two smart pointers are extremely lightweight: they do not occupy more space than a raw pointer, and the most common operations are as cheap as the access to a raw pointer.</p>
 <p>Here is an example to illustrate the usage of both classes by dynamically allocating a test class and letting its instances go out of scope. The printed messages show how the code properly releases the memory before exiting:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="cp">#include</span> <span class="cpf">&lt;cstdlib&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
-</span><span class="cp"></span>
-<span class="cp">#include</span> <span class="cpf">&lt;boost/scoped_array.hpp&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;boost/scoped_ptr.hpp&gt;</span><span class="cp">
-</span><span class="cp"></span>
-<span class="k">static</span> <span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=cp>#include</span> <span class=cpf>&lt;cstdlib&gt;</span><span class=cp>
+</span><span class=cp>#include</span> <span class=cpf>&lt;iostream&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=cp>#include</span> <span class=cpf>&lt;boost/scoped_array.hpp&gt;</span><span class=cp>
+</span><span class=cp>#include</span> <span class=cpf>&lt;boost/scoped_ptr.hpp&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=k>static</span> <span class=kt>int</span> <span class=n>count</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
 
-<span class="k">class</span> <span class="nc">printer</span>
-<span class="p">{</span>
-    <span class="kt">int</span> <span class="n">m_id</span><span class="p">;</span>
+<span class=k>class</span> <span class=nc>printer</span>
+<span class=p>{</span>
+    <span class=kt>int</span> <span class=n>m_id</span><span class=p>;</span>
 
-<span class="k">public</span><span class="o">:</span>
-    <span class="n">printer</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="o">:</span>
-        <span class="n">m_id</span><span class="p">(</span><span class="n">count</span><span class="o">++</span><span class="p">)</span>
-    <span class="p">{</span>
-    <span class="p">}</span>
+<span class=k>public</span><span class=o>:</span>
+    <span class=n>printer</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span> <span class=o>:</span>
+        <span class=n>m_id</span><span class=p>(</span><span class=n>count</span><span class=o>++</span><span class=p>)</span>
+    <span class=p>{</span>
+    <span class=p>}</span>
 
-    <span class="o">~</span><span class="n">printer</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Printer &#34;</span> <span class="o">&lt;&lt;</span> <span class="n">m_id</span> <span class="o">&lt;&lt;</span> <span class="s">&#34; destroyed&#34;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
-    <span class="p">}</span>
-<span class="p">};</span>
+    <span class=o>~</span><span class=n>printer</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;Printer &#34;</span> <span class=o>&lt;&lt;</span> <span class=n>m_id</span> <span class=o>&lt;&lt;</span> <span class=s>&#34; destroyed&#34;</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
+    <span class=p>}</span>
+<span class=p>};</span>
 
-<span class="kt">int</span>
-<span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">boost</span><span class="o">::</span><span class="n">scoped_ptr</span><span class="o">&lt;</span><span class="n">printer</span><span class="o">&gt;</span> <span class="n">p1</span><span class="p">(</span><span class="k">new</span> <span class="n">printer</span><span class="p">);</span>
-    <span class="n">boost</span><span class="o">::</span><span class="n">scoped_array</span><span class="o">&lt;</span><span class="n">printer</span><span class="o">&gt;</span> <span class="n">p2</span><span class="p">(</span><span class="k">new</span> <span class="n">printer</span><span class="p">[</span><span class="mi">5</span><span class="p">]);</span>
+<span class=kt>int</span>
+<span class=nf>main</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>scoped_ptr</span><span class=o>&lt;</span><span class=n>printer</span><span class=o>&gt;</span> <span class=n>p1</span><span class=p>(</span><span class=k>new</span> <span class=n>printer</span><span class=p>);</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>scoped_array</span><span class=o>&lt;</span><span class=n>printer</span><span class=o>&gt;</span> <span class=n>p2</span><span class=p>(</span><span class=k>new</span> <span class=n>printer</span><span class=p>[</span><span class=mi>5</span><span class=p>]);</span>
 
-    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Exiting test program&#34;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;Exiting test program&#34;</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
 
-    <span class="k">return</span> <span class="n">EXIT_SUCCESS</span><span class="p">;</span>
-<span class="p">}</span>
-</code></pre></div><h1 id="shared-pointers">Shared pointers</h1>
+    <span class=k>return</span> <span class=n>EXIT_SUCCESS</span><span class=p>;</span>
+<span class=p>}</span>
+</code></pre></div><h1 id=shared-pointers>Shared pointers</h1>
 <p>A shared pointer is something you cannot live without once you&rsquo;ve learned what it is. If smart pointers are great by themselves, imagine how incredible these are! Really. Remember the essay about garbage collectors at the beginning of the article? Shared pointers are the alternative I was aiming at.</p>
 <p>More seriously, a shared pointer owns a reference to a dynamically allocated pointer&mdash;as all other smart pointers do&mdash;but does not own the object itself. This subtle difference is very important: a shared pointer <em>counts</em> the number of users of the dynamic object by means of a <em>reference counter</em>. The dynamic object is released only when the last shared pointer referencing it disappears.</p>
 <p>You can copy and transfer shared pointers in a trivial way, yet these operations are completely safe: they do not duplicate memory nor try to release a single chunk earlier than necessary. Even more, they are also useful to write clearer code. By using a shared pointer, you no longer need to identify who is responsible for freeing a returned object nor which rules apply to an input parameter. This certainly helps when designing a public API.</p>
 <p>Boost provides two shared pointers: <code>shared_ptr</code> and <code>shared_array</code>. The former is used for raw pointers, while the latter is used for dynamic arrays (those allocated with <code>new[]</code>), for the same reasons as scoped pointers.</p>
 <p>Consider a simple example:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="cp">#include</span> <span class="cpf">&lt;cstdio&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
-</span><span class="cp"></span>
-<span class="cp">#include</span> <span class="cpf">&lt;boost/shared_array.hpp&gt;</span><span class="cp">
-</span><span class="cp"></span>
-<span class="k">class</span> <span class="nc">useless_buffer</span>
-<span class="p">{</span>
-    <span class="n">size_t</span> <span class="n">m_length</span><span class="p">;</span>
-    <span class="n">boost</span><span class="o">::</span><span class="n">shared_array</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span> <span class="n">m_buffer</span><span class="p">;</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=cp>#include</span> <span class=cpf>&lt;cstdio&gt;</span><span class=cp>
+</span><span class=cp>#include</span> <span class=cpf>&lt;iostream&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=cp>#include</span> <span class=cpf>&lt;boost/shared_array.hpp&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=k>class</span> <span class=nc>useless_buffer</span>
+<span class=p>{</span>
+    <span class=n>size_t</span> <span class=n>m_length</span><span class=p>;</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>shared_array</span><span class=o>&lt;</span><span class=kt>char</span><span class=o>&gt;</span> <span class=n>m_buffer</span><span class=p>;</span>
 
-<span class="k">public</span><span class="o">:</span>
-    <span class="n">useless_buffer</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">str</span><span class="p">)</span> <span class="o">:</span>
-        <span class="n">m_length</span><span class="p">(</span><span class="n">str</span><span class="p">.</span><span class="n">length</span><span class="p">()</span> <span class="o">*</span> <span class="mi">2</span><span class="p">),</span>
-        <span class="n">m_buffer</span><span class="p">(</span><span class="k">new</span> <span class="kt">char</span><span class="p">[</span><span class="n">m_length</span><span class="p">])</span>
-    <span class="p">{</span>
-        <span class="n">std</span><span class="o">::</span><span class="n">strcpy</span><span class="p">(</span><span class="n">m_buffer</span><span class="p">.</span><span class="n">get</span><span class="p">(),</span> <span class="n">str</span><span class="p">.</span><span class="n">c_str</span><span class="p">());</span>
-    <span class="p">}</span>
+<span class=k>public</span><span class=o>:</span>
+    <span class=n>useless_buffer</span><span class=p>(</span><span class=k>const</span> <span class=n>std</span><span class=o>::</span><span class=n>string</span><span class=o>&amp;</span> <span class=n>str</span><span class=p>)</span> <span class=o>:</span>
+        <span class=n>m_length</span><span class=p>(</span><span class=n>str</span><span class=p>.</span><span class=n>length</span><span class=p>()</span> <span class=o>*</span> <span class=mi>2</span><span class=p>),</span>
+        <span class=n>m_buffer</span><span class=p>(</span><span class=k>new</span> <span class=kt>char</span><span class=p>[</span><span class=n>m_length</span><span class=p>])</span>
+    <span class=p>{</span>
+        <span class=n>std</span><span class=o>::</span><span class=n>strcpy</span><span class=p>(</span><span class=n>m_buffer</span><span class=p>.</span><span class=n>get</span><span class=p>(),</span> <span class=n>str</span><span class=p>.</span><span class=n>c_str</span><span class=p>());</span>
+    <span class=p>}</span>
 
-    <span class="n">boost</span><span class="o">::</span><span class="n">shared_array</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span> <span class="n">get_buffer</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="k">return</span> <span class="n">m_buffer</span><span class="p">;</span>
-    <span class="p">}</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>shared_array</span><span class=o>&lt;</span><span class=kt>char</span><span class=o>&gt;</span> <span class=n>get_buffer</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=k>return</span> <span class=n>m_buffer</span><span class=p>;</span>
+    <span class=p>}</span>
 
-    <span class="n">boost</span><span class="o">::</span><span class="n">shared_array</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span> <span class="n">copy_buffer</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">boost</span><span class="o">::</span><span class="n">shared_array</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span> <span class="n">copy</span><span class="p">(</span><span class="k">new</span> <span class="kt">char</span><span class="p">[</span><span class="n">m_length</span><span class="p">]);</span>
-        <span class="n">std</span><span class="o">::</span><span class="n">memcpy</span><span class="p">(</span><span class="n">copy</span><span class="p">.</span><span class="n">get</span><span class="p">(),</span> <span class="n">m_buffer</span><span class="p">.</span><span class="n">get</span><span class="p">(),</span> <span class="n">m_length</span><span class="p">);</span>
-        <span class="k">return</span> <span class="n">copy</span><span class="p">;</span>
-    <span class="p">}</span>
-<span class="p">};</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>shared_array</span><span class=o>&lt;</span><span class=kt>char</span><span class=o>&gt;</span> <span class=n>copy_buffer</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=n>boost</span><span class=o>::</span><span class=n>shared_array</span><span class=o>&lt;</span><span class=kt>char</span><span class=o>&gt;</span> <span class=n>copy</span><span class=p>(</span><span class=k>new</span> <span class=kt>char</span><span class=p>[</span><span class=n>m_length</span><span class=p>]);</span>
+        <span class=n>std</span><span class=o>::</span><span class=n>memcpy</span><span class=p>(</span><span class=n>copy</span><span class=p>.</span><span class=n>get</span><span class=p>(),</span> <span class=n>m_buffer</span><span class=p>.</span><span class=n>get</span><span class=p>(),</span> <span class=n>m_length</span><span class=p>);</span>
+        <span class=k>return</span> <span class=n>copy</span><span class=p>;</span>
+    <span class=p>}</span>
+<span class=p>};</span>
 
-<span class="kt">int</span>
-<span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">useless_buffer</span> <span class="n">buf</span><span class="p">(</span><span class="s">&#34;Hello, world!&#34;</span><span class="p">);</span>
+<span class=kt>int</span>
+<span class=nf>main</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=n>useless_buffer</span> <span class=n>buf</span><span class=p>(</span><span class=s>&#34;Hello, world!&#34;</span><span class=p>);</span>
 
-    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">buf</span><span class="p">.</span><span class="n">get_buffer</span><span class="p">().</span><span class="n">get</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
-    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">buf</span><span class="p">.</span><span class="n">copy_buffer</span><span class="p">().</span><span class="n">get</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=n>buf</span><span class=p>.</span><span class=n>get_buffer</span><span class=p>().</span><span class=n>get</span><span class=p>()</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=n>buf</span><span class=p>.</span><span class=n>copy_buffer</span><span class=p>().</span><span class=n>get</span><span class=p>()</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
 
-    <span class="k">return</span> <span class="n">EXIT_SUCCESS</span><span class="p">;</span>
-<span class="p">}</span>
+    <span class=k>return</span> <span class=n>EXIT_SUCCESS</span><span class=p>;</span>
+<span class=p>}</span>
 </code></pre></div><p>It is interesting to note in this example that from the caller&rsquo;s point of view, there is absolutely no visible difference between the <code>get_buffer</code> and <code>copy_buffer</code> methods. The former returns a new reference for a local array, which the caller must not release. The latter returns a new dynamic object, which the caller must release.</p>
 <p>As a complement to shared pointers, Boost provides the <code>weak_ptr</code> smart pointer. This one does not own an object but instead holds a &ldquo;weak reference&rdquo; to an existing shared pointer. The shared pointer can change at will regardless of how many weak pointers are &ldquo;watching&rdquo; it.</p>
 <p>More in detail, a weak pointer is associated to a shared pointer. Whenever someone needs to access the contents of a weak pointer, the weak pointer must first be converted to a shared pointer by means of the <code>lock</code> method or a special constructor. If the object managed by the shared pointer goes away, any further conversion from the weak pointer to a shared pointer will fail.</p>
 <p>Here is a fictitious example in which the use of a weak pointer might be useful. A shared pointer is accessed by two threads. <code>thread1</code> should be able to release the object, but the object should be accessible at some point in <code>thread2</code> only if it still exists. Using the weak pointer makes this situation possible without using a complex locking protocol:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="n">boost</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ptri</span><span class="p">(</span><span class="k">new</span> <span class="kt">int</span><span class="p">(</span><span class="mi">5</span><span class="p">));</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=n>boost</span><span class=o>::</span><span class=n>shared_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>ptri</span><span class=p>(</span><span class=k>new</span> <span class=kt>int</span><span class=p>(</span><span class=mi>5</span><span class=p>));</span>
 
-<span class="kt">void</span>
-<span class="nf">thread1</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="p">...</span>
+<span class=kt>void</span>
+<span class=nf>thread1</span><span class=p>(</span><span class=kt>void</span><span class=o>*</span> <span class=n>arg</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=p>...</span>
 
-    <span class="n">ptri</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+    <span class=n>ptri</span><span class=p>.</span><span class=n>reset</span><span class=p>();</span>
 
-    <span class="p">...</span>
-<span class="p">}</span>
+    <span class=p>...</span>
+<span class=p>}</span>
 
-<span class="kt">void</span>
-<span class="nf">thread2</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">boost</span><span class="o">::</span><span class="n">weak_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">wptr</span><span class="p">(</span><span class="n">ptri</span><span class="p">);</span>
+<span class=kt>void</span>
+<span class=nf>thread2</span><span class=p>(</span><span class=kt>void</span><span class=o>*</span> <span class=n>arg</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>weak_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>wptr</span><span class=p>(</span><span class=n>ptri</span><span class=p>);</span>
 
-    <span class="p">...</span>
+    <span class=p>...</span>
 
-    <span class="k">if</span> <span class="p">(</span><span class="n">boost</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">auxptr</span> <span class="o">=</span> <span class="n">ptri</span><span class="p">.</span><span class="n">lock</span><span class="p">())</span> <span class="p">{</span>
-        <span class="c1">// Do something with &#39;auxptr&#39; because the object is still available.
-</span><span class="c1"></span>    <span class="p">}</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>boost</span><span class=o>::</span><span class=n>shared_ptr</span><span class=o>&lt;</span><span class=kt>int</span><span class=o>&gt;</span> <span class=n>auxptr</span> <span class=o>=</span> <span class=n>ptri</span><span class=p>.</span><span class=n>lock</span><span class=p>())</span> <span class=p>{</span>
+        <span class=c1>// Do something with &#39;auxptr&#39; because the object is still available.
+</span><span class=c1></span>    <span class=p>}</span>
 
-    <span class="p">...</span>
-<span class="p">}</span>
-</code></pre></div><h1 id="intrusive-pointers">Intrusive pointers</h1>
+    <span class=p>...</span>
+<span class=p>}</span>
+</code></pre></div><h1 id=intrusive-pointers>Intrusive pointers</h1>
 <p>The intrusive pointer is a light version of the shared pointer. It assumes that the dynamically allocated object it has to point to implements a reference counter by itself. This maintains the counter in a single place and keeps the smart pointer to the minimum size (the size of the raw pointer).</p>
 <p>In order to define an intrusive pointer for a given object, you must first create two functions that manage its embedded reference counter. One is <code>intrusive_ptr_add_ref</code>, which simply increases the counter; the other is <code>intrusive_ptr_release</code>, which decreases the counter and, if it reaches zero, releases the object.</p>
 <p>This is much clearer with an example. You may want to assume that <code>some_resource</code> is a class you have written or a class provided by someone else, perhaps even the operating system itself.</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="cp">#include</span> <span class="cpf">&lt;cstdlib&gt;</span><span class="cp">
-</span><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
-</span><span class="cp"></span>
-<span class="cp">#include</span> <span class="cpf">&lt;boost/intrusive_ptr.hpp&gt;</span><span class="cp">
-</span><span class="cp"></span>
-<span class="k">class</span> <span class="nc">some_resource</span>
-<span class="p">{</span>
-    <span class="n">size_t</span> <span class="n">m_counter</span><span class="p">;</span>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=cp>#include</span> <span class=cpf>&lt;cstdlib&gt;</span><span class=cp>
+</span><span class=cp>#include</span> <span class=cpf>&lt;iostream&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=cp>#include</span> <span class=cpf>&lt;boost/intrusive_ptr.hpp&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=k>class</span> <span class=nc>some_resource</span>
+<span class=p>{</span>
+    <span class=n>size_t</span> <span class=n>m_counter</span><span class=p>;</span>
 
-<span class="k">public</span><span class="o">:</span>
-    <span class="n">some_resource</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="o">:</span>
-        <span class="n">m_counter</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Resource created&#34;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
-    <span class="p">}</span>
+<span class=k>public</span><span class=o>:</span>
+    <span class=n>some_resource</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span> <span class=o>:</span>
+        <span class=n>m_counter</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;Resource created&#34;</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
+    <span class=p>}</span>
 
-    <span class="o">~</span><span class="n">some_resource</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Resource destroyed&#34;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
-    <span class="p">}</span>
+    <span class=o>~</span><span class=n>some_resource</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;Resource destroyed&#34;</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
+    <span class=p>}</span>
 
-    <span class="n">size_t</span> <span class="nf">refcnt</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="k">return</span> <span class="n">m_counter</span><span class="p">;</span>
-    <span class="p">}</span>
+    <span class=n>size_t</span> <span class=nf>refcnt</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=k>return</span> <span class=n>m_counter</span><span class=p>;</span>
+    <span class=p>}</span>
 
-    <span class="kt">void</span> <span class="nf">ref</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">m_counter</span><span class="o">++</span><span class="p">;</span>
-    <span class="p">}</span>
+    <span class=kt>void</span> <span class=nf>ref</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=n>m_counter</span><span class=o>++</span><span class=p>;</span>
+    <span class=p>}</span>
 
-    <span class="kt">void</span> <span class="nf">unref</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">m_counter</span><span class="o">--</span><span class="p">;</span>
-    <span class="p">}</span>
-<span class="p">};</span>
+    <span class=kt>void</span> <span class=nf>unref</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+    <span class=p>{</span>
+        <span class=n>m_counter</span><span class=o>--</span><span class=p>;</span>
+    <span class=p>}</span>
+<span class=p>};</span>
 
-<span class="kt">void</span>
-<span class="nf">intrusive_ptr_add_ref</span><span class="p">(</span><span class="n">some_resource</span><span class="o">*</span> <span class="n">r</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">r</span><span class="o">-&gt;</span><span class="n">ref</span><span class="p">();</span>
-    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Resource referenced: &#34;</span> <span class="o">&lt;&lt;</span> <span class="n">r</span><span class="o">-&gt;</span><span class="n">refcnt</span><span class="p">()</span>
-              <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
-<span class="p">}</span>
+<span class=kt>void</span>
+<span class=nf>intrusive_ptr_add_ref</span><span class=p>(</span><span class=n>some_resource</span><span class=o>*</span> <span class=n>r</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=n>r</span><span class=o>-&gt;</span><span class=n>ref</span><span class=p>();</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;Resource referenced: &#34;</span> <span class=o>&lt;&lt;</span> <span class=n>r</span><span class=o>-&gt;</span><span class=n>refcnt</span><span class=p>()</span>
+              <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
+<span class=p>}</span>
 
-<span class="kt">void</span>
-<span class="nf">intrusive_ptr_release</span><span class="p">(</span><span class="n">some_resource</span><span class="o">*</span> <span class="n">r</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">r</span><span class="o">-&gt;</span><span class="n">unref</span><span class="p">();</span>
-    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Resource unreferenced: &#34;</span> <span class="o">&lt;&lt;</span> <span class="n">r</span><span class="o">-&gt;</span><span class="n">refcnt</span><span class="p">()</span>
-              <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">r</span><span class="o">-&gt;</span><span class="n">refcnt</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
-        <span class="k">delete</span> <span class="n">r</span><span class="p">;</span>
-<span class="p">}</span>
+<span class=kt>void</span>
+<span class=nf>intrusive_ptr_release</span><span class=p>(</span><span class=n>some_resource</span><span class=o>*</span> <span class=n>r</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=n>r</span><span class=o>-&gt;</span><span class=n>unref</span><span class=p>();</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;Resource unreferenced: &#34;</span> <span class=o>&lt;&lt;</span> <span class=n>r</span><span class=o>-&gt;</span><span class=n>refcnt</span><span class=p>()</span>
+              <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>r</span><span class=o>-&gt;</span><span class=n>refcnt</span><span class=p>()</span> <span class=o>==</span> <span class=mi>0</span><span class=p>)</span>
+        <span class=k>delete</span> <span class=n>r</span><span class=p>;</span>
+<span class=p>}</span>
 
-<span class="kt">int</span>
-<span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">boost</span><span class="o">::</span><span class="n">intrusive_ptr</span><span class="o">&lt;</span><span class="n">some_resource</span><span class="o">&gt;</span> <span class="n">r</span><span class="p">(</span><span class="k">new</span> <span class="n">some_resource</span><span class="p">);</span>
-    <span class="n">boost</span><span class="o">::</span><span class="n">intrusive_ptr</span><span class="o">&lt;</span><span class="n">some_resource</span><span class="o">&gt;</span> <span class="n">r2</span><span class="p">(</span><span class="n">r</span><span class="p">);</span>
+<span class=kt>int</span>
+<span class=nf>main</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+<span class=p>{</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>intrusive_ptr</span><span class=o>&lt;</span><span class=n>some_resource</span><span class=o>&gt;</span> <span class=n>r</span><span class=p>(</span><span class=k>new</span> <span class=n>some_resource</span><span class=p>);</span>
+    <span class=n>boost</span><span class=o>::</span><span class=n>intrusive_ptr</span><span class=o>&lt;</span><span class=n>some_resource</span><span class=o>&gt;</span> <span class=n>r2</span><span class=p>(</span><span class=n>r</span><span class=p>);</span>
 
-    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Program exiting&#34;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class=n>std</span><span class=o>::</span><span class=n>cout</span> <span class=o>&lt;&lt;</span> <span class=s>&#34;Program exiting&#34;</span> <span class=o>&lt;&lt;</span> <span class=n>std</span><span class=o>::</span><span class=n>endl</span><span class=p>;</span>
 
-    <span class="k">return</span> <span class="n">EXIT_SUCCESS</span><span class="p">;</span>
-<span class="p">}</span>
-</code></pre></div><h1 id="conclusion">Conclusion</h1>
+    <span class=k>return</span> <span class=n>EXIT_SUCCESS</span><span class=p>;</span>
+<span class=p>}</span>
+</code></pre></div><h1 id=conclusion>Conclusion</h1>
 <p>I discovered smart pointers a year ago, and since then I firmly believe that their use makes code safer, more robust, and easier to read. I can no longer conceive any C++ code that directly manages dynamically allocated objects due to all the problems that can arise.</p>
 <p>Now that you have finished this article, I hope you feel similarly and that from now on you will use these techniques to improve your own programs.</p>
 <p>Time to code!</p>
 </article>
-            </div>
-          </div>
-
-          <div class="container post-votes">
-            <div class="row">
-              <div class="col-md-6">
-                <p id="vote-request">
-                  <b>What did you think about this article?</b><small>
-                  <i>(Experimental)</i></small>
-                  <br/>
-                  <b><span id="first-vote"></span></b>
-                </p>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsUp()"
-                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
-                  (<span id="thumbs-up-count">0</span>)</a>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsDown()"
-                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
-                  (<span id="thumbs-down-count">0</span>)</a>
-              </div>
-            </div>
-
-            <div class="row mt-3">
-              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Smart&#43;Pointers&#43;in&#43;C%2B%2B&amp;url=https%3A%2F%2Fjmmv.dev%2F2006%2F05%2Fsmart-pointers-in-cxx.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/reddit.png"
-                       alt="Reddit logo"
-                       width="24" height="24">
-                  Share on Reddit
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Smart&#43;Pointers&#43;in&#43;C%2B%2B&amp;u=https%3A%2F%2Fjmmv.dev%2F2006%2F05%2Fsmart-pointers-in-cxx.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/ycombinator.png"
-                       alt="Hacker News logo"
-                       width="24" height="24">
-                  Share on Hacker News
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Smart&#43;Pointers&#43;in&#43;C%2B%2B&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2006%2F05%2Fsmart-pointers-in-cxx.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
-                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
-                       alt="Twitter logo"
-                       width="24" height="24">
-                  Share on Twitter
-                </a>
-              </div>
-            </div>
-          </div>
-
-          
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md-12 text-center">
-                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-md-10">
-                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-                  <div class="form-group row px-md-4">
-                    <input type="text" name="email"
-                          placeholder="Enter your email"
-                          class="form-control input-sm col-md-9 text-center"/>
-                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
-                  </div>
-                </form>
-              </div>
-              <div class="col-md-1 text-center">
-                <p>
-                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-                  </a>
-                </p>
-              </div>
-              <div class="col-md-1 text-center">
-                <p><a href="/feed.xml"><img
-                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-              </div>
-            </div>
-          </div>
-
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md mr-auto text-left">
-                
-                <span><a href="https://jmmv.dev/2006/04/ibook-and-clamshell-mode.html">&laquo; Previous post</a></span>
-                
-              </div>
-
-              <div class="col-md text-center">
-                <span><a href="/archive.html">All posts</a></span>
-              </div>
-
-              <div class="col-md ml-auto text-right">
-                
-                <span><a href="https://jmmv.dev/2006/05/article-smart-pointers-in-c.html">Next post &raquo;</a></span>
-                
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-3 sidebar">
-          <div class="row">
-  <div class="col text-center p-2">
-    <p><a href="/about.html" class="clear-link">
-      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
-      <b>Julio Merino</b><br/>
-      Principal Software Engineer<br/>
-      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
-      <small>From Barcelona, living in Seattle</small>
-    </a></p>
-
-    <div class="row">
-      <div class="col-sm-4 text-center">
-        <p>
-          <a rel="me" href="https://mastodon.online/@jmmv">
-            <img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-4 text-center">
-        <p>
-          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-4 text-center">
-        <p><a href="/feed.xml"><img
-          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-      </div>
-    </div>
-
-    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-      <div class="form-group">
-        <input type="text" name="email"
-          placeholder="Enter your email"
-          class="form-control input-sm text-center"/>
-        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
-      </div>
-    </form>
-  </div>
+<hr>
+<p><i>This article is part number
+4 of 5 of the completed
+<a href=/series.html#ONLamp.com%20guest%20posts><b>
+ONLamp.com guest posts</b> series</a>.</i></p>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Featured posts</h2>
-
-    <ul>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
-      
-      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
-    </ul>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Archive</h2>
-
-    <ul>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
-        <ul id="archive-year-2021" class="collapse">
-        
-          
-          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
-        <ul id="archive-year-2020" class="collapse">
-        
-          
-          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
-        <ul id="archive-year-2019" class="collapse">
-        
-          
-          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
-        <ul id="archive-year-2018" class="collapse">
-        
-          
-          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
-        <ul id="archive-year-2017" class="collapse">
-        
-          
-          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
-        <ul id="archive-year-2016" class="collapse">
-        
-          
-          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
-        <ul id="archive-year-2015" class="collapse">
-        
-          
-          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
-        <ul id="archive-year-2014" class="collapse">
-        
-          
-          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
-        <ul id="archive-year-2013" class="collapse">
-        
-          
-          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
-        <ul id="archive-year-2012" class="collapse">
-        
-          
-          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
-        <ul id="archive-year-2011" class="collapse">
-        
-          
-          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
-        <ul id="archive-year-2010" class="collapse">
-        
-          
-          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
-        <ul id="archive-year-2009" class="collapse">
-        
-          
-          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
-        <ul id="archive-year-2008" class="collapse">
-        
-          
-          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
-        <ul id="archive-year-2007" class="collapse">
-        
-          
-          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
-        <ul id="archive-year-2006" class="collapse">
-        
-          
-          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
-        <ul id="archive-year-2005" class="collapse">
-        
-          
-          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
-        
-          
-          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
-        
-          
-          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
-        <ul id="archive-year-2004" class="collapse">
-        
-          
-          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
-        
-          
-          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
-        
-          
-          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-    </ul>
-  </div>
+<div class="container post-links">
+<div class=row>
+<div class="col mr-auto text-left">
+<span><a href=https://jmmv.dev/2006/04/ibook-and-clamshell-mode.html>&#171; Previous</a></span>
 </div>
-
-        </div>
-      </div>
-    </div>
-
-    <footer class="container">
-  <div class="row">
-    <div class="col order-2 texr-right">
-      <p class="float-right"><a href="#">Back to top</a></p>
-    </div>
-    <div class="col order-1 mr-auto">
-      <p>Copyright 2004&ndash;2021 Julio Merino</p>
-    </div>
-  </div>
+<div class="col text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col ml-auto text-right">
+<span><a href=https://jmmv.dev/2006/05/article-smart-pointers-in-c.html>Next &#187;</a></span>
+</div>
+</div>
+</div>
+<div class="container post-votes">
+<div class=row>
+<div class="col-lg-4 my-2">
+<div class=row>
+<div class=col>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+</div>
+<div class="col-lg-8 my-2 d-none d-sm-block">
+<div class=row>
+<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Smart+Pointers+in+C%2B%2B&url=https%3A%2F%2Fjmmv.dev%2F2006%2F05%2Fsmart-pointers-in-cxx.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Smart+Pointers+in+C%2B%2B&u=https%3A%2F%2Fjmmv.dev%2F2006%2F05%2Fsmart-pointers-in-cxx.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Smart+Pointers+in+C%2B%2B+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2006%2F05%2Fsmart-pointers-in-cxx.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
+</a>
+</div>
+</div>
+</div>
+</div>
+<div class="row my-4" id=postCommentRow>
+<div class=col>
+<div class=media>
+<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
+<div class="media-body container">
+<form method=post id=newPost>
+<div class=row>
+<div class="col my-1">
+<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentEmail>Your email (optional):</label>
+<input type=text class=form-control type=email id=postCommentEmail>
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
+</div>
+</div>
+<div class=row id=postCommentError style=display:none>
+<div class="col mt-1 alert-danger">
+<p></p>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
+</div>
+<div class="container post-subscribe">
+<div class=row>
+<div class=col-sm-9>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<div class=row>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
+<button type=submit class="btn btn-primary col-4">Subscribe</button>
+</div>
+</div>
+</form>
+</div>
+<div class=col-sm-3>
+<div class=row>
+<div class="col px-2 text-center">
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</div>
+<div class="col px-2 text-center">
+<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar d-none d-md-block">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-4 text-center">
+<p>
+<a rel=me href=https://mastodon.online/@jmmv>
+<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
+</a>
+</p>
+</div>
+<div class="col-sm-4 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-4 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=indent-wrapped-lines><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
+<li class=indent-wrapped-lines><a href=/2022/06/endbasic-0.9.html>EndBASIC 0.9: Run shared demos easily</a></li>
+<li class=indent-wrapped-lines><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
+<li class=indent-wrapped-lines><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
+<li class=indent-wrapped-lines><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
+<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (30)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
+<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
+<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
+<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
+<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
+<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
+<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col-4 order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col-8 order-1 mr-auto">
+<p>Copyright 2004&ndash;2022 Julio Merino</p>
+</div>
+</div>
 </footer>
+<script type=module>
+  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
 
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-63557333-1"></script>
-<script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
-<script src="/js/uuidv4.min.js"></script>
+  var batchClient = new BatchClient(SITE_ID);
+  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
 
-<script src="/script.js"></script>
+  window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
+  window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
 
-<script>
+  window.postComment = function(...args) {
+    batchClient.postComment(...args);
+  };
+
   addAnchorsToHeaders();
   addElementClasses();
-
-  saveRequest();
-  loadVotes();
-</script>
-
-<script>
-  gaRequest();
 </script>
 <noscript>
-  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDA2LzA1L3NtYXJ0LXBvaW50ZXJzLWluLWN4eC5odG1s/stamp.gif" style="display: none;" />
+<img src=https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDA2LzA1L3NtYXJ0LXBvaW50ZXJzLWluLWN4eC5odG1s/stamp.gif style=display:none>
 </noscript>
-
-  </body>
+</body>
 </html>

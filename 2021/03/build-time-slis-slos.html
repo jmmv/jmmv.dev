@@ -1,169 +1,100 @@
-<!doctype html>
-<html lang="en"
-      xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://ogp.me/ns/fb#">
-  <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  
-
-  <meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-
-  <title>Defining build time SLIs and SLOs - Julio Merino (jmmv.dev)</title>
-  <meta property="og:title" content="Defining build time SLIs and SLOs - Julio Merino (jmmv.dev)">
-
-  
-
-  <meta name="description" content="Companies grow, and with them do the software projects that support them. It should be no surprise that larger programs require longer build times. And, if I had to guess, you have seen how those build times eventually grow to unbearable levels, reducing productivity and degrading quality. In this post, I examine how we can leverage the common techniques we use for production services&amp;mdash;namely SLIs and SLOs&amp;mdash;to keep build times on track.">
-  <meta property="og:description" content="Companies grow, and with them do the software projects that support them. It should be no surprise that larger programs require longer build times. And, if I had to guess, you have seen how those build times eventually grow to unbearable levels, reducing productivity and degrading quality. In this post, I examine how we can leverage the common techniques we use for production services&amp;mdash;namely SLIs and SLOs&amp;mdash;to keep build times on track.">
-  <meta name="author" content="Julio Merino">
-  <meta name="generator" content="Hugo 0.92.2" />
-
-  <meta property="og:url" content="https://jmmv.dev/2021/03/build-time-slis-slos.html">
-
-  <meta property="og:type" content="blog">
-
-  <link rel="canonical" href="https://jmmv.dev/2021/03/build-time-slis-slos.html">
-  <link rel="alternate" type="application/rss+xml"
-        title="Julio Merino (jmmv.dev)" href="/feed.xml" />
-
-  <link rel="stylesheet" href="/sass/main.min.723838a96cb313367e5aed166b75faaf5b61f6d641c9d5ea50920a91610c18ce.css">
-  <link rel="stylesheet" href="/css/chroma.css">
-
-  <meta property="og:image" content="/images/favicons/favicon-1200x1200.png" />
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
-  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
-
-  
-  <!--[if lt IE 9]>
-    <script src="/js/html5shiv-3.7.2.min.js"></script>
-    <script src="/js/respond-1.4.2.min.js"></script>
-  <![endif]-->
-
-  <script>
-    const SITE_ID = 'e8da9f62-b7ac-4fe9-bf20-7c527199a376';
-    const PAGE_PATH = 'aHR0cHM6Ly9qbW12LmRldi8yMDIxLzAzL2J1aWxkLXRpbWUtc2xpcy1zbG9zLmh0bWw=';
-  </script>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<meta property="twitter:site" content="@jmmv">
+<title>Defining build time SLIs and SLOs - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Defining build time SLIs and SLOs - Julio Merino (jmmv.dev)">
+<meta property="twitter:title" content="Defining build time SLIs and SLOs - Julio Merino (jmmv.dev)">
+<meta name=description content="Companies grow, and with them do the software projects that support them. It should be no surprise that larger programs require longer build times. And, if I had to guess, you have seen how those build times eventually grow to unbearable levels, reducing productivity and degrading quality. In this post, I examine how we can leverage the common techniques we use for production services&amp;mdash;namely SLIs and SLOs&amp;mdash;to keep build times on track.">
+<meta property="og:description" content="Companies grow, and with them do the software projects that support them. It should be no surprise that larger programs require longer build times. And, if I had to guess, you have seen how those build times eventually grow to unbearable levels, reducing productivity and degrading quality. In this post, I examine how we can leverage the common techniques we use for production services&amp;mdash;namely SLIs and SLOs&amp;mdash;to keep build times on track.">
+<meta property="twitter:description" content="Companies grow, and with them do the software projects that support them. It should be no surprise that larger programs require longer build times. And, if I had to guess, you have seen how those …">
+<meta name=author content="Julio Merino">
+<meta property="twitter:creator" content="@jmmv">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2021/03/build-time-slis-slos.html">
+<meta property="og:type" content="blog">
+<meta property="twitter:card" content="summary">
+<link rel=canonical href=https://jmmv.dev/2021/03/build-time-slis-slos.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.e6bc80a1be92c773c7961a8e97099442cea2dd8ed61958e61cf1436928d991e2.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
+<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
 </head>
-
-
-  <body>
-    <header class="site-header">
-
+<body>
+<header class=site-header>
 <nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-  <a class="navbar-brand" href="/">
-    <img src="/images/favicons/favicon-30x30.png" width="30" height="30" class="d-inline-block align-top" alt="">
-    &nbsp;Julio Merino
-  </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse"
-          data-target="#navbarSupportedContent"
-          aria-controls="navbarSupportedContent" aria-expanded="false"
-          aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/about.html" >About</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/essays.html" >Essays</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/resume.html" >Resume</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/software.html" >Software</a>
-          </li>
-        
-      
-    </ul>
-
-    <ul class="navbar-nav mr-4">
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/archive.html" >Archive</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/privacy.html" >Privacy</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/series.html" >Series</a>
-          </li>
-        
-      
-        
-          <li class="nav-item">
-            <a class="nav-link" href="/tags.html" >Tags</a>
-          </li>
-        
-      
-    </ul>
-
-    <form class="form-inline" method="get" role="search"
-          action="https://www.google.com/search">
-      <div class="input-group">
-        <input type="search" name="query" class="form-control"
-                placeholder="Search" aria-label="Search">
-        <div class="input-group-append">
-          <button type="submit" value="Search" class="btn btn-light">
-            <img src="/octicons/search.svg">
-          </button>
-        </div>
-      </div>
-      <input type="hidden" name="sitesearch" value="https://jmmv.dev/">
-    </form>
-  </div>
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
 </nav>
-
 </header>
-
-
-    <div class="page-header">
-      <div class="container">
-        <h1>Defining build time SLIs and SLOs</h1>
-
-        <p>March 12, 2021 &middot;
-        About 16 minutes
-        &middot;
-        Tags:
-        <a class="text-reset" href="/tags/bazel">bazel</a>, <a class="text-reset" href="/tags/development">development</a></p>
-
-        
-      </div>
-    </div>
-
-    <div class="container">
-      <div class="row">
-        <div class="col-md-9">
-          <div id="cookie-notice"></div>
-
-          <div class="row">
-            <div class="col">
-              
-              <article><p>Companies grow, and with them do the software projects that support them. It should be no surprise that larger programs require longer build times. And, if I had to guess, you have seen how those build times eventually grow to unbearable levels, reducing productivity and degrading quality. Once that happens, and if you are lucky, some engineers might be <del>allowed</del> tasked to speed things up.</p>
-<p>There are many techniques to reduce build times. Some involve infrastructure improvements such as <a href="/2020/12/google-no-clean-builds.html">using tooling that prevents clean builds</a> and <a href="/2021/02/google-monorepos-and-caching.html">adding caching to reuse artifacts</a>&mdash;though these only provide one-time payoffs. Others involve carefully analyzing and untangling the dependencies of the project to reduce bloat&mdash;a very expensive process. And others can be as mundane as refreshing the hardware of all developers&mdash;an option is only possible every few years.</p>
+<div class=page-header>
+<div class=container>
+<h1>Defining build time SLIs and SLOs</h1>
+<p>March 12, 2021 &#183;
+About 16 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/bazel>bazel</a>, <a class=text-reset href=/tags/development>development</a></p>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
+<article><p>Companies grow, and with them do the software projects that support them. It should be no surprise that larger programs require longer build times. And, if I had to guess, you have seen how those build times eventually grow to unbearable levels, reducing productivity and degrading quality. Once that happens, and if you are lucky, some engineers might be <del>allowed</del> tasked to speed things up.</p>
+<p>There are many techniques to reduce build times. Some involve infrastructure improvements such as <a href=/2020/12/google-no-clean-builds.html>using tooling that prevents clean builds</a> and <a href=/2021/02/google-monorepos-and-caching.html>adding caching to reuse artifacts</a>&mdash;though these only provide one-time payoffs. Others involve carefully analyzing and untangling the dependencies of the project to reduce bloat&mdash;a very expensive process. And others can be as mundane as refreshing the hardware of all developers&mdash;an option is only possible every few years.</p>
 <p>No matter which path(s) you take, however, the reductions in build time tend to be transient. You see: developers seem to have an upper bound on how much pain they will put up with, and build times will slowly creep up until they hover around this limit. And there is nothing you can do because software bloat is a fact of life and the product must grow continuously. Or is there?</p>
 <p>We must realize that there are two kinds of build time growth:</p>
 <ul>
@@ -178,7 +109,7 @@
 <p>So the question is: once we have achieved fast build times, how do we keep them fast? Alternatively, if we don&rsquo;t have fast builds yet but want to stop the bleeding, how do we prevent regressions?</p>
 <p>The answer lies in measuring. We must treat build times as yet another health metric for our product along with, for example, customer-observed request latencies or rate of failed requests. Only with metrics (SLIs) and targets (SLOs) around the build cycle we can spot build time growth as it accumulates. Once we spot it, we can dig down and see if it was intentional or accidental. And if it was accidental, we can take corrective action soon after the defect was introduced.</p>
 <p>In this post, I&rsquo;ll describe how we can measure build times and how we can establish SLIs for them. Brace up because it&rsquo;s not as simple as measuring wall time on an dedicated machine and calculating an average.</p>
-<h1 id="build-dimensions">Build dimensions</h1>
+<h1 id=build-dimensions>Build dimensions</h1>
 <p>There are two key dimensions that tie directly into the efficiency of the build cycle and are the two aspects that will drive the definition of our SLIs:</p>
 <ul>
 <li>
@@ -202,41 +133,41 @@
 </li>
 </ul>
 <p>I&rsquo;d suggest you ignore these extra dimensions when you start defining your SLIs though. You may not need them to implement good metrics, and the less complexity involved in them, the better.</p>
-<h1 id="sample-metrics">Sample metrics</h1>
+<h1 id=sample-metrics>Sample metrics</h1>
 <p>Now that we know that interactivity and incrementality are the primary dimensions to back our SLIs, we can start to define them. The goal is to end up with graphs that show us these numbers as a trend line, and some automated alerts that tell us when the goals are exceeded. Here are some examples:</p>
 <table>
 <thead>
 <tr>
 <th>Metric (SLI)</th>
-<th style="text-align:right">Target (SLO)</th>
+<th style=text-align:right>Target (SLO)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Interactive clean build time (debug)</td>
-<td style="text-align:right">≤ 10 min.</td>
+<td style=text-align:right>≤ 10 min.</td>
 </tr>
 <tr>
 <td>Interactive incremental build time (debug)</td>
-<td style="text-align:right">≤ 30 sec.</td>
+<td style=text-align:right>≤ 30 sec.</td>
 </tr>
 <tr>
 <td>CI run build time (debug+release)</td>
-<td style="text-align:right">≤ 15 min.</td>
+<td style=text-align:right>≤ 15 min.</td>
 </tr>
 </tbody>
 </table>
 <p>The specific numbers in the SLOs are irrelevant: they will depend directly on how your builds currently behave or how you&rsquo;d like them to behave. Choose numbers that make sense in your context.</p>
 <p>Note that I have assumed that the developers only use the debug configuration when they do interactive work. This may or may not be true in your case, or you may choose to not care about the distinction. I have also assumed that CI runs always execute clean builds (the common case due to typical limitations in the tooling), but your infrastructure may already be smarter than that.</p>
 <p>Anyhow. At first sight, these proposed metrics sound very simple. In reality, though, implementing them in a way that provides stable and useful signal can be very difficult. So let&rsquo;s dig in.</p>
-<h1 id="data-collection">Data collection</h1>
+<h1 id=data-collection>Data collection</h1>
 <p>The first question that invariably arises when proposing metrics like &ldquo;interactive build time&rdquo; is: how do we gather such data?</p>
 <p>For CI builds, this is trivial. The CI system already publishes artifacts and logs to a central server, so you can easily generate extra information about build statistics from within it. Not very interesting.</p>
 <p>The more interesting problem is how to obtain metrics from the interactive builds. These happen on the developers' machines and, because that&rsquo;s how things have always been, you likely have very little visibility into them. Yet this must change if you truly want to make a difference for the important use case of speedy build interactions.</p>
-<p>What we need is a mechanism to push build-related metrics from the developers' machines to a central location for further analysis: aka, we need some form of telemetry&mdash;as dreaded as it may be. This is not something that build tools provide in the common case. But some do! <a href="https://bazel.build/">Bazel</a>, for example, implements the <a href="https://docs.bazel.build/versions/master/build-event-protocol.html">Build Event Protocol (BEP)</a> and can be configured (it is off by default) to publish per-build information to a remote server. You can enable this feature at a repository level via a custom, checked-in <code>.bazelrc</code> file.</p>
+<p>What we need is a mechanism to push build-related metrics from the developers' machines to a central location for further analysis: aka, we need some form of telemetry&mdash;as dreaded as it may be. This is not something that build tools provide in the common case. But some do! <a href=https://bazel.build/>Bazel</a>, for example, implements the <a href=https://docs.bazel.build/versions/master/build-event-protocol.html>Build Event Protocol (BEP)</a> and can be configured (it is off by default) to publish per-build information to a remote server. You can enable this feature at a repository level via a custom, checked-in <code>.bazelrc</code> file.</p>
 <p>But, of course, you don&rsquo;t need Bazel nor the BEP to gather something as simple as build times. In the ugliest form, you could imagine wrapping the build command that your developers use with a call to <code>time</code> or <code>Measure-Command</code> (why, yes, I&rsquo;ve been learning PowerShell), extract the printed out metrics, and issue a simple asynchronous <code>POST</code> HTTP request to a server to publish the data.</p>
 <p>The way you go about obtaining build metrics from your developer population is up to you, but you must find out how to do it before continuing. Whatever you do, keep in mind that you don&rsquo;t need 100% reliability. If you fail to capture some builds from some developers because their network connection was spotty or they were on a plane, that&rsquo;s likely fine. We will be using aggregates to implement the SLIs and we don&rsquo;t need perfection.</p>
-<h1 id="build-time-representation">Build time representation</h1>
+<h1 id=build-time-representation>Build time representation</h1>
 <p>Once you have a mechanism to collect details on every build that happens on the field and store those in a central timeseries database, we can finally start computing the metrics we care about.</p>
 <p>If you are unsure about <em>what</em> to collect, think about the following when defining your schema:</p>
 <table>
@@ -289,13 +220,13 @@
 <blockquote>
 <p>This assumption allows us to model build incrementality via percentiles: the p50 of the build times represents incremental builds, and the p90 or p95 represent clean builds.</p>
 </blockquote>
-<p>I know, I know: this sounds simplistic and unrealistic. I thought so too when I was introduced to this concept. How can you track something with such variability as build times with aggregates alone? In a large codebase, developers work on different parts of the tree, after all, and what one thinks of as an incremental build could be seen as a clean build by others. But these metrics work, and they work well&hellip; with some tweaks.</p>
-<h1 id="modeling-user-behavior">Modeling user behavior</h1>
+<p>I know, I know: this sounds simplistic and unrealistic. I thought so too when I was introduced to this concept. How can you track something with such variability as build times with aggregates alone? In a large codebase, developers work on different parts of the tree, after all, and what one thinks of as an incremental build could be seen as a clean build by others. But these metrics work, and they work well&mldr; with some tweaks.</p>
+<h1 id=modeling-user-behavior>Modeling user behavior</h1>
 <p>We have a problem though. If we blindly take the p50 or p95 of build times, we might end up with very noisy data: a developer working on base libraries will likely have much longer build times than a developer working on the frontend due to the nature of how much of the project has to be rebuilt in each case. We need to account for these differences in behavior in some way.</p>
 <p>This is where you have to be good at statistics. I&rsquo;m not. Luckily though, I was surrounded by good statisticians in the past who looked into this topic. Their suggestion was to model build times as &ldquo;percentiles of percentiles&rdquo;.</p>
 <p>Assuming we want to compute our metrics on a daily basis, we start by computing the p95 of the build times of every individual user. This gives us a bunch of data points for every day, and each data point models the clean build time that different users experienced. Once we have these, we then compute the p95 of these p95s for each day, yielding our trend line. In this way, we first model the behavior of each user and then we track the aggregate behavior.</p>
-<p>Because we are modeling users individually, this approach also accounts for different build configurations and different hardware characteristics with no additional effort. But&hellip; there might still be a lot of noise in the trend lines, and we have to sort that out.</p>
-<h1 id="weeding-out-the-noise">Weeding out the noise</h1>
+<p>Because we are modeling users individually, this approach also accounts for different build configurations and different hardware characteristics with no additional effort. But&mldr; there might still be a lot of noise in the trend lines, and we have to sort that out.</p>
+<h1 id=weeding-out-the-noise>Weeding out the noise</h1>
 <p>The noise in the SLIs over build times as defined so far will come from two sources. Without addressing them, we may end up with nonsensical trend lines that do nothing to help us.</p>
 <p>The first source of noise, as alluded to in the previous section, comes from major differences in user characteristics. The most obvious one would be building on a laptop vs. building on a workstation. If your developer population shows these differences, it may be a good idea to compute different trend lines for those different categories. After all, the vast difference in performance may imply that you need to set different SLOs for them.</p>
 <p>The second source of noise comes from abrupt changes in behavior. Obviously, weekends and weekdays will show varying behavior. But so will Mondays and Fridays because, in a normal workweek, Mondays will include a lot more clean builds than other days of the week: the first thing people do when they come into work is a <code>git pull</code> or its equivalent.</p>
@@ -306,877 +237,512 @@
 <thead>
 <tr>
 <th>Metric (SLI)</th>
-<th style="text-align:right">Target (SLO)</th>
+<th style=text-align:right>Target (SLO)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>7-day interactive workstation clean build time (debug) as the p95 of per-user p95s</td>
-<td style="text-align:right">≤ 10 min.</td>
+<td style=text-align:right>≤ 10 min.</td>
 </tr>
 <tr>
 <td>7-day interactive workstation incremental build time (debug) as the p50 of per-user p50s</td>
-<td style="text-align:right">≤ 30 sec.</td>
+<td style=text-align:right>≤ 30 sec.</td>
 </tr>
 <tr>
 <td>7-day interactive laptop clean build time (debug) as the p95 of per-user p95s</td>
-<td style="text-align:right">≤ 15 min.</td>
+<td style=text-align:right>≤ 15 min.</td>
 </tr>
 <tr>
 <td>7-day interactive laptop incremental build time (debug) as the p50 of per-user p50s</td>
-<td style="text-align:right">≤ 45 sec.</td>
+<td style=text-align:right>≤ 45 sec.</td>
 </tr>
 <tr>
 <td>7-day CI run build time (debug+release) as the p95 of CI builds</td>
-<td style="text-align:right">≤ 15 min.</td>
+<td style=text-align:right>≤ 15 min.</td>
 </tr>
 </tbody>
 </table>
 <p>Once again, remember that the numbers here are made up and they are not targets for <em>your</em> project. They may be way too large or too small; only you will know.</p>
 <p>Getting to stable lines that are useful will be difficult though, so expect to spend some time experimenting with the data. And once you have the lines, validate them: if you are lucky enough to already have old build time data, go back in time and see if your new SLIs would have spotted previously-known regressions. And if you don&rsquo;t have this luxury, keep a close eye and see if the lines spot future regressions. (Shhht, maybe you could introduce one intentionally and see what happens? Will the lines pick it up? <em>Will your developers even notice?</em>)</p>
-<h1 id="automatic-diagnostics">Automatic diagnostics</h1>
+<h1 id=automatic-diagnostics>Automatic diagnostics</h1>
 <p>Let&rsquo;s conclude by looking at what an ideal world might look like. In such a world, you would like to catch build time regressions <em>before</em> they are checked in. You can imagine some kind of PR merge validation check that measures the build time and blocks the merge if it is greater than what it used to be&mdash;unless the PR author justified the increase somehow (e.g. with a specially-tagged note in the PR description).</p>
 <p>Unfortunately, this can be very hard to achieve because build times are not super-deterministic. Running build time diagnostics on a PR basis may be too costly resource-wise as you might need to run the same build multiple times to get stable measurements. Or you might need dedicated machines for these builds to avoid neighbor interference, and special-cased hardware is expensive and a pain to maintain. But it is doable.</p>
 <p>The trickier problem here is that the kinds of validation you would do in CI will represent <em>one</em> build behavior only: a clean build of the whole project, on one kind of hardware, and on one configuration. And while ensuring this specific combination remains fast is great, it does not represent what your developers are experiencing &ldquo;on the field&rdquo;. And that&rsquo;s what matters.</p>
 <p>So, at the end of the day, there is no escape in collecting data from interactive builds and measuring how they do.</p>
-<h1 id="anything-else">Anything else?</h1>
+<h1 id=anything-else>Anything else?</h1>
 <p>Phew. That was much longer than anticipated but we finally reach the end.</p>
 <p>In this post, I have covered metrics to keep tabs on build times and explored how to go about defining a robust SLI that can help you <em>maintain</em> fast builds.</p>
 <p>But don&rsquo;t let this stop your imagination. Build times are just one component of the edit/build/test cycle. Test times (which you can also break down as interactive vs. CI) are something else that should be monitored and tracked. And even more subtle things should too! What about the time it takes to fetch new sources from the server? What about getting your IDE up-to-speed after you have updated your source tree?</p>
 <p>Make sure to look at the end-to-end development cycle as if it was a product. Once you see it as a product, you can then define use cases (journeys?) through it and you can measure their value and their success.</p>
 </article>
-            </div>
-          </div>
-
-          <div class="container post-votes">
-            <div class="row">
-              <div class="col-md-6">
-                <p id="vote-request">
-                  <b>What did you think about this article?</b><small>
-                  <i>(Experimental)</i></small>
-                  <br/>
-                  <b><span id="first-vote"></span></b>
-                </p>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsUp()"
-                  class="btn btn-block btn-outline-success" id="thumbs-up-btn">👍
-                  (<span id="thumbs-up-count">0</span>)</a>
-              </div>
-              <div class="col-md-3">
-                <a onclick="voteThumbsDown()"
-                  class="btn btn-block btn-outline-danger" id="thumbs-down-btn">👎
-                  (<span id="thumbs-down-count">0</span>)</a>
-              </div>
-            </div>
-
-            <div class="row mt-3">
-              <div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Defining&#43;build&#43;time&#43;SLIs&#43;and&#43;SLOs&amp;url=https%3A%2F%2Fjmmv.dev%2F2021%2F03%2Fbuild-time-slis-slos.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/reddit.png"
-                       alt="Reddit logo"
-                       width="24" height="24">
-                  Share on Reddit
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Defining&#43;build&#43;time&#43;SLIs&#43;and&#43;SLOs&amp;u=https%3A%2F%2Fjmmv.dev%2F2021%2F03%2Fbuild-time-slis-slos.html" class="btn btn-outline-primary">
-                  <img src="/images/badges/ycombinator.png"
-                       alt="Hacker News logo"
-                       width="24" height="24">
-                  Share on Hacker News
-                </a>
-              </div>
-              <div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Defining&#43;build&#43;time&#43;SLIs&#43;and&#43;SLOs&#43;%E2%80%94&#43;https%3A%2F%2Fjmmv.dev%2F2021%2F03%2Fbuild-time-slis-slos.html&#43;%E2%80%94&#43;cc&#43;%40jmmv" class="btn btn-outline-primary">
-                  <img src="/images/badges/Twitter_Social_Icon_Circle_Color.png"
-                       alt="Twitter logo"
-                       width="24" height="24">
-                  Share on Twitter
-                </a>
-              </div>
-            </div>
-          </div>
-
-          
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md-12 text-center">
-                <p><b>Want more posts like this one? Take a moment to subscribe.</b></p>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-md-10">
-                <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-                  <div class="form-group row px-md-4">
-                    <input type="text" name="email"
-                          placeholder="Enter your email"
-                          class="form-control input-sm col-md-9 text-center"/>
-                    <button type="submit" class="btn btn-primary col-md-3">Subscribe</button>
-                  </div>
-                </form>
-              </div>
-              <div class="col-md-1 text-center">
-                <p>
-                  <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-                    <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-                  </a>
-                </p>
-              </div>
-              <div class="col-md-1 text-center">
-                <p><a href="/feed.xml"><img
-                  src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-              </div>
-            </div>
-          </div>
-
-          <div class="container post-links">
-            <div class="row">
-              <div class="col-md mr-auto text-left">
-                
-                <span><a href="https://jmmv.dev/2021/03/oncall-wellbeing.html">&laquo; Previous post</a></span>
-                
-              </div>
-
-              <div class="col-md text-center">
-                <span><a href="/archive.html">All posts</a></span>
-              </div>
-
-              <div class="col-md ml-auto text-right">
-                
-                <span><a href="https://jmmv.dev/2021/04/always-be-quitting.html">Next post &raquo;</a></span>
-                
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-3 sidebar">
-          <div class="row">
-  <div class="col text-center p-2">
-    <p><a href="/about.html" class="clear-link">
-      <img src="/images/avatars/20181124-snow.jpg" class="rounded-circle shadow my-2" style="width: 100px"/><br/>
-      <b>Julio Merino</b><br/>
-      Principal Software Engineer<br/>
-      <small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br/>
-      <small>From Barcelona, living in Seattle</small>
-    </a></p>
-
-    <div class="row">
-      <div class="col-sm-4 text-center">
-        <p>
-          <a rel="me" href="https://mastodon.online/@jmmv">
-            <img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-4 text-center">
-        <p>
-          <a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv">
-            <img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-          </a>
-        </p>
-      </div>
-      <div class="col-sm-4 text-center">
-        <p><a href="/feed.xml"><img
-          src="/images/badges/feed-icon-28x28.png" alt="RSS feed"></a></p>
-      </div>
-    </div>
-
-    <form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method="post">
-      <div class="form-group">
-        <input type="text" name="email"
-          placeholder="Enter your email"
-          class="form-control input-sm text-center"/>
-        <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
-      </div>
-    </form>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Featured posts</h2>
-
-    <ul>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/11/endbasic-0.8.html">EndBASIC 0.8: Now, with graphics!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/07/endbasic-0.7.html">EndBASIC 0.7: Hello, cloud!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/04/always-be-quitting.html">Always be quitting</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2021/02/google-monorepos-and-caching.html">How does Google keep build times low?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/google-no-clean-builds.html">How does Google avoid clean builds?</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/12/unit-testing-a-console-app.html">Unit-testing a console app (a text editor)</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/11/wsl-lost-potential.html">Windows Subsystem for Linux: The lost potential</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/10/bye-google-hi-microsoft.html">Farewell, Google; hello, Microsoft!</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/08/config-files-vs-directories.html">Configuration files and .d directories</a></li>
-      
-        <li class="indent-wrapped-lines"><a href="/2020/05/bridging-the-web-gap-endbasic.html">Bridging the web gap in EndBASIC</a></li>
-      
-      <li class="indent-wrapped-lines"><a href="/essays.html#featured">More...</a></li>
-    </ul>
-  </div>
 </div>
-
-<div class="row">
-  <div class="col">
-    <h2>Archive</h2>
-
-    <ul>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2021">2021</a> (22)
-        <ul id="archive-year-2021" class="collapse">
-        
-          
-          <li><a href="/archive.html#2021-11">November 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-08">August 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-07">July 2021</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2021-06">June 2021</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2021-04">April 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-03">March 2021</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2021-02">February 2021</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2021-01">January 2021</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2020">2020</a> (36)
-        <ul id="archive-year-2020" class="collapse">
-        
-          
-          <li><a href="/archive.html#2020-12">December 2020</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2020-11">November 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-10">October 2020</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2020-09">September 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-08">August 2020</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2020-07">July 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-06">June 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-05">May 2020</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2020-04">April 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-03">March 2020</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2020-02">February 2020</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2020-01">January 2020</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2019">2019</a> (24)
-        <ul id="archive-year-2019" class="collapse">
-        
-          
-          <li><a href="/archive.html#2019-12">December 2019</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2019-11">November 2019</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2019-10">October 2019</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2019-09">September 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-03">March 2019</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2019-02">February 2019</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2019-01">January 2019</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2018">2018</a> (25)
-        <ul id="archive-year-2018" class="collapse">
-        
-          
-          <li><a href="/archive.html#2018-07">July 2018</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2018-06">June 2018</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2018-05">May 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-04">April 2018</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2018-03">March 2018</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2018-02">February 2018</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2017">2017</a> (6)
-        <ul id="archive-year-2017" class="collapse">
-        
-          
-          <li><a href="/archive.html#2017-10">October 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-08">August 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-07">July 2017</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2017-02">February 2017</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2016">2016</a> (8)
-        <ul id="archive-year-2016" class="collapse">
-        
-          
-          <li><a href="/archive.html#2016-09">September 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-05">May 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-04">April 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-03">March 2016</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2016-02">February 2016</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2016-01">January 2016</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2015">2015</a> (17)
-        <ul id="archive-year-2015" class="collapse">
-        
-          
-          <li><a href="/archive.html#2015-12">December 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-10">October 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-09">September 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-06">June 2015</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2015-05">May 2015</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2015-04">April 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-03">March 2015</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2015-02">February 2015</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2014">2014</a> (12)
-        <ul id="archive-year-2014" class="collapse">
-        
-          
-          <li><a href="/archive.html#2014-11">November 2014</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2014-05">May 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-03">March 2014</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2014-02">February 2014</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2014-01">January 2014</a> (3)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2013">2013</a> (62)
-        <ul id="archive-year-2013" class="collapse">
-        
-          
-          <li><a href="/archive.html#2013-12">December 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-11">November 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-10">October 2013</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2013-09">September 2013</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2013-08">August 2013</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2013-07">July 2013</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2013-06">June 2013</a> (9)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2012">2012</a> (29)
-        <ul id="archive-year-2012" class="collapse">
-        
-          
-          <li><a href="/archive.html#2012-10">October 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-09">September 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-08">August 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-07">July 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-06">June 2012</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2012-05">May 2012</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2012-04">April 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-03">March 2012</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2012-02">February 2012</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2012-01">January 2012</a> (5)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2011">2011</a> (60)
-        <ul id="archive-year-2011" class="collapse">
-        
-          
-          <li><a href="/archive.html#2011-12">December 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-11">November 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-10">October 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-09">September 2011</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2011-08">August 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-07">July 2011</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2011-06">June 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-05">May 2011</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2011-04">April 2011</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2011-03">March 2011</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2011-01">January 2011</a> (7)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2010">2010</a> (26)
-        <ul id="archive-year-2010" class="collapse">
-        
-          
-          <li><a href="/archive.html#2010-12">December 2010</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2010-09">September 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-07">July 2010</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2010-06">June 2010</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2010-05">May 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-04">April 2010</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2010-03">March 2010</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2010-01">January 2010</a> (2)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2009">2009</a> (31)
-        <ul id="archive-year-2009" class="collapse">
-        
-          
-          <li><a href="/archive.html#2009-10">October 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-09">September 2009</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2009-08">August 2009</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2009-07">July 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-06">June 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-05">May 2009</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2009-04">April 2009</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2009-03">March 2009</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2009-01">January 2009</a> (8)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2008">2008</a> (61)
-        <ul id="archive-year-2008" class="collapse">
-        
-          
-          <li><a href="/archive.html#2008-12">December 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-11">November 2008</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2008-10">October 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-09">September 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-08">August 2008</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2008-07">July 2008</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2008-06">June 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-05">May 2008</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2008-04">April 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-03">March 2008</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2008-02">February 2008</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2008-01">January 2008</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2007">2007</a> (86)
-        <ul id="archive-year-2007" class="collapse">
-        
-          
-          <li><a href="/archive.html#2007-12">December 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-11">November 2007</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2007-10">October 2007</a> (2)</li>
-        
-          
-          <li><a href="/archive.html#2007-09">September 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-08">August 2007</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2007-07">July 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-06">June 2007</a> (15)</li>
-        
-          
-          <li><a href="/archive.html#2007-05">May 2007</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2007-04">April 2007</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2007-03">March 2007</a> (8)</li>
-        
-          
-          <li><a href="/archive.html#2007-02">February 2007</a> (1)</li>
-        
-          
-          <li><a href="/archive.html#2007-01">January 2007</a> (6)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2006">2006</a> (103)
-        <ul id="archive-year-2006" class="collapse">
-        
-          
-          <li><a href="/archive.html#2006-12">December 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-11">November 2006</a> (3)</li>
-        
-          
-          <li><a href="/archive.html#2006-10">October 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-09">September 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-08">August 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-07">July 2006</a> (4)</li>
-        
-          
-          <li><a href="/archive.html#2006-06">June 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-05">May 2006</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2006-04">April 2006</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2006-03">March 2006</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2006-02">February 2006</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2006-01">January 2006</a> (18)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2005">2005</a> (129)
-        <ul id="archive-year-2005" class="collapse">
-        
-          
-          <li><a href="/archive.html#2005-12">December 2005</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2005-11">November 2005</a> (7)</li>
-        
-          
-          <li><a href="/archive.html#2005-10">October 2005</a> (23)</li>
-        
-          
-          <li><a href="/archive.html#2005-09">September 2005</a> (10)</li>
-        
-          
-          <li><a href="/archive.html#2005-08">August 2005</a> (14)</li>
-        
-          
-          <li><a href="/archive.html#2005-07">July 2005</a> (5)</li>
-        
-          
-          <li><a href="/archive.html#2005-06">June 2005</a> (12)</li>
-        
-          
-          <li><a href="/archive.html#2005-05">May 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-04">April 2005</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2005-03">March 2005</a> (13)</li>
-        
-          
-          <li><a href="/archive.html#2005-02">February 2005</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2005-01">January 2005</a> (13)</li>
-        
-        </ul>
-      </li>
-    
-      <li>
-        
-        <a data-toggle="collapse" href="#archive-year-2004">2004</a> (84)
-        <ul id="archive-year-2004" class="collapse">
-        
-          
-          <li><a href="/archive.html#2004-12">December 2004</a> (9)</li>
-        
-          
-          <li><a href="/archive.html#2004-11">November 2004</a> (6)</li>
-        
-          
-          <li><a href="/archive.html#2004-10">October 2004</a> (11)</li>
-        
-          
-          <li><a href="/archive.html#2004-09">September 2004</a> (19)</li>
-        
-          
-          <li><a href="/archive.html#2004-07">July 2004</a> (29)</li>
-        
-          
-          <li><a href="/archive.html#2004-06">June 2004</a> (10)</li>
-        
-        </ul>
-      </li>
-    
-    </ul>
-  </div>
+<div class="container post-links">
+<div class=row>
+<div class="col mr-auto text-left">
+<span><a href=https://jmmv.dev/2021/03/oncall-wellbeing.html>&#171; Previous</a></span>
 </div>
-
-        </div>
-      </div>
-    </div>
-
-    <footer class="container">
-  <div class="row">
-    <div class="col order-2 texr-right">
-      <p class="float-right"><a href="#">Back to top</a></p>
-    </div>
-    <div class="col order-1 mr-auto">
-      <p>Copyright 2004&ndash;2021 Julio Merino</p>
-    </div>
-  </div>
+<div class="col text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col ml-auto text-right">
+<span><a href=https://jmmv.dev/2021/04/always-be-quitting.html>Next &#187;</a></span>
+</div>
+</div>
+</div>
+<div class="container post-votes">
+<div class=row>
+<div class="col-lg-4 my-2">
+<div class=row>
+<div class=col>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+</div>
+<div class="col-lg-8 my-2 d-none d-sm-block">
+<div class=row>
+<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Defining+build+time+SLIs+and+SLOs&url=https%3A%2F%2Fjmmv.dev%2F2021%2F03%2Fbuild-time-slis-slos.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Defining+build+time+SLIs+and+SLOs&u=https%3A%2F%2Fjmmv.dev%2F2021%2F03%2Fbuild-time-slis-slos.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Defining+build+time+SLIs+and+SLOs+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2021%2F03%2Fbuild-time-slis-slos.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
+</a>
+</div>
+</div>
+</div>
+</div>
+<div class="row my-4" id=postCommentRow>
+<div class=col>
+<div class=media>
+<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
+<div class="media-body container">
+<form method=post id=newPost>
+<div class=row>
+<div class="col my-1">
+<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentEmail>Your email (optional):</label>
+<input type=text class=form-control type=email id=postCommentEmail>
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
+</div>
+</div>
+<div class=row id=postCommentError style=display:none>
+<div class="col mt-1 alert-danger">
+<p></p>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
+</div>
+<div class="container post-subscribe">
+<div class=row>
+<div class=col-sm-9>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<div class=row>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
+<button type=submit class="btn btn-primary col-4">Subscribe</button>
+</div>
+</div>
+</form>
+</div>
+<div class=col-sm-3>
+<div class=row>
+<div class="col px-2 text-center">
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</div>
+<div class="col px-2 text-center">
+<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar d-none d-md-block">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-4 text-center">
+<p>
+<a rel=me href=https://mastodon.online/@jmmv>
+<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
+</a>
+</p>
+</div>
+<div class="col-sm-4 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-4 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=indent-wrapped-lines><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
+<li class=indent-wrapped-lines><a href=/2022/06/endbasic-0.9.html>EndBASIC 0.9: Run shared demos easily</a></li>
+<li class=indent-wrapped-lines><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
+<li class=indent-wrapped-lines><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
+<li class=indent-wrapped-lines><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
+<li class=indent-wrapped-lines><a href=/2021/11/endbasic-0.8.html>EndBASIC 0.8: Now, with graphics!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/07/endbasic-0.7.html>EndBASIC 0.7: Hello, cloud!</a></li>
+<li class=indent-wrapped-lines><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=indent-wrapped-lines><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=indent-wrapped-lines><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=indent-wrapped-lines><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (30)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
+<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
+<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
+<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
+<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
+<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
+<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col-4 order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col-8 order-1 mr-auto">
+<p>Copyright 2004&ndash;2022 Julio Merino</p>
+</div>
+</div>
 </footer>
+<script type=module>
+  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
 
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-63557333-1"></script>
-<script src="/js/jquery-1.11.2.min.js"></script>
-<script src="/bootstrap-4.3.1/dist/js/bootstrap.min.js"></script>
-<script src="/js/uuidv4.min.js"></script>
+  var batchClient = new BatchClient(SITE_ID);
+  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
 
-<script src="/script.js"></script>
+  window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
+  window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
 
-<script>
+  window.postComment = function(...args) {
+    batchClient.postComment(...args);
+  };
+
   addAnchorsToHeaders();
   addElementClasses();
-
-  saveRequest();
-  loadVotes();
-</script>
-
-<script>
-  gaRequest();
 </script>
 <noscript>
-  <img src="https://api.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIxLzAzL2J1aWxkLXRpbWUtc2xpcy1zbG9zLmh0bWw=/stamp.gif" style="display: none;" />
+<img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIxLzAzL2J1aWxkLXRpbWUtc2xpcy1zbG9zLmh0bWw=/stamp.gif" style=display:none>
 </noscript>
-
-  </body>
+</body>
 </html>
