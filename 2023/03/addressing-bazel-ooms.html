@@ -1,0 +1,705 @@
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
+<head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
+<meta property="twitter:site" content="@jmmv">
+<title>Addressing Bazel OOMs - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Addressing Bazel OOMs - Julio Merino (jmmv.dev)">
+<meta property="twitter:title" content="Addressing Bazel OOMs - Julio Merino (jmmv.dev)">
+<meta name=description content="Here at Snowflake, the Developer Productivity organization (DPE for short) is tackling some important problems we face as a company: namely, lengthening build times and complex development environments. A key strategy we are pursuing to resolve these is the migration of key build processes from CMake and Maven to Bazel.
+We are still in the early stages of this migration and cannot yet share many details or a success story, but we can start explaining some of the issues we encounter as we work through this ambitious project.
+">
+<meta property="og:description" content="Here at Snowflake, the Developer Productivity organization (DPE for short) is tackling some important problems we face as a company: namely, lengthening build times and complex development environments. A key strategy we are pursuing to resolve these is the migration of key build processes from CMake and Maven to Bazel.
+We are still in the early stages of this migration and cannot yet share many details or a success story, but we can start explaining some of the issues we encounter as we work through this ambitious project.
+">
+<meta property="twitter:description" content="Here at Snowflake, the Developer Productivity organization (DPE for short) is tackling some important problems we face as a company: namely, lengthening build times and complex development …">
+<meta name=author content="Julio Merino">
+<meta property="twitter:creator" content="@jmmv">
+<meta name=generator content="Hugo 0.92.1">
+<meta property="og:url" content="https://jmmv.dev/2023/03/addressing-bazel-ooms.html">
+<meta property="og:type" content="blog">
+<meta property="twitter:card" content="summary">
+<link rel=canonical href=https://jmmv.dev/2023/03/addressing-bazel-ooms.html>
+<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
+<link rel=stylesheet href=/sass/main.min.ce628ad32d280a2570d17aa4a7e3cb429d327b6b044032d289bf9e395f5365ba.css>
+<link rel=stylesheet href=/css/chroma.css>
+<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
+<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
+<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
+<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
+<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
+<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
+</head>
+<body>
+<header class=site-header>
+<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
+<a class=navbar-brand href=/>
+<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino
+</a>
+<button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span>
+</button>
+<div class="collapse navbar-collapse" id=navbarSupportedContent>
+<ul class="navbar-nav mr-auto">
+<li class=nav-item>
+<a class=nav-link href=/about.html>About</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/essays.html>Essays</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/resume.html>Resume</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/software.html>Software</a>
+</li>
+</ul>
+<ul class="navbar-nav mr-4">
+<li class=nav-item>
+<a class=nav-link href=/archive.html>Archive</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/series.html>Series</a>
+</li>
+<li class=nav-item>
+<a class=nav-link href=/tags.html>Tags</a>
+</li>
+</ul>
+<form class=form-inline method=get role=search action=https://www.google.com/search>
+<div class=input-group>
+<input type=search name=query class=form-control placeholder=Search aria-label=Search>
+<div class=input-group-append>
+<button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg>
+</button>
+</div>
+</div>
+<input type=hidden name=sitesearch value=https://jmmv.dev/>
+</form>
+</div>
+</nav>
+</header>
+<div class=page-header>
+<div class=container>
+<h1>Addressing Bazel OOMs</h1>
+<p>March 16, 2023 &#183;
+About 16 minutes
+&#183;
+Tags:
+<a class=text-reset href=/tags/bazel>bazel</a>, <a class=text-reset href=/tags/snowflake>snowflake</a></p>
+<figure class=cover-image>
+<img src=/images/2023-03-16-header.jpg width=100%>
+</figure>
+</div>
+</div>
+<div class=container>
+<div class=row>
+<div class=col-md-9>
+<div class=row>
+<div class=col>
+<p><i>This article was
+<a href=https://medium.com/snowflake/addressing-bazel-ooms-38023b736fa2>originally published
+on Medium</a>
+in the <a href=https://medium.com/snowflake>Snowflake publication</a>
+and is replicated here <a href=/2016/01/medium-experiment-wrapup.html>for
+archival purposes</a>.</i></p>
+<hr>
+<article><p>Here at Snowflake, the Developer Productivity organization (DPE for short) is tackling some important problems we face as a company: namely, lengthening build times and complex development environments. A key strategy we are pursuing to resolve these is the migration of key build processes from CMake and Maven to <a href=https://bazel.build/>Bazel</a>.</p>
+<p>We are still in the early stages of this migration and cannot yet share many details or a success story, but we can start explaining some of the issues we encounter as we work through this ambitious project.</p>
+<p>More specifically, in today&rsquo;s post I want to talk about how we diagnosed and fixed three different issues that made Bazel trip over the Linux OOM killer. These issues led to spurious build failures and made our workstations unusable due to memory thrashing.</p>
+<p>The guiding principle behind the fixes I&rsquo;ll describe is that flaky builds are infinitely worse than slow builds. A build that passes 100% of the time but is slower than it could potentially be will convince developers that <a href=/2020/12/google-no-clean-builds.html><code>make clean</code> can be a thing of the past</a>. A build that is really fast but breaks at random will do the opposite: it will show sloppiness and a lack of quality, leaving skeptical developers to wonder why adopting Bazel is worth the migration cost. Therefore, at this early stage in the migration process, it is fine for us to trade build speed for reliability.</p>
+<p>Let&rsquo;s dive in.</p>
+<h1 id=concurrent-linkers>Concurrent linkers</h1>
+<p>The first problem we encountered was obvious from the onset given that our CMake builds had exhibited the same issue in the past and we had a workaround for it in place.</p>
+<p>As is common in the build graph of complex applications with many tests, we have a collection of C++ test targets that depend on heavy common libraries. Each of these tests is linked separately, and the linker consumes a significant amount of memory to process each one of them: about 8GB per linker invocation in the <code>-c fastbuild</code> configuration. Unsurprisingly, if we concurrently run a handful of these on a local dev environment capped at, say, 16–20GB of RAM, we quickly run into OOM scenarios.</p>
+<p>But, if you know some Bazel internals, you&rsquo;d expect this to not happen: Bazel has <a href=/2019/12/bazel-local-resources.html>provisions to avoid overloading the host machine</a> when scheduling local actions so, in theory, we should not be seeing any issue. To summarize: the way this works is by making every build rule estimate how much resources its build actions will consume in the form of an &ldquo;X CPUs and Y MBs of RAM&rdquo; quantity. Bazel then compares these numbers against its own understanding of total machine capacity and uses this information to limit the parallelism of local actions.</p>
+<p>Sounds good, right? Unfortunately, this mechanism isn&rsquo;t great because it relies on the build rules to provide an accurate estimate of their resource consumption. This estimation is hard to do upfront, especially when the rules support a multitude of toolchains with potentially different performance profiles. Let&rsquo;s peek under the hood and see what the C++ rules do in order to compute the memory requirements of every linker action. Here is what the code in <code>CppLinkAction.java</code> <a href="https://cs.opensource.google/bazel/bazel/+/f3be7b16aa319676e56ec54fe0e9ca3d0e1fbf7a:src/main/java/com/google/devtools/build/lib/rules/cpp/CppLinkAction.java;l=131">had to say</a> circa 2021:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-java data-lang=java><span class=c1>// Linking uses a lot of memory; estimate 1 MB per input file,
+</span><span class=c1>// min 1.5 Gib. It is vital to not underestimate too much here,
+</span><span class=c1>// because running too many concurrent links can thrash the machine
+</span><span class=c1>// to the point where it stops responding to keystrokes or mouse
+</span><span class=c1>// clicks. This is primarily a problem with memory consumption, not
+</span><span class=c1>// CPU or I/O usage.
+</span><span class=c1></span><span class=kd>public</span> <span class=kd>static</span> <span class=kd>final</span> <span class=n>ResourceSet</span> <span class=n>LINK_RESOURCES_PER_INPUT</span> <span class=o>=</span>
+    <span class=n>ResourceSet</span><span class=o>.</span><span class=na>createWithRamCpu</span><span class=o>(</span><span class=n>1</span><span class=o>,</span> <span class=n>0</span><span class=o>);</span>
+
+<span class=c1>// This defines the minimum of each resource that will be reserved.
+</span><span class=c1></span><span class=kd>public</span> <span class=kd>static</span> <span class=kd>final</span> <span class=n>ResourceSet</span> <span class=n>MIN_STATIC_LINK_RESOURCES</span> <span class=o>=</span>
+    <span class=n>ResourceSet</span><span class=o>.</span><span class=na>createWithRamCpu</span><span class=o>(</span><span class=n>1536</span><span class=o>,</span> <span class=n>1</span><span class=o>);</span>
+
+<span class=c1>// Dynamic linking should be cheaper than static linking.
+</span><span class=c1></span><span class=kd>public</span> <span class=kd>static</span> <span class=kd>final</span> <span class=n>ResourceSet</span> <span class=n>MIN_DYNAMIC_LINK_RESOURCES</span> <span class=o>=</span>
+    <span class=n>ResourceSet</span><span class=o>.</span><span class=na>createWithRamCpu</span><span class=o>(</span><span class=n>1024</span><span class=o>,</span> <span class=n>1</span><span class=o>);</span>
+</code></pre></div><p>This behavior <a href="https://cs.opensource.google/bazel/bazel/+/01c10e030c1e453fa814d316f8f9950420bd3de7:src/main/java/com/google/devtools/build/lib/rules/cpp/CppLinkAction.java;l=420">changed in commit <code>01c10e03</code></a> in an attempt to improve the situation based on build performance data collected at Google:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>commit 01c10e030c1e453fa814d316f8f9950420bd3de7
+Author: wilwell &lt;wilwell@google.com&gt;
+Date:   Fri Jul 16 05:41:57 2021 -0700
+
+    Memory expectations for local CppLink action
+
+    During investigation we find out the  better linear dependency
+    between number of inputs and memory.
+    Using our data we made linear estimation of form C + K * inputs
+    such that 95% of actions used less memory than estimated.
+
+    In case of memory overestimate  we will make our builds slower,
+    because of large amount unused memory, which we could use for
+    execution other actions.
+
+    In case of memory underestimate we could overload system and get
+    OOMs during builds.
+</code></pre></div><p>From a previous life, I knew that this piece of code was problematic for local linking, but this recent commit made me think that the new memory estimation in Bazel was close to reality: Google has a vast repository of build performance data from which to deduce a good model. Therefore, I was left to think that our build graph broke these assumptions for some reason.</p>
+<p>Yet&mldr; something was off. As a first experiment, I tried to limit the RAM available to Bazel with <code>--local_ram_resources=8192</code>, hoping that a much lower limit than the default would cap the number of concurrent linkers. Interestingly, this did not have any effect. I tried going lower, specifying 1GB as the limit, and the results were equally puzzling. Why wasn&rsquo;t this flag limiting linker concurrency <em>at all</em>? The answer is in the code logic described above: I patched the C++ link rule to print its thoughts on the resource limits and I found that the new rule concluded that <em>all</em> of our link actions needed only 50 MBs of RAM each. 50MB is wrong by a factor of ~160 and explains why lowering <code>--local_ram_resources</code> did not make a difference.</p>
+<p>The most likely explanation for this difference is that our Bazel configuration was stuck on the old-and-rusty <code>ld</code> when I debugged this problem and Google drew its conclusions from <code>gold</code> or <code>lld</code>, but I do not know yet. Note that, at the time of this writing, we have already moved away from <code>ld</code>. <a href=https://github.com/bazelbuild/bazel/issues/17368>Issue #17368</a> tracks this.</p>
+<h1 id=real-fix-resource-set-overrides>Real fix: resource set overrides</h1>
+<p>The simplest solution to this problem would have been to tweak the C++ build rules and update their memory model for our scenario: if we could tell Bazel that our linker actions require 8GB of RAM, we could have done that and called it a day.</p>
+<p>And I tried. I researched if we could specify a tag of the form <code>ram:Xmb</code> for the linker rules, hoping that tags like these would override the requirements computed by the rules. Support for a <code>ram:Xmb</code> tag, however, does not exist. There is support for a <code>cpu:N</code> tag, so as a compromise I thought of leveraging this to claim that the linker uses all CPUs on the machine. But&mldr; <code>cpu:N</code> only applies to tests and is not recognized in other kinds of targets. Digging deeper, I discovered the <code>--experimental_allow_tags_propagation</code> option, which I hoped would cause the <code>cpu:N</code> tag to be propagated to the actions and have the desired effect, but testing revealed that this was not the case either. (I&rsquo;m actually not yet sure what this flag does.)</p>
+<p>If the C++ rules had been written in Starlark, and if <a href=https://github.com/bazelbuild/bazel/issues/6477>issue #6477</a> from 2018 had been implemented, we could also have been able to paper over the problem. But the C++ rules are still native rules, which means that they cannot be modified without rebuilding Bazel. Not an option at this point.</p>
+<p>I hit a lot of dead ends. Short of modifying Bazel to special-case our requirements, which we are trying hard to avoid, I had to find another solution that could be implemented within the constraints of what Bazel allows today. Which, by the way, I kinda enjoy doing.</p>
+<h2 id=workaround-linker-wrapper-to-limit-concurrency>Workaround: linker wrapper to limit concurrency</h2>
+<p>The workaround came in the form of a wrapper over the linker plumbed through our own toolchain definition. This wrapper is a simple script that uses <code>flock(1)</code> on the linker binary to allow just one linker invocation at a time. This is suboptimal because, by the time the wrapper runs, Bazel has already decided to run the action. As a result, Bazel is holding one of its job slots hostage to a script that may do nothing for many seconds, lowering overall throughput. In practice, however, this is not a problem because most link actions pile up towards the end of the build where parallelism is already minimal and where we really cannot afford to run linkers in parallel.</p>
+<p>Implementing this wrapper sounds simple but the devil lies in the details, as is usually the case. For example: given that the wrapper has to run a specific linker, I needed the wrapper to include the path to the linker. I wanted to do this using a <code>genrule</code> to create the wrapper, but this seems impossible to achieve as described in <a href=https://github.com/bazelbuild/bazel/issues/17401>issue #17401</a>. Additionally, even after working around that issue, I encountered further problems with the <code>cmake</code> rule, which somehow ended up trying to invoke the wrapper script via a relative path and failed to do so. After reading the code of the <code>cmake</code> rule, I found that if the paths to tools are from external repos, the rules will absolutize them&mldr; so as yet-another-workaround, I created a nested workspace to hold the wrapper, which was sufficient to trick <code>cmake</code> into doing the right thing.</p>
+<p>Remember: this solution was just a workaround that we could live with for a little while. We have adopted lld in our Bazel builds, just like our CMake builds do, since I wrote this draft and we have mostly adopted remote execution, both of which have made this issue invisible.</p>
+<h1 id=concurrent-foreign-builds>Concurrent foreign builds</h1>
+<p>The second problem we encountered was due to our use of <code>rules_foreign_cc</code> to build a bunch of C++ external dependencies. We have a dozen or so of these using a combination of <code>configure_make</code>, <code>make</code>, and <code>cmake</code>.</p>
+<p>Our first cut at building these dependencies was to pass <code>-j $(nproc)</code> as an argument to the foreign rules. This works great when the actions spawned by these rules run in a remote build farm: each executor node will run the nested build in a container that will expose as many CPUs as it wants to expose and cause no harm to sibling processes. But this does not work so well in a local build. In the ideal case, these nested builds would end up evenly spaced throughout the build, spreading their resource overload to random points. Unfortunately, that&rsquo;s not what we observed: our build graph has a choke point on these foreign dependencies so, during a build, it is easy to notice that Bazel has to run and wait for a bunch of these foreign compiles simultaneously.</p>
+<p>As you can imagine, this can turn into a problematic scenario. For example: if the host machine running Bazel has 8 CPUs in total and Bazel is running 6 nested builds (based on the default <code>--local_cpu_resources</code> computation), each configured to run 8 parallel jobs via <code>-j 8</code>, we potentially have <em>6 * 8 = 42</em> resource-hungry processes in competition. If these processes compete for CPU alone, then they will take a long time to finish but nothing too bad will happen. If they compete for RAM, however, as happens with linkers as described earlier, then it&rsquo;s easy to enter a thrashing situation that&rsquo;s hard to get out of.</p>
+<h2 id=real-fix-cooperative-parallelism>Real fix: cooperative parallelism</h2>
+<p>The correct solution to this is to teach cooperative parallelism to Bazel <a href=https://github.com/bazelbuild/bazel/issues/10443>issue #10443</a>: every time Bazel runs an action that can consume N CPUs, Bazel should be aware of this fact and schedule it accordingly.</p>
+<p>You can imagine this as a <code>cpu:N</code> tag like the one described above, which would indicate the parallelism of each nested build and would sequence them when run through Bazel. Or it could be in the form of Bazel leveraging <a href=https://www.gnu.org/software/make/manual/html_node/Job-Slots.html>GNU Make&rsquo;s jobserver feature</a> to coordinate the parallelism of those submakes. I&rsquo;m not going to design this feature in this post but&mldr; are you interested in doing this? It sounds like an awesome intern project that I&rsquo;d be pleased to mentor!</p>
+<h2 id=workaround-nested-make-job-limits>Workaround: nested make job limits</h2>
+<p>As a compromise, I went back to the wrapper approach. In this case, a wrapper checks for details of the running environment to determine whether the nested build can use all resources of the machine or not. If it can, such as on build farm workers, then the wrapper passes <code>-j $(nproc)</code> to these nested builds and calls it a day. If it cannot, then the wrapper tries to be smart: for GNU Make, it passes <code>-j $(nproc) -l $(nproc)</code> to try to use as many CPUs as possible while accounting for load average; and for CMake, it just passes <code>-j 2</code> as I have not found out how to plumb through the <code>-l</code> equivalent.</p>
+<p>Like before, adding such a wrapper sounds simple in theory but becomes hard to do in practice. A specific detail that turned out to be problematic is the way <code>rules_foreign_cc</code> constructs wrapper scripts. The rules try to generate scripts that can work both on a POSIX Shell and on Windows' <code>cmd.exe</code>&mldr; which is a nightmare due to quoting differences, plus the resulting scripts become unreadable. In the end, I got this to work, which was quite nice.</p>
+<h1 id=concurrent-remote-actions>Concurrent remote actions</h1>
+<p>The third problem we encountered was the most puzzling of all. After resolving the other two issues, there was nothing else left in the build that could consume too much memory. Yet&mldr; occasionally, the Linux OOM killer would show up and terminate Bazel. And it would <em>always</em> terminate Bazel. Unfair, isn&rsquo;t it?</p>
+<p>Fortunately, when the Linux OOM killer kicks in, it dumps the process table along with memory statistics to the kernel log. Looking there, I noticed two culprits:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>[648264.500883] Tasks state (memory values in pages):
+[648264.500884] [ pid ] uid tgid total_vm rss pgtables_bytes swapents oom_score_adj name
+...
+[648264.500993] [ 10337] 1970 10337 5440032 3303604 34402304 585643 0 java
+...
+[648264.501024] [ 30196] 1970 30196 1353096 1344352 10874880 0 0 ld
+...
+[648264.501030] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0,global_oom,task_memcg=/user.slice/user-1970.slice,task=java,pid=10337,uid=1970
+[648264.501486] Out of memory: Killed process 10337 (java) total-vm:21760128kB, anon-rss:13214416kB, file-rss:0kB, shmem-rss:0kB, UID:1970 pgtables:33596kB oom_score_adj:0
+[648265.100163] oom_reaper: reaped process 10337 (java), now anon-rss:0kB, file-rss:0kB, shmem-rss:0kB
+</code></pre></div><p>A single linker (thanks to the changes described earlier) and Bazel. If we do the math, because <code>total_vm</code> and <code>rss</code> are in <em>pages</em> (because why would they not), we see that the linker is using 5GB of RAM and Bazel is using&mldr; 13GB? Wait, what? Why?</p>
+<p>What I noticed from these crashes is that they seemed to happen when Bazel was running multiple remote <code>Compiling</code> actions at once, at least as reported in the Bazel UI. This made me suspect (again, thanks to past experience) that the state Bazel was holding in memory for each running action was large, and when combined with hundreds of parallel actions, memory requirements ballooned. But still, 13GB was <em>a lot</em>, and if this were true, there would be few options for us short of growing the total RAM of our dev environments.</p>
+<p>Looking closer, I noticed that during our initial deployment of our build farm, we bumped the max heap size that Bazel was allowed to use to 14GB. The rationale given at the time was that the build graph was too big and we needed more RAM due to the increased <code>--jobs</code> number. Which might be true, but this had to be better substantiated: for one, the build graph doesn&rsquo;t grow with an increase of <code>--jobs</code>, and for another, coordinating remote jobs shouldn&rsquo;t really require that much memory.</p>
+<p>Also note that a large JVM heap <em>limit</em> doesn&rsquo;t necessarily mean that all memory will be <code>live</code>. An implication of a large heap is that the JRE will postpone GC cycles for longer. So by giving Bazel a max heap of 14GB on a 16–20GB environment, we were telling the JVM that it was allowed to hold onto most of the machine&rsquo;s memory&mdash;even if a lower limit could also have worked at the expense of additional GC cycles.</p>
+<h2 id=real-fix-measurement-and-tuning>Real fix: measurement and tuning</h2>
+<p>The first step to solving this last problem was to measure how big the build graph really was. Seeing that our Bazel analysis phase is pretty short compared to other horrors I&rsquo;ve seen in the past, I did not expect the size to be too large. But it had to be measured. This is as easy as running a command like the following and looking at the heap size in VisualVM while the command runs:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>bazel build -k --nobuild //...
+</code></pre></div><p>Note the funnily-named <code>--nobuild</code> flag given to the <code>build</code> command. This flag causes Bazel to stop executing the build right after the analysis phase is done, which means that the only thing that Bazel will hold onto memory is the build graph. Armed with this knowledge, I noticed something reasonable in VisualVM: after GC, Bazel&rsquo;s memory usage was a mere 500MB&mdash;extremely far from the 13GB used during the build.</p>
+<p>This was promising, but the initial observation of needing more memory due to the increase in <code>--jobs</code> was probably well-founded. What could we do about it? A good starting point, as with most things in Bazel, is to research what options exist to tune the feature we suspect is problematic, which in this case was Remote Execution. Among these flags I spotted <code>-- experimental_remote_discard_merkle_trees</code> and <a href=https://cs.opensource.google/bazel/bazel/+/4069a87611886532a19c7e558ab4c2f1e83f53f0>commit <code>4069a876</code></a>, which introduced it, described pretty much the same problem I faced. Unfortunately, this flag is not yet in a stable Bazel release (6.0.0 at the time of this writing).</p>
+<p>Luckily, this also made me find <code>-- experimental_remote_merkle_tree_cache</code>, which was introduced much earlier in <a href=https://cs.opensource.google/bazel/bazel/+/becd1494481b96d2bc08055d3d9d4d7968d9702e>commit <code>becd1494</code></a> and which was supposed to improve this scenario based on data collected at Google. Here is what the change had to say:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>commit becd1494481b96d2bc08055d3d9d4d7968d9702e
+Author: Fredrik Medley &lt;fredrik.medley@gmail.com&gt;
+Date:   Tue Oct 26 19:44:10 2021 -0700
+
+    Remote: Cache merkle trees
+
+    When --experimental_remote_merkle_tree_cache is set, Merkle tree
+    calculations are cached for each node in the input NestedSets
+    (depsets). This drastically improves the speed when checking for
+    remote cache hits. One example reduced the Merkle tree calculation
+    time from 78 ms to 3 ms for 3000 inputs.
+
+    The memory foot print of the cache is controlled by
+    --experimental_remote_merkle_tree_cache_size.
+
+    The caching is discarded after each build to free up memory, the
+    cache setup time is negligible.
+</code></pre></div><p>Giving this flag a try made Bazel consume less than 4GB of RAM throughout the build with a <code>--jobs</code> value set to a much higher number than what we currently use by default. This is a 10GB of RAM savings, which also translated into a much, much faster build due to Bazel and Java having to compute and collect less garbage.</p>
+<p>No workarounds needed to solve this problem, and keeping RAM under control always feels nice.</p>
+<hr>
+<p>That&rsquo;s about it for today! Our pilot Bazel builds are now speedier than they were and we have eliminated a major source of frustration for our users during our initial deployment of Bazel: namely, their workstations don&rsquo;t melt under memory pressure any longer.</p>
+<p>As a personal tip: don&rsquo;t ever give into the temptations of increasing memory limits <em>before</em> understanding the cause behind growth&mdash;even if you have enough memory to spare and what you are doing is &ldquo;just&rdquo; a small increase. Caving into these temptations without further investigation means you will be oblivious to real bugs that exist in your system and that need to be ironed out for better overall performance. Be skeptical, question assumptions, measure reality, and adjust as necessary.</p>
+<p>If you like what you read and would enjoy working on similar exciting problems, know that <a href=https://careers.snowflake.com/us/en/job/5436043002/Senior-Software-Engineer-Developer-Productivity-Engineering>we are hiring in the Developer Productivity Engineering team</a> here at Snowflake.</p></article>
+</div>
+</div>
+<div class="container post-links">
+<div class=row>
+<div class="col mr-auto text-left">
+<span><a href=https://jmmv.dev/2023/03/introducing-iii-iv.html>&#171; Previous</a></span>
+</div>
+<div class="col text-center">
+<span><a href=/archive.html>All posts</a></span>
+</div>
+<div class="col ml-auto text-right">
+<span></span>
+</div>
+</div>
+</div>
+<div class="container post-votes">
+<div class=row>
+<div class="col-lg-4 my-2">
+<div class=row>
+<div class=col>
+<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a>
+</div>
+<div class=col>
+<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a>
+</div>
+</div>
+</div>
+<div class="col-lg-8 my-2 d-none d-sm-block">
+<div class=row>
+<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Addressing+Bazel+OOMs&url=https%3A%2F%2Fjmmv.dev%2F2023%2F03%2Faddressing-bazel-ooms.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Addressing+Bazel+OOMs&u=https%3A%2F%2Fjmmv.dev%2F2023%2F03%2Faddressing-bazel-ooms.html" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
+</a>
+</div>
+<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Addressing+Bazel+OOMs+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2023%2F03%2Faddressing-bazel-ooms.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
+Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
+</a>
+</div>
+</div>
+</div>
+</div>
+<div class="row my-4" id=postCommentRow>
+<div class=col>
+<div class=media>
+<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
+<div class="media-body container">
+<form method=post id=newPost>
+<div class=row>
+<div class="col my-1">
+<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<div class="col my-1 form-group">
+<label for=postCommentEmail>Your email (optional):</label>
+<input type=text class=form-control type=email id=postCommentEmail>
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
+</div>
+</div>
+<div class=row id=postCommentError style=display:none>
+<div class="col mt-1 alert-danger">
+<p></p>
+</div>
+</div>
+<div class="row newPostControls" style=display:none>
+<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
+</div>
+<div class="container post-subscribe">
+<div class=row>
+<div class="col-sm-3 py-2">
+<div class=row>
+<div class="col px-2 text-center">
+<a rel=me href=https://mastodon.online/@jmmv>
+<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
+</a>
+</div>
+<div class="col px-2 text-center">
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</div>
+<div class="col px-2 text-center">
+<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
+</div>
+</div>
+</div>
+<div class="col-sm-9 py-2">
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<div class=row>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
+<button type=submit class="btn btn-primary col-4">Subscribe</button>
+</div>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+<div class="col-md-3 sidebar d-none d-md-block">
+<div class=row>
+<div class="col text-center p-2">
+<p><a href=/about.html class=clear-link>
+<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
+<b>Julio Merino</b><br>
+Software Engineer<br>
+<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
+<small>From Barcelona, living in Seattle</small>
+</a></p>
+<div class=row>
+<div class="col-sm-4 text-center">
+<p>
+<a rel=me href=https://mastodon.online/@jmmv>
+<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
+</a>
+</p>
+</div>
+<div class="col-sm-4 text-center">
+<p>
+<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
+<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a>
+</p>
+</div>
+<div class="col-sm-4 text-center">
+<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
+</div>
+</div>
+<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
+<div class=form-group>
+<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button>
+</div>
+</form>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Featured posts</h2>
+<ul>
+<li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li>
+<li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
+<li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
+<li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
+<li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
+<li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
+<li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
+<li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
+<li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
+<li class=overflow-ellipsis><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
+<li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li>
+</ul>
+</div>
+</div>
+<div class=row>
+<div class=col>
+<h2>Archive</h2>
+<ul>
+<li>
+<a data-toggle=collapse href=#archive-year-2023>2023</a> (3)
+<ul id=archive-year-2023 class=collapse>
+<li><a href=/archive.html#2023-03>March 2023</a> (2)</li>
+<li><a href=/archive.html#2023-01>January 2023</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2022>2022</a> (32)
+<ul id=archive-year-2022 class=collapse>
+<li><a href=/archive.html#2022-12>December 2022</a> (1)</li>
+<li><a href=/archive.html#2022-11>November 2022</a> (1)</li>
+<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
+<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
+<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
+<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
+<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
+<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
+<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
+<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
+<ul id=archive-year-2021 class=collapse>
+<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
+<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
+<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
+<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
+<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
+<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
+<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
+<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
+<ul id=archive-year-2020 class=collapse>
+<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
+<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
+<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
+<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
+<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
+<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
+<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
+<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
+<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
+<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
+<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
+<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
+<ul id=archive-year-2019 class=collapse>
+<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
+<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
+<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
+<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
+<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
+<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
+<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
+<ul id=archive-year-2018 class=collapse>
+<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
+<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
+<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
+<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
+<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
+<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
+<ul id=archive-year-2017 class=collapse>
+<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
+<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
+<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
+<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
+<ul id=archive-year-2016 class=collapse>
+<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
+<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
+<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
+<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
+<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
+<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
+<ul id=archive-year-2015 class=collapse>
+<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
+<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
+<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
+<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
+<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
+<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
+<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
+<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
+<ul id=archive-year-2014 class=collapse>
+<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
+<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
+<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
+<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
+<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
+<ul id=archive-year-2013 class=collapse>
+<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
+<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
+<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
+<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
+<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
+<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
+<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
+<ul id=archive-year-2012 class=collapse>
+<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
+<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
+<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
+<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
+<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
+<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
+<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
+<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
+<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
+<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
+<ul id=archive-year-2011 class=collapse>
+<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
+<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
+<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
+<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
+<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
+<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
+<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
+<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
+<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
+<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
+<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
+<ul id=archive-year-2010 class=collapse>
+<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
+<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
+<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
+<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
+<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
+<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
+<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
+<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
+<ul id=archive-year-2009 class=collapse>
+<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
+<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
+<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
+<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
+<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
+<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
+<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
+<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
+<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
+<ul id=archive-year-2008 class=collapse>
+<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
+<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
+<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
+<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
+<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
+<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
+<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
+<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
+<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
+<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
+<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
+<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
+<ul id=archive-year-2007 class=collapse>
+<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
+<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
+<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
+<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
+<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
+<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
+<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
+<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
+<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
+<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
+<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
+<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
+<ul id=archive-year-2006 class=collapse>
+<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
+<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
+<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
+<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
+<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
+<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
+<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
+<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
+<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
+<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
+<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
+<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
+<ul id=archive-year-2005 class=collapse>
+<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
+<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
+<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
+<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
+<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
+<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
+<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
+<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
+<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
+<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
+<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
+<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
+</ul>
+</li>
+<li>
+<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
+<ul id=archive-year-2004 class=collapse>
+<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
+<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
+<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
+<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
+<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
+<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class=container>
+<div class=row>
+<div class="col-4 order-2 texr-right">
+<p class=float-right><a href=#>Back to top</a></p>
+</div>
+<div class="col-8 order-1 mr-auto">
+<p>Copyright 2004&ndash;2023 Julio Merino</p>
+</div>
+</div>
+</footer>
+<script type=module>
+  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
+
+  var batchClient = new BatchClient(SITE_ID);
+  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
+
+  window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
+  window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
+
+  window.postComment = function(...args) {
+    batchClient.postComment(...args);
+  };
+
+  addAnchorsToHeaders();
+  addElementClasses();
+</script>
+<noscript>
+<img src=https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIzLzAzL2FkZHJlc3NpbmctYmF6ZWwtb29tcy5odG1s/stamp.gif style=display:none>
+</noscript>
+</body>
+</html>
