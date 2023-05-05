@@ -1,682 +1,96 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<meta property="twitter:site" content="@jmmv">
-<title>Using the builder pattern to define test scenarios - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="Using the builder pattern to define test scenarios - Julio Merino (jmmv.dev)">
-<meta property="twitter:title" content="Using the builder pattern to define test scenarios - Julio Merino …">
-<meta name=description content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&amp;rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, the ideas presented here apply to any language. So don&amp;rsquo;t leave just because I said Rust!
-">
-<meta property="og:description" content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&amp;rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, the ideas presented here apply to any language. So don&amp;rsquo;t leave just because I said Rust!
-">
-<meta property="twitter:description" content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test …">
-<meta name=author content="Julio Merino">
-<meta property="twitter:creator" content="@jmmv">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2020/12/builder-pattern-for-tests.html">
-<meta property="og:type" content="blog">
-<meta property="twitter:card" content="summary">
-<link rel=canonical href=https://jmmv.dev/2020/12/builder-pattern-for-tests.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.ce628ad32d280a2570d17aa4a7e3cb429d327b6b044032d289bf9e395f5365ba.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
-<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
-</head>
-<body>
-<header class=site-header>
-<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Using the builder pattern to define test scenarios - Julio Merino (jmmv.dev)</title><meta property="og:title" content="Using the builder pattern to define test scenarios - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Using the builder pattern to define test scenarios - Julio Merino …"><meta name=description content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&amp;rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, the ideas presented here apply to any language. So don&amp;rsquo;t leave just because I said Rust!
+"><meta property="og:description" content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&amp;rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, the ideas presented here apply to any language. So don&amp;rsquo;t leave just because I said Rust!
+"><meta property="twitter:description" content="I&amp;rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&amp;rsquo;ve liked the outcome and feel that this design can yield to pretty good test …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.111.3"><meta property="og:url" content="https://jmmv.dev/2020/12/builder-pattern-for-tests.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2020/12/builder-pattern-for-tests.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.2e4a4a3a8db91cf527e242ade6346a52e880c9075e469c82b2c0e7d293642165.css><link rel=stylesheet href=/css/chroma.css><meta property="og:image" content="/images/favicons/favicon-1200x1200.png"><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><header class=site-header><nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary"><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino</a>
 <button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
-</nav>
-</header>
-<div class=page-header>
-<div class=container>
-<h1>Using the builder pattern to define test scenarios</h1>
-<p>December 4, 2020 &#183;
-About 5 minutes
+<span class=navbar-toggler-icon></span></button><div class="collapse navbar-collapse" id=navbarSupportedContent><ul class="navbar-nav mr-auto"><li class=nav-item><a class=nav-link href=/about.html>About</a></li><li class=nav-item><a class=nav-link href=/essays.html>Essays</a></li><li class=nav-item><a class=nav-link href=/resume.html>Resume</a></li><li class=nav-item><a class=nav-link href=/software.html>Software</a></li></ul><ul class="navbar-nav mr-4"><li class=nav-item><a class=nav-link href=/archive.html>Archive</a></li><li class=nav-item><a class=nav-link href=/series.html>Series</a></li><li class=nav-item><a class=nav-link href=/tags.html>Tags</a></li></ul><form class=form-inline method=get role=search action=https://www.google.com/search><div class=input-group><input type=search name=query class=form-control placeholder=Search aria-label=Search><div class=input-group-append><button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg></button></div></div><input type=hidden name=sitesearch value=https://jmmv.dev/></form></div></nav></header><div class=page-header><div class=container><h1>Using the builder pattern to define test scenarios</h1><p>December 4, 2020 &#183;
+About 6 minutes
 &#183;
 Tags:
-<a class=text-reset href=/tags/endbasic>endbasic</a>, <a class=text-reset href=/tags/programming>programming</a>, <a class=text-reset href=/tags/rust>rust</a></p>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
-<article><p>I&rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, <strong>the ideas presented here apply to any language</strong>. So don&rsquo;t leave just because I said Rust!</p>
-<hr>
-<p>While Rust provides excellent facilities to execute unit and integration tests via <code>cargo test</code>, the APIs to write such tests are&mldr; extremely limited. In essence, we can tag tests functions with <code>#[test]</code> and we can then use the <code>assert*</code> family of macros plus <code>unwrap()/expect()</code> calls to validate values. But that&rsquo;s about it. No fixtures. No <a href=https://junit.org/junit5/>JUnit-like advanced features</a>. No <a href=https://truth.dev/>Truth-like expressive assertions</a>. No nothing.</p>
-<p>These limitations, and in particular the lack of fixtures, can lead to convoluted test code. The fact is that some tests, even if they are true unit tests, require quite a bit of boilerplate: prepare fake objects with golden values, inject those into the code under test, and validate results. If we want to adhere to the principle of making each individual test case (aka each <code>#[test]</code> function) focus on a single behavior, we find ourselves with a lot of code duplication. Code duplication blurs the essence behind each test, which then makes tests harder to maintain&mdash;and hard to maintain tests is something you <em>really</em> do not want in a codebase.</p>
-<p>To mitigate these limitations and keep the content of test functions focused on behavior, I&rsquo;ve found myself writing helpers of the form <code>do_ok_test_for_blah()</code>. These helpers wrap the <code>blah()</code> under test and abstract away all of the uninteresting setup/teardown noise, customizing these based on input parameters.</p>
-<p>The problem is that functions like <code>do_ok_test_for_blah()</code> quickly become complex. As you add more test cases, the amount of parameters to pass to these functions grows too, and the tests that used to be succinct aren&rsquo;t any more. To compensate, you might add extra functions like <code>do_ok_test_for_blah_with_bleh()</code> that provide even further wrapping&mldr; but then you end up with a real mess that goes counter the original goal of simplifying the test code. Mind you, a lot of the older tests in EndBASIC suffer from this problem and it&rsquo;s a pain to touch them, so I had to find a solution.</p>
-<p>Of course, there are crates out there to provide extra testing facilities for Rust. But how far can we get with the simple Rust primitives? Pretty far actually.</p>
-<blockquote>
-<p>What if we used the builder pattern to define the test scenario with required and optional properties, set expectations in a declarative manner, and then hid the test logic within it?</p>
-</blockquote>
-<p>The idea is to define a <em>type</em> (or <code>struct</code>, or <code>class</code>, or whatever your language of choice offers to encapsulate data) that holds all details needed to set up a test and also carries the expectations of the test. The type requires the minimum amount of parameters to run a &ldquo;null&rdquo; test scenario, and allows passing all other parameters in an optional manner. Lastly, a single <code>run()</code>-like function takes care of preparing the test scenario and running through it.</p>
-<hr>
-<p>Let&rsquo;s illustrate all these words with a trivial example.</p>
-<p>Consider a simple and non-generic <code>sum_all</code> function that takes an array of <code>i32</code> values and sums them all:</p>
-<div class=src>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=cp>#[cfg(test)]</span><span class=w> </span><span class=k>mod</span> <span class=nn>tests</span><span class=p>;</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=sd>/// Sums all input `values` and returns the total.
-</span><span class=sd></span><span class=k>pub</span><span class=w> </span><span class=k>fn</span> <span class=nf>sum_all</span><span class=p>(</span><span class=n>values</span>: <span class=kp>&amp;</span><span class=p>[</span><span class=kt>i32</span><span class=p>])</span><span class=w> </span>-&gt; <span class=kt>i32</span> <span class=p>{</span><span class=w>
-</span><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>result</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>0</span><span class=p>;</span><span class=w>
-</span><span class=w>    </span><span class=k>for</span><span class=w> </span><span class=n>v</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>values</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>        </span><span class=n>result</span><span class=w> </span><span class=o>+=</span><span class=w> </span><span class=n>v</span><span class=p>;</span><span class=w>
-</span><span class=w>    </span><span class=p>}</span><span class=w>
-</span><span class=w>    </span><span class=n>result</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span></code></pre></div>
-<div class=footer>
-<div class=filename>
-<a href=/src/builder-pattern-for-tests/src/lib.rs type=text/plain>src/lib.rs</a>
-</div>
-</div>
-</div>
-<p>Yes, this is a simplistic function that can be trivially tested: using the builder pattern here is overkill, but hopefully you get the idea of how this helps verify more complex interfaces.</p>
-<p>To test this function, we define a <code>SumAllTest</code> type to represent the builder pattern, with these properties:</p>
-<ul>
-<li>Given that <code>sum_all()</code> always returns a value, the test must always know what value to expect; therefore, we express this requirement as part of the type&rsquo;s constructor.</li>
-<li>The data to pass to the function is variable, though, so we make it optional via an <code>add_value()</code> method. I&rsquo;ve chosen to use an accumulator method here to further illustrate how a builder might be helpful.</li>
-<li>We define a <code>run()</code> method that <em>consumes the builder</em> and executes the test.</li>
-</ul>
-<p>Our test code looks like this:</p>
-<div class=src>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=cp>#![deny(warnings)]</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=k>use</span><span class=w> </span><span class=k>crate</span>::<span class=o>*</span><span class=p>;</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=sd>/// Builder pattern for tests that validate `sum_all`.
-</span><span class=sd></span><span class=cp>#[must_use]</span><span class=w>
-</span><span class=w></span><span class=k>struct</span> <span class=nc>SumAllTest</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>    </span><span class=n>expected</span>: <span class=kt>i32</span><span class=p>,</span><span class=w>
-</span><span class=w>    </span><span class=n>values</span>: <span class=nb>Vec</span><span class=o>&lt;</span><span class=kt>i32</span><span class=o>&gt;</span><span class=p>,</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=k>impl</span><span class=w> </span><span class=n>SumAllTest</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>    </span><span class=sd>/// Creates the test scenario and initializes it with the result we expect.
-</span><span class=sd></span><span class=w>    </span><span class=k>fn</span> <span class=nf>expect</span><span class=p>(</span><span class=n>value</span>: <span class=kt>i32</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>Self</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>        </span><span class=bp>Self</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>expected</span>: <span class=nc>value</span><span class=p>,</span><span class=w> </span><span class=n>values</span>: <span class=nc>vec</span><span class=o>!</span><span class=p>()</span><span class=w> </span><span class=p>}</span><span class=w>
-</span><span class=w>    </span><span class=p>}</span><span class=w>
-</span><span class=w>
-</span><span class=w>    </span><span class=sd>/// Registers a value to pass to `sum_all` as an input.
-</span><span class=sd></span><span class=w>    </span><span class=k>fn</span> <span class=nf>add_value</span><span class=p>(</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>,</span><span class=w> </span><span class=n>value</span>: <span class=kt>i32</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>Self</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>        </span><span class=bp>self</span><span class=p>.</span><span class=n>values</span><span class=p>.</span><span class=n>push</span><span class=p>(</span><span class=n>value</span><span class=p>);</span><span class=w>
-</span><span class=w>        </span><span class=bp>self</span><span class=w>
-</span><span class=w>    </span><span class=p>}</span><span class=w>
-</span><span class=w>
-</span><span class=w>    </span><span class=sd>/// Runs `sum_all` with all recorded values and checks the result.
-</span><span class=sd></span><span class=w>    </span><span class=k>fn</span> <span class=nf>run</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>        </span><span class=kd>let</span><span class=w> </span><span class=n>actual</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>sum_all</span><span class=p>(</span><span class=o>&amp;</span><span class=bp>self</span><span class=p>.</span><span class=n>values</span><span class=p>);</span><span class=w>
-</span><span class=w>        </span><span class=fm>assert_eq!</span><span class=p>(</span><span class=bp>self</span><span class=p>.</span><span class=n>expected</span><span class=p>,</span><span class=w> </span><span class=n>actual</span><span class=p>);</span><span class=w>
-</span><span class=w>    </span><span class=p>}</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=cp>#[test]</span><span class=w>
-</span><span class=w></span><span class=k>fn</span> <span class=nf>test_sum_all_with_no_values</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>    </span><span class=n>SumAllTest</span>::<span class=n>expect</span><span class=p>(</span><span class=mi>0</span><span class=p>).</span><span class=n>run</span><span class=p>();</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=cp>#[test]</span><span class=w>
-</span><span class=w></span><span class=k>fn</span> <span class=nf>test_sum_all_with_one_value</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>    </span><span class=n>SumAllTest</span>::<span class=n>expect</span><span class=p>(</span><span class=mi>5</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>5</span><span class=p>).</span><span class=n>run</span><span class=p>();</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=cp>#[test]</span><span class=w>
-</span><span class=w></span><span class=k>fn</span> <span class=nf>test_sum_all_with_many_values</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>    </span><span class=n>SumAllTest</span>::<span class=n>expect</span><span class=p>(</span><span class=mi>8</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>3</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>4</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>1</span><span class=p>).</span><span class=n>run</span><span class=p>();</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span></code></pre></div>
-<div class=footer>
-<div class=filename>
-<a href=/src/builder-pattern-for-tests/src/tests.rs type=text/plain>src/tests.rs</a>
-</div>
-</div>
-</div>
-<p>The beauty of this design is that each test case is now declarative. The test case expresses, <em>in code</em>, what the test scenario looks like and what the expectations are. And given the simplicity of the calls, we can trivially express each scenario in its own test case. When we run the tests, we get what we expect:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>running 3 tests
-test tests::test_sum_all_many_values ... ok
-test tests::test_sum_all_no_values ... ok
-test tests::test_sum_all_one_value ... ok
-
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-</code></pre></div><p>Great!</p>
-<p>But before we go, there is <em>one key detail</em> I glanced over. This detail is critical to ensure that your tests always do the right thing:</p>
-<p><strong>IMPORTANT: The test builder has to be annotated with <code>#[must_use]</code>.</strong> You may want also want to accompany that with the optional <code>#[deny(warnings)]</code>.</p>
-<p>You see: given the above design, it&rsquo;s all too easy to forget to call <code>run()</code> on the test builder&mdash;and if you forget to do that, the test will do nothing and will always pass. That&rsquo;s too risky for test code. Fortunately, by using the <code>#[must_use]</code> annotation on the builder type, the compiler will catch such problems.</p>
-<p>To witness: if we remove the <code>run()</code> call from any of the tests above and try to build:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>error: unused `SumAllTest` that must be used
-  --&gt; src/tests.rs:33:5
-   |
-33 |     SumAllTest::expect(0);
-   |     ^^^^^^^^^^^^^^^^^^^^^^
-   |
-</code></pre></div><p>Rust fails the build and tells us that we forgot to consume the builder object. There is no way we can forget to call <code>run()</code> once we have initialized a <code>SumAllTest</code> object, so the test code will always be exercised.</p>
-<hr>
-<p>What do you think? Interesting? Problematic?</p>
-<p>For a more realistic example, check out <a href=https://github.com/endbasic/endbasic/blob/bd15aa4f2ff44c7491e5890976725ddae465d5d6/core/src/console.rs#L703>EndBASIC <code>read_line</code>&rsquo;s own tests</a>.</p></article>
-</div>
-</div>
-<div class="container post-links">
-<div class=row>
-<div class="col mr-auto text-left">
-<span><a href=https://jmmv.dev/2020/11/endbasic-0.3.html>&#171; Previous</a></span>
-</div>
-<div class="col text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col ml-auto text-right">
-<span><a href=https://jmmv.dev/2020/12/unit-testing-a-console-app.html>Next &#187;</a></span>
-</div>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class="col-lg-4 my-2">
-<div class=row>
-<div class=col>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-</div>
-<div class="col-lg-8 my-2 d-none d-sm-block">
-<div class=row>
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Using+the+builder+pattern+to+define+test+scenarios&url=https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Using+the+builder+pattern+to+define+test+scenarios&u=https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Using+the+builder+pattern+to+define+test+scenarios+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
-</a>
-</div>
-</div>
-</div>
-</div>
-<div class="row my-4" id=postCommentRow>
-<div class=col>
-<div class=media>
-<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
-<div class="media-body container">
-<form method=post id=newPost>
-<div class=row>
-<div class="col my-1">
-<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentAuthor>Your name (optional):</label>
-<input type=text class=form-control id=postCommentAuthor>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentEmail>Your email (optional):</label>
+<a class=text-reset href=/tags/endbasic>endbasic</a>, <a class=text-reset href=/tags/programming>programming</a>, <a class=text-reset href=/tags/rust>rust</a></p></div></div><div class=container><div class=row><div class=col-md-9><div class=row><div class=col><article><p>I&rsquo;ve been playing with the builder patter to express test scenarios in a succinct and declarative manner. I&rsquo;ve liked the outcome and feel that this design can yield to pretty good test code, so I&rsquo;ll dig through this idea here. Note that, while this post and the associated code talk about Rust, <strong>the ideas presented here apply to any language</strong>. So don&rsquo;t leave just because I said Rust!</p><hr><p>While Rust provides excellent facilities to execute unit and integration tests via <code>cargo test</code>, the APIs to write such tests are&mldr; extremely limited. In essence, we can tag tests functions with <code>#[test]</code> and we can then use the <code>assert*</code> family of macros plus <code>unwrap()/expect()</code> calls to validate values. But that&rsquo;s about it. No fixtures. No <a href=https://junit.org/junit5/>JUnit-like advanced features</a>. No <a href=https://truth.dev/>Truth-like expressive assertions</a>. No nothing.</p><p>These limitations, and in particular the lack of fixtures, can lead to convoluted test code. The fact is that some tests, even if they are true unit tests, require quite a bit of boilerplate: prepare fake objects with golden values, inject those into the code under test, and validate results. If we want to adhere to the principle of making each individual test case (aka each <code>#[test]</code> function) focus on a single behavior, we find ourselves with a lot of code duplication. Code duplication blurs the essence behind each test, which then makes tests harder to maintain&mdash;and hard to maintain tests is something you <em>really</em> do not want in a codebase.</p><p>To mitigate these limitations and keep the content of test functions focused on behavior, I&rsquo;ve found myself writing helpers of the form <code>do_ok_test_for_blah()</code>. These helpers wrap the <code>blah()</code> under test and abstract away all of the uninteresting setup/teardown noise, customizing these based on input parameters.</p><p>The problem is that functions like <code>do_ok_test_for_blah()</code> quickly become complex. As you add more test cases, the amount of parameters to pass to these functions grows too, and the tests that used to be succinct aren&rsquo;t any more. To compensate, you might add extra functions like <code>do_ok_test_for_blah_with_bleh()</code> that provide even further wrapping&mldr; but then you end up with a real mess that goes counter the original goal of simplifying the test code. Mind you, a lot of the older tests in EndBASIC suffer from this problem and it&rsquo;s a pain to touch them, so I had to find a solution.</p><p>Of course, there are crates out there to provide extra testing facilities for Rust. But how far can we get with the simple Rust primitives? Pretty far actually.</p><blockquote><p>What if we used the builder pattern to define the test scenario with required and optional properties, set expectations in a declarative manner, and then hid the test logic within it?</p></blockquote><p>The idea is to define a <em>type</em> (or <code>struct</code>, or <code>class</code>, or whatever your language of choice offers to encapsulate data) that holds all details needed to set up a test and also carries the expectations of the test. The type requires the minimum amount of parameters to run a &ldquo;null&rdquo; test scenario, and allows passing all other parameters in an optional manner. Lastly, a single <code>run()</code>-like function takes care of preparing the test scenario and running through it.</p><hr><p>Let&rsquo;s illustrate all these words with a trivial example.</p><p>Consider a simple and non-generic <code>sum_all</code> function that takes an array of <code>i32</code> values and sums them all:</p><div class=src><div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=cp>#[cfg(test)]</span><span class=w> </span><span class=k>mod</span> <span class=nn>tests</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=sd>/// Sums all input `values` and returns the total.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=k>pub</span><span class=w> </span><span class=k>fn</span> <span class=nf>sum_all</span><span class=p>(</span><span class=n>values</span>: <span class=kp>&amp;</span><span class=p>[</span><span class=kt>i32</span><span class=p>])</span><span class=w> </span>-&gt; <span class=kt>i32</span> <span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>result</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>0</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=k>for</span><span class=w> </span><span class=n>v</span><span class=w> </span><span class=k>in</span><span class=w> </span><span class=n>values</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=n>result</span><span class=w> </span><span class=o>+=</span><span class=w> </span><span class=n>v</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>result</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></div><div class=footer><div class=filename><a href=/src/builder-pattern-for-tests/src/lib.rs type=text/plain>src/lib.rs</a></div></div></div><p>Yes, this is a simplistic function that can be trivially tested: using the builder pattern here is overkill, but hopefully you get the idea of how this helps verify more complex interfaces.</p><p>To test this function, we define a <code>SumAllTest</code> type to represent the builder pattern, with these properties:</p><ul><li>Given that <code>sum_all()</code> always returns a value, the test must always know what value to expect; therefore, we express this requirement as part of the type&rsquo;s constructor.</li><li>The data to pass to the function is variable, though, so we make it optional via an <code>add_value()</code> method. I&rsquo;ve chosen to use an accumulator method here to further illustrate how a builder might be helpful.</li><li>We define a <code>run()</code> method that <em>consumes the builder</em> and executes the test.</li></ul><p>Our test code looks like this:</p><div class=src><div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=cp>#![deny(warnings)]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>use</span><span class=w> </span><span class=k>crate</span>::<span class=o>*</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=sd>/// Builder pattern for tests that validate `sum_all`.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=cp>#[must_use]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>struct</span> <span class=nc>SumAllTest</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>expected</span>: <span class=kt>i32</span><span class=p>,</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>values</span>: <span class=nb>Vec</span><span class=o>&lt;</span><span class=kt>i32</span><span class=o>&gt;</span><span class=p>,</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>impl</span><span class=w> </span><span class=n>SumAllTest</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=sd>/// Creates the test scenario and initializes it with the result we expect.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=w>    </span><span class=k>fn</span> <span class=nf>expect</span><span class=p>(</span><span class=n>value</span>: <span class=kt>i32</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>Self</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=bp>Self</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>expected</span>: <span class=nc>value</span><span class=p>,</span><span class=w> </span><span class=n>values</span>: <span class=nc>vec</span><span class=o>!</span><span class=p>()</span><span class=w> </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=sd>/// Registers a value to pass to `sum_all` as an input.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=w>    </span><span class=k>fn</span> <span class=nf>add_value</span><span class=p>(</span><span class=k>mut</span><span class=w> </span><span class=bp>self</span><span class=p>,</span><span class=w> </span><span class=n>value</span>: <span class=kt>i32</span><span class=p>)</span><span class=w> </span>-&gt; <span class=nc>Self</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=bp>self</span><span class=p>.</span><span class=n>values</span><span class=p>.</span><span class=n>push</span><span class=p>(</span><span class=n>value</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=bp>self</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=sd>/// Runs `sum_all` with all recorded values and checks the result.
+</span></span></span><span class=line><span class=cl><span class=sd></span><span class=w>    </span><span class=k>fn</span> <span class=nf>run</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=kd>let</span><span class=w> </span><span class=n>actual</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>sum_all</span><span class=p>(</span><span class=o>&amp;</span><span class=bp>self</span><span class=p>.</span><span class=n>values</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=fm>assert_eq!</span><span class=p>(</span><span class=bp>self</span><span class=p>.</span><span class=n>expected</span><span class=p>,</span><span class=w> </span><span class=n>actual</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=cp>#[test]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>fn</span> <span class=nf>test_sum_all_with_no_values</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>SumAllTest</span>::<span class=n>expect</span><span class=p>(</span><span class=mi>0</span><span class=p>).</span><span class=n>run</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=cp>#[test]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>fn</span> <span class=nf>test_sum_all_with_one_value</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>SumAllTest</span>::<span class=n>expect</span><span class=p>(</span><span class=mi>5</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>5</span><span class=p>).</span><span class=n>run</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=cp>#[test]</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>fn</span> <span class=nf>test_sum_all_with_many_values</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=n>SumAllTest</span>::<span class=n>expect</span><span class=p>(</span><span class=mi>8</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>3</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>4</span><span class=p>).</span><span class=n>add_value</span><span class=p>(</span><span class=mi>1</span><span class=p>).</span><span class=n>run</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></div><div class=footer><div class=filename><a href=/src/builder-pattern-for-tests/src/tests.rs type=text/plain>src/tests.rs</a></div></div></div><p>The beauty of this design is that each test case is now declarative. The test case expresses, <em>in code</em>, what the test scenario looks like and what the expectations are. And given the simplicity of the calls, we can trivially express each scenario in its own test case. When we run the tests, we get what we expect:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>running 3 tests
+</span></span><span class=line><span class=cl>test tests::test_sum_all_many_values ... ok
+</span></span><span class=line><span class=cl>test tests::test_sum_all_no_values ... ok
+</span></span><span class=line><span class=cl>test tests::test_sum_all_one_value ... ok
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+</span></span></code></pre></div><p>Great!</p><p>But before we go, there is <em>one key detail</em> I glanced over. This detail is critical to ensure that your tests always do the right thing:</p><p><strong>IMPORTANT: The test builder has to be annotated with <code>#[must_use]</code>.</strong> You may want also want to accompany that with the optional <code>#[deny(warnings)]</code>.</p><p>You see: given the above design, it&rsquo;s all too easy to forget to call <code>run()</code> on the test builder&mdash;and if you forget to do that, the test will do nothing and will always pass. That&rsquo;s too risky for test code. Fortunately, by using the <code>#[must_use]</code> annotation on the builder type, the compiler will catch such problems.</p><p>To witness: if we remove the <code>run()</code> call from any of the tests above and try to build:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>error: unused `SumAllTest` that must be used
+</span></span><span class=line><span class=cl>  --&gt; src/tests.rs:33:5
+</span></span><span class=line><span class=cl>   |
+</span></span><span class=line><span class=cl>33 |     SumAllTest::expect(0);
+</span></span><span class=line><span class=cl>   |     ^^^^^^^^^^^^^^^^^^^^^^
+</span></span><span class=line><span class=cl>   |
+</span></span></code></pre></div><p>Rust fails the build and tells us that we forgot to consume the builder object. There is no way we can forget to call <code>run()</code> once we have initialized a <code>SumAllTest</code> object, so the test code will always be exercised.</p><hr><p>What do you think? Interesting? Problematic?</p><p>For a more realistic example, check out <a href=https://github.com/endbasic/endbasic/blob/bd15aa4f2ff44c7491e5890976725ddae465d5d6/core/src/console.rs#L703>EndBASIC <code>read_line</code>&rsquo;s own tests</a>.</p></article></div></div><div class="container post-links"><div class=row><div class="col mr-auto text-left"><span><a href=https://jmmv.dev/2020/11/endbasic-0.3.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ml-auto text-right"><span><a href=https://jmmv.dev/2020/12/unit-testing-a-console-app.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a></div><div class=col><a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a></div></div></div><div class="col-lg-8 my-2 d-none d-sm-block"><div class=row><div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Using+the+builder+pattern+to+define+test+scenarios&amp;url=https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Using+the+builder+pattern+to+define+test+scenarios&amp;u=https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Using+the+builder+pattern+to+define+test+scenarios+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2020%2F12%2Fbuilder-pattern-for-tests.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24></a></div></div></div></div><div class="row my-4" id=postCommentRow><div class=col><div class=media><img class=mr-3 src=/octicons/pencil.svg width=32px height=32px><div class="media-body container"><form method=post id=newPost><div class=row><div class="col my-1"><textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentEmail>Your email (optional):</label>
 <input type=text class=form-control type=email id=postCommentEmail>
-<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
-</div>
-</div>
-<div class=row id=postCommentError style=display:none>
-<div class="col mt-1 alert-danger">
-<p></p>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
-<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
-</div>
-<div class="container post-subscribe">
-<div class=row>
-<div class="col-sm-3 py-2">
-<div class=row>
-<div class="col px-2 text-center">
-<a rel=me href=https://mastodon.online/@jmmv>
-<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
-</div>
-</div>
-</div>
-<div class="col-sm-9 py-2">
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<div class=row>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
-<button type=submit class="btn btn-primary col-4">Subscribe</button>
-</div>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar d-none d-md-block">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-4 text-center">
-<p>
-<a rel=me href=https://mastodon.online/@jmmv>
-<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
-</a>
-</p>
-</div>
-<div class="col-sm-4 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-4 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li>
-<li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
-<li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
-<li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
-<li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
-<li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
-<li class=overflow-ellipsis><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
-<li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2023>2023</a> (3)
-<ul id=archive-year-2023 class=collapse>
-<li><a href=/archive.html#2023-03>March 2023</a> (2)</li>
-<li><a href=/archive.html#2023-01>January 2023</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (32)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-12>December 2022</a> (1)</li>
-<li><a href=/archive.html#2022-11>November 2022</a> (1)</li>
-<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
-<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
-<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
-<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
-<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
-<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
-<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col-4 order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col-8 order-1 mr-auto">
-<p>Copyright 2004&ndash;2023 Julio Merino</p>
-</div>
-</div>
-</footer>
-<script type=module>
-  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small></div></div><div class=row id=postCommentError style=display:none><div class="col mt-1 alert-danger"><p></p></div></div><div class="row newPostControls" style=display:none><button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small></div></form></div></div></div></div><script>function hidePostComment(){var t,e=document.getElementById("postCommentContent");e.rows=1,e.value="",t=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(t,function(e){e.style.display="none"})}function showPostComment(){var e,t=document.getElementById("postCommentContent");t.rows=5,e=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(e,function(e){e.style.display=""})}const form=document.querySelector("#newPost");form.onsubmit=function(e){e.preventDefault();let t=document.getElementById("postCommentAuthor").value,n=document.getElementById("postCommentEmail").value,s=document.getElementById("postCommentContent").value;postComment(t,n,s,hidePostComment)}</script></div><div class="container post-subscribe"><div class=row><div class="col-sm-3 py-2"><div class=row><div class="col px-2 text-center"><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon"></a></div><div class="col px-2 text-center"><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter"></a></div><div class="col px-2 text-center"><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></div></div></div><div class="col-sm-9 py-2"><form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post><div class=form-group><div class=row><input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
+<button type=submit class="btn btn-primary col-4">Subscribe</button></div></div></form></div></div></div></div><div class="col-md-3 sidebar d-none d-md-block"><div class=row><div class="col text-center p-2"><p><a href=/about.html class=clear-link><img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br><b>Julio Merino</b><br>Software Engineer<br><small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br><small>From Barcelona, living in Seattle</small></a></p><div class=row><div class="col-sm-4 text-center"><p><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon"></a></p></div><div class="col-sm-4 text-center"><p><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter"></a></p></div><div class="col-sm-4 text-center"><p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p></div></div><form action=https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add method=post><div class=form-group><input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button></div><small><span id=subscriber-count>0</span> subscribers</small></form></div></div><div class=row><div class=col><h2>Featured posts</h2><ul><li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li><li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li><li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li><li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li><li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li><li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li><li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li><li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li><li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li><li class=overflow-ellipsis><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li><li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li></ul></div></div><div class=row><div class=col><h2>Archive</h2><ul><li><a data-toggle=collapse href=#archive-year-2023>2023</a> (3)<ul id=archive-year-2023 class=collapse><li><a href=/archive.html#2023-03>March 2023</a> (2)</li><li><a href=/archive.html#2023-01>January 2023</a> (1)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2022>2022</a> (32)<ul id=archive-year-2022 class=collapse><li><a href=/archive.html#2022-12>December 2022</a> (1)</li><li><a href=/archive.html#2022-11>November 2022</a> (1)</li><li><a href=/archive.html#2022-10>October 2022</a> (1)</li><li><a href=/archive.html#2022-07>July 2022</a> (1)</li><li><a href=/archive.html#2022-06>June 2022</a> (2)</li><li><a href=/archive.html#2022-05>May 2022</a> (2)</li><li><a href=/archive.html#2022-04>April 2022</a> (4)</li><li><a href=/archive.html#2022-03>March 2022</a> (15)</li><li><a href=/archive.html#2022-02>February 2022</a> (4)</li><li><a href=/archive.html#2022-01>January 2022</a> (1)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2021>2021</a> (22)<ul id=archive-year-2021 class=collapse><li><a href=/archive.html#2021-11>November 2021</a> (2)</li><li><a href=/archive.html#2021-08>August 2021</a> (2)</li><li><a href=/archive.html#2021-07>July 2021</a> (5)</li><li><a href=/archive.html#2021-06>June 2021</a> (1)</li><li><a href=/archive.html#2021-04>April 2021</a> (2)</li><li><a href=/archive.html#2021-03>March 2021</a> (2)</li><li><a href=/archive.html#2021-02>February 2021</a> (3)</li><li><a href=/archive.html#2021-01>January 2021</a> (5)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2020>2020</a> (36)<ul id=archive-year-2020 class=collapse><li><a href=/archive.html#2020-12>December 2020</a> (4)</li><li><a href=/archive.html#2020-11>November 2020</a> (5)</li><li><a href=/archive.html#2020-10>October 2020</a> (5)</li><li><a href=/archive.html#2020-09>September 2020</a> (2)</li><li><a href=/archive.html#2020-08>August 2020</a> (6)</li><li><a href=/archive.html#2020-07>July 2020</a> (2)</li><li><a href=/archive.html#2020-06>June 2020</a> (2)</li><li><a href=/archive.html#2020-05>May 2020</a> (3)</li><li><a href=/archive.html#2020-04>April 2020</a> (2)</li><li><a href=/archive.html#2020-03>March 2020</a> (2)</li><li><a href=/archive.html#2020-02>February 2020</a> (1)</li><li><a href=/archive.html#2020-01>January 2020</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2019>2019</a> (24)<ul id=archive-year-2019 class=collapse><li><a href=/archive.html#2019-12>December 2019</a> (8)</li><li><a href=/archive.html#2019-11>November 2019</a> (6)</li><li><a href=/archive.html#2019-10>October 2019</a> (1)</li><li><a href=/archive.html#2019-09>September 2019</a> (2)</li><li><a href=/archive.html#2019-03>March 2019</a> (2)</li><li><a href=/archive.html#2019-02>February 2019</a> (3)</li><li><a href=/archive.html#2019-01>January 2019</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2018>2018</a> (25)<ul id=archive-year-2018 class=collapse><li><a href=/archive.html#2018-07>July 2018</a> (3)</li><li><a href=/archive.html#2018-06>June 2018</a> (7)</li><li><a href=/archive.html#2018-05>May 2018</a> (2)</li><li><a href=/archive.html#2018-04>April 2018</a> (2)</li><li><a href=/archive.html#2018-03>March 2018</a> (8)</li><li><a href=/archive.html#2018-02>February 2018</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2017>2017</a> (6)<ul id=archive-year-2017 class=collapse><li><a href=/archive.html#2017-10>October 2017</a> (1)</li><li><a href=/archive.html#2017-08>August 2017</a> (1)</li><li><a href=/archive.html#2017-07>July 2017</a> (1)</li><li><a href=/archive.html#2017-02>February 2017</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2016>2016</a> (8)<ul id=archive-year-2016 class=collapse><li><a href=/archive.html#2016-09>September 2016</a> (1)</li><li><a href=/archive.html#2016-05>May 2016</a> (1)</li><li><a href=/archive.html#2016-04>April 2016</a> (1)</li><li><a href=/archive.html#2016-03>March 2016</a> (2)</li><li><a href=/archive.html#2016-02>February 2016</a> (1)</li><li><a href=/archive.html#2016-01>January 2016</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2015>2015</a> (17)<ul id=archive-year-2015 class=collapse><li><a href=/archive.html#2015-12>December 2015</a> (2)</li><li><a href=/archive.html#2015-10>October 2015</a> (2)</li><li><a href=/archive.html#2015-09>September 2015</a> (3)</li><li><a href=/archive.html#2015-06>June 2015</a> (2)</li><li><a href=/archive.html#2015-05>May 2015</a> (3)</li><li><a href=/archive.html#2015-04>April 2015</a> (1)</li><li><a href=/archive.html#2015-03>March 2015</a> (1)</li><li><a href=/archive.html#2015-02>February 2015</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2014>2014</a> (12)<ul id=archive-year-2014 class=collapse><li><a href=/archive.html#2014-11>November 2014</a> (2)</li><li><a href=/archive.html#2014-05>May 2014</a> (3)</li><li><a href=/archive.html#2014-03>March 2014</a> (1)</li><li><a href=/archive.html#2014-02>February 2014</a> (3)</li><li><a href=/archive.html#2014-01>January 2014</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2013>2013</a> (62)<ul id=archive-year-2013 class=collapse><li><a href=/archive.html#2013-12>December 2013</a> (7)</li><li><a href=/archive.html#2013-11>November 2013</a> (7)</li><li><a href=/archive.html#2013-10>October 2013</a> (7)</li><li><a href=/archive.html#2013-09>September 2013</a> (13)</li><li><a href=/archive.html#2013-08>August 2013</a> (9)</li><li><a href=/archive.html#2013-07>July 2013</a> (10)</li><li><a href=/archive.html#2013-06>June 2013</a> (9)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2012>2012</a> (29)<ul id=archive-year-2012 class=collapse><li><a href=/archive.html#2012-10>October 2012</a> (1)</li><li><a href=/archive.html#2012-09>September 2012</a> (1)</li><li><a href=/archive.html#2012-08>August 2012</a> (3)</li><li><a href=/archive.html#2012-07>July 2012</a> (2)</li><li><a href=/archive.html#2012-06>June 2012</a> (2)</li><li><a href=/archive.html#2012-05>May 2012</a> (3)</li><li><a href=/archive.html#2012-04>April 2012</a> (1)</li><li><a href=/archive.html#2012-03>March 2012</a> (1)</li><li><a href=/archive.html#2012-02>February 2012</a> (10)</li><li><a href=/archive.html#2012-01>January 2012</a> (5)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2011>2011</a> (60)<ul id=archive-year-2011 class=collapse><li><a href=/archive.html#2011-12>December 2011</a> (4)</li><li><a href=/archive.html#2011-11>November 2011</a> (4)</li><li><a href=/archive.html#2011-10>October 2011</a> (5)</li><li><a href=/archive.html#2011-09>September 2011</a> (11)</li><li><a href=/archive.html#2011-08>August 2011</a> (6)</li><li><a href=/archive.html#2011-07>July 2011</a> (4)</li><li><a href=/archive.html#2011-06>June 2011</a> (6)</li><li><a href=/archive.html#2011-05>May 2011</a> (6)</li><li><a href=/archive.html#2011-04>April 2011</a> (5)</li><li><a href=/archive.html#2011-03>March 2011</a> (2)</li><li><a href=/archive.html#2011-01>January 2011</a> (7)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2010>2010</a> (26)<ul id=archive-year-2010 class=collapse><li><a href=/archive.html#2010-12>December 2010</a> (7)</li><li><a href=/archive.html#2010-09>September 2010</a> (1)</li><li><a href=/archive.html#2010-07>July 2010</a> (1)</li><li><a href=/archive.html#2010-06>June 2010</a> (2)</li><li><a href=/archive.html#2010-05>May 2010</a> (5)</li><li><a href=/archive.html#2010-04>April 2010</a> (5)</li><li><a href=/archive.html#2010-03>March 2010</a> (3)</li><li><a href=/archive.html#2010-01>January 2010</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2009>2009</a> (31)<ul id=archive-year-2009 class=collapse><li><a href=/archive.html#2009-10>October 2009</a> (1)</li><li><a href=/archive.html#2009-09>September 2009</a> (1)</li><li><a href=/archive.html#2009-08>August 2009</a> (3)</li><li><a href=/archive.html#2009-07>July 2009</a> (2)</li><li><a href=/archive.html#2009-06>June 2009</a> (4)</li><li><a href=/archive.html#2009-05>May 2009</a> (6)</li><li><a href=/archive.html#2009-04>April 2009</a> (2)</li><li><a href=/archive.html#2009-03>March 2009</a> (4)</li><li><a href=/archive.html#2009-01>January 2009</a> (8)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2008>2008</a> (61)<ul id=archive-year-2008 class=collapse><li><a href=/archive.html#2008-12>December 2008</a> (1)</li><li><a href=/archive.html#2008-11>November 2008</a> (4)</li><li><a href=/archive.html#2008-10>October 2008</a> (6)</li><li><a href=/archive.html#2008-09>September 2008</a> (1)</li><li><a href=/archive.html#2008-08>August 2008</a> (6)</li><li><a href=/archive.html#2008-07>July 2008</a> (14)</li><li><a href=/archive.html#2008-06>June 2008</a> (3)</li><li><a href=/archive.html#2008-05>May 2008</a> (1)</li><li><a href=/archive.html#2008-04>April 2008</a> (3)</li><li><a href=/archive.html#2008-03>March 2008</a> (3)</li><li><a href=/archive.html#2008-02>February 2008</a> (9)</li><li><a href=/archive.html#2008-01>January 2008</a> (10)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2007>2007</a> (86)<ul id=archive-year-2007 class=collapse><li><a href=/archive.html#2007-12>December 2007</a> (4)</li><li><a href=/archive.html#2007-11>November 2007</a> (7)</li><li><a href=/archive.html#2007-10>October 2007</a> (2)</li><li><a href=/archive.html#2007-09>September 2007</a> (8)</li><li><a href=/archive.html#2007-08>August 2007</a> (6)</li><li><a href=/archive.html#2007-07>July 2007</a> (15)</li><li><a href=/archive.html#2007-06>June 2007</a> (15)</li><li><a href=/archive.html#2007-05>May 2007</a> (4)</li><li><a href=/archive.html#2007-04>April 2007</a> (10)</li><li><a href=/archive.html#2007-03>March 2007</a> (8)</li><li><a href=/archive.html#2007-02>February 2007</a> (1)</li><li><a href=/archive.html#2007-01>January 2007</a> (6)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2006>2006</a> (103)<ul id=archive-year-2006 class=collapse><li><a href=/archive.html#2006-12>December 2006</a> (4)</li><li><a href=/archive.html#2006-11>November 2006</a> (3)</li><li><a href=/archive.html#2006-10>October 2006</a> (7)</li><li><a href=/archive.html#2006-09>September 2006</a> (6)</li><li><a href=/archive.html#2006-08>August 2006</a> (13)</li><li><a href=/archive.html#2006-07>July 2006</a> (4)</li><li><a href=/archive.html#2006-06>June 2006</a> (13)</li><li><a href=/archive.html#2006-05>May 2006</a> (7)</li><li><a href=/archive.html#2006-04>April 2006</a> (9)</li><li><a href=/archive.html#2006-03>March 2006</a> (6)</li><li><a href=/archive.html#2006-02>February 2006</a> (13)</li><li><a href=/archive.html#2006-01>January 2006</a> (18)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2005>2005</a> (129)<ul id=archive-year-2005 class=collapse><li><a href=/archive.html#2005-12>December 2005</a> (9)</li><li><a href=/archive.html#2005-11>November 2005</a> (7)</li><li><a href=/archive.html#2005-10>October 2005</a> (23)</li><li><a href=/archive.html#2005-09>September 2005</a> (10)</li><li><a href=/archive.html#2005-08>August 2005</a> (14)</li><li><a href=/archive.html#2005-07>July 2005</a> (5)</li><li><a href=/archive.html#2005-06>June 2005</a> (12)</li><li><a href=/archive.html#2005-05>May 2005</a> (6)</li><li><a href=/archive.html#2005-04>April 2005</a> (6)</li><li><a href=/archive.html#2005-03>March 2005</a> (13)</li><li><a href=/archive.html#2005-02>February 2005</a> (11)</li><li><a href=/archive.html#2005-01>January 2005</a> (13)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2004>2004</a> (84)<ul id=archive-year-2004 class=collapse><li><a href=/archive.html#2004-12>December 2004</a> (9)</li><li><a href=/archive.html#2004-11>November 2004</a> (6)</li><li><a href=/archive.html#2004-10>October 2004</a> (11)</li><li><a href=/archive.html#2004-09>September 2004</a> (19)</li><li><a href=/archive.html#2004-07>July 2004</a> (29)</li><li><a href=/archive.html#2004-06>June 2004</a> (10)</li></ul></li></ul></div></div></div></div></div><footer class=container><div class=row><div class="col-4 order-2 texr-right"><p class=float-right><a href=#>Back to top</a></p></div><div class="col-8 order-1 mr-auto"><p>Copyright 2004&ndash;2023 Julio Merino</p></div></div></footer><script type=module>
+  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.9a47b323ba8f681c34c2db58e62eebd208ed54394a41b1f8052eea144a874915.js";
 
   var batchClient = new BatchClient(SITE_ID);
-  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
+  batchClient.doAll({
+    put_request: true, get_comments: true, get_subscriber_count: true, get_votes: true });
 
   window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
   window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
@@ -687,9 +101,4 @@ Software Engineer<br>
 
   addAnchorsToHeaders();
   addElementClasses();
-</script>
-<noscript>
-<img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEyL2J1aWxkZXItcGF0dGVybi1mb3ItdGVzdHMuaHRtbA==/stamp.gif" style=display:none>
-</noscript>
-</body>
-</html>
+</script><noscript><img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIwLzEyL2J1aWxkZXItcGF0dGVybi1mb3ItdGVzdHMuaHRtbA==/stamp.gif" style=display:none></noscript></body></html>

@@ -1,1164 +1,529 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<meta property="twitter:site" content="@jmmv">
-<title>Remembering Buildtool - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="Remembering Buildtool - Julio Merino (jmmv.dev)">
-<meta property="twitter:title" content="Remembering Buildtool - Julio Merino (jmmv.dev)">
-<meta name=description content="Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&amp;mdash;20 years ago&amp;mdash;and became a pkgsrc contributor. Packaging software for NetBSD made me fight various build systems and, in particular, experience the pains of debugging the GNU Autotools.
-Around that same time, I was also writing small tools here and there. Out of inertia, I used the GNU Autotools for these and, the more I used them, the more I saw an opportunity for improvement.">
-<meta property="og:description" content="Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&amp;mdash;20 years ago&amp;mdash;and became a pkgsrc contributor. Packaging software for NetBSD made me fight various build systems and, in particular, experience the pains of debugging the GNU Autotools.
-Around that same time, I was also writing small tools here and there. Out of inertia, I used the GNU Autotools for these and, the more I used them, the more I saw an opportunity for improvement.">
-<meta property="twitter:description" content="Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&amp;mdash;20 years ago&amp;mdash;and became a pkgsrc …">
-<meta name=author content="Julio Merino">
-<meta property="twitter:creator" content="@jmmv">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2022/05/remembering-buildtool.html">
-<meta property="og:type" content="blog">
-<meta property="twitter:card" content="summary">
-<link rel=canonical href=https://jmmv.dev/2022/05/remembering-buildtool.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.ce628ad32d280a2570d17aa4a7e3cb429d327b6b044032d289bf9e395f5365ba.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
-<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
-</head>
-<body>
-<header class=site-header>
-<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Remembering Buildtool - Julio Merino (jmmv.dev)</title><meta property="og:title" content="Remembering Buildtool - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Remembering Buildtool - Julio Merino (jmmv.dev)"><meta name=description content="Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&amp;mdash;20 years ago&amp;mdash;and became a pkgsrc contributor. Packaging software for NetBSD made me fight various build systems and, in particular, experience the pains of debugging the GNU Autotools.
+Around that same time, I was also writing small tools here and there. Out of inertia, I used the GNU Autotools for these and, the more I used them, the more I saw an opportunity for improvement."><meta property="og:description" content="Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&amp;mdash;20 years ago&amp;mdash;and became a pkgsrc contributor. Packaging software for NetBSD made me fight various build systems and, in particular, experience the pains of debugging the GNU Autotools.
+Around that same time, I was also writing small tools here and there. Out of inertia, I used the GNU Autotools for these and, the more I used them, the more I saw an opportunity for improvement."><meta property="twitter:description" content="Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&amp;mdash;20 years ago&amp;mdash;and became a pkgsrc …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.111.3"><meta property="og:url" content="https://jmmv.dev/2022/05/remembering-buildtool.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2022/05/remembering-buildtool.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.2e4a4a3a8db91cf527e242ade6346a52e880c9075e469c82b2c0e7d293642165.css><link rel=stylesheet href=/css/chroma.css><meta property="og:image" content="/images/favicons/favicon-1200x1200.png"><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><header class=site-header><nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary"><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino</a>
 <button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
-</nav>
-</header>
-<div class=page-header>
-<div class=container>
-<h1>Remembering Buildtool</h1>
-<p>May 13, 2022 &#183;
+<span class=navbar-toggler-icon></span></button><div class="collapse navbar-collapse" id=navbarSupportedContent><ul class="navbar-nav mr-auto"><li class=nav-item><a class=nav-link href=/about.html>About</a></li><li class=nav-item><a class=nav-link href=/essays.html>Essays</a></li><li class=nav-item><a class=nav-link href=/resume.html>Resume</a></li><li class=nav-item><a class=nav-link href=/software.html>Software</a></li></ul><ul class="navbar-nav mr-4"><li class=nav-item><a class=nav-link href=/archive.html>Archive</a></li><li class=nav-item><a class=nav-link href=/series.html>Series</a></li><li class=nav-item><a class=nav-link href=/tags.html>Tags</a></li></ul><form class=form-inline method=get role=search action=https://www.google.com/search><div class=input-group><input type=search name=query class=form-control placeholder=Search aria-label=Search><div class=input-group-append><button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg></button></div></div><input type=hidden name=sitesearch value=https://jmmv.dev/></form></div></nav></header><div class=page-header><div class=container><h1>Remembering Buildtool</h1><p>May 13, 2022 &#183;
 About 21 minutes
 &#183;
 Tags:
-<a class=text-reset href=/tags/buildtool>buildtool</a></p>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
-<article><p>Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&mdash;20 years ago&mdash;and became a pkgsrc contributor. Packaging software for NetBSD made me <a href=/2005/03/making-packager-friendly-software-1.html>fight various build systems</a> and, in particular, experience the pains of debugging the GNU Autotools.</p>
-<p>Around that same time, I was also writing <a href=/software/menu2wm.html>small</a> <a href=/software/vcsme.html>tools</a> <a href=/software/xmlcatmgr.html>here</a> <a href=/software/sysbuild.html>and</a> <a href=/software/pkg_comp.html>there</a>. Out of inertia, I used the GNU Autotools for these and, the more I used them, the more I saw an opportunity for improvement. The GNU Autotools were slow, hard to deal with, and they bloated every package. Why did you have to ship heavy <code>configure</code>, <code>Makefile.in</code> and <code>libtool</code> scripts in every single distribution file when you could instead rely on a few system-wide scripts? And thus <a href=/software/buildtool.html>Buildtool</a> was born in the summer of 2002, just before I started college, and I worked on it for about two years.</p>
-<p>The Buildtool project recently came to mind and I noticed that <a href=http://buildtool.sourceforge.net/>its website is still up and running</a> (kudos to SourceForge for that), so I poked around a bit. Just by looking at the <a href=http://buildtool.sourceforge.net/docs/manual/index.html>User&rsquo;s Manual</a>, I&rsquo;m amazed by how comprehensive the tool is and makes me jealous of how much free time I had back then. Since noticing this, I had been meaning to try the tool again and write a post, and finally got to it just yesterday. So let&rsquo;s take a tour of what Buildtool was and what it achieved.</p>
-<h1 id=history>History</h1>
-<p>Buildtool was originally inspired by the FreeBSD and NetBSD build systems. The idea was to leverage system-wide generic build logic files to build libraries and binaries&mdash;just like <code>bsd.lib.mk</code> and <code>bsd.prog.mk</code> provide&mdash;and have arbitrary packages rely on those installed files. As an end user, you would have to install Buildtool first before you could build any other package, but you would only pay the cost of the build infrastructure once. While this paradigm is accepted today, it was quite a departure from the traditions of Unix systems in the early 2000s.</p>
-<p>Buildtool&rsquo;s first version in 2002 was precisely what the NetBSD build system was. The 0.1 release shipped with a copy of NetBSD&rsquo;s <code>make</code> tool, renamed as <code>bt_make</code>, along with a few <code>mk</code> files to build common targets. That release also included a rudimentary GNU Autoconf-like tool.</p>
-<p>Later on, Buildtool grew a <code>bt_wrap</code> helper utility to deal with platform incompatibilities when invoking common tools such as the compiler. This idea was inspired by pkgsrc&rsquo;s buildlink3 and wrappers infrastructure, which to this day still wrap the compiler and linker to paper over platform-specific oddities. Reading through the release notes, I can see how this helped make Buildtool work on Cygwin and Mac OS X systems of the day.</p>
-<p>Towards the latest releases of the project by 2004, things took a significant turn: <code>bt_make</code> and <code>bt_wrap</code> were removed in favor of <code>bt_logic</code>, a custom-made build system purely based on shell scripts. If I recall correctly, the first version of <code>bt_logic</code> was written in Perl, but it never shipped because having Buildtool rely on the gigantic Perl dependency was a non-starter.</p>
-<p>By the beginning of 2005, I cancelled the project for the reasons I&rsquo;ll cover at the end of this post.</p>
-<h1 id=installing-buildtool>Installing Buildtool</h1>
-<p>The last release of Buildtool was 0.16, which was published on July 4th, 2004 (about 18 years ago) and is still available in the <a href=http://buildtool.sourceforge.net/download.html>Downloads</a> page if you want to try it out.</p>
-<p>Buildtool itself was written in about 10,000 lines shell, but the distribution includes a slimmed down version of NetBSD&rsquo;s <code>/bin/sh</code> named <code>bt_sh</code>. The raison d&rsquo;être for <code>bt_sh</code> was pretty much the same as Debian&rsquo;s <a href=https://manpages.debian.org/buster/dash/dash.1.en.html><code>dash</code></a>: a portable, high-performance and standards-compliant shell interpreter to run scripts. <code>bt_sh</code> helped keep Buildtool&rsquo;s implementation simpler as it did not have to deal with <code>sh</code> platform incompatibilities (Solaris' version was a pain). Furthermore, <code>bt_sh</code> also ensured that the users of Buildtool writing their own build scripts wouldn&rsquo;t have to <a href=https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.71/html_node/Portable-Shell.html>care about shell portability</a>, as is the case when writing <code>configure.ac</code> scripts.</p>
-<p>The reason I&rsquo;m mentioning <code>bt_sh</code> is because trying to build Buildtool 0.16 on a FreeBSD 13 system today fails due to a couple of bugs in the C code. Fixing those bugs is a matter of avoiding trivial conflicts among repeated symbols in different modules. After those simple fixes, Buildtool installs successfully:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/buildtool-0.16$ ./configure -p /tmp/local
-configuring for buildtool-0.16
-checking for machine type: amd64
-checking for program gcc: not found
-checking for program cc: /usr/bin/cc
-checking whether /usr/bin/cc is GNU C: yes
-[...]
-
-===========================================================================
-BUILDTOOL 0.16 CONFIGURATION SUMMARY
-
-    Installation prefix: /tmp/local
-    Configuration directory: /tmp/local/etc/buildtool
-
-    Type `make&#39; to start the build.
-    Type `make install&#39; to install, only _after_ the build has finished.
-
-===========================================================================
-
-/tmp/buildtool-0.16$ make &amp;&amp; make install
-[...]
-===========================================================================
-    Buildtool 0.16 has been successfully installed!
-
-    Please take some time to read the `Testing&#39; section in the README file
-    to easily provide useful feedback.  This will not take more than ten
-    minutes, but you will be contributing to the project.
-
-    As part of the post installation stage, you should now create a system
-    configuration file for the bt_config module, containing cached results
-    for several common checks run by many configure scripts.
-    For an automated setup, issue the following commands:
-        mkdir -p /tmp/local/etc/buildtool
-        cp /tmp/local/share/buildtool/templates/bt_config.conf.in \
-            /tmp/local/etc/buildtool/bt_config.conf.in
-        /tmp/local/bin/buildtool swcgen
-
-    Thanks for choosing Buildtool.
-===========================================================================
-</code></pre></div><h1 id=post-installation-configuration>Post-installation configuration</h1>
-<p>The installation process quoted above tells us that we should create a system-wide configuration file and then run <code>buildtool swcgen</code>, which stands for &ldquo;System-wide configuration generator&rdquo;. Let&rsquo;s poke at that file and try to follow the given steps.</p>
-<p>Here is what <code>/tmp/local/share/buildtool/templates/bt_config.conf.in</code> has to say:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=c1># $Id: bt_config.conf.in,v 1.8 2004/06/26 18:42:05 jmmv Exp $</span>
-<span class=c1>#</span>
-<span class=c1># bt_config.conf - System wide configuration</span>
-<span class=c1>#</span>
-<span class=c1># File automatically generated by @BT_PKG_NAME@, version @BT_PKG_VERSION@.</span>
-<span class=c1># Timestamp: @TIMESTAMP@</span>
-<span class=c1>#</span>
-<span class=c1># bt_config will open this file from @BT_DIR_ETC@.</span>
-<span class=c1>#</span>
-
-<span class=c1># C/C++ environments (leave both for now, all other macros rely on them).</span>
-bt_cache_env c cxx
-
-<span class=c1># Basic programs (C/C++ utilities handled by environments).</span>
-bt_cache_prog info lex m4 sh yacc
-
-<span class=c1># Header files</span>
-bt_cache_hdr sys/cdefs.h sys/utsname.h err.h poll.h stdarg.h stdbool.h ulimit.h
-<span class=c1># C++ only header files</span>
-bt_cache_hdr bitset deque fstream iostream list map queue <span class=nb>set</span> stack string <span class=se>\
-</span><span class=se></span>             vector
-
-<span class=c1># Basic libraries</span>
-bt_cache_lib m
-
-<span class=c1># System specific functions</span>
-bt_cache_func setenv strerror stricmp strlcat strlcpy strncat strncpy strndup <span class=se>\
-</span><span class=se></span>              strftime poll readdir_r <span class=nb>ulimit</span> uname vfork vsnprintf
-
-<span class=c1># Types</span>
-bt_cache_type gid_t int8_t int16_t int32_t int64_t size_t uid_t uint8_t <span class=se>\
-</span><span class=se></span>              uint16_t uint32_t uint64_t u_int8_t u_int16_t u_int32_t u_int64_t
-
-<span class=c1># Type sizes</span>
-bt_cache_sizeof char short int long <span class=s2>&#34;long long&#34;</span>
-
-<span class=c1># Miscellaneous results</span>
-bt_cache_attribute
-</code></pre></div><p>Interesting. This configuration file is all about &ldquo;caching&rdquo;. But caching what?</p>
-<p>You see, one of the problems I had with the GNU Autotools is how every single package I built and installed on my machine had to go through a very costly <code>configure</code> invocation. It was mind-blowing to me (and still is <em>today</em>) how many CPU hours the world burns on a day-to-day basis checking if a system has standard headers and functions. Couldn&rsquo;t we check just <em>once</em> and have all packages reuse the results? If the system has <code>vfork</code>, for example, it will continue to have that function for the foreseeable future; there is no need to test for it over and over again.</p>
-<p>That&rsquo;s precisely what the <code>buildtool swcgen</code> command addresses: it executes all of the checks specified in the configuration file and installs those cached results for later reuse. Let&rsquo;s see what the invocation looks like:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>$ cp /tmp/local/share/buildtool/templates/bt_config.conf.in \
-    /tmp/local/etc/buildtool/bt_config.conf.in
-$ /tmp/local/bin/buildtool swcgen
-Input:  /tmp/local/etc/buildtool/bt_config.conf.in
-Output: /tmp/local/etc/buildtool/bt_config.conf
-
-bt_swcgen: running bt_wizard to create temporary project skeleton
-Entering directory /tmp/bt_swcgen.1802... done.
-Creating directories... src
-Creating Generic.bt... done.
-Creating README.bt... done.
-Creating src/Logic.bt... done.
-bt_swcgen: generating configuration script and cache
-bt_config: starting configuration for bt_swcgen-0.16
-checking for program gcc... not found.
-checking for program cc... /usr/bin/cc
-checking for C compiler name... gnu
-checking for C compiler version... 13.0.0
-checking for program cpp... /usr/bin/cpp
-checking for program ld... /usr/bin/ld
-[...]
-checking for program sh... /bin/sh
-checking for program yacc... /usr/bin/yacc
-checking for c header sys/cdefs.h... yes
-checking for cxx header sys/cdefs.h... yes
-checking for c header sys/utsname.h... yes
-checking for cxx header sys/utsname.h... yes
-checking for c header err.h... yes
-checking for cxx header err.h... yes
-[...]
-checking for c function vfork... yes
-checking for cxx function vfork... no
-checking for c function vsnprintf... yes
-checking for cxx function vsnprintf... no
-checking for c type gid_t... yes
-checking for cxx type gid_t... yes
-checking for c type int8_t... yes
-checking for cxx type int8_t... yes
-[...]
-bt_config: creating bt_output
-bt_config: generating configuration environment
-bt_config: generating package dependent build logic
-
-===========================================================================
-Configuration summary for bt_swcgen-0.16:
-
-    Prefix is: /usr/local
-    Developer mode: yes
-    Install documentation: yes
-    Static libraries: no, Shared libraries: yes, rpath: yes
-
-===========================================================================
-
-bt_swcgen: creating system wide configuration file
-bt_output: creating /tmp/bt_swcgen.1802/conf
-bt_swcgen: /tmp/local/etc/buildtool/bt_config.conf created
-
-===========================================================================
-PLEASE NOTE THE FOLLOWING:
-
-    Installed: /tmp/local/etc/buildtool/bt_config.conf
-
-    By using a system wide configuration file for bt_config that stores
-    check results, you assume that they may get obsoleted with respect to
-    your system, specially after software updates.  Be careful to only
-    store results that are unlikely to change with time.  Anyway, you are
-    encouraged to re-run this program periodically to regenerate the file
-    with new results.
-
-    If a third party program fails to configure after a check that shows
-    the `(cached)&#39; string in it, try to pass the `--ignore-sw-config&#39;
-    flag to bt_config before thinking it is a bug in your system or in
-    the package.  DO NOT DISTURB SOFTWARE AUTHORS BEFORE DOUBLE CHECKING
-    THAT THERE IS A PROBLEM IN THEIR SOFTWARE.  YOU HAVE BEEN WARNED.
-===========================================================================
-</code></pre></div><p>Pretty impressive that this 18-year old code still works today, and running this shows precisely the problem that this was supposed to solve: computing these results took about 15 seconds on my modest server, and those are 15 seconds you would pay to build most software packages. When you are bulk-building all binary packages for a source-bootstrapped system (the common case in the BSD world), those quickly add up.</p>
-<p>By the way: Autoconf supports this same feature although I did not discover it until later. <a href=https://pkgsrc.se/pkgtools/autoswc><code>autoswc</code></a> is a follow-up tool I created for pkgsrc to implement this same idea. Using autoswc proved to be a nice speedup for daily operations when I was still an active pkgsrc maintainer. I suspect that most people are still unaware of this Autoconf feature, unfortunately.</p>
-<h1 id=commands-summary>Commands summary</h1>
-<p>Now that Buildtool is installed and configured, let&rsquo;s poke around to see what it has to offer:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>$ /tmp/local/bin/buildtool --help
-buildtool version 0.16
-usage: buildtool [options] target [target_options]
-
-Copyright (c) 2002, 2003, 2004 Julio M. Merino Vidal.
-This program is licensed under the terms of the BSD license.
-
-Available options:
-    {-h,--help}       Show detailed usage (this text).
-    {-v,--version}    Show version number.
-    {-w,--warnings}   Enable bt_sh warning messages.
-
-Available targets:
-    build       Build the package.
-    clean       Soft clean the package (keeps configuration data).
-    cleandir    Hard clean the package.
-    config      Automatically configure a package.
-    dist        Generate a distribution file.
-    deinstall   Deinstalls the package.
-    doc         Read build-time package documentation.
-    install     Installs the package.
-    lint        Validate the package according to standards.
-    pkgflags    Show compilation flags for an installed package.
-    siteinfo    Get site specific configuration details.
-    swcgen      Aid with creation of system-wide configuration files.
-    test        Run tests specific to the package after a successful build.
-    wizard      Use an interactive wizard to create initial project files.
-
-See buildtool(1) for more information.
-</code></pre></div><p>Pretty standard output for a subcommand-based utility, but I can already see myself here. <a href=/2013/08/cli-design-series-introduction.html>My style</a> in developing command-line tools hasn&rsquo;t changed much since then.</p>
-<p>Anyhow. From the output above, we can distill the following command groups:</p>
-<ul>
-<li><code>config</code>: A configuration command to let each package discover system-wide features, obviously inspired by GNU Autoconf.</li>
-<li><code>build</code>, <code>clean</code>, <code>cleandir</code>, <code>dist</code>, <code>deinstall</code>, <code>install</code>, <code>test</code>: Build-related commands, some of which (like <code>dist</code>) are inspired by GNU Automake.</li>
-<li><code>doc</code>: An interactive documentation viewer for a package&rsquo;s <code>README</code>, <code>INSTALL</code>, etc. distribution documents. Interesting.</li>
-<li><code>pkgflags</code>: A replacement for the heavy-weight <code>pkg-config</code>. These days we have <a href=http://pkgconf.org/>pkgconf</a> instead, which is compatible with <code>pkg-config</code>.</li>
-<li><code>wizard</code>: An interactive tool to create a new package, akin to what <code>cargo init</code> would offer today.</li>
-</ul>
-<h1 id=demo>Demo</h1>
-<p>Alright. Let&rsquo;s now use Buildtool&rsquo;s package creation wizard to initialize a new demo project. The wizard is interactive so I&rsquo;m just going to post the completed output of what I typed:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>$ mkdir /tmp/demo
-$ cd /tmp/demo
-$ /tmp/local/bin/buildtool wizard
-Welcome to Buildtool&#39;s Wizard
------------------------------
-
-This module will help you to set up a basic directory structure
-for your project, based on your choices.
-
-Each question has associated a default answer, shown inside the
-brackets.  If you hit [RETURN] leaving a question in blank, it
-will take the default value.
-
-Project definitions:
-- Unix name [foobar]? demo
-- Initial version [0.1]?
-- License [bsd]?
-- Maintainer&#39;s email [foo@bar.net]? julio@meroh.net
-- Homepage (if any) []?
-- Short comment [Sample package]? Remembering Buildtool
-
-Code details:
-- Will this package provide one or more programs [y]?
-- Will this package provide one or more libraries [n]? y
-- Will you use the C language [y]?
-- Will you use the C++ language [n]?
-- Will you use CVS [y]? n
-
-Dependancies:
-- Do you need pkgconfig (not bt_pkgflags) [n]?
-- Do you need threads [n]?
-- Do you need an X Window System [n]?
-- Do you need awk [n]?
-- Do you need a lexical analyzer [n]?
-- Do you need a LARL parser generator [n]?
-
-Begin process:
-- Where should files be created [.]?
-
-Creating directories... src data lib
-Creating Generic.bt... done.
-Creating README.bt... done.
-Creating src/Logic.bt... done.
-Creating lib/Logic.bt... done.
-Creating data/demo.bpf.in... done.
-Creating data/Logic.bt... done.
-</code></pre></div><p>This asked many more questions than I expected. Looks like I implemented support for many different things.</p>
-<p>After completing the wizard, we are left with these files:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ find . -type f | sort
-./Generic.bt
-./README.bt
-./data/Logic.bt
-./data/demo.bpf.in
-./lib/Logic.bt
-./src/Logic.bt
-</code></pre></div><p>From the looks of it, we have a top-level configuration file called <code>Generic.bt</code>, a mysterious <code>data</code> directory with a <code>bpf</code> file, a <code>lib</code> directory to contain the library we&rsquo;ll write, and a <code>src</code> directory to contain the code of the program we&rsquo;ll write.</p>
-<h2 id=the-top-level-genericbt-file>The top-level Generic.bt file</h2>
-<p>First, let&rsquo;s look at the top-level <code>Generic.bt</code> file:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=c1>#</span>
-<span class=c1># Buildtool Generic Script</span>
-<span class=c1>#</span>
-
-defs<span class=o>()</span> <span class=o>{</span>
-    <span class=nv>BT_REQUIRE</span><span class=o>=</span><span class=s2>&#34;0.16&#34;</span>
-
-    <span class=nv>BT_PKG_NAME</span><span class=o>=</span><span class=s2>&#34;demo&#34;</span>
-    <span class=nv>BT_PKG_VERSION</span><span class=o>=</span><span class=s2>&#34;0.1&#34;</span>
-    <span class=nv>BT_PKG_LICENSE</span><span class=o>=</span><span class=s2>&#34;bsd&#34;</span>
-
-    <span class=nv>BT_PKG_MAINTAINER</span><span class=o>=</span><span class=s2>&#34;julio@meroh.net&#34;</span>
-    <span class=nv>BT_PKG_COMMENT</span><span class=o>=</span><span class=s2>&#34;Remembering Buildtool&#34;</span>
-<span class=o>}</span>
-
-config_init<span class=o>()</span> <span class=o>{</span>
-<span class=o>}</span>
-
-config<span class=o>()</span> <span class=o>{</span>
-    bt_check_env_c
-
-    bt_generate_output data/demo.bpf
-    bt_generate_configh
-<span class=o>}</span>
-
-docs<span class=o>()</span> <span class=o>{</span>
-    bt_doc CHANGES <span class=s2>&#34;Major changes between package versions&#34;</span>
-    bt_doc PEOPLE <span class=s2>&#34;Authors and contributors&#34;</span>
-    bt_doc README <span class=s2>&#34;General documentation&#34;</span>
-    bt_doc TODO <span class=s2>&#34;Missing things&#34;</span>
-<span class=o>}</span>
-
-logic<span class=o>()</span> <span class=o>{</span>
-    bt_target  lib data src
-<span class=o>}</span>
-</code></pre></div><p><code>Generic.bt</code> is the package-wide file where it all begins. This file is composed of a collection of user-defined functions that tell Buildtool what to do:</p>
-<ul>
-<li><code>defs</code>: Describes the package&rsquo;s metadata, much like what <code>Cargo.toml</code>, <code>go.mod</code> or <code>package.json</code> do today in popular ecosystems.</li>
-<li><code>config_init</code> and <code>config</code>: Allow the package to request system feature checks. In other words, these contain what you would typically put in a <code>configure.ac</code> file with GNU Autoconf.</li>
-<li><code>docs</code>: Configures documentation files, consumed both by the build process and by the <code>buildtool doc</code> interactive viewer.</li>
-<li><code>logic</code>: The entry point to the build process, aka the equivalent of a top-level <code>Makefile.am</code> file.</li>
-</ul>
-<h2 id=creating-source-files>Creating source files</h2>
-<p>Before we can successfully build our demo, we have to perform a few edits to the source tree. The wizard didn&rsquo;t tell us we had to do any of these, so I encountered various failures while I played with the tool. Fear not, it wasn&rsquo;t too hard to get past these failures.</p>
-<p>First, let&rsquo;s create the top-level documents referenced by the <code>docs</code> function:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ touch CHANGES PEOPLE README TODO
-</code></pre></div><p>Next, let&rsquo;s look at what building the <code>lib</code> subdirectory will require by looking at the <code>lib/Logic.bt</code> build script:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>logic<span class=o>()</span> <span class=o>{</span>
-    bt_target demo
-
-    target_demo<span class=o>()</span> <span class=o>{</span>
-        <span class=nv>BT_LIB_MAJOR</span><span class=o>=</span><span class=m>0</span>
-        <span class=nv>BT_LIB_MINOR</span><span class=o>=</span><span class=m>1</span>
-        <span class=nv>BT_MANPAGES</span><span class=o>=</span><span class=s2>&#34;demo.1&#34;</span>
-        <span class=nv>BT_SOURCES</span><span class=o>=</span>func1.c
-        <span class=nv>BT_TYPE</span><span class=o>=</span>library
-
-        <span class=nv>BT_INCLUDESDIR</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_DIR_INC</span><span class=si>}</span><span class=s2>/demo&#34;</span>
-        <span class=nv>BT_INCLUDESDIR_demo_h</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_DIR_INC</span><span class=si>}</span><span class=s2>&#34;</span>
-        <span class=nv>BT_INCLUDES</span><span class=o>=</span><span class=s2>&#34;demo.h&#34;</span>
-    <span class=o>}</span>
-<span class=o>}</span>
-</code></pre></div><p>Based on this, let&rsquo;s create the files <code>lib</code> expects:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ cat &gt;lib/demo.h
-int func1(void);
-^D
-/tmp/demo$ cat &gt;lib/func1.c
-int func1(void) { return 42; }
-^D
-/tmp/demo$ touch lib/demo.1
-</code></pre></div><p>After that, let&rsquo;s do the same with the <code>src</code> subdirectory. Here is what the <code>src/Logic.bt</code> build script will require:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>logic<span class=o>()</span> <span class=o>{</span>
-    bt_target demo
-
-    target_demo<span class=o>()</span> <span class=o>{</span>
-        <span class=nv>BT_MANPAGES</span><span class=o>=</span><span class=s2>&#34;demo.1&#34;</span>
-        <span class=nv>BT_SOURCES</span><span class=o>=</span>main.c
-        <span class=nv>BT_TYPE</span><span class=o>=</span>program
-    <span class=o>}</span>
-<span class=o>}</span>
-</code></pre></div><p>And, as before, let&rsquo;s create the files <code>src</code> expects:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ cat &gt;src/main.c
-#include &lt;stdio.h&gt;
-#include &#34;lib/demo.h&#34;
-
-int main(void) {
-    printf(&#34;Calling library: %d\n&#34;, func1());
-    return 0;
-}
-^D
-/tmp/demo$ touch src/demo.1
-</code></pre></div><p>Finally, because we have made the binary in <code>src</code> depend on the library in <code>lib</code>, we have to express this dependency in the <code>src/Logic.bt</code> script. We can add these two lines to the <code>target_demo</code> function in <code>src/Logic.bt</code>:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=nv>BT_FLAGS_LD</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_FLAGS_LD</span><span class=si>}</span><span class=s2> -L../lib&#34;</span>
-<span class=nv>BT_LIBS</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_LIBS</span><span class=si>}</span><span class=s2> -ldemo&#34;</span>
-</code></pre></div><h2 id=configuring-the-demo>Configuring the demo</h2>
-<p>We are ready to go. Let&rsquo;s configure the demo project against our current system:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ /tmp/local/bin/buildtool config -p /tmp/root
-bt_config: loading system-wide configuration
-bt_config: starting configuration for demo-0.1
-checking for program gcc cc bcc... /usr/bin/cc (cached)
-checking for C compiler name... gnu (cached)
-checking for C compiler version... 13.0.0 (cached)
-checking for program cpp... /usr/bin/cpp (cached)
-checking for program ld... /usr/bin/ld (cached)
-checking for c header stdio.h... yes (cached)
-checking for c header sys/types.h... yes (cached)
-checking for c header sys/stat.h... yes (cached)
-checking for c header stdlib.h... yes (cached)
-checking for c header string.h... yes (cached)
-checking for c header unistd.h... yes (cached)
-checking for host system name... FreeBSD
-checking for host system type... FreeBSD-13.1-STABLE-amd64
-checking for program ar... /usr/bin/ar (cached)
-checking for program ranlib... /usr/bin/ranlib (cached)
-checking for program fastdep... not found.
-bt_config: creating bt_output
-bt_output: creating data/demo.bpf
-bt_config: generating C include header
-bt_config: generating configuration environment
-bt_config: generating package dependent build logic
-
-===========================================================================
-Configuration summary for demo-0.1:
-
-    Prefix is: /tmp/root
-    Developer mode: no
-    Install documentation: yes
-    Static libraries: no, Shared libraries: yes, rpath: yes
-
-===========================================================================
-</code></pre></div><p>Pretty standard <code>configure</code>-like output.</p>
-<p>What I want you to notice is how pretty much all results were cached. These results come from the system-wide cache we populated with <code>swcgen</code> after installing Buildtool, so running this step was almost instantaneous. Good time savings.</p>
-<h2 id=building-the-demo>Building the demo</h2>
-<p>With a successful configuration step, let&rsquo;s try to build:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ /tmp/local/bin/buildtool build
-bt_logic: entering directory `lib&#39; for `build&#39;
-[depend] func1.c -&gt; func1.dep
-c++: warning: treating &#39;c&#39; input as &#39;c++&#39; when in C++ mode, this behavior is deprecated [-Wdeprecated]
-[compile] /usr/bin/cc -I/tmp/demo/lib -I/tmp/demo -I/tmp/demo -fPIC -DPIC -shared -o func1.po -c /tmp/demo/lib/func1.c
-cc: warning: argument unused during compilation: &#39;-shared&#39; [-Wunused-command-line-argument]
-[link] /usr/bin/cc -Wl,-R/usr/local/lib -shared -Wl,-soname=libdemo.so.0 -o libdemo.so.0.1 func1.po
-[exec] ln -fs libdemo.so.0.1 libdemo.so.0
-[exec] ln -fs libdemo.so.0.1 libdemo.so
-bt_logic: leaving directory `lib&#39; for `build&#39;
-bt_logic: entering directory `data&#39; for `build&#39;
-bt_logic: leaving directory `data&#39; for `build&#39;
-bt_logic: entering directory `src&#39; for `build&#39;
-[depend] main.c -&gt; main.dep
-c++: warning: treating &#39;c&#39; input as &#39;c++&#39; when in C++ mode, this behavior is deprecated [-Wdeprecated]
-[compile] /usr/bin/cc -I/tmp/demo/src -I/tmp/demo -I/tmp/demo -fPIC -DPIC -shared -o main.po -c /tmp/demo/src/main.c
-cc: warning: argument unused during compilation: &#39;-shared&#39; [-Wunused-command-line-argument]
-[runscript] demo
-[link] /usr/bin/cc -L/tmp/demo/lib -Wl,-R/usr/local/lib -o real.bt/demo main.po -ldemo
-bt_logic: leaving directory `src&#39; for `build&#39;
-</code></pre></div><p>We get a few warnings around shared libraries, as you could imagine from build scripts written almost 20 years ago, but no failures. Neat.</p>
-<p>But does the built product work?</p>
-<h2 id=running-the-demo>Running the demo</h2>
-<p>Let&rsquo;s try to run the final binary we got:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ ./src/demo
-Calling library: 42
-</code></pre></div><p>Yay! It does work! But wait a moment:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ file src/demo
-src/demo: a /tmp/local/libexec/buildtool/bt_sh script, ASCII text executable
-</code></pre></div><p>What is this about? Why is our <code>demo</code> a script and not a proper binary given that we used C?</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ cat src/demo
-#!/tmp/local/libexec/buildtool/bt_sh
-# File generated by bt_logic.
-# Fri May 13 06:35:23 PDT 2022
-
-LD_LIBRARY_PATH=:/tmp/demo/lib; export LD_LIBRARY_PATH
-/tmp/demo//src/real.bt/demo
-</code></pre></div><p>Aha. Much like when using GNU Libtool, a binary cannot be run from the source tree if it links against a library, because the library has not been installed yet. The script is just a wrapper to configure the dynamic loader and make things work. After installation, the rpath functionality will kick in and make the dynamic loader find the library in the right place.</p>
-<h2 id=installing-the-demo>Installing the demo</h2>
-<p>Let&rsquo;s install the demo:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ /tmp/local/bin/buildtool install
-bt_logic: entering directory `lib&#39; for `install&#39;
-[install] installing data file /tmp/root/lib/libdemo.so.0.1
-[exec] ln -fs libdemo.so.0.1 libdemo.so.0
-[exec] ln -fs libdemo.so.0.1 libdemo.so
-[install] creating missing directory /demo
-mkdir: /demo: Permission denied
-bt_logic: process stopped; command exited with error status `1&#39;
-bt_logic: leaving directory `lib&#39; for `install&#39;
-bt_logic: entering directory `data&#39; for `install&#39;
-[install] installing data file /tmp/local/share/buildtool/pkgflags/demo.bpf
-bt_logic: leaving directory `data&#39; for `install&#39;
-bt_logic: entering directory `src&#39; for `install&#39;
-[install] installing binary file /tmp/root/bin/demo
-[install] installing data file /tmp/root/man/man1/demo.1
-bt_logic: leaving directory `src&#39; for `install&#39;
-[install] installing data file /tmp/root/share/doc/demo/CHANGES
-[install] installing data file /tmp/root/share/doc/demo/PEOPLE
-[install] installing data file /tmp/root/share/doc/demo/README
-[install] installing data file /tmp/root/share/doc/demo/TODO
-</code></pre></div><p>Oops, a little <code>mkdir</code> error, but it seems to have worked. If we inspect the installation prefix we provided during the configuration step (the <code>-p /tmp/root</code> flag we specified):</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ find /tmp/root
-/tmp/root
-/tmp/root/bin
-/tmp/root/bin/demo
-/tmp/root/lib
-/tmp/root/lib/libdemo.so
-/tmp/root/lib/libdemo.so.0.1
-/tmp/root/lib/libdemo.so.0
-/tmp/root/share
-/tmp/root/share/doc
-/tmp/root/share/doc/demo
-/tmp/root/share/doc/demo/PEOPLE
-/tmp/root/share/doc/demo/CHANGES
-/tmp/root/share/doc/demo/TODO
-/tmp/root/share/doc/demo/README
-/tmp/root/man
-/tmp/root/man/man1
-/tmp/root/man/man1/demo.1
-</code></pre></div><p>And, from these installed files, we can run the demo:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>$ /tmp/root/bin/demo
-Calling library: 42
-</code></pre></div><p>Finally, note how the installed demo is really a proper executable that uses the shared library that was installed along it:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ file /tmp/root/bin/demo
-/tmp/root/bin/demo: ELF 64-bit LSB executable, x86-64, version 1 (FreeBSD), dynamically linked, interpreter /libexec/ld-elf.so.1, for FreeBSD 13.0 (1300525), FreeBSD-style, with debug_info, not stripped
-/tmp/demo$ ldd /tmp/root/bin/demo
-/tmp/root/bin/demo:
-        libdemo.so.0 =&gt; /tmp/root/lib/libdemo.so.0 (0x200000)
-        libc.so.7 =&gt; /lib/libc.so.7 (0x200000)
-[preloaded]
-        [vdso] (0x7ffffffff5d0)
-</code></pre></div><h2 id=distributing-the-demo>Distributing the demo</h2>
-<p>As a software package author, installing the program in one&rsquo;s machine is nice, but what about giving the program to other people? This is where the <code>dist</code> command comes into play, much like GNU Automake&rsquo;s <code>dist</code> target:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ /tmp/local/bin/buildtool dist
-bt_dist: cleaning tree (cleandir)
-bt_logic: entering directory `lib&#39; for `clean&#39;
-[remove]  func1.po
-[remove]  libdemo.so.0.1 libdemo.so.0 libdemo.so
-bt_logic: leaving directory `lib&#39; for `clean&#39;
-bt_logic: entering directory `lib&#39; for `cleandir&#39;
-[remove]  func1.dep
-bt_logic: leaving directory `lib&#39; for `cleandir&#39;
-bt_logic: entering directory `data&#39; for `clean&#39;
-[remove]  demo.bpf
-bt_logic: leaving directory `data&#39; for `clean&#39;
-bt_logic: entering directory `data&#39; for `cleandir&#39;
-bt_logic: leaving directory `data&#39; for `cleandir&#39;
-bt_logic: entering directory `src&#39; for `clean&#39;
-[remove]  main.po
-[remove]  demo
-[remove]  real.bt/demo
-bt_logic: leaving directory `src&#39; for `clean&#39;
-bt_logic: entering directory `src&#39; for `cleandir&#39;
-[remove]  main.dep
-bt_logic: leaving directory `src&#39; for `cleandir&#39;
-[remove]  /tmp/demo/bt_config.h /tmp/demo/bt_config.env /tmp/demo/bt_logic.env /tmp/demo/bt_config.log /tmp/demo/bt_config.sed /tmp/demo/bt_output
-bt_dist: validating package
-=&gt; Checking root files
-WARN: COPYING not found; it is highly recommended
-=&gt; Checking definitions (/tmp/demo/Generic.bt)
-WARN: no package homepage
-=&gt; Checking configuration script (/tmp/demo/Generic.bt)
-=&gt; Summary
-bt_lint: package should be corrected; 2 warnings
-bt_dist: building compressed dist, type tar.gz
-</code></pre></div><p>The above invocation above generates a <code>demo-0.1.tar.gz</code> distributable source package, which we can inspect:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>/tmp/demo$ tar tzf ../demo-0.1.tar.gz
-demo-0.1/
-demo-0.1/PEOPLE
-demo-0.1/lib/
-demo-0.1/CHANGES
-demo-0.1/TODO
-demo-0.1/README.bt
-demo-0.1/data/
-demo-0.1/README
-demo-0.1/src/
-demo-0.1/Generic.bt
-demo-0.1/src/Logic.bt
-demo-0.1/src/main.c
-demo-0.1/src/demo.1
-demo-0.1/data/Logic.bt
-demo-0.1/data/demo.bpf.in
-demo-0.1/lib/func1.c
-demo-0.1/lib/Logic.bt
-demo-0.1/lib/demo.1
-demo-0.1/lib/demo.h
-</code></pre></div><h2 id=peeking-into-the-data-directory>Peeking into the data directory</h2>
-<p>I glanced over the <code>data</code> directory earlier on, skipping that mysterious <code>bpf</code> file. If we look at the files that were installed under Buildtool&rsquo;s own prefix (a mistake) when we installed the demo, we can find that our package installed a <code>share/buildtool/pkgflags/demo.bpf</code> file. Looking at its contents, we see:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=c1># $Id: pkgflags,v 1.1 2003/04/26 21:48:17 jmmv Exp $</span>
-<span class=c1># pkgflags file</span>
-<span class=c1>#</span>
-<span class=c1># This file is mostly useful for packages providing libraries.</span>
-<span class=c1># If not needed (i.e., if the package is a program), remove it.</span>
-<span class=c1>#</span>
-
-<span class=nv>BT_PREFIX</span><span class=o>=</span><span class=s2>&#34;/tmp/root&#34;</span>
-<span class=nv>BT_DIR_LIB</span><span class=o>=</span><span class=s2>&#34;/tmp/root/lib&#34;</span>
-<span class=nv>BT_DIR_INCLUDE</span><span class=o>=</span><span class=s2>&#34;/tmp/root/include&#34;</span>
-
-<span class=nv>bpf_name</span><span class=o>=</span><span class=s2>&#34;demo&#34;</span>
-<span class=nv>bpf_descr</span><span class=o>=</span><span class=s2>&#34;Remembering Buildtool&#34;</span>
-<span class=nv>bpf_version</span><span class=o>=</span><span class=s2>&#34;0.1&#34;</span>
-<span class=nv>bpf_libs</span><span class=o>=</span><span class=s2>&#34;-L</span><span class=si>${</span><span class=nv>BT_DIR_LIB</span><span class=si>}</span><span class=s2> -ldemo&#34;</span>
-<span class=nv>bpf_cflags</span><span class=o>=</span><span class=s2>&#34;-I</span><span class=si>${</span><span class=nv>BT_DIR_INCLUDE</span><span class=si>}</span><span class=s2>&#34;</span>
-</code></pre></div><p>This is the equivalent of what a <code>pkg-config</code> file would provide. And it works. We can query the file using Buildtool&rsquo;s <code>pkgflags</code> command and obtain the right compiler and linker flags for our demo library:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text>$ /tmp/local/bin/buildtool pkgflags --cflags --libs demo
-setting undefined variable `BT_PREFIX&#39;
-setting undefined variable `BT_DIR_LIB&#39;
-setting undefined variable `BT_DIR_INCLUDE&#39;
--I/tmp/root/include -L/tmp/root/lib -ldemo
-</code></pre></div><p>And this concludes the demo.</p>
-<h1 id=what-happened-to-buildtool>What happened to Buildtool?</h1>
-<p>Buildtool as it was in its 0.16 release in 2004 seems fairly impressive. The user manual is comprehensive, the tool provides many more features than I remembered, and it still works to this day.</p>
-<p>So what happened to Buildtool? Why did I officially cancel it in 2005? There are a few reasons.</p>
-<ol>
-<li>
-<p>The first is that Buildtool collapsed under its own complexity. Shell is not the right language to write a build system in, and <code>bt_logic</code> became an unmanageable mess to deal with. I&rsquo;m surprised it still works on a modern system to be honest.</p>
-</li>
-<li>
-<p>The second is that, even though Buildtool seems &ldquo;complete&rdquo;, it still lacks lots of functionality&mdash;and the missing functionality wasn&rsquo;t easy to implement. When I was writing the tool, I found myself leaning on the GNU Autotools manuals to understand how things worked across systems, and I relied on those details to implement my own versions. The more I did this, the more I learned about the GNU Autotools, and the more I realized how knowledgeable the GNU Autotools authors were and how far I was from providing something comparable. This was humbling. Furthermore, during this process, I had become so &ldquo;fluent&rdquo; in the GNU Autotools that it made no sense to continue developing my own thing.</p>
-</li>
-<li>
-<p>The third is that having to install a supporting build tool to compile fundamental system packages wasn&rsquo;t well-seen at the time. Every time I had to deal with a similar system in pkgsrc (Boost.Jam or whatever Mozilla had, for example), it was a pain. Like it or not, the GNU Autotools are the de-facto standard, and despite all of their flaws, they are the ones that integrate well with packaging systems and system tools.</p>
-</li>
-</ol>
-<p>My interest in build systems remains and what you have read here partially explains my <a href=/2015/04/on-bazel-and-open-source.html>original critique of Bazel</a>. I ended up working in Bazel for a few years though because I like the topic. No matter my original comments, Bazel is a great build system from which many others should learn. But it&rsquo;s still missing the kind of system-level integration that Buildtool intended to provide via the <code>install</code> and <code>pkgflags</code> commands.</p>
-<p>One thing I&rsquo;ll note is how Buildtool already had a concept of high-level targets from a semantical perspective. You could make a single build file define various targets (libraries, programs, etc.) and each of those would know how to build, install, and clean itself. You can see that the same ideas have evolved in most of today&rsquo;s build systems in some form or another, and that the file-level dependency tracking that <code>make</code> provides is &ldquo;a thing of the past&rdquo;.</p>
-<p>To conclude, let me add that I still believe there is room for something like Buildtool in this day and age to support the foundations of our free Unix-like systems&mldr; but it would need to be much better designed and implemented than Buildtool. I have ideas; I just wish I had the same amount of free time that I had when I was a student.</p>
-</article>
-</div>
-</div>
-<div class="container post-links">
-<div class=row>
-<div class="col mr-auto text-left">
-<span><a href=https://jmmv.dev/2022/05/rust-is-hard-but-does-it-matter.html>&#171; Previous</a></span>
-</div>
-<div class="col text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col ml-auto text-right">
-<span><a href=https://jmmv.dev/2022/06/endbasic-0.9.html>Next &#187;</a></span>
-</div>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class="col-lg-4 my-2">
-<div class=row>
-<div class=col>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-</div>
-<div class="col-lg-8 my-2 d-none d-sm-block">
-<div class=row>
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Remembering+Buildtool&url=https%3A%2F%2Fjmmv.dev%2F2022%2F05%2Fremembering-buildtool.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Remembering+Buildtool&u=https%3A%2F%2Fjmmv.dev%2F2022%2F05%2Fremembering-buildtool.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Remembering+Buildtool+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2022%2F05%2Fremembering-buildtool.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
-</a>
-</div>
-</div>
-</div>
-</div>
-<div class="row my-4" id=postCommentRow>
-<div class=col>
-<div class=media>
-<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
-<div class="media-body container">
-<form method=post id=newPost>
-<div class=row>
-<div class="col my-1">
-<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentAuthor>Your name (optional):</label>
-<input type=text class=form-control id=postCommentAuthor>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentEmail>Your email (optional):</label>
+<a class=text-reset href=/tags/buildtool>buildtool</a></p></div></div><div class=container><div class=row><div class=col-md-9><div class=row><div class=col><article><p>Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&mdash;20 years ago&mdash;and became a pkgsrc contributor. Packaging software for NetBSD made me <a href=/2005/03/making-packager-friendly-software-1.html>fight various build systems</a> and, in particular, experience the pains of debugging the GNU Autotools.</p><p>Around that same time, I was also writing <a href=/software/menu2wm.html>small</a> <a href=/software/vcsme.html>tools</a> <a href=/software/xmlcatmgr.html>here</a> <a href=/software/sysbuild.html>and</a> <a href=/software/pkg_comp.html>there</a>. Out of inertia, I used the GNU Autotools for these and, the more I used them, the more I saw an opportunity for improvement. The GNU Autotools were slow, hard to deal with, and they bloated every package. Why did you have to ship heavy <code>configure</code>, <code>Makefile.in</code> and <code>libtool</code> scripts in every single distribution file when you could instead rely on a few system-wide scripts? And thus <a href=/software/buildtool.html>Buildtool</a> was born in the summer of 2002, just before I started college, and I worked on it for about two years.</p><p>The Buildtool project recently came to mind and I noticed that <a href=http://buildtool.sourceforge.net/>its website is still up and running</a> (kudos to SourceForge for that), so I poked around a bit. Just by looking at the <a href=http://buildtool.sourceforge.net/docs/manual/index.html>User&rsquo;s Manual</a>, I&rsquo;m amazed by how comprehensive the tool is and makes me jealous of how much free time I had back then. Since noticing this, I had been meaning to try the tool again and write a post, and finally got to it just yesterday. So let&rsquo;s take a tour of what Buildtool was and what it achieved.</p><h1 id=history>History</h1><p>Buildtool was originally inspired by the FreeBSD and NetBSD build systems. The idea was to leverage system-wide generic build logic files to build libraries and binaries&mdash;just like <code>bsd.lib.mk</code> and <code>bsd.prog.mk</code> provide&mdash;and have arbitrary packages rely on those installed files. As an end user, you would have to install Buildtool first before you could build any other package, but you would only pay the cost of the build infrastructure once. While this paradigm is accepted today, it was quite a departure from the traditions of Unix systems in the early 2000s.</p><p>Buildtool&rsquo;s first version in 2002 was precisely what the NetBSD build system was. The 0.1 release shipped with a copy of NetBSD&rsquo;s <code>make</code> tool, renamed as <code>bt_make</code>, along with a few <code>mk</code> files to build common targets. That release also included a rudimentary GNU Autoconf-like tool.</p><p>Later on, Buildtool grew a <code>bt_wrap</code> helper utility to deal with platform incompatibilities when invoking common tools such as the compiler. This idea was inspired by pkgsrc&rsquo;s buildlink3 and wrappers infrastructure, which to this day still wrap the compiler and linker to paper over platform-specific oddities. Reading through the release notes, I can see how this helped make Buildtool work on Cygwin and Mac OS X systems of the day.</p><p>Towards the latest releases of the project by 2004, things took a significant turn: <code>bt_make</code> and <code>bt_wrap</code> were removed in favor of <code>bt_logic</code>, a custom-made build system purely based on shell scripts. If I recall correctly, the first version of <code>bt_logic</code> was written in Perl, but it never shipped because having Buildtool rely on the gigantic Perl dependency was a non-starter.</p><p>By the beginning of 2005, I cancelled the project for the reasons I&rsquo;ll cover at the end of this post.</p><h1 id=installing-buildtool>Installing Buildtool</h1><p>The last release of Buildtool was 0.16, which was published on July 4th, 2004 (about 18 years ago) and is still available in the <a href=http://buildtool.sourceforge.net/download.html>Downloads</a> page if you want to try it out.</p><p>Buildtool itself was written in about 10,000 lines shell, but the distribution includes a slimmed down version of NetBSD&rsquo;s <code>/bin/sh</code> named <code>bt_sh</code>. The raison d&rsquo;être for <code>bt_sh</code> was pretty much the same as Debian&rsquo;s <a href=https://manpages.debian.org/buster/dash/dash.1.en.html><code>dash</code></a>: a portable, high-performance and standards-compliant shell interpreter to run scripts. <code>bt_sh</code> helped keep Buildtool&rsquo;s implementation simpler as it did not have to deal with <code>sh</code> platform incompatibilities (Solaris&rsquo; version was a pain). Furthermore, <code>bt_sh</code> also ensured that the users of Buildtool writing their own build scripts wouldn&rsquo;t have to <a href=https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.71/html_node/Portable-Shell.html>care about shell portability</a>, as is the case when writing <code>configure.ac</code> scripts.</p><p>The reason I&rsquo;m mentioning <code>bt_sh</code> is because trying to build Buildtool 0.16 on a FreeBSD 13 system today fails due to a couple of bugs in the C code. Fixing those bugs is a matter of avoiding trivial conflicts among repeated symbols in different modules. After those simple fixes, Buildtool installs successfully:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/buildtool-0.16$ ./configure -p /tmp/local
+</span></span><span class=line><span class=cl>configuring for buildtool-0.16
+</span></span><span class=line><span class=cl>checking for machine type: amd64
+</span></span><span class=line><span class=cl>checking for program gcc: not found
+</span></span><span class=line><span class=cl>checking for program cc: /usr/bin/cc
+</span></span><span class=line><span class=cl>checking whether /usr/bin/cc is GNU C: yes
+</span></span><span class=line><span class=cl>[...]
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span><span class=line><span class=cl>BUILDTOOL 0.16 CONFIGURATION SUMMARY
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    Installation prefix: /tmp/local
+</span></span><span class=line><span class=cl>    Configuration directory: /tmp/local/etc/buildtool
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    Type `make&#39; to start the build.
+</span></span><span class=line><span class=cl>    Type `make install&#39; to install, only _after_ the build has finished.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>/tmp/buildtool-0.16$ make &amp;&amp; make install
+</span></span><span class=line><span class=cl>[...]
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span><span class=line><span class=cl>    Buildtool 0.16 has been successfully installed!
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    Please take some time to read the `Testing&#39; section in the README file
+</span></span><span class=line><span class=cl>    to easily provide useful feedback.  This will not take more than ten
+</span></span><span class=line><span class=cl>    minutes, but you will be contributing to the project.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    As part of the post installation stage, you should now create a system
+</span></span><span class=line><span class=cl>    configuration file for the bt_config module, containing cached results
+</span></span><span class=line><span class=cl>    for several common checks run by many configure scripts.
+</span></span><span class=line><span class=cl>    For an automated setup, issue the following commands:
+</span></span><span class=line><span class=cl>        mkdir -p /tmp/local/etc/buildtool
+</span></span><span class=line><span class=cl>        cp /tmp/local/share/buildtool/templates/bt_config.conf.in \
+</span></span><span class=line><span class=cl>            /tmp/local/etc/buildtool/bt_config.conf.in
+</span></span><span class=line><span class=cl>        /tmp/local/bin/buildtool swcgen
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    Thanks for choosing Buildtool.
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span></code></pre></div><h1 id=post-installation-configuration>Post-installation configuration</h1><p>The installation process quoted above tells us that we should create a system-wide configuration file and then run <code>buildtool swcgen</code>, which stands for &ldquo;System-wide configuration generator&rdquo;. Let&rsquo;s poke at that file and try to follow the given steps.</p><p>Here is what <code>/tmp/local/share/buildtool/templates/bt_config.conf.in</code> has to say:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=line><span class=cl><span class=c1># $Id: bt_config.conf.in,v 1.8 2004/06/26 18:42:05 jmmv Exp $</span>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl><span class=c1># bt_config.conf - System wide configuration</span>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl><span class=c1># File automatically generated by @BT_PKG_NAME@, version @BT_PKG_VERSION@.</span>
+</span></span><span class=line><span class=cl><span class=c1># Timestamp: @TIMESTAMP@</span>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl><span class=c1># bt_config will open this file from @BT_DIR_ETC@.</span>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># C/C++ environments (leave both for now, all other macros rely on them).</span>
+</span></span><span class=line><span class=cl>bt_cache_env c cxx
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Basic programs (C/C++ utilities handled by environments).</span>
+</span></span><span class=line><span class=cl>bt_cache_prog info lex m4 sh yacc
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Header files</span>
+</span></span><span class=line><span class=cl>bt_cache_hdr sys/cdefs.h sys/utsname.h err.h poll.h stdarg.h stdbool.h ulimit.h
+</span></span><span class=line><span class=cl><span class=c1># C++ only header files</span>
+</span></span><span class=line><span class=cl>bt_cache_hdr bitset deque fstream iostream list map queue <span class=nb>set</span> stack string <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>             vector
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Basic libraries</span>
+</span></span><span class=line><span class=cl>bt_cache_lib m
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># System specific functions</span>
+</span></span><span class=line><span class=cl>bt_cache_func setenv strerror stricmp strlcat strlcpy strncat strncpy strndup <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>              strftime poll readdir_r <span class=nb>ulimit</span> uname vfork vsnprintf
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Types</span>
+</span></span><span class=line><span class=cl>bt_cache_type gid_t int8_t int16_t int32_t int64_t size_t uid_t uint8_t <span class=se>\
+</span></span></span><span class=line><span class=cl><span class=se></span>              uint16_t uint32_t uint64_t u_int8_t u_int16_t u_int32_t u_int64_t
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Type sizes</span>
+</span></span><span class=line><span class=cl>bt_cache_sizeof char short int long <span class=s2>&#34;long long&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Miscellaneous results</span>
+</span></span><span class=line><span class=cl>bt_cache_attribute
+</span></span></code></pre></div><p>Interesting. This configuration file is all about &ldquo;caching&rdquo;. But caching what?</p><p>You see, one of the problems I had with the GNU Autotools is how every single package I built and installed on my machine had to go through a very costly <code>configure</code> invocation. It was mind-blowing to me (and still is <em>today</em>) how many CPU hours the world burns on a day-to-day basis checking if a system has standard headers and functions. Couldn&rsquo;t we check just <em>once</em> and have all packages reuse the results? If the system has <code>vfork</code>, for example, it will continue to have that function for the foreseeable future; there is no need to test for it over and over again.</p><p>That&rsquo;s precisely what the <code>buildtool swcgen</code> command addresses: it executes all of the checks specified in the configuration file and installs those cached results for later reuse. Let&rsquo;s see what the invocation looks like:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>$ cp /tmp/local/share/buildtool/templates/bt_config.conf.in \
+</span></span><span class=line><span class=cl>    /tmp/local/etc/buildtool/bt_config.conf.in
+</span></span><span class=line><span class=cl>$ /tmp/local/bin/buildtool swcgen
+</span></span><span class=line><span class=cl>Input:  /tmp/local/etc/buildtool/bt_config.conf.in
+</span></span><span class=line><span class=cl>Output: /tmp/local/etc/buildtool/bt_config.conf
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>bt_swcgen: running bt_wizard to create temporary project skeleton
+</span></span><span class=line><span class=cl>Entering directory /tmp/bt_swcgen.1802... done.
+</span></span><span class=line><span class=cl>Creating directories... src
+</span></span><span class=line><span class=cl>Creating Generic.bt... done.
+</span></span><span class=line><span class=cl>Creating README.bt... done.
+</span></span><span class=line><span class=cl>Creating src/Logic.bt... done.
+</span></span><span class=line><span class=cl>bt_swcgen: generating configuration script and cache
+</span></span><span class=line><span class=cl>bt_config: starting configuration for bt_swcgen-0.16
+</span></span><span class=line><span class=cl>checking for program gcc... not found.
+</span></span><span class=line><span class=cl>checking for program cc... /usr/bin/cc
+</span></span><span class=line><span class=cl>checking for C compiler name... gnu
+</span></span><span class=line><span class=cl>checking for C compiler version... 13.0.0
+</span></span><span class=line><span class=cl>checking for program cpp... /usr/bin/cpp
+</span></span><span class=line><span class=cl>checking for program ld... /usr/bin/ld
+</span></span><span class=line><span class=cl>[...]
+</span></span><span class=line><span class=cl>checking for program sh... /bin/sh
+</span></span><span class=line><span class=cl>checking for program yacc... /usr/bin/yacc
+</span></span><span class=line><span class=cl>checking for c header sys/cdefs.h... yes
+</span></span><span class=line><span class=cl>checking for cxx header sys/cdefs.h... yes
+</span></span><span class=line><span class=cl>checking for c header sys/utsname.h... yes
+</span></span><span class=line><span class=cl>checking for cxx header sys/utsname.h... yes
+</span></span><span class=line><span class=cl>checking for c header err.h... yes
+</span></span><span class=line><span class=cl>checking for cxx header err.h... yes
+</span></span><span class=line><span class=cl>[...]
+</span></span><span class=line><span class=cl>checking for c function vfork... yes
+</span></span><span class=line><span class=cl>checking for cxx function vfork... no
+</span></span><span class=line><span class=cl>checking for c function vsnprintf... yes
+</span></span><span class=line><span class=cl>checking for cxx function vsnprintf... no
+</span></span><span class=line><span class=cl>checking for c type gid_t... yes
+</span></span><span class=line><span class=cl>checking for cxx type gid_t... yes
+</span></span><span class=line><span class=cl>checking for c type int8_t... yes
+</span></span><span class=line><span class=cl>checking for cxx type int8_t... yes
+</span></span><span class=line><span class=cl>[...]
+</span></span><span class=line><span class=cl>bt_config: creating bt_output
+</span></span><span class=line><span class=cl>bt_config: generating configuration environment
+</span></span><span class=line><span class=cl>bt_config: generating package dependent build logic
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span><span class=line><span class=cl>Configuration summary for bt_swcgen-0.16:
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    Prefix is: /usr/local
+</span></span><span class=line><span class=cl>    Developer mode: yes
+</span></span><span class=line><span class=cl>    Install documentation: yes
+</span></span><span class=line><span class=cl>    Static libraries: no, Shared libraries: yes, rpath: yes
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>bt_swcgen: creating system wide configuration file
+</span></span><span class=line><span class=cl>bt_output: creating /tmp/bt_swcgen.1802/conf
+</span></span><span class=line><span class=cl>bt_swcgen: /tmp/local/etc/buildtool/bt_config.conf created
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span><span class=line><span class=cl>PLEASE NOTE THE FOLLOWING:
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    Installed: /tmp/local/etc/buildtool/bt_config.conf
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    By using a system wide configuration file for bt_config that stores
+</span></span><span class=line><span class=cl>    check results, you assume that they may get obsoleted with respect to
+</span></span><span class=line><span class=cl>    your system, specially after software updates.  Be careful to only
+</span></span><span class=line><span class=cl>    store results that are unlikely to change with time.  Anyway, you are
+</span></span><span class=line><span class=cl>    encouraged to re-run this program periodically to regenerate the file
+</span></span><span class=line><span class=cl>    with new results.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    If a third party program fails to configure after a check that shows
+</span></span><span class=line><span class=cl>    the `(cached)&#39; string in it, try to pass the `--ignore-sw-config&#39;
+</span></span><span class=line><span class=cl>    flag to bt_config before thinking it is a bug in your system or in
+</span></span><span class=line><span class=cl>    the package.  DO NOT DISTURB SOFTWARE AUTHORS BEFORE DOUBLE CHECKING
+</span></span><span class=line><span class=cl>    THAT THERE IS A PROBLEM IN THEIR SOFTWARE.  YOU HAVE BEEN WARNED.
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span></code></pre></div><p>Pretty impressive that this 18-year old code still works today, and running this shows precisely the problem that this was supposed to solve: computing these results took about 15 seconds on my modest server, and those are 15 seconds you would pay to build most software packages. When you are bulk-building all binary packages for a source-bootstrapped system (the common case in the BSD world), those quickly add up.</p><p>By the way: Autoconf supports this same feature although I did not discover it until later. <a href=https://pkgsrc.se/pkgtools/autoswc><code>autoswc</code></a> is a follow-up tool I created for pkgsrc to implement this same idea. Using autoswc proved to be a nice speedup for daily operations when I was still an active pkgsrc maintainer. I suspect that most people are still unaware of this Autoconf feature, unfortunately.</p><h1 id=commands-summary>Commands summary</h1><p>Now that Buildtool is installed and configured, let&rsquo;s poke around to see what it has to offer:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>$ /tmp/local/bin/buildtool --help
+</span></span><span class=line><span class=cl>buildtool version 0.16
+</span></span><span class=line><span class=cl>usage: buildtool [options] target [target_options]
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Copyright (c) 2002, 2003, 2004 Julio M. Merino Vidal.
+</span></span><span class=line><span class=cl>This program is licensed under the terms of the BSD license.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Available options:
+</span></span><span class=line><span class=cl>    {-h,--help}       Show detailed usage (this text).
+</span></span><span class=line><span class=cl>    {-v,--version}    Show version number.
+</span></span><span class=line><span class=cl>    {-w,--warnings}   Enable bt_sh warning messages.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Available targets:
+</span></span><span class=line><span class=cl>    build       Build the package.
+</span></span><span class=line><span class=cl>    clean       Soft clean the package (keeps configuration data).
+</span></span><span class=line><span class=cl>    cleandir    Hard clean the package.
+</span></span><span class=line><span class=cl>    config      Automatically configure a package.
+</span></span><span class=line><span class=cl>    dist        Generate a distribution file.
+</span></span><span class=line><span class=cl>    deinstall   Deinstalls the package.
+</span></span><span class=line><span class=cl>    doc         Read build-time package documentation.
+</span></span><span class=line><span class=cl>    install     Installs the package.
+</span></span><span class=line><span class=cl>    lint        Validate the package according to standards.
+</span></span><span class=line><span class=cl>    pkgflags    Show compilation flags for an installed package.
+</span></span><span class=line><span class=cl>    siteinfo    Get site specific configuration details.
+</span></span><span class=line><span class=cl>    swcgen      Aid with creation of system-wide configuration files.
+</span></span><span class=line><span class=cl>    test        Run tests specific to the package after a successful build.
+</span></span><span class=line><span class=cl>    wizard      Use an interactive wizard to create initial project files.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>See buildtool(1) for more information.
+</span></span></code></pre></div><p>Pretty standard output for a subcommand-based utility, but I can already see myself here. <a href=/2013/08/cli-design-series-introduction.html>My style</a> in developing command-line tools hasn&rsquo;t changed much since then.</p><p>Anyhow. From the output above, we can distill the following command groups:</p><ul><li><code>config</code>: A configuration command to let each package discover system-wide features, obviously inspired by GNU Autoconf.</li><li><code>build</code>, <code>clean</code>, <code>cleandir</code>, <code>dist</code>, <code>deinstall</code>, <code>install</code>, <code>test</code>: Build-related commands, some of which (like <code>dist</code>) are inspired by GNU Automake.</li><li><code>doc</code>: An interactive documentation viewer for a package&rsquo;s <code>README</code>, <code>INSTALL</code>, etc. distribution documents. Interesting.</li><li><code>pkgflags</code>: A replacement for the heavy-weight <code>pkg-config</code>. These days we have <a href=http://pkgconf.org/>pkgconf</a> instead, which is compatible with <code>pkg-config</code>.</li><li><code>wizard</code>: An interactive tool to create a new package, akin to what <code>cargo init</code> would offer today.</li></ul><h1 id=demo>Demo</h1><p>Alright. Let&rsquo;s now use Buildtool&rsquo;s package creation wizard to initialize a new demo project. The wizard is interactive so I&rsquo;m just going to post the completed output of what I typed:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>$ mkdir /tmp/demo
+</span></span><span class=line><span class=cl>$ cd /tmp/demo
+</span></span><span class=line><span class=cl>$ /tmp/local/bin/buildtool wizard
+</span></span><span class=line><span class=cl>Welcome to Buildtool&#39;s Wizard
+</span></span><span class=line><span class=cl>-----------------------------
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>This module will help you to set up a basic directory structure
+</span></span><span class=line><span class=cl>for your project, based on your choices.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Each question has associated a default answer, shown inside the
+</span></span><span class=line><span class=cl>brackets.  If you hit [RETURN] leaving a question in blank, it
+</span></span><span class=line><span class=cl>will take the default value.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Project definitions:
+</span></span><span class=line><span class=cl>- Unix name [foobar]? demo
+</span></span><span class=line><span class=cl>- Initial version [0.1]?
+</span></span><span class=line><span class=cl>- License [bsd]?
+</span></span><span class=line><span class=cl>- Maintainer&#39;s email [foo@bar.net]? julio@meroh.net
+</span></span><span class=line><span class=cl>- Homepage (if any) []?
+</span></span><span class=line><span class=cl>- Short comment [Sample package]? Remembering Buildtool
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Code details:
+</span></span><span class=line><span class=cl>- Will this package provide one or more programs [y]?
+</span></span><span class=line><span class=cl>- Will this package provide one or more libraries [n]? y
+</span></span><span class=line><span class=cl>- Will you use the C language [y]?
+</span></span><span class=line><span class=cl>- Will you use the C++ language [n]?
+</span></span><span class=line><span class=cl>- Will you use CVS [y]? n
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Dependancies:
+</span></span><span class=line><span class=cl>- Do you need pkgconfig (not bt_pkgflags) [n]?
+</span></span><span class=line><span class=cl>- Do you need threads [n]?
+</span></span><span class=line><span class=cl>- Do you need an X Window System [n]?
+</span></span><span class=line><span class=cl>- Do you need awk [n]?
+</span></span><span class=line><span class=cl>- Do you need a lexical analyzer [n]?
+</span></span><span class=line><span class=cl>- Do you need a LARL parser generator [n]?
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Begin process:
+</span></span><span class=line><span class=cl>- Where should files be created [.]?
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Creating directories... src data lib
+</span></span><span class=line><span class=cl>Creating Generic.bt... done.
+</span></span><span class=line><span class=cl>Creating README.bt... done.
+</span></span><span class=line><span class=cl>Creating src/Logic.bt... done.
+</span></span><span class=line><span class=cl>Creating lib/Logic.bt... done.
+</span></span><span class=line><span class=cl>Creating data/demo.bpf.in... done.
+</span></span><span class=line><span class=cl>Creating data/Logic.bt... done.
+</span></span></code></pre></div><p>This asked many more questions than I expected. Looks like I implemented support for many different things.</p><p>After completing the wizard, we are left with these files:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ find . -type f | sort
+</span></span><span class=line><span class=cl>./Generic.bt
+</span></span><span class=line><span class=cl>./README.bt
+</span></span><span class=line><span class=cl>./data/Logic.bt
+</span></span><span class=line><span class=cl>./data/demo.bpf.in
+</span></span><span class=line><span class=cl>./lib/Logic.bt
+</span></span><span class=line><span class=cl>./src/Logic.bt
+</span></span></code></pre></div><p>From the looks of it, we have a top-level configuration file called <code>Generic.bt</code>, a mysterious <code>data</code> directory with a <code>bpf</code> file, a <code>lib</code> directory to contain the library we&rsquo;ll write, and a <code>src</code> directory to contain the code of the program we&rsquo;ll write.</p><h2 id=the-top-level-genericbt-file>The top-level Generic.bt file</h2><p>First, let&rsquo;s look at the top-level <code>Generic.bt</code> file:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl><span class=c1># Buildtool Generic Script</span>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>defs<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>    <span class=nv>BT_REQUIRE</span><span class=o>=</span><span class=s2>&#34;0.16&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=nv>BT_PKG_NAME</span><span class=o>=</span><span class=s2>&#34;demo&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=nv>BT_PKG_VERSION</span><span class=o>=</span><span class=s2>&#34;0.1&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=nv>BT_PKG_LICENSE</span><span class=o>=</span><span class=s2>&#34;bsd&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=nv>BT_PKG_MAINTAINER</span><span class=o>=</span><span class=s2>&#34;julio@meroh.net&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=nv>BT_PKG_COMMENT</span><span class=o>=</span><span class=s2>&#34;Remembering Buildtool&#34;</span>
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>config_init<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>config<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>    bt_check_env_c
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    bt_generate_output data/demo.bpf
+</span></span><span class=line><span class=cl>    bt_generate_configh
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>docs<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>    bt_doc CHANGES <span class=s2>&#34;Major changes between package versions&#34;</span>
+</span></span><span class=line><span class=cl>    bt_doc PEOPLE <span class=s2>&#34;Authors and contributors&#34;</span>
+</span></span><span class=line><span class=cl>    bt_doc README <span class=s2>&#34;General documentation&#34;</span>
+</span></span><span class=line><span class=cl>    bt_doc TODO <span class=s2>&#34;Missing things&#34;</span>
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>logic<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>    bt_target  lib data src
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span></code></pre></div><p><code>Generic.bt</code> is the package-wide file where it all begins. This file is composed of a collection of user-defined functions that tell Buildtool what to do:</p><ul><li><code>defs</code>: Describes the package&rsquo;s metadata, much like what <code>Cargo.toml</code>, <code>go.mod</code> or <code>package.json</code> do today in popular ecosystems.</li><li><code>config_init</code> and <code>config</code>: Allow the package to request system feature checks. In other words, these contain what you would typically put in a <code>configure.ac</code> file with GNU Autoconf.</li><li><code>docs</code>: Configures documentation files, consumed both by the build process and by the <code>buildtool doc</code> interactive viewer.</li><li><code>logic</code>: The entry point to the build process, aka the equivalent of a top-level <code>Makefile.am</code> file.</li></ul><h2 id=creating-source-files>Creating source files</h2><p>Before we can successfully build our demo, we have to perform a few edits to the source tree. The wizard didn&rsquo;t tell us we had to do any of these, so I encountered various failures while I played with the tool. Fear not, it wasn&rsquo;t too hard to get past these failures.</p><p>First, let&rsquo;s create the top-level documents referenced by the <code>docs</code> function:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ touch CHANGES PEOPLE README TODO
+</span></span></code></pre></div><p>Next, let&rsquo;s look at what building the <code>lib</code> subdirectory will require by looking at the <code>lib/Logic.bt</code> build script:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=line><span class=cl>logic<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>    bt_target demo
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    target_demo<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_LIB_MAJOR</span><span class=o>=</span><span class=m>0</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_LIB_MINOR</span><span class=o>=</span><span class=m>1</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_MANPAGES</span><span class=o>=</span><span class=s2>&#34;demo.1&#34;</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_SOURCES</span><span class=o>=</span>func1.c
+</span></span><span class=line><span class=cl>        <span class=nv>BT_TYPE</span><span class=o>=</span>library
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_INCLUDESDIR</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_DIR_INC</span><span class=si>}</span><span class=s2>/demo&#34;</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_INCLUDESDIR_demo_h</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_DIR_INC</span><span class=si>}</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_INCLUDES</span><span class=o>=</span><span class=s2>&#34;demo.h&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=o>}</span>
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span></code></pre></div><p>Based on this, let&rsquo;s create the files <code>lib</code> expects:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ cat &gt;lib/demo.h
+</span></span><span class=line><span class=cl>int func1(void);
+</span></span><span class=line><span class=cl>^D
+</span></span><span class=line><span class=cl>/tmp/demo$ cat &gt;lib/func1.c
+</span></span><span class=line><span class=cl>int func1(void) { return 42; }
+</span></span><span class=line><span class=cl>^D
+</span></span><span class=line><span class=cl>/tmp/demo$ touch lib/demo.1
+</span></span></code></pre></div><p>After that, let&rsquo;s do the same with the <code>src</code> subdirectory. Here is what the <code>src/Logic.bt</code> build script will require:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=line><span class=cl>logic<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>    bt_target demo
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    target_demo<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_MANPAGES</span><span class=o>=</span><span class=s2>&#34;demo.1&#34;</span>
+</span></span><span class=line><span class=cl>        <span class=nv>BT_SOURCES</span><span class=o>=</span>main.c
+</span></span><span class=line><span class=cl>        <span class=nv>BT_TYPE</span><span class=o>=</span>program
+</span></span><span class=line><span class=cl>    <span class=o>}</span>
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span></code></pre></div><p>And, as before, let&rsquo;s create the files <code>src</code> expects:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ cat &gt;src/main.c
+</span></span><span class=line><span class=cl>#include &lt;stdio.h&gt;
+</span></span><span class=line><span class=cl>#include &#34;lib/demo.h&#34;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>int main(void) {
+</span></span><span class=line><span class=cl>    printf(&#34;Calling library: %d\n&#34;, func1());
+</span></span><span class=line><span class=cl>    return 0;
+</span></span><span class=line><span class=cl>}
+</span></span><span class=line><span class=cl>^D
+</span></span><span class=line><span class=cl>/tmp/demo$ touch src/demo.1
+</span></span></code></pre></div><p>Finally, because we have made the binary in <code>src</code> depend on the library in <code>lib</code>, we have to express this dependency in the <code>src/Logic.bt</code> script. We can add these two lines to the <code>target_demo</code> function in <code>src/Logic.bt</code>:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=line><span class=cl><span class=nv>BT_FLAGS_LD</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_FLAGS_LD</span><span class=si>}</span><span class=s2> -L../lib&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>BT_LIBS</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>BT_LIBS</span><span class=si>}</span><span class=s2> -ldemo&#34;</span>
+</span></span></code></pre></div><h2 id=configuring-the-demo>Configuring the demo</h2><p>We are ready to go. Let&rsquo;s configure the demo project against our current system:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ /tmp/local/bin/buildtool config -p /tmp/root
+</span></span><span class=line><span class=cl>bt_config: loading system-wide configuration
+</span></span><span class=line><span class=cl>bt_config: starting configuration for demo-0.1
+</span></span><span class=line><span class=cl>checking for program gcc cc bcc... /usr/bin/cc (cached)
+</span></span><span class=line><span class=cl>checking for C compiler name... gnu (cached)
+</span></span><span class=line><span class=cl>checking for C compiler version... 13.0.0 (cached)
+</span></span><span class=line><span class=cl>checking for program cpp... /usr/bin/cpp (cached)
+</span></span><span class=line><span class=cl>checking for program ld... /usr/bin/ld (cached)
+</span></span><span class=line><span class=cl>checking for c header stdio.h... yes (cached)
+</span></span><span class=line><span class=cl>checking for c header sys/types.h... yes (cached)
+</span></span><span class=line><span class=cl>checking for c header sys/stat.h... yes (cached)
+</span></span><span class=line><span class=cl>checking for c header stdlib.h... yes (cached)
+</span></span><span class=line><span class=cl>checking for c header string.h... yes (cached)
+</span></span><span class=line><span class=cl>checking for c header unistd.h... yes (cached)
+</span></span><span class=line><span class=cl>checking for host system name... FreeBSD
+</span></span><span class=line><span class=cl>checking for host system type... FreeBSD-13.1-STABLE-amd64
+</span></span><span class=line><span class=cl>checking for program ar... /usr/bin/ar (cached)
+</span></span><span class=line><span class=cl>checking for program ranlib... /usr/bin/ranlib (cached)
+</span></span><span class=line><span class=cl>checking for program fastdep... not found.
+</span></span><span class=line><span class=cl>bt_config: creating bt_output
+</span></span><span class=line><span class=cl>bt_output: creating data/demo.bpf
+</span></span><span class=line><span class=cl>bt_config: generating C include header
+</span></span><span class=line><span class=cl>bt_config: generating configuration environment
+</span></span><span class=line><span class=cl>bt_config: generating package dependent build logic
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span><span class=line><span class=cl>Configuration summary for demo-0.1:
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    Prefix is: /tmp/root
+</span></span><span class=line><span class=cl>    Developer mode: no
+</span></span><span class=line><span class=cl>    Install documentation: yes
+</span></span><span class=line><span class=cl>    Static libraries: no, Shared libraries: yes, rpath: yes
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>===========================================================================
+</span></span></code></pre></div><p>Pretty standard <code>configure</code>-like output.</p><p>What I want you to notice is how pretty much all results were cached. These results come from the system-wide cache we populated with <code>swcgen</code> after installing Buildtool, so running this step was almost instantaneous. Good time savings.</p><h2 id=building-the-demo>Building the demo</h2><p>With a successful configuration step, let&rsquo;s try to build:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ /tmp/local/bin/buildtool build
+</span></span><span class=line><span class=cl>bt_logic: entering directory `lib&#39; for `build&#39;
+</span></span><span class=line><span class=cl>[depend] func1.c -&gt; func1.dep
+</span></span><span class=line><span class=cl>c++: warning: treating &#39;c&#39; input as &#39;c++&#39; when in C++ mode, this behavior is deprecated [-Wdeprecated]
+</span></span><span class=line><span class=cl>[compile] /usr/bin/cc -I/tmp/demo/lib -I/tmp/demo -I/tmp/demo -fPIC -DPIC -shared -o func1.po -c /tmp/demo/lib/func1.c
+</span></span><span class=line><span class=cl>cc: warning: argument unused during compilation: &#39;-shared&#39; [-Wunused-command-line-argument]
+</span></span><span class=line><span class=cl>[link] /usr/bin/cc -Wl,-R/usr/local/lib -shared -Wl,-soname=libdemo.so.0 -o libdemo.so.0.1 func1.po
+</span></span><span class=line><span class=cl>[exec] ln -fs libdemo.so.0.1 libdemo.so.0
+</span></span><span class=line><span class=cl>[exec] ln -fs libdemo.so.0.1 libdemo.so
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `lib&#39; for `build&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `data&#39; for `build&#39;
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `data&#39; for `build&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `src&#39; for `build&#39;
+</span></span><span class=line><span class=cl>[depend] main.c -&gt; main.dep
+</span></span><span class=line><span class=cl>c++: warning: treating &#39;c&#39; input as &#39;c++&#39; when in C++ mode, this behavior is deprecated [-Wdeprecated]
+</span></span><span class=line><span class=cl>[compile] /usr/bin/cc -I/tmp/demo/src -I/tmp/demo -I/tmp/demo -fPIC -DPIC -shared -o main.po -c /tmp/demo/src/main.c
+</span></span><span class=line><span class=cl>cc: warning: argument unused during compilation: &#39;-shared&#39; [-Wunused-command-line-argument]
+</span></span><span class=line><span class=cl>[runscript] demo
+</span></span><span class=line><span class=cl>[link] /usr/bin/cc -L/tmp/demo/lib -Wl,-R/usr/local/lib -o real.bt/demo main.po -ldemo
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `src&#39; for `build&#39;
+</span></span></code></pre></div><p>We get a few warnings around shared libraries, as you could imagine from build scripts written almost 20 years ago, but no failures. Neat.</p><p>But does the built product work?</p><h2 id=running-the-demo>Running the demo</h2><p>Let&rsquo;s try to run the final binary we got:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ ./src/demo
+</span></span><span class=line><span class=cl>Calling library: 42
+</span></span></code></pre></div><p>Yay! It does work! But wait a moment:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ file src/demo
+</span></span><span class=line><span class=cl>src/demo: a /tmp/local/libexec/buildtool/bt_sh script, ASCII text executable
+</span></span></code></pre></div><p>What is this about? Why is our <code>demo</code> a script and not a proper binary given that we used C?</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ cat src/demo
+</span></span><span class=line><span class=cl>#!/tmp/local/libexec/buildtool/bt_sh
+</span></span><span class=line><span class=cl># File generated by bt_logic.
+</span></span><span class=line><span class=cl># Fri May 13 06:35:23 PDT 2022
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>LD_LIBRARY_PATH=:/tmp/demo/lib; export LD_LIBRARY_PATH
+</span></span><span class=line><span class=cl>/tmp/demo//src/real.bt/demo
+</span></span></code></pre></div><p>Aha. Much like when using GNU Libtool, a binary cannot be run from the source tree if it links against a library, because the library has not been installed yet. The script is just a wrapper to configure the dynamic loader and make things work. After installation, the rpath functionality will kick in and make the dynamic loader find the library in the right place.</p><h2 id=installing-the-demo>Installing the demo</h2><p>Let&rsquo;s install the demo:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ /tmp/local/bin/buildtool install
+</span></span><span class=line><span class=cl>bt_logic: entering directory `lib&#39; for `install&#39;
+</span></span><span class=line><span class=cl>[install] installing data file /tmp/root/lib/libdemo.so.0.1
+</span></span><span class=line><span class=cl>[exec] ln -fs libdemo.so.0.1 libdemo.so.0
+</span></span><span class=line><span class=cl>[exec] ln -fs libdemo.so.0.1 libdemo.so
+</span></span><span class=line><span class=cl>[install] creating missing directory /demo
+</span></span><span class=line><span class=cl>mkdir: /demo: Permission denied
+</span></span><span class=line><span class=cl>bt_logic: process stopped; command exited with error status `1&#39;
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `lib&#39; for `install&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `data&#39; for `install&#39;
+</span></span><span class=line><span class=cl>[install] installing data file /tmp/local/share/buildtool/pkgflags/demo.bpf
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `data&#39; for `install&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `src&#39; for `install&#39;
+</span></span><span class=line><span class=cl>[install] installing binary file /tmp/root/bin/demo
+</span></span><span class=line><span class=cl>[install] installing data file /tmp/root/man/man1/demo.1
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `src&#39; for `install&#39;
+</span></span><span class=line><span class=cl>[install] installing data file /tmp/root/share/doc/demo/CHANGES
+</span></span><span class=line><span class=cl>[install] installing data file /tmp/root/share/doc/demo/PEOPLE
+</span></span><span class=line><span class=cl>[install] installing data file /tmp/root/share/doc/demo/README
+</span></span><span class=line><span class=cl>[install] installing data file /tmp/root/share/doc/demo/TODO
+</span></span></code></pre></div><p>Oops, a little <code>mkdir</code> error, but it seems to have worked. If we inspect the installation prefix we provided during the configuration step (the <code>-p /tmp/root</code> flag we specified):</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ find /tmp/root
+</span></span><span class=line><span class=cl>/tmp/root
+</span></span><span class=line><span class=cl>/tmp/root/bin
+</span></span><span class=line><span class=cl>/tmp/root/bin/demo
+</span></span><span class=line><span class=cl>/tmp/root/lib
+</span></span><span class=line><span class=cl>/tmp/root/lib/libdemo.so
+</span></span><span class=line><span class=cl>/tmp/root/lib/libdemo.so.0.1
+</span></span><span class=line><span class=cl>/tmp/root/lib/libdemo.so.0
+</span></span><span class=line><span class=cl>/tmp/root/share
+</span></span><span class=line><span class=cl>/tmp/root/share/doc
+</span></span><span class=line><span class=cl>/tmp/root/share/doc/demo
+</span></span><span class=line><span class=cl>/tmp/root/share/doc/demo/PEOPLE
+</span></span><span class=line><span class=cl>/tmp/root/share/doc/demo/CHANGES
+</span></span><span class=line><span class=cl>/tmp/root/share/doc/demo/TODO
+</span></span><span class=line><span class=cl>/tmp/root/share/doc/demo/README
+</span></span><span class=line><span class=cl>/tmp/root/man
+</span></span><span class=line><span class=cl>/tmp/root/man/man1
+</span></span><span class=line><span class=cl>/tmp/root/man/man1/demo.1
+</span></span></code></pre></div><p>And, from these installed files, we can run the demo:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>$ /tmp/root/bin/demo
+</span></span><span class=line><span class=cl>Calling library: 42
+</span></span></code></pre></div><p>Finally, note how the installed demo is really a proper executable that uses the shared library that was installed along it:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ file /tmp/root/bin/demo
+</span></span><span class=line><span class=cl>/tmp/root/bin/demo: ELF 64-bit LSB executable, x86-64, version 1 (FreeBSD), dynamically linked, interpreter /libexec/ld-elf.so.1, for FreeBSD 13.0 (1300525), FreeBSD-style, with debug_info, not stripped
+</span></span><span class=line><span class=cl>/tmp/demo$ ldd /tmp/root/bin/demo
+</span></span><span class=line><span class=cl>/tmp/root/bin/demo:
+</span></span><span class=line><span class=cl>        libdemo.so.0 =&gt; /tmp/root/lib/libdemo.so.0 (0x200000)
+</span></span><span class=line><span class=cl>        libc.so.7 =&gt; /lib/libc.so.7 (0x200000)
+</span></span><span class=line><span class=cl>[preloaded]
+</span></span><span class=line><span class=cl>        [vdso] (0x7ffffffff5d0)
+</span></span></code></pre></div><h2 id=distributing-the-demo>Distributing the demo</h2><p>As a software package author, installing the program in one&rsquo;s machine is nice, but what about giving the program to other people? This is where the <code>dist</code> command comes into play, much like GNU Automake&rsquo;s <code>dist</code> target:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ /tmp/local/bin/buildtool dist
+</span></span><span class=line><span class=cl>bt_dist: cleaning tree (cleandir)
+</span></span><span class=line><span class=cl>bt_logic: entering directory `lib&#39; for `clean&#39;
+</span></span><span class=line><span class=cl>[remove]  func1.po
+</span></span><span class=line><span class=cl>[remove]  libdemo.so.0.1 libdemo.so.0 libdemo.so
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `lib&#39; for `clean&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `lib&#39; for `cleandir&#39;
+</span></span><span class=line><span class=cl>[remove]  func1.dep
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `lib&#39; for `cleandir&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `data&#39; for `clean&#39;
+</span></span><span class=line><span class=cl>[remove]  demo.bpf
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `data&#39; for `clean&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `data&#39; for `cleandir&#39;
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `data&#39; for `cleandir&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `src&#39; for `clean&#39;
+</span></span><span class=line><span class=cl>[remove]  main.po
+</span></span><span class=line><span class=cl>[remove]  demo
+</span></span><span class=line><span class=cl>[remove]  real.bt/demo
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `src&#39; for `clean&#39;
+</span></span><span class=line><span class=cl>bt_logic: entering directory `src&#39; for `cleandir&#39;
+</span></span><span class=line><span class=cl>[remove]  main.dep
+</span></span><span class=line><span class=cl>bt_logic: leaving directory `src&#39; for `cleandir&#39;
+</span></span><span class=line><span class=cl>[remove]  /tmp/demo/bt_config.h /tmp/demo/bt_config.env /tmp/demo/bt_logic.env /tmp/demo/bt_config.log /tmp/demo/bt_config.sed /tmp/demo/bt_output
+</span></span><span class=line><span class=cl>bt_dist: validating package
+</span></span><span class=line><span class=cl>=&gt; Checking root files
+</span></span><span class=line><span class=cl>WARN: COPYING not found; it is highly recommended
+</span></span><span class=line><span class=cl>=&gt; Checking definitions (/tmp/demo/Generic.bt)
+</span></span><span class=line><span class=cl>WARN: no package homepage
+</span></span><span class=line><span class=cl>=&gt; Checking configuration script (/tmp/demo/Generic.bt)
+</span></span><span class=line><span class=cl>=&gt; Summary
+</span></span><span class=line><span class=cl>bt_lint: package should be corrected; 2 warnings
+</span></span><span class=line><span class=cl>bt_dist: building compressed dist, type tar.gz
+</span></span></code></pre></div><p>The above invocation above generates a <code>demo-0.1.tar.gz</code> distributable source package, which we can inspect:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>/tmp/demo$ tar tzf ../demo-0.1.tar.gz
+</span></span><span class=line><span class=cl>demo-0.1/
+</span></span><span class=line><span class=cl>demo-0.1/PEOPLE
+</span></span><span class=line><span class=cl>demo-0.1/lib/
+</span></span><span class=line><span class=cl>demo-0.1/CHANGES
+</span></span><span class=line><span class=cl>demo-0.1/TODO
+</span></span><span class=line><span class=cl>demo-0.1/README.bt
+</span></span><span class=line><span class=cl>demo-0.1/data/
+</span></span><span class=line><span class=cl>demo-0.1/README
+</span></span><span class=line><span class=cl>demo-0.1/src/
+</span></span><span class=line><span class=cl>demo-0.1/Generic.bt
+</span></span><span class=line><span class=cl>demo-0.1/src/Logic.bt
+</span></span><span class=line><span class=cl>demo-0.1/src/main.c
+</span></span><span class=line><span class=cl>demo-0.1/src/demo.1
+</span></span><span class=line><span class=cl>demo-0.1/data/Logic.bt
+</span></span><span class=line><span class=cl>demo-0.1/data/demo.bpf.in
+</span></span><span class=line><span class=cl>demo-0.1/lib/func1.c
+</span></span><span class=line><span class=cl>demo-0.1/lib/Logic.bt
+</span></span><span class=line><span class=cl>demo-0.1/lib/demo.1
+</span></span><span class=line><span class=cl>demo-0.1/lib/demo.h
+</span></span></code></pre></div><h2 id=peeking-into-the-data-directory>Peeking into the data directory</h2><p>I glanced over the <code>data</code> directory earlier on, skipping that mysterious <code>bpf</code> file. If we look at the files that were installed under Buildtool&rsquo;s own prefix (a mistake) when we installed the demo, we can find that our package installed a <code>share/buildtool/pkgflags/demo.bpf</code> file. Looking at its contents, we see:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=line><span class=cl><span class=c1># $Id: pkgflags,v 1.1 2003/04/26 21:48:17 jmmv Exp $</span>
+</span></span><span class=line><span class=cl><span class=c1># pkgflags file</span>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl><span class=c1># This file is mostly useful for packages providing libraries.</span>
+</span></span><span class=line><span class=cl><span class=c1># If not needed (i.e., if the package is a program), remove it.</span>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>BT_PREFIX</span><span class=o>=</span><span class=s2>&#34;/tmp/root&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>BT_DIR_LIB</span><span class=o>=</span><span class=s2>&#34;/tmp/root/lib&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>BT_DIR_INCLUDE</span><span class=o>=</span><span class=s2>&#34;/tmp/root/include&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>bpf_name</span><span class=o>=</span><span class=s2>&#34;demo&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>bpf_descr</span><span class=o>=</span><span class=s2>&#34;Remembering Buildtool&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>bpf_version</span><span class=o>=</span><span class=s2>&#34;0.1&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>bpf_libs</span><span class=o>=</span><span class=s2>&#34;-L</span><span class=si>${</span><span class=nv>BT_DIR_LIB</span><span class=si>}</span><span class=s2> -ldemo&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>bpf_cflags</span><span class=o>=</span><span class=s2>&#34;-I</span><span class=si>${</span><span class=nv>BT_DIR_INCLUDE</span><span class=si>}</span><span class=s2>&#34;</span>
+</span></span></code></pre></div><p>This is the equivalent of what a <code>pkg-config</code> file would provide. And it works. We can query the file using Buildtool&rsquo;s <code>pkgflags</code> command and obtain the right compiler and linker flags for our demo library:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>$ /tmp/local/bin/buildtool pkgflags --cflags --libs demo
+</span></span><span class=line><span class=cl>setting undefined variable `BT_PREFIX&#39;
+</span></span><span class=line><span class=cl>setting undefined variable `BT_DIR_LIB&#39;
+</span></span><span class=line><span class=cl>setting undefined variable `BT_DIR_INCLUDE&#39;
+</span></span><span class=line><span class=cl>-I/tmp/root/include -L/tmp/root/lib -ldemo
+</span></span></code></pre></div><p>And this concludes the demo.</p><h1 id=what-happened-to-buildtool>What happened to Buildtool?</h1><p>Buildtool as it was in its 0.16 release in 2004 seems fairly impressive. The user manual is comprehensive, the tool provides many more features than I remembered, and it still works to this day.</p><p>So what happened to Buildtool? Why did I officially cancel it in 2005? There are a few reasons.</p><ol><li><p>The first is that Buildtool collapsed under its own complexity. Shell is not the right language to write a build system in, and <code>bt_logic</code> became an unmanageable mess to deal with. I&rsquo;m surprised it still works on a modern system to be honest.</p></li><li><p>The second is that, even though Buildtool seems &ldquo;complete&rdquo;, it still lacks lots of functionality&mdash;and the missing functionality wasn&rsquo;t easy to implement. When I was writing the tool, I found myself leaning on the GNU Autotools manuals to understand how things worked across systems, and I relied on those details to implement my own versions. The more I did this, the more I learned about the GNU Autotools, and the more I realized how knowledgeable the GNU Autotools authors were and how far I was from providing something comparable. This was humbling. Furthermore, during this process, I had become so &ldquo;fluent&rdquo; in the GNU Autotools that it made no sense to continue developing my own thing.</p></li><li><p>The third is that having to install a supporting build tool to compile fundamental system packages wasn&rsquo;t well-seen at the time. Every time I had to deal with a similar system in pkgsrc (Boost.Jam or whatever Mozilla had, for example), it was a pain. Like it or not, the GNU Autotools are the de-facto standard, and despite all of their flaws, they are the ones that integrate well with packaging systems and system tools.</p></li></ol><p>My interest in build systems remains and what you have read here partially explains my <a href=/2015/04/on-bazel-and-open-source.html>original critique of Bazel</a>. I ended up working in Bazel for a few years though because I like the topic. No matter my original comments, Bazel is a great build system from which many others should learn. But it&rsquo;s still missing the kind of system-level integration that Buildtool intended to provide via the <code>install</code> and <code>pkgflags</code> commands.</p><p>One thing I&rsquo;ll note is how Buildtool already had a concept of high-level targets from a semantical perspective. You could make a single build file define various targets (libraries, programs, etc.) and each of those would know how to build, install, and clean itself. You can see that the same ideas have evolved in most of today&rsquo;s build systems in some form or another, and that the file-level dependency tracking that <code>make</code> provides is &ldquo;a thing of the past&rdquo;.</p><p>To conclude, let me add that I still believe there is room for something like Buildtool in this day and age to support the foundations of our free Unix-like systems&mldr; but it would need to be much better designed and implemented than Buildtool. I have ideas; I just wish I had the same amount of free time that I had when I was a student.</p></article></div></div><div class="container post-links"><div class=row><div class="col mr-auto text-left"><span><a href=https://jmmv.dev/2022/05/rust-is-hard-but-does-it-matter.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ml-auto text-right"><span><a href=https://jmmv.dev/2022/06/endbasic-0.9.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a></div><div class=col><a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a></div></div></div><div class="col-lg-8 my-2 d-none d-sm-block"><div class=row><div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Remembering+Buildtool&amp;url=https%3A%2F%2Fjmmv.dev%2F2022%2F05%2Fremembering-buildtool.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Remembering+Buildtool&amp;u=https%3A%2F%2Fjmmv.dev%2F2022%2F05%2Fremembering-buildtool.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Remembering+Buildtool+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2022%2F05%2Fremembering-buildtool.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24></a></div></div></div></div><div class="row my-4" id=postCommentRow><div class=col><div class=media><img class=mr-3 src=/octicons/pencil.svg width=32px height=32px><div class="media-body container"><form method=post id=newPost><div class=row><div class="col my-1"><textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentEmail>Your email (optional):</label>
 <input type=text class=form-control type=email id=postCommentEmail>
-<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
-</div>
-</div>
-<div class=row id=postCommentError style=display:none>
-<div class="col mt-1 alert-danger">
-<p></p>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
-<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
-</div>
-<div class="container post-subscribe">
-<div class=row>
-<div class="col-sm-3 py-2">
-<div class=row>
-<div class="col px-2 text-center">
-<a rel=me href=https://mastodon.online/@jmmv>
-<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
-</div>
-</div>
-</div>
-<div class="col-sm-9 py-2">
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<div class=row>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
-<button type=submit class="btn btn-primary col-4">Subscribe</button>
-</div>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar d-none d-md-block">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-4 text-center">
-<p>
-<a rel=me href=https://mastodon.online/@jmmv>
-<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
-</a>
-</p>
-</div>
-<div class="col-sm-4 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-4 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li>
-<li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
-<li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
-<li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
-<li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
-<li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
-<li class=overflow-ellipsis><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
-<li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2023>2023</a> (3)
-<ul id=archive-year-2023 class=collapse>
-<li><a href=/archive.html#2023-03>March 2023</a> (2)</li>
-<li><a href=/archive.html#2023-01>January 2023</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (32)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-12>December 2022</a> (1)</li>
-<li><a href=/archive.html#2022-11>November 2022</a> (1)</li>
-<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
-<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
-<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
-<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
-<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
-<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
-<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col-4 order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col-8 order-1 mr-auto">
-<p>Copyright 2004&ndash;2023 Julio Merino</p>
-</div>
-</div>
-</footer>
-<script type=module>
-  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small></div></div><div class=row id=postCommentError style=display:none><div class="col mt-1 alert-danger"><p></p></div></div><div class="row newPostControls" style=display:none><button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small></div></form></div></div></div></div><script>function hidePostComment(){var t,e=document.getElementById("postCommentContent");e.rows=1,e.value="",t=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(t,function(e){e.style.display="none"})}function showPostComment(){var e,t=document.getElementById("postCommentContent");t.rows=5,e=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(e,function(e){e.style.display=""})}const form=document.querySelector("#newPost");form.onsubmit=function(e){e.preventDefault();let t=document.getElementById("postCommentAuthor").value,n=document.getElementById("postCommentEmail").value,s=document.getElementById("postCommentContent").value;postComment(t,n,s,hidePostComment)}</script></div><div class="container post-subscribe"><div class=row><div class="col-sm-3 py-2"><div class=row><div class="col px-2 text-center"><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon"></a></div><div class="col px-2 text-center"><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter"></a></div><div class="col px-2 text-center"><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></div></div></div><div class="col-sm-9 py-2"><form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post><div class=form-group><div class=row><input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
+<button type=submit class="btn btn-primary col-4">Subscribe</button></div></div></form></div></div></div></div><div class="col-md-3 sidebar d-none d-md-block"><div class=row><div class="col text-center p-2"><p><a href=/about.html class=clear-link><img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br><b>Julio Merino</b><br>Software Engineer<br><small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br><small>From Barcelona, living in Seattle</small></a></p><div class=row><div class="col-sm-4 text-center"><p><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon"></a></p></div><div class="col-sm-4 text-center"><p><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter"></a></p></div><div class="col-sm-4 text-center"><p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p></div></div><form action=https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add method=post><div class=form-group><input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button></div><small><span id=subscriber-count>0</span> subscribers</small></form></div></div><div class=row><div class=col><h2>Featured posts</h2><ul><li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li><li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li><li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li><li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li><li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li><li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li><li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li><li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li><li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li><li class=overflow-ellipsis><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li><li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li></ul></div></div><div class=row><div class=col><h2>Archive</h2><ul><li><a data-toggle=collapse href=#archive-year-2023>2023</a> (3)<ul id=archive-year-2023 class=collapse><li><a href=/archive.html#2023-03>March 2023</a> (2)</li><li><a href=/archive.html#2023-01>January 2023</a> (1)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2022>2022</a> (32)<ul id=archive-year-2022 class=collapse><li><a href=/archive.html#2022-12>December 2022</a> (1)</li><li><a href=/archive.html#2022-11>November 2022</a> (1)</li><li><a href=/archive.html#2022-10>October 2022</a> (1)</li><li><a href=/archive.html#2022-07>July 2022</a> (1)</li><li><a href=/archive.html#2022-06>June 2022</a> (2)</li><li><a href=/archive.html#2022-05>May 2022</a> (2)</li><li><a href=/archive.html#2022-04>April 2022</a> (4)</li><li><a href=/archive.html#2022-03>March 2022</a> (15)</li><li><a href=/archive.html#2022-02>February 2022</a> (4)</li><li><a href=/archive.html#2022-01>January 2022</a> (1)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2021>2021</a> (22)<ul id=archive-year-2021 class=collapse><li><a href=/archive.html#2021-11>November 2021</a> (2)</li><li><a href=/archive.html#2021-08>August 2021</a> (2)</li><li><a href=/archive.html#2021-07>July 2021</a> (5)</li><li><a href=/archive.html#2021-06>June 2021</a> (1)</li><li><a href=/archive.html#2021-04>April 2021</a> (2)</li><li><a href=/archive.html#2021-03>March 2021</a> (2)</li><li><a href=/archive.html#2021-02>February 2021</a> (3)</li><li><a href=/archive.html#2021-01>January 2021</a> (5)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2020>2020</a> (36)<ul id=archive-year-2020 class=collapse><li><a href=/archive.html#2020-12>December 2020</a> (4)</li><li><a href=/archive.html#2020-11>November 2020</a> (5)</li><li><a href=/archive.html#2020-10>October 2020</a> (5)</li><li><a href=/archive.html#2020-09>September 2020</a> (2)</li><li><a href=/archive.html#2020-08>August 2020</a> (6)</li><li><a href=/archive.html#2020-07>July 2020</a> (2)</li><li><a href=/archive.html#2020-06>June 2020</a> (2)</li><li><a href=/archive.html#2020-05>May 2020</a> (3)</li><li><a href=/archive.html#2020-04>April 2020</a> (2)</li><li><a href=/archive.html#2020-03>March 2020</a> (2)</li><li><a href=/archive.html#2020-02>February 2020</a> (1)</li><li><a href=/archive.html#2020-01>January 2020</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2019>2019</a> (24)<ul id=archive-year-2019 class=collapse><li><a href=/archive.html#2019-12>December 2019</a> (8)</li><li><a href=/archive.html#2019-11>November 2019</a> (6)</li><li><a href=/archive.html#2019-10>October 2019</a> (1)</li><li><a href=/archive.html#2019-09>September 2019</a> (2)</li><li><a href=/archive.html#2019-03>March 2019</a> (2)</li><li><a href=/archive.html#2019-02>February 2019</a> (3)</li><li><a href=/archive.html#2019-01>January 2019</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2018>2018</a> (25)<ul id=archive-year-2018 class=collapse><li><a href=/archive.html#2018-07>July 2018</a> (3)</li><li><a href=/archive.html#2018-06>June 2018</a> (7)</li><li><a href=/archive.html#2018-05>May 2018</a> (2)</li><li><a href=/archive.html#2018-04>April 2018</a> (2)</li><li><a href=/archive.html#2018-03>March 2018</a> (8)</li><li><a href=/archive.html#2018-02>February 2018</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2017>2017</a> (6)<ul id=archive-year-2017 class=collapse><li><a href=/archive.html#2017-10>October 2017</a> (1)</li><li><a href=/archive.html#2017-08>August 2017</a> (1)</li><li><a href=/archive.html#2017-07>July 2017</a> (1)</li><li><a href=/archive.html#2017-02>February 2017</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2016>2016</a> (8)<ul id=archive-year-2016 class=collapse><li><a href=/archive.html#2016-09>September 2016</a> (1)</li><li><a href=/archive.html#2016-05>May 2016</a> (1)</li><li><a href=/archive.html#2016-04>April 2016</a> (1)</li><li><a href=/archive.html#2016-03>March 2016</a> (2)</li><li><a href=/archive.html#2016-02>February 2016</a> (1)</li><li><a href=/archive.html#2016-01>January 2016</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2015>2015</a> (17)<ul id=archive-year-2015 class=collapse><li><a href=/archive.html#2015-12>December 2015</a> (2)</li><li><a href=/archive.html#2015-10>October 2015</a> (2)</li><li><a href=/archive.html#2015-09>September 2015</a> (3)</li><li><a href=/archive.html#2015-06>June 2015</a> (2)</li><li><a href=/archive.html#2015-05>May 2015</a> (3)</li><li><a href=/archive.html#2015-04>April 2015</a> (1)</li><li><a href=/archive.html#2015-03>March 2015</a> (1)</li><li><a href=/archive.html#2015-02>February 2015</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2014>2014</a> (12)<ul id=archive-year-2014 class=collapse><li><a href=/archive.html#2014-11>November 2014</a> (2)</li><li><a href=/archive.html#2014-05>May 2014</a> (3)</li><li><a href=/archive.html#2014-03>March 2014</a> (1)</li><li><a href=/archive.html#2014-02>February 2014</a> (3)</li><li><a href=/archive.html#2014-01>January 2014</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2013>2013</a> (62)<ul id=archive-year-2013 class=collapse><li><a href=/archive.html#2013-12>December 2013</a> (7)</li><li><a href=/archive.html#2013-11>November 2013</a> (7)</li><li><a href=/archive.html#2013-10>October 2013</a> (7)</li><li><a href=/archive.html#2013-09>September 2013</a> (13)</li><li><a href=/archive.html#2013-08>August 2013</a> (9)</li><li><a href=/archive.html#2013-07>July 2013</a> (10)</li><li><a href=/archive.html#2013-06>June 2013</a> (9)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2012>2012</a> (29)<ul id=archive-year-2012 class=collapse><li><a href=/archive.html#2012-10>October 2012</a> (1)</li><li><a href=/archive.html#2012-09>September 2012</a> (1)</li><li><a href=/archive.html#2012-08>August 2012</a> (3)</li><li><a href=/archive.html#2012-07>July 2012</a> (2)</li><li><a href=/archive.html#2012-06>June 2012</a> (2)</li><li><a href=/archive.html#2012-05>May 2012</a> (3)</li><li><a href=/archive.html#2012-04>April 2012</a> (1)</li><li><a href=/archive.html#2012-03>March 2012</a> (1)</li><li><a href=/archive.html#2012-02>February 2012</a> (10)</li><li><a href=/archive.html#2012-01>January 2012</a> (5)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2011>2011</a> (60)<ul id=archive-year-2011 class=collapse><li><a href=/archive.html#2011-12>December 2011</a> (4)</li><li><a href=/archive.html#2011-11>November 2011</a> (4)</li><li><a href=/archive.html#2011-10>October 2011</a> (5)</li><li><a href=/archive.html#2011-09>September 2011</a> (11)</li><li><a href=/archive.html#2011-08>August 2011</a> (6)</li><li><a href=/archive.html#2011-07>July 2011</a> (4)</li><li><a href=/archive.html#2011-06>June 2011</a> (6)</li><li><a href=/archive.html#2011-05>May 2011</a> (6)</li><li><a href=/archive.html#2011-04>April 2011</a> (5)</li><li><a href=/archive.html#2011-03>March 2011</a> (2)</li><li><a href=/archive.html#2011-01>January 2011</a> (7)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2010>2010</a> (26)<ul id=archive-year-2010 class=collapse><li><a href=/archive.html#2010-12>December 2010</a> (7)</li><li><a href=/archive.html#2010-09>September 2010</a> (1)</li><li><a href=/archive.html#2010-07>July 2010</a> (1)</li><li><a href=/archive.html#2010-06>June 2010</a> (2)</li><li><a href=/archive.html#2010-05>May 2010</a> (5)</li><li><a href=/archive.html#2010-04>April 2010</a> (5)</li><li><a href=/archive.html#2010-03>March 2010</a> (3)</li><li><a href=/archive.html#2010-01>January 2010</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2009>2009</a> (31)<ul id=archive-year-2009 class=collapse><li><a href=/archive.html#2009-10>October 2009</a> (1)</li><li><a href=/archive.html#2009-09>September 2009</a> (1)</li><li><a href=/archive.html#2009-08>August 2009</a> (3)</li><li><a href=/archive.html#2009-07>July 2009</a> (2)</li><li><a href=/archive.html#2009-06>June 2009</a> (4)</li><li><a href=/archive.html#2009-05>May 2009</a> (6)</li><li><a href=/archive.html#2009-04>April 2009</a> (2)</li><li><a href=/archive.html#2009-03>March 2009</a> (4)</li><li><a href=/archive.html#2009-01>January 2009</a> (8)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2008>2008</a> (61)<ul id=archive-year-2008 class=collapse><li><a href=/archive.html#2008-12>December 2008</a> (1)</li><li><a href=/archive.html#2008-11>November 2008</a> (4)</li><li><a href=/archive.html#2008-10>October 2008</a> (6)</li><li><a href=/archive.html#2008-09>September 2008</a> (1)</li><li><a href=/archive.html#2008-08>August 2008</a> (6)</li><li><a href=/archive.html#2008-07>July 2008</a> (14)</li><li><a href=/archive.html#2008-06>June 2008</a> (3)</li><li><a href=/archive.html#2008-05>May 2008</a> (1)</li><li><a href=/archive.html#2008-04>April 2008</a> (3)</li><li><a href=/archive.html#2008-03>March 2008</a> (3)</li><li><a href=/archive.html#2008-02>February 2008</a> (9)</li><li><a href=/archive.html#2008-01>January 2008</a> (10)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2007>2007</a> (86)<ul id=archive-year-2007 class=collapse><li><a href=/archive.html#2007-12>December 2007</a> (4)</li><li><a href=/archive.html#2007-11>November 2007</a> (7)</li><li><a href=/archive.html#2007-10>October 2007</a> (2)</li><li><a href=/archive.html#2007-09>September 2007</a> (8)</li><li><a href=/archive.html#2007-08>August 2007</a> (6)</li><li><a href=/archive.html#2007-07>July 2007</a> (15)</li><li><a href=/archive.html#2007-06>June 2007</a> (15)</li><li><a href=/archive.html#2007-05>May 2007</a> (4)</li><li><a href=/archive.html#2007-04>April 2007</a> (10)</li><li><a href=/archive.html#2007-03>March 2007</a> (8)</li><li><a href=/archive.html#2007-02>February 2007</a> (1)</li><li><a href=/archive.html#2007-01>January 2007</a> (6)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2006>2006</a> (103)<ul id=archive-year-2006 class=collapse><li><a href=/archive.html#2006-12>December 2006</a> (4)</li><li><a href=/archive.html#2006-11>November 2006</a> (3)</li><li><a href=/archive.html#2006-10>October 2006</a> (7)</li><li><a href=/archive.html#2006-09>September 2006</a> (6)</li><li><a href=/archive.html#2006-08>August 2006</a> (13)</li><li><a href=/archive.html#2006-07>July 2006</a> (4)</li><li><a href=/archive.html#2006-06>June 2006</a> (13)</li><li><a href=/archive.html#2006-05>May 2006</a> (7)</li><li><a href=/archive.html#2006-04>April 2006</a> (9)</li><li><a href=/archive.html#2006-03>March 2006</a> (6)</li><li><a href=/archive.html#2006-02>February 2006</a> (13)</li><li><a href=/archive.html#2006-01>January 2006</a> (18)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2005>2005</a> (129)<ul id=archive-year-2005 class=collapse><li><a href=/archive.html#2005-12>December 2005</a> (9)</li><li><a href=/archive.html#2005-11>November 2005</a> (7)</li><li><a href=/archive.html#2005-10>October 2005</a> (23)</li><li><a href=/archive.html#2005-09>September 2005</a> (10)</li><li><a href=/archive.html#2005-08>August 2005</a> (14)</li><li><a href=/archive.html#2005-07>July 2005</a> (5)</li><li><a href=/archive.html#2005-06>June 2005</a> (12)</li><li><a href=/archive.html#2005-05>May 2005</a> (6)</li><li><a href=/archive.html#2005-04>April 2005</a> (6)</li><li><a href=/archive.html#2005-03>March 2005</a> (13)</li><li><a href=/archive.html#2005-02>February 2005</a> (11)</li><li><a href=/archive.html#2005-01>January 2005</a> (13)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2004>2004</a> (84)<ul id=archive-year-2004 class=collapse><li><a href=/archive.html#2004-12>December 2004</a> (9)</li><li><a href=/archive.html#2004-11>November 2004</a> (6)</li><li><a href=/archive.html#2004-10>October 2004</a> (11)</li><li><a href=/archive.html#2004-09>September 2004</a> (19)</li><li><a href=/archive.html#2004-07>July 2004</a> (29)</li><li><a href=/archive.html#2004-06>June 2004</a> (10)</li></ul></li></ul></div></div></div></div></div><footer class=container><div class=row><div class="col-4 order-2 texr-right"><p class=float-right><a href=#>Back to top</a></p></div><div class="col-8 order-1 mr-auto"><p>Copyright 2004&ndash;2023 Julio Merino</p></div></div></footer><script type=module>
+  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.9a47b323ba8f681c34c2db58e62eebd208ed54394a41b1f8052eea144a874915.js";
 
   var batchClient = new BatchClient(SITE_ID);
-  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
+  batchClient.doAll({
+    put_request: true, get_comments: true, get_subscriber_count: true, get_votes: true });
 
   window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
   window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
@@ -1169,9 +534,4 @@ Software Engineer<br>
 
   addAnchorsToHeaders();
   addElementClasses();
-</script>
-<noscript>
-<img src=https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIyLzA1L3JlbWVtYmVyaW5nLWJ1aWxkdG9vbC5odG1s/stamp.gif style=display:none>
-</noscript>
-</body>
-</html>
+</script><noscript><img src=https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDIyLzA1L3JlbWVtYmVyaW5nLWJ1aWxkdG9vbC5odG1s/stamp.gif style=display:none></noscript></body></html>

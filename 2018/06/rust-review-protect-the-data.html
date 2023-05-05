@@ -1,167 +1,66 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#>
-<head>
-<meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge">
-<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
-<meta property="og:site_name" content="Julio Merino (jmmv.dev)">
-<meta property="twitter:site" content="@jmmv">
-<title>Rust review: Protect the data - Julio Merino (jmmv.dev)</title>
-<meta property="og:title" content="Rust review: Protect the data - Julio Merino (jmmv.dev)">
-<meta property="twitter:title" content="Rust review: Protect the data - Julio Merino (jmmv.dev)">
-<meta name=description content="The one thing that blew my mind about Rust is its approach to data sharing in concurrent situations.
-I had always thought of mutexes as something that is easy to get wrong and was convinced that the use of a RAII pattern to prevent lock leaks never happen (like with Abseil&amp;rsquo;s MutexLock) was the panacea. (I&amp;rsquo;m a fan of RAII in C++ by the way, in case you haven&amp;rsquo;t noticed.)">
-<meta property="og:description" content="The one thing that blew my mind about Rust is its approach to data sharing in concurrent situations.
-I had always thought of mutexes as something that is easy to get wrong and was convinced that the use of a RAII pattern to prevent lock leaks never happen (like with Abseil&amp;rsquo;s MutexLock) was the panacea. (I&amp;rsquo;m a fan of RAII in C++ by the way, in case you haven&amp;rsquo;t noticed.)">
-<meta property="twitter:description" content="The one thing that blew my mind about Rust is its approach to data sharing in concurrent situations.
-I had always thought of mutexes as something that is easy to get wrong and was convinced that the …">
-<meta name=author content="Julio Merino">
-<meta property="twitter:creator" content="@jmmv">
-<meta name=generator content="Hugo 0.92.1">
-<meta property="og:url" content="https://jmmv.dev/2018/06/rust-review-protect-the-data.html">
-<meta property="og:type" content="blog">
-<meta property="twitter:card" content="summary">
-<link rel=canonical href=https://jmmv.dev/2018/06/rust-review-protect-the-data.html>
-<link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml>
-<link rel=stylesheet href=/sass/main.min.ce628ad32d280a2570d17aa4a7e3cb429d327b6b044032d289bf9e395f5365ba.css>
-<link rel=stylesheet href=/css/chroma.css>
-<meta property="og:image" content="/images/favicons/favicon-1200x1200.png">
-<link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16>
-<link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32>
-<link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96>
-<meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png">
-<script>const SITE_ID='e8da9f62-b7ac-4fe9-bf20-7c527199a376',BASE_URL='https://jmmv.dev/'</script>
-</head>
-<body>
-<header class=site-header>
-<nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary">
-<a class=navbar-brand href=/>
-<img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
-&nbsp;Julio Merino
-</a>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Rust review: Protect the data - Julio Merino (jmmv.dev)</title><meta property="og:title" content="Rust review: Protect the data - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Rust review: Protect the data - Julio Merino (jmmv.dev)"><meta name=description content="The one thing that blew my mind about Rust is its approach to data sharing in concurrent situations.
+I had always thought of mutexes as something that is easy to get wrong and was convinced that the use of a RAII pattern to prevent lock leaks never happen (like with Abseil&amp;rsquo;s MutexLock) was the panacea. (I&amp;rsquo;m a fan of RAII in C++ by the way, in case you haven&amp;rsquo;t noticed.)"><meta property="og:description" content="The one thing that blew my mind about Rust is its approach to data sharing in concurrent situations.
+I had always thought of mutexes as something that is easy to get wrong and was convinced that the use of a RAII pattern to prevent lock leaks never happen (like with Abseil&amp;rsquo;s MutexLock) was the panacea. (I&amp;rsquo;m a fan of RAII in C++ by the way, in case you haven&amp;rsquo;t noticed.)"><meta property="twitter:description" content="The one thing that blew my mind about Rust is its approach to data sharing in concurrent situations.
+I had always thought of mutexes as something that is easy to get wrong and was convinced that the …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.111.3"><meta property="og:url" content="https://jmmv.dev/2018/06/rust-review-protect-the-data.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2018/06/rust-review-protect-the-data.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.2e4a4a3a8db91cf527e242ade6346a52e880c9075e469c82b2c0e7d293642165.css><link rel=stylesheet href=/css/chroma.css><meta property="og:image" content="/images/favicons/favicon-1200x1200.png"><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><header class=site-header><nav class="navbar navbar-expand-lg fixed-top navbar-dark bg-primary"><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;Julio Merino</a>
 <button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
-<span class=navbar-toggler-icon></span>
-</button>
-<div class="collapse navbar-collapse" id=navbarSupportedContent>
-<ul class="navbar-nav mr-auto">
-<li class=nav-item>
-<a class=nav-link href=/about.html>About</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/essays.html>Essays</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/resume.html>Resume</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/software.html>Software</a>
-</li>
-</ul>
-<ul class="navbar-nav mr-4">
-<li class=nav-item>
-<a class=nav-link href=/archive.html>Archive</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/series.html>Series</a>
-</li>
-<li class=nav-item>
-<a class=nav-link href=/tags.html>Tags</a>
-</li>
-</ul>
-<form class=form-inline method=get role=search action=https://www.google.com/search>
-<div class=input-group>
-<input type=search name=query class=form-control placeholder=Search aria-label=Search>
-<div class=input-group-append>
-<button type=submit value=Search class="btn btn-light">
-<img src=/octicons/search.svg>
-</button>
-</div>
-</div>
-<input type=hidden name=sitesearch value=https://jmmv.dev/>
-</form>
-</div>
-</nav>
-</header>
-<div class=page-header>
-<div class=container>
-<h1>Rust review: Protect the data</h1>
-<p>June 5, 2018 &#183;
+<span class=navbar-toggler-icon></span></button><div class="collapse navbar-collapse" id=navbarSupportedContent><ul class="navbar-nav mr-auto"><li class=nav-item><a class=nav-link href=/about.html>About</a></li><li class=nav-item><a class=nav-link href=/essays.html>Essays</a></li><li class=nav-item><a class=nav-link href=/resume.html>Resume</a></li><li class=nav-item><a class=nav-link href=/software.html>Software</a></li></ul><ul class="navbar-nav mr-4"><li class=nav-item><a class=nav-link href=/archive.html>Archive</a></li><li class=nav-item><a class=nav-link href=/series.html>Series</a></li><li class=nav-item><a class=nav-link href=/tags.html>Tags</a></li></ul><form class=form-inline method=get role=search action=https://www.google.com/search><div class=input-group><input type=search name=query class=form-control placeholder=Search aria-label=Search><div class=input-group-append><button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg></button></div></div><input type=hidden name=sitesearch value=https://jmmv.dev/></form></div></nav></header><div class=page-header><div class=container><h1>Rust review: Protect the data</h1><p>June 5, 2018 &#183;
 About 5 minutes
 &#183;
 Tags:
-<a class=text-reset href=/tags/programming>programming</a>, <a class=text-reset href=/tags/rust>rust</a>, <a class=text-reset href=/tags/sandboxfs>sandboxfs</a></p>
-</div>
-</div>
-<div class=container>
-<div class=row>
-<div class=col-md-9>
-<div class=row>
-<div class=col>
-<p><i>This article is part number
+<a class=text-reset href=/tags/programming>programming</a>, <a class=text-reset href=/tags/rust>rust</a>, <a class=text-reset href=/tags/sandboxfs>sandboxfs</a></p></div></div><div class=container><div class=row><div class=col-md-9><div class=row><div class=col><p><i>This article is part number
 4 of the ongoing
-<a href=/series.html#Rust%20review><b>
-Rust review</b> series</a>.</i></p>
-<hr>
-<article><p><em>The one thing</em> that blew my mind about Rust is its approach to data sharing in concurrent situations.</p>
-<p>I had always thought of mutexes as something that is easy to get wrong and was convinced that the use of a RAII pattern to prevent lock leaks never happen (like with <a href=https://github.com/abseil/abseil-cpp/blob/59ae4d5a0e833bedd9d7cc059ac15a9dc130e3f7/absl/synchronization/mutex.h#L499>Abseil&rsquo;s <code>MutexLock</code></a>) was the panacea. (I&rsquo;m a fan of RAII in C++ by the way, in case you haven&rsquo;t noticed.)</p>
-<p>As Rust has taught me, that&rsquo;s far from the truth: <strong>in Rust, you protect the <em>data</em>, not the <em>code</em>.</strong> What this means is that, e.g. a mutex is not an object to control access to a piece of data: <strong>a mutex is a <em>container</em> for a piece of data</strong>. It is impossible to access the data without going through the mutex.</p>
-<p><em>&ldquo;Ah! Not so fast! You can do exactly the same in C++ or even in Go!"</em>, you claim. Yeeee&mldr; no, not at all. Sure, you can implement a container that holds the data and only exposes its contents via a getter after grabbing the lock. But there is <em>nothing</em> preventing the code from leaking a reference to that inner data after the mutex is released. Let&rsquo;s imagine an interface like this (with lots of details omitted, like suppression of copies and assignments):</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=k>template</span><span class=o>&lt;</span> <span class=k>typename</span> <span class=n>T</span> <span class=o>&gt;</span>
-<span class=k>class</span> <span class=nc>Lock</span> <span class=p>{</span>
-    <span class=n>T</span><span class=o>&amp;</span> <span class=n>_data</span><span class=p>;</span>
-
-    <span class=k>friend</span> <span class=k>class</span> <span class=nc>Mutex</span><span class=p>;</span>
-    <span class=n>Lock</span><span class=p>(</span><span class=n>T</span><span class=o>&amp;</span><span class=p>);</span>  <span class=c1>// Grabs non-owning reference to the data.
-</span><span class=c1></span>
-  <span class=k>public</span><span class=o>:</span>
-    <span class=o>~</span><span class=n>Lock</span><span class=p>();</span>  <span class=c1>// Releases mutex.
-</span><span class=c1></span>    <span class=k>const</span> <span class=n>T</span><span class=o>&amp;</span> <span class=n>get</span><span class=p>()</span> <span class=k>const</span><span class=p>;</span>
-    <span class=n>T</span><span class=o>&amp;</span> <span class=n>get</span><span class=p>();</span>
-<span class=p>};</span>
-
-<span class=k>template</span><span class=o>&lt;</span> <span class=k>typename</span> <span class=n>T</span> <span class=o>&gt;</span>
-<span class=k>class</span> <span class=nc>Mutex</span> <span class=p>{</span>
-    <span class=n>T</span> <span class=n>_data</span><span class=p>;</span>
-
-  <span class=k>public</span><span class=o>:</span>
-    <span class=k>explicit</span> <span class=n>Mutex</span><span class=p>(</span><span class=n>T</span><span class=o>&amp;&amp;</span><span class=p>);</span>  <span class=c1>// Grabs ownership of the data.
-</span><span class=c1></span>    <span class=n>Lock</span><span class=o>&lt;</span><span class=n>T</span><span class=o>&gt;</span> <span class=n>lock</span><span class=p>(</span><span class=kt>void</span><span class=p>);</span>  <span class=c1>// Acquires mutex.
-</span><span class=c1></span><span class=p>};</span>
-</code></pre></div><p>Looks legit, right? We can only construct a <code>Mutex</code> by moving an arbitrary object into it, and from there on, the only way to get back to the object is to first call <code>lock()</code> on the mutex. Doing so returns us a <code>Lock</code> RAII construct that automatically releases the lock on destruction. And with that done, the only way to reach the data is by invoking <code>get()</code> on a valid <code>Lock</code>, which we know holds the mutex.</p>
-<p>But, ha ha, it is trivial to escape all these nice intentions:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=n>Mutex</span><span class=o>&lt;</span><span class=n>SuperDuperType</span><span class=o>&gt;</span> <span class=n>mutex</span><span class=p>(</span><span class=n>std</span><span class=o>::</span><span class=n>move</span><span class=p>(</span><span class=n>data</span><span class=p>));</span>
-
-<span class=n>SuperDuperType</span><span class=o>*</span> <span class=n>dangling_pointer</span><span class=p>;</span>
-<span class=p>{</span>
-    <span class=n>Lock</span><span class=o>&lt;</span><span class=n>SuperDuperType</span><span class=o>&gt;</span> <span class=n>lock</span> <span class=o>=</span> <span class=n>mutex</span><span class=p>.</span><span class=n>lock</span><span class=p>();</span>
-    <span class=n>dangling_pointer</span> <span class=o>=</span> <span class=o>&amp;</span><span class=n>lock</span><span class=p>.</span><span class=n>get</span><span class=p>();</span>
-<span class=p>}</span>  <span class=c1>// lock goes out of scope here so the mutex is released.
-</span><span class=c1></span>
-<span class=c1>// Oh oh.  We now have a pointer to the inner object, which is not locked any
-</span><span class=c1>// more... and it wouldn&#39;t even be valid if the mutex had gone out of scope.
-</span><span class=c1></span><span class=n>dangling_pointer</span><span class=o>-&gt;</span><span class=n>i_will_misbehave</span><span class=p>();</span>
-</code></pre></div><p>No matter how good your intentions are, such an API will leak the data in one way or another and, <a href=http://www.hyrumslaw.com>eventually, someone will write broken code</a> like the one shown above—possibly along a lengthy comment explaining why they had to go through such nastiness.</p>
-<p>So no. It&rsquo;s just impossible to <em>safely</em> implement a mutex as a data container in C++—and, for that matter, in Go as well because the language has even fewer protections. The resulting interface would be so fragile that you may as well not bother implementing it in the first place.</p>
-<p>In Rust, however&mldr; it is perfectly possible to implement this API safely: <strong><em>the Rust compiler</em> will catch misuses and disallow code from even building when it violates data access restrictions</strong>. And that is precisely how the <a href=https://doc.rust-lang.org/std/sync/struct.Mutex.html><code>std::sync::Mutex</code></a> type in the standard library behaves.</p>
-<p>For completeness sake, let&rsquo;s try to translate the above example to Rust:</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=k>use</span><span class=w> </span><span class=n>std</span>::<span class=n>sync</span>::<span class=n>Mutex</span><span class=p>;</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=k>struct</span> <span class=nc>SuperDuperType</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>  </span><span class=n>value</span>: <span class=kt>i32</span><span class=p>,</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span><span class=w>
-</span><span class=w></span><span class=k>fn</span> <span class=nf>main</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
-</span><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>data</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>SuperDuperType</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>value</span>: <span class=mi>3</span><span class=w> </span><span class=p>};</span><span class=w>
-</span><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>mutex</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>Mutex</span>::<span class=n>new</span><span class=p>(</span><span class=n>data</span><span class=p>);</span><span class=w>
-</span><span class=w>
-</span><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>leaked</span>: <span class=kp>&amp;</span><span class=nc>SuperDuperType</span><span class=p>;</span><span class=w>
-</span><span class=w>    </span><span class=p>{</span><span class=w>
-</span><span class=w>        </span><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>locked_data</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>mutex</span><span class=p>.</span><span class=n>lock</span><span class=p>().</span><span class=n>unwrap</span><span class=p>();</span><span class=w>
-</span><span class=w>        </span><span class=n>locked_data</span><span class=p>.</span><span class=n>value</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>5</span><span class=p>;</span><span class=w>
-</span><span class=w>        </span><span class=n>leaked</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=o>&amp;</span><span class=n>locked_data</span><span class=p>;</span><span class=w>  </span><span class=c1>// Impossible.
-</span><span class=c1></span><span class=w>    </span><span class=p>}</span><span class=w>
-</span><span class=w></span><span class=p>}</span><span class=w>
-</span></code></pre></div><p>If we try to <em>build</em> this code, we&rsquo;ll be greeted with the following <em>error</em> at the point were we tried to leak the reference to the inner, locked data:</p>
-<pre tabindex=0><code>error[E0597]: `locked_data` does not live long enough
+<a href=/series.html#Rust%20review><b>Rust review</b> series</a>.</i></p><hr><article><p><em>The one thing</em> that blew my mind about Rust is its approach to data sharing in concurrent situations.</p><p>I had always thought of mutexes as something that is easy to get wrong and was convinced that the use of a RAII pattern to prevent lock leaks never happen (like with <a href=https://github.com/abseil/abseil-cpp/blob/59ae4d5a0e833bedd9d7cc059ac15a9dc130e3f7/absl/synchronization/mutex.h#L499>Abseil&rsquo;s <code>MutexLock</code></a>) was the panacea. (I&rsquo;m a fan of RAII in C++ by the way, in case you haven&rsquo;t noticed.)</p><p>As Rust has taught me, that&rsquo;s far from the truth: <strong>in Rust, you protect the <em>data</em>, not the <em>code</em>.</strong> What this means is that, e.g. a mutex is not an object to control access to a piece of data: <strong>a mutex is a <em>container</em> for a piece of data</strong>. It is impossible to access the data without going through the mutex.</p><p><em>&ldquo;Ah! Not so fast! You can do exactly the same in C++ or even in Go!&rdquo;</em>, you claim. Yeeee&mldr; no, not at all. Sure, you can implement a container that holds the data and only exposes its contents via a getter after grabbing the lock. But there is <em>nothing</em> preventing the code from leaking a reference to that inner data after the mutex is released. Let&rsquo;s imagine an interface like this (with lots of details omitted, like suppression of copies and assignments):</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=line><span class=cl><span class=k>template</span><span class=o>&lt;</span> <span class=k>typename</span> <span class=n>T</span> <span class=o>&gt;</span>
+</span></span><span class=line><span class=cl><span class=k>class</span> <span class=nc>Lock</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>T</span><span class=o>&amp;</span> <span class=n>_data</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=k>friend</span> <span class=k>class</span> <span class=nc>Mutex</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=n>Lock</span><span class=p>(</span><span class=n>T</span><span class=o>&amp;</span><span class=p>);</span>  <span class=c1>// Grabs non-owning reference to the data.
+</span></span></span><span class=line><span class=cl><span class=c1></span>
+</span></span><span class=line><span class=cl>  <span class=k>public</span><span class=o>:</span>
+</span></span><span class=line><span class=cl>    <span class=o>~</span><span class=n>Lock</span><span class=p>();</span>  <span class=c1>// Releases mutex.
+</span></span></span><span class=line><span class=cl><span class=c1></span>    <span class=k>const</span> <span class=n>T</span><span class=o>&amp;</span> <span class=n>get</span><span class=p>()</span> <span class=k>const</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=n>T</span><span class=o>&amp;</span> <span class=n>get</span><span class=p>();</span>
+</span></span><span class=line><span class=cl><span class=p>};</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>template</span><span class=o>&lt;</span> <span class=k>typename</span> <span class=n>T</span> <span class=o>&gt;</span>
+</span></span><span class=line><span class=cl><span class=k>class</span> <span class=nc>Mutex</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>T</span> <span class=n>_data</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=k>public</span><span class=o>:</span>
+</span></span><span class=line><span class=cl>    <span class=k>explicit</span> <span class=n>Mutex</span><span class=p>(</span><span class=n>T</span><span class=o>&amp;&amp;</span><span class=p>);</span>  <span class=c1>// Grabs ownership of the data.
+</span></span></span><span class=line><span class=cl><span class=c1></span>    <span class=n>Lock</span><span class=o>&lt;</span><span class=n>T</span><span class=o>&gt;</span> <span class=n>lock</span><span class=p>(</span><span class=kt>void</span><span class=p>);</span>  <span class=c1>// Acquires mutex.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=p>};</span>
+</span></span></code></pre></div><p>Looks legit, right? We can only construct a <code>Mutex</code> by moving an arbitrary object into it, and from there on, the only way to get back to the object is to first call <code>lock()</code> on the mutex. Doing so returns us a <code>Lock</code> RAII construct that automatically releases the lock on destruction. And with that done, the only way to reach the data is by invoking <code>get()</code> on a valid <code>Lock</code>, which we know holds the mutex.</p><p>But, ha ha, it is trivial to escape all these nice intentions:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-c++ data-lang=c++><span class=line><span class=cl><span class=n>Mutex</span><span class=o>&lt;</span><span class=n>SuperDuperType</span><span class=o>&gt;</span> <span class=n>mutex</span><span class=p>(</span><span class=n>std</span><span class=o>::</span><span class=n>move</span><span class=p>(</span><span class=n>data</span><span class=p>));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>SuperDuperType</span><span class=o>*</span> <span class=n>dangling_pointer</span><span class=p>;</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>Lock</span><span class=o>&lt;</span><span class=n>SuperDuperType</span><span class=o>&gt;</span> <span class=n>lock</span> <span class=o>=</span> <span class=n>mutex</span><span class=p>.</span><span class=n>lock</span><span class=p>();</span>
+</span></span><span class=line><span class=cl>    <span class=n>dangling_pointer</span> <span class=o>=</span> <span class=o>&amp;</span><span class=n>lock</span><span class=p>.</span><span class=n>get</span><span class=p>();</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>  <span class=c1>// lock goes out of scope here so the mutex is released.
+</span></span></span><span class=line><span class=cl><span class=c1></span>
+</span></span><span class=line><span class=cl><span class=c1>// Oh oh.  We now have a pointer to the inner object, which is not locked any
+</span></span></span><span class=line><span class=cl><span class=c1>// more... and it wouldn&#39;t even be valid if the mutex had gone out of scope.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=n>dangling_pointer</span><span class=o>-&gt;</span><span class=n>i_will_misbehave</span><span class=p>();</span>
+</span></span></code></pre></div><p>No matter how good your intentions are, such an API will leak the data in one way or another and, <a href=http://www.hyrumslaw.com>eventually, someone will write broken code</a> like the one shown above—possibly along a lengthy comment explaining why they had to go through such nastiness.</p><p>So no. It&rsquo;s just impossible to <em>safely</em> implement a mutex as a data container in C++—and, for that matter, in Go as well because the language has even fewer protections. The resulting interface would be so fragile that you may as well not bother implementing it in the first place.</p><p>In Rust, however&mldr; it is perfectly possible to implement this API safely: <strong><em>the Rust compiler</em> will catch misuses and disallow code from even building when it violates data access restrictions</strong>. And that is precisely how the <a href=https://doc.rust-lang.org/std/sync/struct.Mutex.html><code>std::sync::Mutex</code></a> type in the standard library behaves.</p><p>For completeness sake, let&rsquo;s try to translate the above example to Rust:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-rust data-lang=rust><span class=line><span class=cl><span class=k>use</span><span class=w> </span><span class=n>std</span>::<span class=n>sync</span>::<span class=n>Mutex</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>struct</span> <span class=nc>SuperDuperType</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=n>value</span>: <span class=kt>i32</span><span class=p>,</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=k>fn</span> <span class=nf>main</span><span class=p>()</span><span class=w> </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>data</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>SuperDuperType</span><span class=w> </span><span class=p>{</span><span class=w> </span><span class=n>value</span>: <span class=mi>3</span><span class=w> </span><span class=p>};</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>mutex</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>Mutex</span>::<span class=n>new</span><span class=p>(</span><span class=n>data</span><span class=p>);</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=kd>let</span><span class=w> </span><span class=n>leaked</span>: <span class=kp>&amp;</span><span class=nc>SuperDuperType</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=p>{</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=kd>let</span><span class=w> </span><span class=k>mut</span><span class=w> </span><span class=n>locked_data</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=n>mutex</span><span class=p>.</span><span class=n>lock</span><span class=p>().</span><span class=n>unwrap</span><span class=p>();</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=n>locked_data</span><span class=p>.</span><span class=n>value</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=mi>5</span><span class=p>;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=n>leaked</span><span class=w> </span><span class=o>=</span><span class=w> </span><span class=o>&amp;</span><span class=n>locked_data</span><span class=p>;</span><span class=w>  </span><span class=c1>// Impossible.
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=w>    </span><span class=p>}</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w></span><span class=p>}</span><span class=w>
+</span></span></span></code></pre></div><p>If we try to <em>build</em> this code, we&rsquo;ll be greeted with the following <em>error</em> at the point were we tried to leak the reference to the inner, locked data:</p><pre tabindex=0><code>error[E0597]: `locked_data` does not live long enough
   --&gt; data.rs:15:31
    |
 15 |         leaked = &amp;locked_data;  // Broken.
@@ -171,484 +70,25 @@ Rust review</b> series</a>.</i></p>
 17 | }
    | - borrowed value needs to live until here
 `
-</code></pre><p>I encourage you to try to come up with a pathological piece of code that lets you leak the reference. Try to implement it and see what happens. My original thought when I went through this exercise was: &ldquo;well, what if I create a thread once the mutex is held and access the reference through the other thread? Surely that&rsquo;d lead to a bug.&rdquo; Turns out you cannot even express this: the reference cannot be passed to the new thread (see <a href=https://doc.rust-lang.org/book/second-edition/ch16-01-threads.html#using-move-closures-with-threads>the <code>move</code> keyword</a> for details), so you cannot reach this situation. The only thing you can pass to the new thread without losing ownership of the data is the <code>Mutex</code> itself or something like a thread-safe reference-counted container like an <code>Arc</code>. (<strong>Update:</strong> OK, I was wrong&mldr;. <a href=https://twitter.com/Argorak/status/1004375508640043008>As Florian Gilcher points out</a>, it&rsquo;s still possible to break the safety guarantees in some cases but the good thing is that <a href=https://internals.rust-lang.org/t/announcing-the-formal-verification-working-group/7240>there is a Formal Verification Working Group</a> to address these!)</p>
-<p><strong>The fact that the language is able to enforce these restrictions at <em>build</em> time is hard to believe.</strong> And these restrictions are possible thanks to Rust&rsquo;s data ownership rules and thanks to our <del>evil</del> good friend <a href=/2018/06/rust-review-borrow-checker.html>the borrow checker, which we previously discussed</a>.</p>
-<p>Even with the examples above, which I know are convoluted, it&rsquo;s hard for me to articulate how powerful these concepts are unless you experience their benefits firsthand. In my case, I witnessed these during the sandboxfs rewrite: while &ldquo;transcribing&rdquo; the original design from Go to Rust, I was able to catch a bunch of cases in which concurrency was slightly off. The code was rightfully buggy, but Go itself didn&rsquo;t nor <em>couldn&rsquo;t</em> care. On the other hand, Rust just didn&rsquo;t allow me express those invalid constructions in the first place, which forced me to fix the design.</p>
-<p>In the next episode, we&rsquo;ll explore how these theoretically simple concepts tie to computing fundamentals and how they make Rust&rsquo;s learning curve steep.</p>
-</article>
-<hr>
-<p><i>This article is part number
+</code></pre><p>I encourage you to try to come up with a pathological piece of code that lets you leak the reference. Try to implement it and see what happens. My original thought when I went through this exercise was: &ldquo;well, what if I create a thread once the mutex is held and access the reference through the other thread? Surely that&rsquo;d lead to a bug.&rdquo; Turns out you cannot even express this: the reference cannot be passed to the new thread (see <a href=https://doc.rust-lang.org/book/second-edition/ch16-01-threads.html#using-move-closures-with-threads>the <code>move</code> keyword</a> for details), so you cannot reach this situation. The only thing you can pass to the new thread without losing ownership of the data is the <code>Mutex</code> itself or something like a thread-safe reference-counted container like an <code>Arc</code>. (<strong>Update:</strong> OK, I was wrong&mldr;. <a href=https://twitter.com/Argorak/status/1004375508640043008>As Florian Gilcher points out</a>, it&rsquo;s still possible to break the safety guarantees in some cases but the good thing is that <a href=https://internals.rust-lang.org/t/announcing-the-formal-verification-working-group/7240>there is a Formal Verification Working Group</a> to address these!)</p><p><strong>The fact that the language is able to enforce these restrictions at <em>build</em> time is hard to believe.</strong> And these restrictions are possible thanks to Rust&rsquo;s data ownership rules and thanks to our <del>evil</del> good friend <a href=/2018/06/rust-review-borrow-checker.html>the borrow checker, which we previously discussed</a>.</p><p>Even with the examples above, which I know are convoluted, it&rsquo;s hard for me to articulate how powerful these concepts are unless you experience their benefits firsthand. In my case, I witnessed these during the sandboxfs rewrite: while &ldquo;transcribing&rdquo; the original design from Go to Rust, I was able to catch a bunch of cases in which concurrency was slightly off. The code was rightfully buggy, but Go itself didn&rsquo;t nor <em>couldn&rsquo;t</em> care. On the other hand, Rust just didn&rsquo;t allow me express those invalid constructions in the first place, which forced me to fix the design.</p><p>In the next episode, we&rsquo;ll explore how these theoretically simple concepts tie to computing fundamentals and how they make Rust&rsquo;s learning curve steep.</p></article><hr><p><i>This article is part number
 4 of the ongoing
-<a href=/series.html#Rust%20review><b>
-Rust review</b> series</a>.</i></p>
-</div>
-</div>
-<div class="container post-links">
-<div class=row>
-<div class="col mr-auto text-left">
-<span><a href=https://jmmv.dev/2018/06/rust-review-borrow-checker.html>&#171; Previous</a></span>
-</div>
-<div class="col text-center">
-<span><a href=/archive.html>All posts</a></span>
-</div>
-<div class="col ml-auto text-right">
-<span><a href=https://jmmv.dev/2018/06/rust-review-learning-curve.html>Next &#187;</a></span>
-</div>
-</div>
-</div>
-<div class="container post-votes">
-<div class=row>
-<div class="col-lg-4 my-2">
-<div class=row>
-<div class=col>
-<a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
-(<span id=thumbs-up-count>0</span>)</a>
-</div>
-<div class=col>
-<a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
-(<span id=thumbs-down-count>0</span>)</a>
-</div>
-</div>
-</div>
-<div class="col-lg-8 my-2 d-none d-sm-block">
-<div class=row>
-<div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Rust+review%3A+Protect+the+data&url=https%3A%2F%2Fjmmv.dev%2F2018%2F06%2Frust-review-protect-the-data.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/reddit.png alt=Reddit width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Rust+review%3A+Protect+the+data&u=https%3A%2F%2Fjmmv.dev%2F2018%2F06%2Frust-review-protect-the-data.html" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24>
-</a>
-</div>
-<div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Rust+review%3A+Protect+the+data+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2018%2F06%2Frust-review-protect-the-data.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">
-Share on
-<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24>
-</a>
-</div>
-</div>
-</div>
-</div>
-<div class="row my-4" id=postCommentRow>
-<div class=col>
-<div class=media>
-<img class=mr-3 src=/octicons/pencil.svg width=32px height=32px>
-<div class="media-body container">
-<form method=post id=newPost>
-<div class=row>
-<div class="col my-1">
-<textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentAuthor>Your name (optional):</label>
-<input type=text class=form-control id=postCommentAuthor>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<div class="col my-1 form-group">
-<label for=postCommentEmail>Your email (optional):</label>
+<a href=/series.html#Rust%20review><b>Rust review</b> series</a>.</i></p></div></div><div class="container post-links"><div class=row><div class="col mr-auto text-left"><span><a href=https://jmmv.dev/2018/06/rust-review-borrow-checker.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ml-auto text-right"><span><a href=https://jmmv.dev/2018/06/rust-review-learning-curve.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a></div><div class=col><a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a></div></div></div><div class="col-lg-8 my-2 d-none d-sm-block"><div class=row><div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Rust+review%3A+Protect+the+data&amp;url=https%3A%2F%2Fjmmv.dev%2F2018%2F06%2Frust-review-protect-the-data.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Rust+review%3A+Protect+the+data&amp;u=https%3A%2F%2Fjmmv.dev%2F2018%2F06%2Frust-review-protect-the-data.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Rust+review%3A+Protect+the+data+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2018%2F06%2Frust-review-protect-the-data.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24></a></div></div></div></div><div class="row my-4" id=postCommentRow><div class=col><div class=media><img class=mr-3 src=/octicons/pencil.svg width=32px height=32px><div class="media-body container"><form method=post id=newPost><div class=row><div class="col my-1"><textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentEmail>Your email (optional):</label>
 <input type=text class=form-control type=email id=postCommentEmail>
-<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small>
-</div>
-</div>
-<div class=row id=postCommentError style=display:none>
-<div class="col mt-1 alert-danger">
-<p></p>
-</div>
-</div>
-<div class="row newPostControls" style=display:none>
-<button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
-<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<script>function hidePostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=1,a.value='',b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display='none'})}function showPostComment(){var a=document.getElementById('postCommentContent'),b;a.rows=5,b=document.getElementsByClassName('newPostControls'),Array.prototype.forEach.call(b,function(a){a.style.display=''})}const form=document.querySelector('#newPost');form.onsubmit=function(a){a.preventDefault();let b=document.getElementById('postCommentAuthor').value,c=document.getElementById('postCommentEmail').value,d=document.getElementById('postCommentContent').value;postComment(b,c,d,hidePostComment)}</script>
-</div>
-<div class="container post-subscribe">
-<div class=row>
-<div class="col-sm-3 py-2">
-<div class=row>
-<div class="col px-2 text-center">
-<a rel=me href=https://mastodon.online/@jmmv>
-<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</div>
-<div class="col px-2 text-center">
-<a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a>
-</div>
-</div>
-</div>
-<div class="col-sm-9 py-2">
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<div class=row>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
-<button type=submit class="btn btn-primary col-4">Subscribe</button>
-</div>
-</div>
-</form>
-</div>
-</div>
-</div>
-</div>
-<div class="col-md-3 sidebar d-none d-md-block">
-<div class=row>
-<div class="col text-center p-2">
-<p><a href=/about.html class=clear-link>
-<img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br>
-<b>Julio Merino</b><br>
-Software Engineer<br>
-<small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br>
-<small>From Barcelona, living in Seattle</small>
-</a></p>
-<div class=row>
-<div class="col-sm-4 text-center">
-<p>
-<a rel=me href=https://mastodon.online/@jmmv>
-<img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
-</a>
-</p>
-</div>
-<div class="col-sm-4 text-center">
-<p>
-<a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv">
-<img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
-</a>
-</p>
-</div>
-<div class="col-sm-4 text-center">
-<p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p>
-</div>
-</div>
-<form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post>
-<div class=form-group>
-<input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
-<button type=submit class="btn btn-primary btn-block">Subscribe</button>
-</div>
-</form>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Featured posts</h2>
-<ul>
-<li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li>
-<li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li>
-<li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li>
-<li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li>
-<li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li>
-<li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li>
-<li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li>
-<li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li>
-<li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li>
-<li class=overflow-ellipsis><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li>
-<li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li>
-</ul>
-</div>
-</div>
-<div class=row>
-<div class=col>
-<h2>Archive</h2>
-<ul>
-<li>
-<a data-toggle=collapse href=#archive-year-2023>2023</a> (3)
-<ul id=archive-year-2023 class=collapse>
-<li><a href=/archive.html#2023-03>March 2023</a> (2)</li>
-<li><a href=/archive.html#2023-01>January 2023</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2022>2022</a> (32)
-<ul id=archive-year-2022 class=collapse>
-<li><a href=/archive.html#2022-12>December 2022</a> (1)</li>
-<li><a href=/archive.html#2022-11>November 2022</a> (1)</li>
-<li><a href=/archive.html#2022-10>October 2022</a> (1)</li>
-<li><a href=/archive.html#2022-07>July 2022</a> (1)</li>
-<li><a href=/archive.html#2022-06>June 2022</a> (2)</li>
-<li><a href=/archive.html#2022-05>May 2022</a> (2)</li>
-<li><a href=/archive.html#2022-04>April 2022</a> (4)</li>
-<li><a href=/archive.html#2022-03>March 2022</a> (15)</li>
-<li><a href=/archive.html#2022-02>February 2022</a> (4)</li>
-<li><a href=/archive.html#2022-01>January 2022</a> (1)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2021>2021</a> (22)
-<ul id=archive-year-2021 class=collapse>
-<li><a href=/archive.html#2021-11>November 2021</a> (2)</li>
-<li><a href=/archive.html#2021-08>August 2021</a> (2)</li>
-<li><a href=/archive.html#2021-07>July 2021</a> (5)</li>
-<li><a href=/archive.html#2021-06>June 2021</a> (1)</li>
-<li><a href=/archive.html#2021-04>April 2021</a> (2)</li>
-<li><a href=/archive.html#2021-03>March 2021</a> (2)</li>
-<li><a href=/archive.html#2021-02>February 2021</a> (3)</li>
-<li><a href=/archive.html#2021-01>January 2021</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2020>2020</a> (36)
-<ul id=archive-year-2020 class=collapse>
-<li><a href=/archive.html#2020-12>December 2020</a> (4)</li>
-<li><a href=/archive.html#2020-11>November 2020</a> (5)</li>
-<li><a href=/archive.html#2020-10>October 2020</a> (5)</li>
-<li><a href=/archive.html#2020-09>September 2020</a> (2)</li>
-<li><a href=/archive.html#2020-08>August 2020</a> (6)</li>
-<li><a href=/archive.html#2020-07>July 2020</a> (2)</li>
-<li><a href=/archive.html#2020-06>June 2020</a> (2)</li>
-<li><a href=/archive.html#2020-05>May 2020</a> (3)</li>
-<li><a href=/archive.html#2020-04>April 2020</a> (2)</li>
-<li><a href=/archive.html#2020-03>March 2020</a> (2)</li>
-<li><a href=/archive.html#2020-02>February 2020</a> (1)</li>
-<li><a href=/archive.html#2020-01>January 2020</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2019>2019</a> (24)
-<ul id=archive-year-2019 class=collapse>
-<li><a href=/archive.html#2019-12>December 2019</a> (8)</li>
-<li><a href=/archive.html#2019-11>November 2019</a> (6)</li>
-<li><a href=/archive.html#2019-10>October 2019</a> (1)</li>
-<li><a href=/archive.html#2019-09>September 2019</a> (2)</li>
-<li><a href=/archive.html#2019-03>March 2019</a> (2)</li>
-<li><a href=/archive.html#2019-02>February 2019</a> (3)</li>
-<li><a href=/archive.html#2019-01>January 2019</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2018>2018</a> (25)
-<ul id=archive-year-2018 class=collapse>
-<li><a href=/archive.html#2018-07>July 2018</a> (3)</li>
-<li><a href=/archive.html#2018-06>June 2018</a> (7)</li>
-<li><a href=/archive.html#2018-05>May 2018</a> (2)</li>
-<li><a href=/archive.html#2018-04>April 2018</a> (2)</li>
-<li><a href=/archive.html#2018-03>March 2018</a> (8)</li>
-<li><a href=/archive.html#2018-02>February 2018</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2017>2017</a> (6)
-<ul id=archive-year-2017 class=collapse>
-<li><a href=/archive.html#2017-10>October 2017</a> (1)</li>
-<li><a href=/archive.html#2017-08>August 2017</a> (1)</li>
-<li><a href=/archive.html#2017-07>July 2017</a> (1)</li>
-<li><a href=/archive.html#2017-02>February 2017</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2016>2016</a> (8)
-<ul id=archive-year-2016 class=collapse>
-<li><a href=/archive.html#2016-09>September 2016</a> (1)</li>
-<li><a href=/archive.html#2016-05>May 2016</a> (1)</li>
-<li><a href=/archive.html#2016-04>April 2016</a> (1)</li>
-<li><a href=/archive.html#2016-03>March 2016</a> (2)</li>
-<li><a href=/archive.html#2016-02>February 2016</a> (1)</li>
-<li><a href=/archive.html#2016-01>January 2016</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2015>2015</a> (17)
-<ul id=archive-year-2015 class=collapse>
-<li><a href=/archive.html#2015-12>December 2015</a> (2)</li>
-<li><a href=/archive.html#2015-10>October 2015</a> (2)</li>
-<li><a href=/archive.html#2015-09>September 2015</a> (3)</li>
-<li><a href=/archive.html#2015-06>June 2015</a> (2)</li>
-<li><a href=/archive.html#2015-05>May 2015</a> (3)</li>
-<li><a href=/archive.html#2015-04>April 2015</a> (1)</li>
-<li><a href=/archive.html#2015-03>March 2015</a> (1)</li>
-<li><a href=/archive.html#2015-02>February 2015</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2014>2014</a> (12)
-<ul id=archive-year-2014 class=collapse>
-<li><a href=/archive.html#2014-11>November 2014</a> (2)</li>
-<li><a href=/archive.html#2014-05>May 2014</a> (3)</li>
-<li><a href=/archive.html#2014-03>March 2014</a> (1)</li>
-<li><a href=/archive.html#2014-02>February 2014</a> (3)</li>
-<li><a href=/archive.html#2014-01>January 2014</a> (3)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2013>2013</a> (62)
-<ul id=archive-year-2013 class=collapse>
-<li><a href=/archive.html#2013-12>December 2013</a> (7)</li>
-<li><a href=/archive.html#2013-11>November 2013</a> (7)</li>
-<li><a href=/archive.html#2013-10>October 2013</a> (7)</li>
-<li><a href=/archive.html#2013-09>September 2013</a> (13)</li>
-<li><a href=/archive.html#2013-08>August 2013</a> (9)</li>
-<li><a href=/archive.html#2013-07>July 2013</a> (10)</li>
-<li><a href=/archive.html#2013-06>June 2013</a> (9)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2012>2012</a> (29)
-<ul id=archive-year-2012 class=collapse>
-<li><a href=/archive.html#2012-10>October 2012</a> (1)</li>
-<li><a href=/archive.html#2012-09>September 2012</a> (1)</li>
-<li><a href=/archive.html#2012-08>August 2012</a> (3)</li>
-<li><a href=/archive.html#2012-07>July 2012</a> (2)</li>
-<li><a href=/archive.html#2012-06>June 2012</a> (2)</li>
-<li><a href=/archive.html#2012-05>May 2012</a> (3)</li>
-<li><a href=/archive.html#2012-04>April 2012</a> (1)</li>
-<li><a href=/archive.html#2012-03>March 2012</a> (1)</li>
-<li><a href=/archive.html#2012-02>February 2012</a> (10)</li>
-<li><a href=/archive.html#2012-01>January 2012</a> (5)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2011>2011</a> (60)
-<ul id=archive-year-2011 class=collapse>
-<li><a href=/archive.html#2011-12>December 2011</a> (4)</li>
-<li><a href=/archive.html#2011-11>November 2011</a> (4)</li>
-<li><a href=/archive.html#2011-10>October 2011</a> (5)</li>
-<li><a href=/archive.html#2011-09>September 2011</a> (11)</li>
-<li><a href=/archive.html#2011-08>August 2011</a> (6)</li>
-<li><a href=/archive.html#2011-07>July 2011</a> (4)</li>
-<li><a href=/archive.html#2011-06>June 2011</a> (6)</li>
-<li><a href=/archive.html#2011-05>May 2011</a> (6)</li>
-<li><a href=/archive.html#2011-04>April 2011</a> (5)</li>
-<li><a href=/archive.html#2011-03>March 2011</a> (2)</li>
-<li><a href=/archive.html#2011-01>January 2011</a> (7)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2010>2010</a> (26)
-<ul id=archive-year-2010 class=collapse>
-<li><a href=/archive.html#2010-12>December 2010</a> (7)</li>
-<li><a href=/archive.html#2010-09>September 2010</a> (1)</li>
-<li><a href=/archive.html#2010-07>July 2010</a> (1)</li>
-<li><a href=/archive.html#2010-06>June 2010</a> (2)</li>
-<li><a href=/archive.html#2010-05>May 2010</a> (5)</li>
-<li><a href=/archive.html#2010-04>April 2010</a> (5)</li>
-<li><a href=/archive.html#2010-03>March 2010</a> (3)</li>
-<li><a href=/archive.html#2010-01>January 2010</a> (2)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2009>2009</a> (31)
-<ul id=archive-year-2009 class=collapse>
-<li><a href=/archive.html#2009-10>October 2009</a> (1)</li>
-<li><a href=/archive.html#2009-09>September 2009</a> (1)</li>
-<li><a href=/archive.html#2009-08>August 2009</a> (3)</li>
-<li><a href=/archive.html#2009-07>July 2009</a> (2)</li>
-<li><a href=/archive.html#2009-06>June 2009</a> (4)</li>
-<li><a href=/archive.html#2009-05>May 2009</a> (6)</li>
-<li><a href=/archive.html#2009-04>April 2009</a> (2)</li>
-<li><a href=/archive.html#2009-03>March 2009</a> (4)</li>
-<li><a href=/archive.html#2009-01>January 2009</a> (8)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2008>2008</a> (61)
-<ul id=archive-year-2008 class=collapse>
-<li><a href=/archive.html#2008-12>December 2008</a> (1)</li>
-<li><a href=/archive.html#2008-11>November 2008</a> (4)</li>
-<li><a href=/archive.html#2008-10>October 2008</a> (6)</li>
-<li><a href=/archive.html#2008-09>September 2008</a> (1)</li>
-<li><a href=/archive.html#2008-08>August 2008</a> (6)</li>
-<li><a href=/archive.html#2008-07>July 2008</a> (14)</li>
-<li><a href=/archive.html#2008-06>June 2008</a> (3)</li>
-<li><a href=/archive.html#2008-05>May 2008</a> (1)</li>
-<li><a href=/archive.html#2008-04>April 2008</a> (3)</li>
-<li><a href=/archive.html#2008-03>March 2008</a> (3)</li>
-<li><a href=/archive.html#2008-02>February 2008</a> (9)</li>
-<li><a href=/archive.html#2008-01>January 2008</a> (10)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2007>2007</a> (86)
-<ul id=archive-year-2007 class=collapse>
-<li><a href=/archive.html#2007-12>December 2007</a> (4)</li>
-<li><a href=/archive.html#2007-11>November 2007</a> (7)</li>
-<li><a href=/archive.html#2007-10>October 2007</a> (2)</li>
-<li><a href=/archive.html#2007-09>September 2007</a> (8)</li>
-<li><a href=/archive.html#2007-08>August 2007</a> (6)</li>
-<li><a href=/archive.html#2007-07>July 2007</a> (15)</li>
-<li><a href=/archive.html#2007-06>June 2007</a> (15)</li>
-<li><a href=/archive.html#2007-05>May 2007</a> (4)</li>
-<li><a href=/archive.html#2007-04>April 2007</a> (10)</li>
-<li><a href=/archive.html#2007-03>March 2007</a> (8)</li>
-<li><a href=/archive.html#2007-02>February 2007</a> (1)</li>
-<li><a href=/archive.html#2007-01>January 2007</a> (6)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2006>2006</a> (103)
-<ul id=archive-year-2006 class=collapse>
-<li><a href=/archive.html#2006-12>December 2006</a> (4)</li>
-<li><a href=/archive.html#2006-11>November 2006</a> (3)</li>
-<li><a href=/archive.html#2006-10>October 2006</a> (7)</li>
-<li><a href=/archive.html#2006-09>September 2006</a> (6)</li>
-<li><a href=/archive.html#2006-08>August 2006</a> (13)</li>
-<li><a href=/archive.html#2006-07>July 2006</a> (4)</li>
-<li><a href=/archive.html#2006-06>June 2006</a> (13)</li>
-<li><a href=/archive.html#2006-05>May 2006</a> (7)</li>
-<li><a href=/archive.html#2006-04>April 2006</a> (9)</li>
-<li><a href=/archive.html#2006-03>March 2006</a> (6)</li>
-<li><a href=/archive.html#2006-02>February 2006</a> (13)</li>
-<li><a href=/archive.html#2006-01>January 2006</a> (18)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2005>2005</a> (129)
-<ul id=archive-year-2005 class=collapse>
-<li><a href=/archive.html#2005-12>December 2005</a> (9)</li>
-<li><a href=/archive.html#2005-11>November 2005</a> (7)</li>
-<li><a href=/archive.html#2005-10>October 2005</a> (23)</li>
-<li><a href=/archive.html#2005-09>September 2005</a> (10)</li>
-<li><a href=/archive.html#2005-08>August 2005</a> (14)</li>
-<li><a href=/archive.html#2005-07>July 2005</a> (5)</li>
-<li><a href=/archive.html#2005-06>June 2005</a> (12)</li>
-<li><a href=/archive.html#2005-05>May 2005</a> (6)</li>
-<li><a href=/archive.html#2005-04>April 2005</a> (6)</li>
-<li><a href=/archive.html#2005-03>March 2005</a> (13)</li>
-<li><a href=/archive.html#2005-02>February 2005</a> (11)</li>
-<li><a href=/archive.html#2005-01>January 2005</a> (13)</li>
-</ul>
-</li>
-<li>
-<a data-toggle=collapse href=#archive-year-2004>2004</a> (84)
-<ul id=archive-year-2004 class=collapse>
-<li><a href=/archive.html#2004-12>December 2004</a> (9)</li>
-<li><a href=/archive.html#2004-11>November 2004</a> (6)</li>
-<li><a href=/archive.html#2004-10>October 2004</a> (11)</li>
-<li><a href=/archive.html#2004-09>September 2004</a> (19)</li>
-<li><a href=/archive.html#2004-07>July 2004</a> (29)</li>
-<li><a href=/archive.html#2004-06>June 2004</a> (10)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class=container>
-<div class=row>
-<div class="col-4 order-2 texr-right">
-<p class=float-right><a href=#>Back to top</a></p>
-</div>
-<div class="col-8 order-1 mr-auto">
-<p>Copyright 2004&ndash;2023 Julio Merino</p>
-</div>
-</div>
-</footer>
-<script type=module>
-  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.ce76cc2da3084d3f7618091e58a0b302d42a2efdf8638389c45f107a2430accd.js";
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small></div></div><div class=row id=postCommentError style=display:none><div class="col mt-1 alert-danger"><p></p></div></div><div class="row newPostControls" style=display:none><button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small></div></form></div></div></div></div><script>function hidePostComment(){var t,e=document.getElementById("postCommentContent");e.rows=1,e.value="",t=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(t,function(e){e.style.display="none"})}function showPostComment(){var e,t=document.getElementById("postCommentContent");t.rows=5,e=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(e,function(e){e.style.display=""})}const form=document.querySelector("#newPost");form.onsubmit=function(e){e.preventDefault();let t=document.getElementById("postCommentAuthor").value,n=document.getElementById("postCommentEmail").value,s=document.getElementById("postCommentContent").value;postComment(t,n,s,hidePostComment)}</script></div><div class="container post-subscribe"><div class=row><div class="col-sm-3 py-2"><div class=row><div class="col px-2 text-center"><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon"></a></div><div class="col px-2 text-center"><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter"></a></div><div class="col px-2 text-center"><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></div></div></div><div class="col-sm-9 py-2"><form action="https://api.follow.it/subscription-form/WWZwVlFmTks4enBrYytaNHorbE4zSnpRTTBoTy9PcXNsZjdQbVpmWDJDemwyVW9rc2llZHNxQW9iUGdXNG83dm11SWZDM0NKSlQ5Qm1LTUpJZnF2b0Z5WDE3UUtvaEgzTWRWUFBQWEo4RUxyNUt5UW4xN3VZaW9paEd1UUFCL1J8YStTYmVCc3VoVGhCeENNSVZHSmEyUk1hejZWaEZkT1M1WTVkSXdBY1Q5cz0=/8" method=post><div class=form-group><div class=row><input type=text name=email placeholder="Enter your email" class="form-control input-sm col-8 text-center">
+<button type=submit class="btn btn-primary col-4">Subscribe</button></div></div></form></div></div></div></div><div class="col-md-3 sidebar d-none d-md-block"><div class=row><div class="col text-center p-2"><p><a href=/about.html class=clear-link><img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br><b>Julio Merino</b><br>Software Engineer<br><small>#FreeBSD, #Unix, #Rust, #Bazel, #blogger</small><br><small>From Barcelona, living in Seattle</small></a></p><div class=row><div class="col-sm-4 text-center"><p><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon"></a></p></div><div class="col-sm-4 text-center"><p><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter"></a></p></div><div class="col-sm-4 text-center"><p><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p></div></div><form action=https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add method=post><div class=form-group><input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center">
+<button type=submit class="btn btn-primary btn-block">Subscribe</button></div><small><span id=subscriber-count>0</span> subscribers</small></form></div></div><div class=row><div class=col><h2>Featured posts</h2><ul><li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li><li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li><li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li><li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li><li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li><li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li><li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li><li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li><li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li><li class=overflow-ellipsis><a href=/2020/11/wsl-lost-potential.html>Windows Subsystem for Linux: The lost potential</a></li><li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li></ul></div></div><div class=row><div class=col><h2>Archive</h2><ul><li><a data-toggle=collapse href=#archive-year-2023>2023</a> (3)<ul id=archive-year-2023 class=collapse><li><a href=/archive.html#2023-03>March 2023</a> (2)</li><li><a href=/archive.html#2023-01>January 2023</a> (1)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2022>2022</a> (32)<ul id=archive-year-2022 class=collapse><li><a href=/archive.html#2022-12>December 2022</a> (1)</li><li><a href=/archive.html#2022-11>November 2022</a> (1)</li><li><a href=/archive.html#2022-10>October 2022</a> (1)</li><li><a href=/archive.html#2022-07>July 2022</a> (1)</li><li><a href=/archive.html#2022-06>June 2022</a> (2)</li><li><a href=/archive.html#2022-05>May 2022</a> (2)</li><li><a href=/archive.html#2022-04>April 2022</a> (4)</li><li><a href=/archive.html#2022-03>March 2022</a> (15)</li><li><a href=/archive.html#2022-02>February 2022</a> (4)</li><li><a href=/archive.html#2022-01>January 2022</a> (1)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2021>2021</a> (22)<ul id=archive-year-2021 class=collapse><li><a href=/archive.html#2021-11>November 2021</a> (2)</li><li><a href=/archive.html#2021-08>August 2021</a> (2)</li><li><a href=/archive.html#2021-07>July 2021</a> (5)</li><li><a href=/archive.html#2021-06>June 2021</a> (1)</li><li><a href=/archive.html#2021-04>April 2021</a> (2)</li><li><a href=/archive.html#2021-03>March 2021</a> (2)</li><li><a href=/archive.html#2021-02>February 2021</a> (3)</li><li><a href=/archive.html#2021-01>January 2021</a> (5)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2020>2020</a> (36)<ul id=archive-year-2020 class=collapse><li><a href=/archive.html#2020-12>December 2020</a> (4)</li><li><a href=/archive.html#2020-11>November 2020</a> (5)</li><li><a href=/archive.html#2020-10>October 2020</a> (5)</li><li><a href=/archive.html#2020-09>September 2020</a> (2)</li><li><a href=/archive.html#2020-08>August 2020</a> (6)</li><li><a href=/archive.html#2020-07>July 2020</a> (2)</li><li><a href=/archive.html#2020-06>June 2020</a> (2)</li><li><a href=/archive.html#2020-05>May 2020</a> (3)</li><li><a href=/archive.html#2020-04>April 2020</a> (2)</li><li><a href=/archive.html#2020-03>March 2020</a> (2)</li><li><a href=/archive.html#2020-02>February 2020</a> (1)</li><li><a href=/archive.html#2020-01>January 2020</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2019>2019</a> (24)<ul id=archive-year-2019 class=collapse><li><a href=/archive.html#2019-12>December 2019</a> (8)</li><li><a href=/archive.html#2019-11>November 2019</a> (6)</li><li><a href=/archive.html#2019-10>October 2019</a> (1)</li><li><a href=/archive.html#2019-09>September 2019</a> (2)</li><li><a href=/archive.html#2019-03>March 2019</a> (2)</li><li><a href=/archive.html#2019-02>February 2019</a> (3)</li><li><a href=/archive.html#2019-01>January 2019</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2018>2018</a> (25)<ul id=archive-year-2018 class=collapse><li><a href=/archive.html#2018-07>July 2018</a> (3)</li><li><a href=/archive.html#2018-06>June 2018</a> (7)</li><li><a href=/archive.html#2018-05>May 2018</a> (2)</li><li><a href=/archive.html#2018-04>April 2018</a> (2)</li><li><a href=/archive.html#2018-03>March 2018</a> (8)</li><li><a href=/archive.html#2018-02>February 2018</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2017>2017</a> (6)<ul id=archive-year-2017 class=collapse><li><a href=/archive.html#2017-10>October 2017</a> (1)</li><li><a href=/archive.html#2017-08>August 2017</a> (1)</li><li><a href=/archive.html#2017-07>July 2017</a> (1)</li><li><a href=/archive.html#2017-02>February 2017</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2016>2016</a> (8)<ul id=archive-year-2016 class=collapse><li><a href=/archive.html#2016-09>September 2016</a> (1)</li><li><a href=/archive.html#2016-05>May 2016</a> (1)</li><li><a href=/archive.html#2016-04>April 2016</a> (1)</li><li><a href=/archive.html#2016-03>March 2016</a> (2)</li><li><a href=/archive.html#2016-02>February 2016</a> (1)</li><li><a href=/archive.html#2016-01>January 2016</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2015>2015</a> (17)<ul id=archive-year-2015 class=collapse><li><a href=/archive.html#2015-12>December 2015</a> (2)</li><li><a href=/archive.html#2015-10>October 2015</a> (2)</li><li><a href=/archive.html#2015-09>September 2015</a> (3)</li><li><a href=/archive.html#2015-06>June 2015</a> (2)</li><li><a href=/archive.html#2015-05>May 2015</a> (3)</li><li><a href=/archive.html#2015-04>April 2015</a> (1)</li><li><a href=/archive.html#2015-03>March 2015</a> (1)</li><li><a href=/archive.html#2015-02>February 2015</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2014>2014</a> (12)<ul id=archive-year-2014 class=collapse><li><a href=/archive.html#2014-11>November 2014</a> (2)</li><li><a href=/archive.html#2014-05>May 2014</a> (3)</li><li><a href=/archive.html#2014-03>March 2014</a> (1)</li><li><a href=/archive.html#2014-02>February 2014</a> (3)</li><li><a href=/archive.html#2014-01>January 2014</a> (3)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2013>2013</a> (62)<ul id=archive-year-2013 class=collapse><li><a href=/archive.html#2013-12>December 2013</a> (7)</li><li><a href=/archive.html#2013-11>November 2013</a> (7)</li><li><a href=/archive.html#2013-10>October 2013</a> (7)</li><li><a href=/archive.html#2013-09>September 2013</a> (13)</li><li><a href=/archive.html#2013-08>August 2013</a> (9)</li><li><a href=/archive.html#2013-07>July 2013</a> (10)</li><li><a href=/archive.html#2013-06>June 2013</a> (9)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2012>2012</a> (29)<ul id=archive-year-2012 class=collapse><li><a href=/archive.html#2012-10>October 2012</a> (1)</li><li><a href=/archive.html#2012-09>September 2012</a> (1)</li><li><a href=/archive.html#2012-08>August 2012</a> (3)</li><li><a href=/archive.html#2012-07>July 2012</a> (2)</li><li><a href=/archive.html#2012-06>June 2012</a> (2)</li><li><a href=/archive.html#2012-05>May 2012</a> (3)</li><li><a href=/archive.html#2012-04>April 2012</a> (1)</li><li><a href=/archive.html#2012-03>March 2012</a> (1)</li><li><a href=/archive.html#2012-02>February 2012</a> (10)</li><li><a href=/archive.html#2012-01>January 2012</a> (5)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2011>2011</a> (60)<ul id=archive-year-2011 class=collapse><li><a href=/archive.html#2011-12>December 2011</a> (4)</li><li><a href=/archive.html#2011-11>November 2011</a> (4)</li><li><a href=/archive.html#2011-10>October 2011</a> (5)</li><li><a href=/archive.html#2011-09>September 2011</a> (11)</li><li><a href=/archive.html#2011-08>August 2011</a> (6)</li><li><a href=/archive.html#2011-07>July 2011</a> (4)</li><li><a href=/archive.html#2011-06>June 2011</a> (6)</li><li><a href=/archive.html#2011-05>May 2011</a> (6)</li><li><a href=/archive.html#2011-04>April 2011</a> (5)</li><li><a href=/archive.html#2011-03>March 2011</a> (2)</li><li><a href=/archive.html#2011-01>January 2011</a> (7)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2010>2010</a> (26)<ul id=archive-year-2010 class=collapse><li><a href=/archive.html#2010-12>December 2010</a> (7)</li><li><a href=/archive.html#2010-09>September 2010</a> (1)</li><li><a href=/archive.html#2010-07>July 2010</a> (1)</li><li><a href=/archive.html#2010-06>June 2010</a> (2)</li><li><a href=/archive.html#2010-05>May 2010</a> (5)</li><li><a href=/archive.html#2010-04>April 2010</a> (5)</li><li><a href=/archive.html#2010-03>March 2010</a> (3)</li><li><a href=/archive.html#2010-01>January 2010</a> (2)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2009>2009</a> (31)<ul id=archive-year-2009 class=collapse><li><a href=/archive.html#2009-10>October 2009</a> (1)</li><li><a href=/archive.html#2009-09>September 2009</a> (1)</li><li><a href=/archive.html#2009-08>August 2009</a> (3)</li><li><a href=/archive.html#2009-07>July 2009</a> (2)</li><li><a href=/archive.html#2009-06>June 2009</a> (4)</li><li><a href=/archive.html#2009-05>May 2009</a> (6)</li><li><a href=/archive.html#2009-04>April 2009</a> (2)</li><li><a href=/archive.html#2009-03>March 2009</a> (4)</li><li><a href=/archive.html#2009-01>January 2009</a> (8)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2008>2008</a> (61)<ul id=archive-year-2008 class=collapse><li><a href=/archive.html#2008-12>December 2008</a> (1)</li><li><a href=/archive.html#2008-11>November 2008</a> (4)</li><li><a href=/archive.html#2008-10>October 2008</a> (6)</li><li><a href=/archive.html#2008-09>September 2008</a> (1)</li><li><a href=/archive.html#2008-08>August 2008</a> (6)</li><li><a href=/archive.html#2008-07>July 2008</a> (14)</li><li><a href=/archive.html#2008-06>June 2008</a> (3)</li><li><a href=/archive.html#2008-05>May 2008</a> (1)</li><li><a href=/archive.html#2008-04>April 2008</a> (3)</li><li><a href=/archive.html#2008-03>March 2008</a> (3)</li><li><a href=/archive.html#2008-02>February 2008</a> (9)</li><li><a href=/archive.html#2008-01>January 2008</a> (10)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2007>2007</a> (86)<ul id=archive-year-2007 class=collapse><li><a href=/archive.html#2007-12>December 2007</a> (4)</li><li><a href=/archive.html#2007-11>November 2007</a> (7)</li><li><a href=/archive.html#2007-10>October 2007</a> (2)</li><li><a href=/archive.html#2007-09>September 2007</a> (8)</li><li><a href=/archive.html#2007-08>August 2007</a> (6)</li><li><a href=/archive.html#2007-07>July 2007</a> (15)</li><li><a href=/archive.html#2007-06>June 2007</a> (15)</li><li><a href=/archive.html#2007-05>May 2007</a> (4)</li><li><a href=/archive.html#2007-04>April 2007</a> (10)</li><li><a href=/archive.html#2007-03>March 2007</a> (8)</li><li><a href=/archive.html#2007-02>February 2007</a> (1)</li><li><a href=/archive.html#2007-01>January 2007</a> (6)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2006>2006</a> (103)<ul id=archive-year-2006 class=collapse><li><a href=/archive.html#2006-12>December 2006</a> (4)</li><li><a href=/archive.html#2006-11>November 2006</a> (3)</li><li><a href=/archive.html#2006-10>October 2006</a> (7)</li><li><a href=/archive.html#2006-09>September 2006</a> (6)</li><li><a href=/archive.html#2006-08>August 2006</a> (13)</li><li><a href=/archive.html#2006-07>July 2006</a> (4)</li><li><a href=/archive.html#2006-06>June 2006</a> (13)</li><li><a href=/archive.html#2006-05>May 2006</a> (7)</li><li><a href=/archive.html#2006-04>April 2006</a> (9)</li><li><a href=/archive.html#2006-03>March 2006</a> (6)</li><li><a href=/archive.html#2006-02>February 2006</a> (13)</li><li><a href=/archive.html#2006-01>January 2006</a> (18)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2005>2005</a> (129)<ul id=archive-year-2005 class=collapse><li><a href=/archive.html#2005-12>December 2005</a> (9)</li><li><a href=/archive.html#2005-11>November 2005</a> (7)</li><li><a href=/archive.html#2005-10>October 2005</a> (23)</li><li><a href=/archive.html#2005-09>September 2005</a> (10)</li><li><a href=/archive.html#2005-08>August 2005</a> (14)</li><li><a href=/archive.html#2005-07>July 2005</a> (5)</li><li><a href=/archive.html#2005-06>June 2005</a> (12)</li><li><a href=/archive.html#2005-05>May 2005</a> (6)</li><li><a href=/archive.html#2005-04>April 2005</a> (6)</li><li><a href=/archive.html#2005-03>March 2005</a> (13)</li><li><a href=/archive.html#2005-02>February 2005</a> (11)</li><li><a href=/archive.html#2005-01>January 2005</a> (13)</li></ul></li><li><a data-toggle=collapse href=#archive-year-2004>2004</a> (84)<ul id=archive-year-2004 class=collapse><li><a href=/archive.html#2004-12>December 2004</a> (9)</li><li><a href=/archive.html#2004-11>November 2004</a> (6)</li><li><a href=/archive.html#2004-10>October 2004</a> (11)</li><li><a href=/archive.html#2004-09>September 2004</a> (19)</li><li><a href=/archive.html#2004-07>July 2004</a> (29)</li><li><a href=/archive.html#2004-06>June 2004</a> (10)</li></ul></li></ul></div></div></div></div></div><footer class=container><div class=row><div class="col-4 order-2 texr-right"><p class=float-right><a href=#>Back to top</a></p></div><div class="col-8 order-1 mr-auto"><p>Copyright 2004&ndash;2023 Julio Merino</p></div></div></footer><script type=module>
+  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.9a47b323ba8f681c34c2db58e62eebd208ed54394a41b1f8052eea144a874915.js";
 
   var batchClient = new BatchClient(SITE_ID);
-  batchClient.doAll({ put_request: true, get_comments: true, get_votes: true });
+  batchClient.doAll({
+    put_request: true, get_comments: true, get_subscriber_count: true, get_votes: true });
 
   window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
   window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
@@ -659,9 +99,4 @@ Software Engineer<br>
 
   addAnchorsToHeaders();
   addElementClasses();
-</script>
-<noscript>
-<img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE4LzA2L3J1c3QtcmV2aWV3LXByb3RlY3QtdGhlLWRhdGEuaHRtbA==/stamp.gif" style=display:none>
-</noscript>
-</body>
-</html>
+</script><noscript><img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDE4LzA2L3J1c3QtcmV2aWV3LXByb3RlY3QtdGhlLWRhdGEuaHRtbA==/stamp.gif" style=display:none></noscript></body></html>
