@@ -1,4 +1,206 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sat, 01 Jul 2023 16:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>ldd(1) and untrusted binaries</title><link>https://jmmv.dev/2023/07/ldd-untrusted-binaries.html</link><pubDate>Sat, 01 Jul 2023 16:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/07/ldd-untrusted-binaries.html</guid><description>&lt;p>While diagnosing a non-determinism Bazel issue at work, I had to compare the dynamic libraries used by two builds of the same binary. To do so, I used &lt;code>ldd(1)&lt;/code>. The list of libraries printed by the tool was the same between the two builds, but the numbers next to them were different. Which numbers, you ask? Well, take a look at this sample output:&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 07 Jul 2023 06:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Unit-testing a web service in Rust</title><link>https://jmmv.dev/2023/07/unit-testing-a-web-service.html</link><pubDate>Fri, 07 Jul 2023 06:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/07/unit-testing-a-web-service.html</guid><description>&lt;p>One of the things I&amp;rsquo;m most proud of the Rust web services I have written is how I can run their tests with zero setup and within milliseconds, all while making me confident that &lt;code>main&lt;/code> can always be shipped to production. I&amp;rsquo;ve previously touched upon how this all works in other articles, but it&amp;rsquo;s time for a deep dive.&lt;/p>
+&lt;p>To make things specific, I&amp;rsquo;ll be describing the testing infrastructure of &lt;a href="/software/endtracker.html">EndTRACKER&lt;/a>, the &lt;a href="/2021/07/endbasic-0.7.html">EndBASIC Service&lt;/a>, and the &lt;a href="https://github.com/jmmv/iii-iv/tree/eec320cd02149f223d8a9c7f8d697845ec2114d8/example/">sample key/value store app of III-IV&lt;/a>. These services are all structured in three separate layers, and I&amp;rsquo;ll be covering the testing strategy for each of them.&lt;/p>
+&lt;p>But before getting into how each layer is exercised on its way to production, let&amp;rsquo;s talk about external dependencies&amp;hellip; because dependencies are the root of all evil when it comes to the usual poor testing strategies you may encounter.&lt;/p>
+&lt;h1 id="interacting-with-dependencies">Interacting with dependencies&lt;/h1>
+&lt;p>Pretty much any web service relies on other services, which I&amp;rsquo;ll call &lt;em>dependencies&lt;/em>. These include databases, queuing systems, distributed storage, remote logging&amp;hellip; you name it. The list of dependencies may be long, and their direct use in tests is typically where the friction in testing comes from: most service implementations are unable to stub their dependencies out, so the developers end up having to run the real dependencies to execute any test.&lt;/p>
+&lt;p>If you have worked on the development of any modern web service, particularly in a corporate environment, you&amp;rsquo;ve witnessed the issues that running real dependencies causes:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>You have had to carefully set up your development environment with the right versions of tools and services, wasting hours (or days!) of productive time.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>You have had to troubleshoot test failures caused by problems in your development environment. Any small deviation from the blessed configuration can lead to mysterious problems and you are on your own to figure them out. &amp;ldquo;Works on my machine!&amp;rdquo; is a common excuse to not get involved in solving a coworker&amp;rsquo;s issue.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>You have had to rely on overly powerful machines to run the tests because all the dependencies are huge and consume large amounts of RAM and CPU. After all, each dependency assumes it will be running on its own server(s) and is likely written in a language different from all other dependencies, thus requiring its own heavy runtime. &lt;a href="/2023/06/fast-machines-slow-machines.html">Talk about waste, huh.&lt;/a>&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>You have had to patiently wait for many minutes every time you run tests while Docker downloads multi-GB images, starts the dependencies, and waits for them to be ready to serve requests after (re)starting from scratch.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>You have had to suffer from flaky tests because the connections to the dependent services sometimes fail or the state of the dependent services has somehow been polluted by other tests.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>You have had to witness entire teams being spun up and funded to deal with slow CI runs and flaky tests, all while spending countless machines to support these resource-hungry tests.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>These issues are all avoidable with proper &lt;em>upfront care&lt;/em>. I&amp;rsquo;m convinced that most developers want to do the right thing, but: one, many times they don&amp;rsquo;t &lt;em>know&lt;/em> what the right thing &lt;em>even is&lt;/em>; and, two, the pressure to &amp;ldquo;launch and iterate&amp;rdquo; often comes with an empty promise that there will be time &amp;ldquo;later&amp;rdquo; to address past cut corners. And you well know that automated tests are often ignored until they become truly necessary&amp;mdash;that is, when the product is crashing left and right and customers are threatening to leave&amp;mdash;at which point a solid testing infrastructure is non-existent and cannot be easily retrofit.&lt;/p>
+&lt;p>A key foundation to avoid these problems is to architect the system in a way that puts all external dependencies behind interfaces from the ground up. These interfaces then let you plug in different implementations of the dependencies such that most tests can skip using the real dependencies. In other words, the key foundation is &lt;strong>Dependency Injection (DI)&lt;/strong>. And no, I&amp;rsquo;m not talking about fancy DI frameworks: all I&amp;rsquo;m talking about is the very basics of defining interfaces or traits and passing instances of those to constructors and functions.&lt;/p>
+&lt;p>Now, of course, there is a balance between A) fast and deterministic tests that rely on fake services and B) slow and accurate tests that rely on real services: the more you stub out real dependencies, the less accurate tests become. The idea, though, is to have the &lt;em>choice&lt;/em> to pick one or the other on a test by test basis depending on the scenario to validate. And to make that choice, the system architecture must be in place to support it from the very beginning. With that in place, you can come up with the best testing strategy for each scenario, and you can choose how much of test collateral has to run every time you run tests and how much of it can be postponed to PR merge time or nightly runs.&lt;/p>
+&lt;p>In my services, my goal is to make the vast majority of tests run with a simple &lt;code>cargo test&lt;/code> after a &lt;code>git clone&lt;/code>. No configuration necessary. A small subset of tests &lt;em>do&lt;/em> talk to the real dependencies and require configuration but, while these can run locally, I rarely need to do so because they are automated to run in CI at PR merge time.&lt;/p>
+&lt;p>Let&amp;rsquo;s dive into the different layers of the architecture to see how these ideas play out. The layers are one for database access, one for business logic, and one for REST handling. You may want to read &lt;a href="/2023/03/introducing-iii-iv.html">&amp;ldquo;Introducing III-IV&amp;rdquo;&lt;/a> and &lt;a href="/2023/06/mvc-non-ui-apps.html">&amp;ldquo;MVC but for non-UI apps&amp;rdquo;&lt;/a> beforehand, both of which describe the general architecture of these services.&lt;/p>
+&lt;h1 id="database-layer-testing">Database layer testing&lt;/h1>
+&lt;p>My services use PostgreSQL in production. While setting up a local instance of this database is not difficult and it doesn&amp;rsquo;t consume any meaningful resources when idle, it&amp;rsquo;s still far from the zero setup experience I strive to achieve. So the first thing I had to do was hide the database queries behind an interface. The basic building blocks look like this and can be found in the &lt;a href="https://github.com/jmmv/iii-iv/blob/eec320cd02149f223d8a9c7f8d697845ec2114d8/core/src/db.rs">&lt;code>iii_iv_core::db&lt;/code>&lt;/a> module:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="sd">/// Abstraction over the database connection.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="cp">#[async_trait]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">trait&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Db&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="sd">/// Type of the transaction wrapper type to generate.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">type&lt;/span> &lt;span class="nc">Tx&lt;/span>: &lt;span class="nc">BareTx&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="sd">/// Begins a transaction.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">begin&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="bp">self&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="nc">DbResult&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="bp">Self&lt;/span>::&lt;span class="n">Tx&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="sd">/// Common operations for all transactions.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="cp">#[async_trait]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">trait&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">BareTx&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="sd">/// Commits the transaction.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">commit&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="bp">self&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="nc">DbResult&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The &lt;code>Db&lt;/code> trait exposes a generic mechanism to open a transaction against a database via its &lt;code>begin&lt;/code> method. The returned transaction type is parameterized on &lt;code>Db::Tx&lt;/code>, which has to be a subtrait of &lt;code>BareTx&lt;/code>. In turn, &lt;code>BareTx&lt;/code> represents the common operations one can do with a generic transaction but does not have any domain-specific knowledge.&lt;/p>
+&lt;p>Each web service is responsible for supplying its own transaction trait that extends &lt;code>BareTx&lt;/code> with the operations that make sense in its domain. For example, here is how the sample key/value store service that ships with III-IV exposes the database operations needed to implement the key retrieval and storage operations. Note that the upstream code uses the name &lt;code>Tx&lt;/code> for this trait, but I&amp;rsquo;ve renamed it to &lt;code>KVStoreTx&lt;/code> in this text for clarity:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#[async_trait]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">trait&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">KVStoreTx&lt;/span>: &lt;span class="nc">BareTx&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="sd">/// Gets the current value of the given `key`.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">get_key&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="bp">self&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">key&lt;/span>: &lt;span class="kp">&amp;amp;&lt;/span>&lt;span class="nc">Key&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="nc">DbResult&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">Entry&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="sd">/// Sets `key` to `entry`, which includes its value and version.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">set_key&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="bp">self&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">key&lt;/span>: &lt;span class="kp">&amp;amp;&lt;/span>&lt;span class="nc">Key&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">entry&lt;/span>: &lt;span class="kp">&amp;amp;&lt;/span>&lt;span class="nc">Entry&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="nc">DbResult&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// ... and several more ...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>There is nothing in these interfaces that points to database-specific behavior, which is intentional. The only thing that client code is allowed to do is create a transaction and call the business-specific methods on it, without knowing what the transaction is talking to. Going back to the example above, this snippet would fetch the value of a key from the key/value store:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tx&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">db&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">begin&lt;/span>&lt;span class="p">().&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="o">?&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">value&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tx&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">get_key&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">key&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="o">?&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="n">tx&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">commit&lt;/span>&lt;span class="p">().&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="o">?&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>With the service-specific transaction type in place (&lt;code>KVStoreTx&lt;/code>), the service is also responsible for supplying separate implementations of it for all databases the service wishes to support. As mentioned earlier, this means providing a variant for PostgreSQL for production usage. But what about tests? Tests could use their own database-less implementation&amp;mdash;for this trivial example, a &lt;code>HashMap&lt;/code> would suffice&amp;mdash;but going this route becomes tricky once you want to reproduce more realistic OLTP database behavior, especially when concurrent operations take place. The other obvious alternative is to use SQLite: a real database that requires zero configuration, which fits the perfect bill for unit tests.&lt;/p>
+&lt;p>As a result, I end up with the following types in the system:&lt;/p>
+&lt;ul>
+&lt;li>A generic &lt;code>PostgresDb&lt;/code> (provided by &lt;a href="https://github.com/jmmv/iii-iv/tree/eec320cd02149f223d8a9c7f8d697845ec2114d8/postgres/">&lt;code>iii_iv_postgres&lt;/code>&lt;/a>) and a service-specific &lt;code>PostgresKVStoreTx&lt;/code> for production.&lt;/li>
+&lt;li>A generic &lt;code>SqliteDb&lt;/code> (provided by &lt;a href="https://github.com/jmmv/iii-iv/tree/eec320cd02149f223d8a9c7f8d697845ec2114d8/sqlite/">&lt;code>iii_iv_sqlite&lt;/code>&lt;/a>) and service-specific &lt;code>SqliteKVStoreTx&lt;/code> for tests.&lt;/li>
+&lt;/ul>
+&lt;p>Implementing the same database queries against two different database systems is annoying indeed, but forcing myself to do this keeps me honest in maintaining true abstractions. However, it is critical that these implementations behave as similarly as possible and, to guarantee this, I write extensive unit tests in a separate &lt;code>db/tests.rs&lt;/code> file. These tests look like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">test_simplified_get_after_set&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">D&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">db&lt;/span>: &lt;span class="nc">D&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">where&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">D&lt;/span>: &lt;span class="nc">Db&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">D&lt;/span>::&lt;span class="n">Tx&lt;/span>: &lt;span class="nc">KVStoreTx&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tx&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">db&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">begin&lt;/span>&lt;span class="p">().&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">();&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">key&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Key&lt;/span>::&lt;span class="n">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;the-key&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">to_owned&lt;/span>&lt;span class="p">());&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">entry&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">Entry&lt;/span>::&lt;span class="n">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;insert&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">to_owned&lt;/span>&lt;span class="p">(),&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Version&lt;/span>::&lt;span class="n">from_u32&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">());&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">tx&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">set_key&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">key&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">entry&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">();&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="fm">assert_eq!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">entry&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">tx&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">get_key&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="n">key&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">());&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">tx&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">commit&lt;/span>&lt;span class="p">().&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">();&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>As you can see, each tests is parameterized on a &lt;code>D&lt;/code> type. The &lt;code>D&lt;/code> type is an implementation of the &lt;code>Db&lt;/code> trait presented earlier, whose only purpose is to yield new transactions of its inner &lt;code>D::Tx&lt;/code> type based on a pre-established connection. The &lt;code>D::Tx&lt;/code> type is mapped to the domain-specific &lt;code>KVStoreTx&lt;/code> type so that tests have access to the primitives to be tested. Notably, though, the tests have no way of knowing which database they are talking to.&lt;/p>
+&lt;p>With these generic tests in place, the question is: how are they executed against the individual database implementations? The &lt;code>db/postgres.rs&lt;/code> and &lt;code>db/sqlite.rs&lt;/code> modules of each service define &lt;code>#[test]&lt;/code> entry points for each test. These entry points are thin wrappers for the common test code in &lt;code>db/tests.rs&lt;/code> and their sole purpose is to establish a connection to the database and then delegate to the test implementation. Basically, each wrapper looks like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="sd">/// This is the specialization of a test for SQLite.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="cp">#[tokio::test]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">test_simplified_get_after_set&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// Create a connection to the SQLite in-memory database.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">db&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iii_iv_sqlite&lt;/span>::&lt;span class="n">testutils&lt;/span>::&lt;span class="n">setup&lt;/span>::&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">SqliteKVStoreTX&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">().&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// Delegate to the common test code.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">crate&lt;/span>::&lt;span class="n">db&lt;/span>::&lt;span class="n">tests&lt;/span>::&lt;span class="n">test_simplified_get_after_set&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">db&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="sd">/// This is the specialization of a test for PostgreSQL.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">///
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">/// Note how the test is marked `ignore`. We&amp;#39;ll see why that is later on.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd">&lt;/span>&lt;span class="cp">#[tokio::test]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="cp">#[ignore = &lt;/span>&lt;span class="s">&amp;#34;Requires environment configuration and is expensive&amp;#34;&lt;/span>&lt;span class="cp">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">test_simplified_get_after_set&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// Create a connection to PostgreSQL using the configuration specified via
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="c1">// environment variables. The connection is set up to use a temporary
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="c1">// schema so that tests are isolated from each other and don&amp;#39;t leave garbage
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="c1">// behind.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">db&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">iii_iv_postgres&lt;/span>::&lt;span class="n">testutils&lt;/span>::&lt;span class="n">setup&lt;/span>::&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">PostgresKVStoreTx&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">().&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// Delegate to the common test code.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">crate&lt;/span>::&lt;span class="n">db&lt;/span>::&lt;span class="n">tests&lt;/span>::&lt;span class="n">test_simplified_get_after_set&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">db&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>For a long while, this is actually how the test wrappers looked like and&amp;hellip; they were written by hand. At some point, I grew tired of copy/pasting these snippets over and over again and invested a wee bit of time learning how to leverage macros to cut down the repetition. It wasn&amp;rsquo;t as difficult as I imagined. You can see how this works in practice in the sample key/value store &lt;a href="https://github.com/jmmv/iii-iv/blob/eec320cd02149f223d8a9c7f8d697845ec2114d8/example/src/db/tests.rs">tests&lt;/a> and their &lt;a href="https://github.com/jmmv/iii-iv/blob/eec320cd02149f223d8a9c7f8d697845ec2114d8/example/src/db/sqlite.rs#L150">instantiation for SQLite&lt;/a>.&lt;/p>
+&lt;h1 id="driver-layer-testing">Driver layer testing&lt;/h1>
+&lt;p>Let&amp;rsquo;s jump one level up and look at the testing approach for the driver layer.&lt;/p>
+&lt;p>The driver layer of each service typically exposes a single &lt;code>Driver&lt;/code> type. The &lt;code>Driver&lt;/code> maintains the state of the application and provides entry points for all REST operations, usually with a 1:1 mapping between REST API and driver method.&lt;/p>
+&lt;p>To instantiate a &lt;code>Driver&lt;/code>, all service dependencies are injected at creation time. Here is an example of how the &lt;code>Driver&lt;/code> constructor looks like for the EndTRACKER data plane service, which is more interesting to analyze than the driver for the sample key/value store:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="k">pub&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">crate&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">db&lt;/span>: &lt;span class="nc">D&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">clock&lt;/span>: &lt;span class="nc">C&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">geolocator&lt;/span>: &lt;span class="nc">G&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">abuse_policy&lt;/span>: &lt;span class="nc">A&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">queue_client&lt;/span>: &lt;span class="nc">Client&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">BatchTask&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">C&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="no">QD&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="nc">Self&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="bp">Self&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">db&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">clock&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">geolocator&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">abuse_policy&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">queue_client&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>See? A trivial constructor that &lt;em>does no work&lt;/em>, as it shall be done. Neat&amp;hellip; but what are all these type parameters? These type parameters are what allow injecting the different implementations of each dependency into the service for testing purposes.&lt;/p>
+&lt;p>Now, why are they are type parameters? Simply because I wanted to &lt;em>try&lt;/em> using static dispatch, and&amp;hellip; things have gotten unwieldy. All references to the &lt;code>Driver&lt;/code> type in &lt;code>impl&lt;/code> blocks look like this awful chunk:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="k">impl&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">A&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">C&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">D&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">G&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="no">QD&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Driver&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">A&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">C&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">D&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">G&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="no">QD&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">where&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">A&lt;/span>: &lt;span class="nc">AbusePolicy&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">D&lt;/span>::&lt;span class="n">Tx&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Clone&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">C&lt;/span>: &lt;span class="nc">Clock&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Clone&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">D&lt;/span>: &lt;span class="nc">Db&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Clone&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">D&lt;/span>::&lt;span class="n">Tx&lt;/span>: &lt;span class="nc">DataTx&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">From&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">D&lt;/span>::&lt;span class="n">SqlxTx&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">G&lt;/span>: &lt;span class="nc">GeoLocator&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Clone&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="no">QD&lt;/span>: &lt;span class="nc">Db&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Clone&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="no">QD&lt;/span>::&lt;span class="n">Tx&lt;/span>: &lt;span class="nc">ClientTx&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">T&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">BatchTask&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">From&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="no">QD&lt;/span>::&lt;span class="n">SqlxTx&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Send&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">Sync&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">+&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">&amp;#39;static&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="c1">// ...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>If I had to write this monstrosity &lt;em>just once&lt;/em>, it could be tolerable. But because I split the implementation of the &lt;code>Driver&lt;/code> across different files to keep them short&amp;hellip; this chunk is repeated across many files and keeping them in sync is a humongous hassle. I&amp;rsquo;m&amp;hellip; not happy. Fear not though: the alternative is to use &lt;code>Arc&amp;lt;Mutex&amp;lt;T&amp;gt;&amp;gt;&lt;/code> everywhere with &lt;code>T&lt;/code> being a type alias over the trait, which keeps the noise down significantly. Mind you, I used to do this and I&amp;rsquo;m not sure the switch to static dispatch was worth it. But I digress&amp;hellip;&lt;/p>
+&lt;p>Because all these types are parameterized, it means I can instantiate a &lt;code>Driver&lt;/code> and back it by different implementations of each dependency. For example:&lt;/p>
+&lt;ul>
+&lt;li>The &lt;code>db&lt;/code> can be backed by PostgreSQL in production and SQLite in tests as I have already covered in the database layer section.&lt;/li>
+&lt;li>The &lt;code>clock&lt;/code> can be backed by a &lt;code>SystemClock&lt;/code> that returns the system time, and also by a &lt;code>MonotonicClock&lt;/code> that exposes fake (and deterministic!) time.&lt;/li>
+&lt;li>The &lt;code>geolocator&lt;/code> can be backed by an &lt;code>AzureGeoLocator&lt;/code> that talks to Azure Maps, and also by a &lt;code>MockGeoLocator&lt;/code> that returns pre-configured results and errors.&lt;/li>
+&lt;/ul>
+&lt;p>&amp;hellip; and similarly for any other resource needed by the &lt;code>Driver&lt;/code>.&lt;/p>
+&lt;p>This, once again, allows: writing super-fast non-flaky unit tests because they do not reach out to real resources; running the tests with zero configuration; and avoiding the need to spawn resource-hungry dependencies on the local machine.&lt;/p>
+&lt;p>So what do tests in the driver layer actually test? These tests are mostly responsible for validating the business logic. They cover all happy paths but, critically, they &lt;em>also&lt;/em> cover all error paths I can think about&amp;mdash;something that&amp;rsquo;s made trivial by the use of fake dependencies. These tests do not cover any HTTP interactions though; for those, we have to move up one layer.&lt;/p>
+&lt;h1 id="rest-layer-testing">REST layer testing&lt;/h1>
+&lt;p>The REST layer is the one interfacing with the user of the web services via the network. This is the layer where requests are deserialized, validated, routed to the driver, and where responses or errors are serialized back to the user with the correct HTTP status codes.&lt;/p>
+&lt;p>This layer is currently written using the &lt;code>axum&lt;/code> web framework, whose fundamental building block is the &lt;code>Router&lt;/code>. Each web service creates a new &lt;code>Router&lt;/code> and registers all API endpoints plus an instance of the &lt;code>Driver&lt;/code> that gets passed to the API handlers as a state parameter. Take a look at the &lt;a href="https://github.com/jmmv/iii-iv/blob/eec320cd02149f223d8a9c7f8d697845ec2114d8/example/src/rest/mod.rs#L37">sample key/value store router creation&lt;/a>.&lt;/p>
+&lt;p>Because the &lt;code>Driver&lt;/code> is injected into the REST &lt;code>Router&lt;/code>, it can be parameterized with all the non-production dependencies as described earlier&amp;mdash;and it is. Now, the question is: what do the tests of the REST layer look like and what do they do?&lt;/p>
+&lt;p>For these, I used to spawn a local instance of the HTTP server, listening on a random unused port, and then made the tests call HTTP endpoints over the loopback interface with the &lt;code>reqwest&lt;/code> crate. Once I moved to &lt;code>axum&lt;/code> from &lt;code>warp&lt;/code>, things improved. I could start relying on the one-shot testing feature exposed by this framework, which allows calling the router endpoints without going through the network. Not a revolutionary change, but a nice improvement for simplicity indeed.&lt;/p>
+&lt;p>To test this layer, I apply the &lt;a href="/2020/12/builder-pattern-for-tests.html">builder pattern to define test scenarios&lt;/a>. With this idiom, I can capture the parameters to an API call and the expectations of what it should return in a declarative manner. Here is one example of a test for the &amp;ldquo;put key&amp;rdquo; operation of the sample key/value store:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="k">fn&lt;/span> &lt;span class="nf">route&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">key&lt;/span>: &lt;span class="kp">&amp;amp;&lt;/span>&lt;span class="kt">str&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>-&amp;gt; &lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>::&lt;span class="n">Method&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nb">String&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>::&lt;span class="n">Method&lt;/span>::&lt;span class="no">PUT&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="fm">format!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;/api/v1/keys/&lt;/span>&lt;span class="si">{}&lt;/span>&lt;span class="s">&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">key&lt;/span>&lt;span class="p">))&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="cp">#[tokio::test]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">async&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">fn&lt;/span> &lt;span class="nf">test_create&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">context&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">TestContext&lt;/span>::&lt;span class="n">setup&lt;/span>&lt;span class="p">().&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">response&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">OneShotBuilder&lt;/span>::&lt;span class="n">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">context&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">app&lt;/span>&lt;span class="p">(),&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">route&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;first&amp;#34;&lt;/span>&lt;span class="p">))&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">send_text&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;new value&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">expect_status&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">http&lt;/span>::&lt;span class="n">StatusCode&lt;/span>::&lt;span class="no">CREATED&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">expect_json&lt;/span>::&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">Entry&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">exp_response&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Entry&lt;/span>::&lt;span class="n">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;new value&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">to_owned&lt;/span>&lt;span class="p">(),&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Version&lt;/span>::&lt;span class="n">initial&lt;/span>&lt;span class="p">());&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="fm">assert_eq!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">exp_response&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">response&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="fm">assert_eq!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">exp_response&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">context&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">get_key&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;first&amp;#34;&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In this test, &lt;code>TestContext&lt;/code> is a container that helps set up the &lt;code>Driver&lt;/code> with fake dependencies and instantiates the &lt;code>Router&lt;/code> around it. The most interesting part is the use of my own &lt;a href="https://github.com/jmmv/iii-iv/blob/eec320cd02149f223d8a9c7f8d697845ec2114d8/core/src/rest.rs#L223">&lt;code>OneShotBuilder&lt;/code>&lt;/a>, which implements the builder pattern for one-shot calls. With this at hand, the test says that it has to send a specific text document to a specific &lt;code>PUT&lt;/code> endpoint and then expects that the HTTP API call returns a &lt;code>CREATED&lt;/code> status code with a valid JSON response of type &lt;code>Entry&lt;/code>. Finally, the &lt;code>context.get_key&lt;/code> call is a helper method that &lt;em>pokes directly into the database&lt;/em> to see if the key is set, which validates the side-effects of the API call on persistent storage.&lt;/p>
+&lt;p>The tests in this layer are responsible for validating anything that&amp;rsquo;s specific to the interactions with the user over HTTP, but these tests assume that both the driver and database layers work correctly. This is why these tests do not validate in excruciating detail all the possible corner cases that we can face in the driver or its interactions with external dependencies: the driver tests have that responsibility.&lt;/p>
+&lt;h1 id="fidelity-problems">Fidelity problems&lt;/h1>
+&lt;p>Alright, so that&amp;rsquo;s the majority of the current testing approach. We have seen how the foundational database layer is architected to support dual implementations via PostgreSQL and SQLite, how other supporting services are modeled with the same duality, and how the driver and REST layers leverage the in-memory / fake implementations to provide logical test coverage at all layers. As is, these provide very good coverage of the functionality of the web services and give me almost full confidence that &lt;code>main&lt;/code> is release-quality at any given time.&lt;/p>
+&lt;p>But there are still some risks.&lt;/p>
+&lt;p>The major risk in using SQLite for tests vs. PostgreSQL for production is that they are very different databases. Sure, they are both OLTP SQL databases, but their SQL languages are distinct dialects and SQLite is in-process whereas PostgreSQL runs on a server. Dealing with slightly-different SQL queries is easy because the differences are obvious, but there are subtle differences in behavior that influence how calls behave, especially in error conditions. For example: you will never experience a &amp;ldquo;maximum connections reached&amp;rdquo; error with SQLite, but you surely will with PostgreSQL. Similarly, SQLite might give you trouble with concurrent writes while PostgreSQL won&amp;rsquo;t. There are also risks when replacing the clock with a fake one, or when replacing other services such as the Azure Maps or SMTP clients with stub implementations.&lt;/p>
+&lt;p>Now, you&amp;rsquo;d say: &lt;em>&amp;ldquo;Well, you are facing these fidelity issues because you don&amp;rsquo;t test against the real thing, duh. If all your tests used the real dependencies, then you&amp;rsquo;d be fine!&amp;rdquo;&lt;/em> Except&amp;hellip; that&amp;rsquo;s not how testing works. When writing a test, you can do two things:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>You can write tests for the &amp;ldquo;known knowns&amp;rdquo;: the happy and failure paths that you know can happen.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>You can write tests for the &amp;ldquo;known unknowns&amp;rdquo;: the scenarios you think might happen but for which you have no good answers and you need to discover what their behavior is.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>These are easy to model in tests, and if you are writing these tests, then you can make sure your real and fake dependencies behave in the same way.&lt;/p>
+&lt;p>But there is another class of failures that you cannot test for with unit tests: the &amp;ldquo;unknown unknowns&amp;rdquo;. These are the situations you do not anticipate, and because you do not anticipate them, you cannot write tests for them. It doesn&amp;rsquo;t matter that you are using the real dependencies or fake dependencies. If you cannot imagine these scenarios, no test will cover them. And this is where I have encountered interesting bugs in production before.&lt;/p>
+&lt;h1 id="real-system-testing">Real system testing&lt;/h1>
+&lt;p>Thus, even though most of the testing I do in the web services is fast and requires no setup, there is still a need to validate &amp;ldquo;the real thing&amp;rdquo;: that is, the service talking to the real dependencies under real world conditions and usage.&lt;/p>
+&lt;p>To accomplish this, I do two things.&lt;/p>
+&lt;p>The first is I write tests that actually talk to the real services (oops). These tests all require manual configuration and are marked with &lt;code>#[ignore]&lt;/code> as we saw earlier so that a &lt;code>cargo test&lt;/code> won&amp;rsquo;t pick them up by default. The CI jobs are configured to supply the right settings for these tests, and the PR merge checks forcibly run these ignored tests. It is also possible to run these tests locally by manually configuring the environment in a &lt;code>config.env&lt;/code> file and using a trivial &lt;code>test.sh&lt;/code> script that hooks things up with &lt;code>cargo test&lt;/code>, but as said earlier, I rarely have to do so.&lt;/p>
+&lt;p>The second is I deploy to a staging environment and do manual testing on it. Every commit merged into &lt;code>main&lt;/code> gets automatically deployed to a staging instance of the service (which is made easy by Azure Functions&amp;rsquo; slot feature), and I do some manual validation that things work. I could automate this testing, of course, but it is something that can still wait.&lt;/p>
+&lt;h1 id="is-this-enough">Is this enough?&lt;/h1>
+&lt;p>I know this is an overly simplistic view of the world, and that this testing approach can let some subtle bugs slip through. It has actually happened before. But thanks to this testing approach&amp;mdash;and Rust&amp;rsquo;s type system, whose help cannot be overstated&amp;mdash;every new feature I have launched &lt;em>has worked on the first try&lt;/em> and the web services have kept happily chugging along the years.&lt;/p>
+&lt;p>Finally, let me clarify one thing: I&amp;rsquo;ve been talking about &amp;ldquo;unit tests&amp;rdquo; throughout this post, but if we want to be pedantic, almost nothing of what I described are pure unit tests. Every test at every layer relies on the layers below it to behave correctly: the service&amp;rsquo;s own code is never stubbed out so, for example, a test for the REST layer will run code in the driver and database layers. The only thing that&amp;rsquo;s stubbed out are the connections to external services. I believe this style of testing provides much more realistic scenarios at the expense of making them more subtle to breakage when code changes.&lt;/p>
+&lt;p>And that&amp;rsquo;s it for today. If you liked this post, you may also enjoy &lt;a href="/2020/12/unit-testing-a-console-app.html">&amp;ldquo;Unit-testing a console app (a text editor)&amp;rdquo;&lt;/a> from over 2 years ago. It is then that I came up with the idea of using the builder pattern to define tests, and that idea still proves very useful to this day.&lt;/p></description></item><item><title>ldd(1) and untrusted binaries</title><link>https://jmmv.dev/2023/07/ldd-untrusted-binaries.html</link><pubDate>Sat, 01 Jul 2023 16:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/07/ldd-untrusted-binaries.html</guid><description>&lt;p>While diagnosing a non-determinism Bazel issue at work, I had to compare the dynamic libraries used by two builds of the same binary. To do so, I used &lt;code>ldd(1)&lt;/code>. The list of libraries printed by the tool was the same between the two builds, but the numbers next to them were different. Which numbers, you ask? Well, take a look at this sample output:&lt;/p>
 &lt;pre tabindex="0">&lt;code>$ ldd /bin/ls
 linux-vdso.so.1 (0x00007fff5bbed000)
 libselinux.so.1 =&amp;gt; /lib64/libselinux.so.1 (0x00007f7786f48000)
@@ -1431,598 +1633,4 @@ But we didn&amp;rsquo;t need any of this to solve the &lt;code>GOTO&lt;/code> pr
 &lt;h1 id="whats-next">What&amp;rsquo;s next?&lt;/h1>
 &lt;p>I had bigger plans for this release. On top of public file sharing, I planned to finally add support for user-defined functions, &lt;code>GOTO&lt;/code> and &lt;code>GOSUB&lt;/code>, file system directories, and maybe even automatic numeric type promotion. But because the changes to the cloud service turned out to be so intrusive and required a database wipeout, I preferred to cut scope and get this launched ASAP to get the new code exercised and avoid losing even more data.&lt;/p>
 &lt;p>The aforementioned features should come in 0.10 though, so stay tuned for a much better language! A great way to do this is to &lt;a href="https://repl.endbasic.dev/">launch the interpreter&lt;/a>, create an account with &lt;code>SIGNUP&lt;/code>, and opt into receiving promotional (release announcements) emails! Or you can subscribe to this blog with the buttons below.&lt;/p>
-&lt;p>Thanks for reading, and have fun 😁️.&lt;/p></description></item><item><title>Remembering Buildtool</title><link>https://jmmv.dev/2022/05/remembering-buildtool.html</link><pubDate>Fri, 13 May 2022 09:50:00 -0700</pubDate><guid>https://jmmv.dev/2022/05/remembering-buildtool.html</guid><description>&lt;p>Build systems are one of my favorite topics in software engineering. If I recall correctly, my interest in this area started when I got into NetBSD in 2002&amp;mdash;20 years ago&amp;mdash;and became a pkgsrc contributor. Packaging software for NetBSD made me &lt;a href="/2005/03/making-packager-friendly-software-1.html">fight various build systems&lt;/a> and, in particular, experience the pains of debugging the GNU Autotools.&lt;/p>
-&lt;p>Around that same time, I was also writing &lt;a href="/software/menu2wm.html">small&lt;/a> &lt;a href="/software/vcsme.html">tools&lt;/a> &lt;a href="/software/xmlcatmgr.html">here&lt;/a> &lt;a href="/software/sysbuild.html">and&lt;/a> &lt;a href="/software/pkg_comp.html">there&lt;/a>. Out of inertia, I used the GNU Autotools for these and, the more I used them, the more I saw an opportunity for improvement. The GNU Autotools were slow, hard to deal with, and they bloated every package. Why did you have to ship heavy &lt;code>configure&lt;/code>, &lt;code>Makefile.in&lt;/code> and &lt;code>libtool&lt;/code> scripts in every single distribution file when you could instead rely on a few system-wide scripts? And thus &lt;a href="/software/buildtool.html">Buildtool&lt;/a> was born in the summer of 2002, just before I started college, and I worked on it for about two years.&lt;/p>
-&lt;p>The Buildtool project recently came to mind and I noticed that &lt;a href="http://buildtool.sourceforge.net/">its website is still up and running&lt;/a> (kudos to SourceForge for that), so I poked around a bit. Just by looking at the &lt;a href="http://buildtool.sourceforge.net/docs/manual/index.html">User&amp;rsquo;s Manual&lt;/a>, I&amp;rsquo;m amazed by how comprehensive the tool is and makes me jealous of how much free time I had back then. Since noticing this, I had been meaning to try the tool again and write a post, and finally got to it just yesterday. So let&amp;rsquo;s take a tour of what Buildtool was and what it achieved.&lt;/p>
-&lt;h1 id="history">History&lt;/h1>
-&lt;p>Buildtool was originally inspired by the FreeBSD and NetBSD build systems. The idea was to leverage system-wide generic build logic files to build libraries and binaries&amp;mdash;just like &lt;code>bsd.lib.mk&lt;/code> and &lt;code>bsd.prog.mk&lt;/code> provide&amp;mdash;and have arbitrary packages rely on those installed files. As an end user, you would have to install Buildtool first before you could build any other package, but you would only pay the cost of the build infrastructure once. While this paradigm is accepted today, it was quite a departure from the traditions of Unix systems in the early 2000s.&lt;/p>
-&lt;p>Buildtool&amp;rsquo;s first version in 2002 was precisely what the NetBSD build system was. The 0.1 release shipped with a copy of NetBSD&amp;rsquo;s &lt;code>make&lt;/code> tool, renamed as &lt;code>bt_make&lt;/code>, along with a few &lt;code>mk&lt;/code> files to build common targets. That release also included a rudimentary GNU Autoconf-like tool.&lt;/p>
-&lt;p>Later on, Buildtool grew a &lt;code>bt_wrap&lt;/code> helper utility to deal with platform incompatibilities when invoking common tools such as the compiler. This idea was inspired by pkgsrc&amp;rsquo;s buildlink3 and wrappers infrastructure, which to this day still wrap the compiler and linker to paper over platform-specific oddities. Reading through the release notes, I can see how this helped make Buildtool work on Cygwin and Mac OS X systems of the day.&lt;/p>
-&lt;p>Towards the latest releases of the project by 2004, things took a significant turn: &lt;code>bt_make&lt;/code> and &lt;code>bt_wrap&lt;/code> were removed in favor of &lt;code>bt_logic&lt;/code>, a custom-made build system purely based on shell scripts. If I recall correctly, the first version of &lt;code>bt_logic&lt;/code> was written in Perl, but it never shipped because having Buildtool rely on the gigantic Perl dependency was a non-starter.&lt;/p>
-&lt;p>By the beginning of 2005, I cancelled the project for the reasons I&amp;rsquo;ll cover at the end of this post.&lt;/p>
-&lt;h1 id="installing-buildtool">Installing Buildtool&lt;/h1>
-&lt;p>The last release of Buildtool was 0.16, which was published on July 4th, 2004 (about 18 years ago) and is still available in the &lt;a href="http://buildtool.sourceforge.net/download.html">Downloads&lt;/a> page if you want to try it out.&lt;/p>
-&lt;p>Buildtool itself was written in about 10,000 lines shell, but the distribution includes a slimmed down version of NetBSD&amp;rsquo;s &lt;code>/bin/sh&lt;/code> named &lt;code>bt_sh&lt;/code>. The raison d&amp;rsquo;être for &lt;code>bt_sh&lt;/code> was pretty much the same as Debian&amp;rsquo;s &lt;a href="https://manpages.debian.org/buster/dash/dash.1.en.html">&lt;code>dash&lt;/code>&lt;/a>: a portable, high-performance and standards-compliant shell interpreter to run scripts. &lt;code>bt_sh&lt;/code> helped keep Buildtool&amp;rsquo;s implementation simpler as it did not have to deal with &lt;code>sh&lt;/code> platform incompatibilities (Solaris&amp;rsquo; version was a pain). Furthermore, &lt;code>bt_sh&lt;/code> also ensured that the users of Buildtool writing their own build scripts wouldn&amp;rsquo;t have to &lt;a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.71/html_node/Portable-Shell.html">care about shell portability&lt;/a>, as is the case when writing &lt;code>configure.ac&lt;/code> scripts.&lt;/p>
-&lt;p>The reason I&amp;rsquo;m mentioning &lt;code>bt_sh&lt;/code> is because trying to build Buildtool 0.16 on a FreeBSD 13 system today fails due to a couple of bugs in the C code. Fixing those bugs is a matter of avoiding trivial conflicts among repeated symbols in different modules. After those simple fixes, Buildtool installs successfully:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/buildtool-0.16$ ./configure -p /tmp/local
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">configuring for buildtool-0.16
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for machine type: amd64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program gcc: not found
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program cc: /usr/bin/cc
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking whether /usr/bin/cc is GNU C: yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[...]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">BUILDTOOL 0.16 CONFIGURATION SUMMARY
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Installation prefix: /tmp/local
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Configuration directory: /tmp/local/etc/buildtool
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Type `make&amp;#39; to start the build.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Type `make install&amp;#39; to install, only _after_ the build has finished.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/buildtool-0.16$ make &amp;amp;&amp;amp; make install
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[...]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Buildtool 0.16 has been successfully installed!
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Please take some time to read the `Testing&amp;#39; section in the README file
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> to easily provide useful feedback. This will not take more than ten
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> minutes, but you will be contributing to the project.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> As part of the post installation stage, you should now create a system
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> configuration file for the bt_config module, containing cached results
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> for several common checks run by many configure scripts.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> For an automated setup, issue the following commands:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> mkdir -p /tmp/local/etc/buildtool
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> cp /tmp/local/share/buildtool/templates/bt_config.conf.in \
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /tmp/local/etc/buildtool/bt_config.conf.in
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /tmp/local/bin/buildtool swcgen
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Thanks for choosing Buildtool.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="post-installation-configuration">Post-installation configuration&lt;/h1>
-&lt;p>The installation process quoted above tells us that we should create a system-wide configuration file and then run &lt;code>buildtool swcgen&lt;/code>, which stands for &amp;ldquo;System-wide configuration generator&amp;rdquo;. Let&amp;rsquo;s poke at that file and try to follow the given steps.&lt;/p>
-&lt;p>Here is what &lt;code>/tmp/local/share/buildtool/templates/bt_config.conf.in&lt;/code> has to say:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># $Id: bt_config.conf.in,v 1.8 2004/06/26 18:42:05 jmmv Exp $&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># bt_config.conf - System wide configuration&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># File automatically generated by @BT_PKG_NAME@, version @BT_PKG_VERSION@.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Timestamp: @TIMESTAMP@&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># bt_config will open this file from @BT_DIR_ETC@.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># C/C++ environments (leave both for now, all other macros rely on them).&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_env c cxx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Basic programs (C/C++ utilities handled by environments).&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_prog info lex m4 sh yacc
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Header files&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_hdr sys/cdefs.h sys/utsname.h err.h poll.h stdarg.h stdbool.h ulimit.h
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># C++ only header files&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_hdr bitset deque fstream iostream list map queue &lt;span class="nb">set&lt;/span> stack string &lt;span class="se">\
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> vector
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Basic libraries&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_lib m
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># System specific functions&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_func setenv strerror stricmp strlcat strlcpy strncat strncpy strndup &lt;span class="se">\
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> strftime poll readdir_r &lt;span class="nb">ulimit&lt;/span> uname vfork vsnprintf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Types&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_type gid_t int8_t int16_t int32_t int64_t size_t uid_t uint8_t &lt;span class="se">\
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> uint16_t uint32_t uint64_t u_int8_t u_int16_t u_int32_t u_int64_t
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Type sizes&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_sizeof char short int long &lt;span class="s2">&amp;#34;long long&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Miscellaneous results&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_cache_attribute
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Interesting. This configuration file is all about &amp;ldquo;caching&amp;rdquo;. But caching what?&lt;/p>
-&lt;p>You see, one of the problems I had with the GNU Autotools is how every single package I built and installed on my machine had to go through a very costly &lt;code>configure&lt;/code> invocation. It was mind-blowing to me (and still is &lt;em>today&lt;/em>) how many CPU hours the world burns on a day-to-day basis checking if a system has standard headers and functions. Couldn&amp;rsquo;t we check just &lt;em>once&lt;/em> and have all packages reuse the results? If the system has &lt;code>vfork&lt;/code>, for example, it will continue to have that function for the foreseeable future; there is no need to test for it over and over again.&lt;/p>
-&lt;p>That&amp;rsquo;s precisely what the &lt;code>buildtool swcgen&lt;/code> command addresses: it executes all of the checks specified in the configuration file and installs those cached results for later reuse. Let&amp;rsquo;s see what the invocation looks like:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ cp /tmp/local/share/buildtool/templates/bt_config.conf.in \
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /tmp/local/etc/buildtool/bt_config.conf.in
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ /tmp/local/bin/buildtool swcgen
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Input: /tmp/local/etc/buildtool/bt_config.conf.in
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Output: /tmp/local/etc/buildtool/bt_config.conf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_swcgen: running bt_wizard to create temporary project skeleton
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Entering directory /tmp/bt_swcgen.1802... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating directories... src
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating Generic.bt... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating README.bt... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating src/Logic.bt... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_swcgen: generating configuration script and cache
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: starting configuration for bt_swcgen-0.16
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program gcc... not found.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program cc... /usr/bin/cc
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for C compiler name... gnu
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for C compiler version... 13.0.0
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program cpp... /usr/bin/cpp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program ld... /usr/bin/ld
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[...]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program sh... /bin/sh
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program yacc... /usr/bin/yacc
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header sys/cdefs.h... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for cxx header sys/cdefs.h... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header sys/utsname.h... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for cxx header sys/utsname.h... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header err.h... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for cxx header err.h... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[...]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c function vfork... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for cxx function vfork... no
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c function vsnprintf... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for cxx function vsnprintf... no
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c type gid_t... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for cxx type gid_t... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c type int8_t... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for cxx type int8_t... yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[...]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: creating bt_output
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: generating configuration environment
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: generating package dependent build logic
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Configuration summary for bt_swcgen-0.16:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Prefix is: /usr/local
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Developer mode: yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Install documentation: yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Static libraries: no, Shared libraries: yes, rpath: yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_swcgen: creating system wide configuration file
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_output: creating /tmp/bt_swcgen.1802/conf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_swcgen: /tmp/local/etc/buildtool/bt_config.conf created
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">PLEASE NOTE THE FOLLOWING:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Installed: /tmp/local/etc/buildtool/bt_config.conf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> By using a system wide configuration file for bt_config that stores
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> check results, you assume that they may get obsoleted with respect to
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> your system, specially after software updates. Be careful to only
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> store results that are unlikely to change with time. Anyway, you are
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> encouraged to re-run this program periodically to regenerate the file
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> with new results.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> If a third party program fails to configure after a check that shows
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> the `(cached)&amp;#39; string in it, try to pass the `--ignore-sw-config&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> flag to bt_config before thinking it is a bug in your system or in
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> the package. DO NOT DISTURB SOFTWARE AUTHORS BEFORE DOUBLE CHECKING
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> THAT THERE IS A PROBLEM IN THEIR SOFTWARE. YOU HAVE BEEN WARNED.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Pretty impressive that this 18-year old code still works today, and running this shows precisely the problem that this was supposed to solve: computing these results took about 15 seconds on my modest server, and those are 15 seconds you would pay to build most software packages. When you are bulk-building all binary packages for a source-bootstrapped system (the common case in the BSD world), those quickly add up.&lt;/p>
-&lt;p>By the way: Autoconf supports this same feature although I did not discover it until later. &lt;a href="https://pkgsrc.se/pkgtools/autoswc">&lt;code>autoswc&lt;/code>&lt;/a> is a follow-up tool I created for pkgsrc to implement this same idea. Using autoswc proved to be a nice speedup for daily operations when I was still an active pkgsrc maintainer. I suspect that most people are still unaware of this Autoconf feature, unfortunately.&lt;/p>
-&lt;h1 id="commands-summary">Commands summary&lt;/h1>
-&lt;p>Now that Buildtool is installed and configured, let&amp;rsquo;s poke around to see what it has to offer:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ /tmp/local/bin/buildtool --help
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">buildtool version 0.16
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">usage: buildtool [options] target [target_options]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Copyright (c) 2002, 2003, 2004 Julio M. Merino Vidal.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">This program is licensed under the terms of the BSD license.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Available options:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> {-h,--help} Show detailed usage (this text).
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> {-v,--version} Show version number.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> {-w,--warnings} Enable bt_sh warning messages.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Available targets:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> build Build the package.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> clean Soft clean the package (keeps configuration data).
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> cleandir Hard clean the package.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> config Automatically configure a package.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> dist Generate a distribution file.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> deinstall Deinstalls the package.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> doc Read build-time package documentation.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> install Installs the package.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> lint Validate the package according to standards.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> pkgflags Show compilation flags for an installed package.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> siteinfo Get site specific configuration details.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> swcgen Aid with creation of system-wide configuration files.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> test Run tests specific to the package after a successful build.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> wizard Use an interactive wizard to create initial project files.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">See buildtool(1) for more information.
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Pretty standard output for a subcommand-based utility, but I can already see myself here. &lt;a href="/2013/08/cli-design-series-introduction.html">My style&lt;/a> in developing command-line tools hasn&amp;rsquo;t changed much since then.&lt;/p>
-&lt;p>Anyhow. From the output above, we can distill the following command groups:&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>config&lt;/code>: A configuration command to let each package discover system-wide features, obviously inspired by GNU Autoconf.&lt;/li>
-&lt;li>&lt;code>build&lt;/code>, &lt;code>clean&lt;/code>, &lt;code>cleandir&lt;/code>, &lt;code>dist&lt;/code>, &lt;code>deinstall&lt;/code>, &lt;code>install&lt;/code>, &lt;code>test&lt;/code>: Build-related commands, some of which (like &lt;code>dist&lt;/code>) are inspired by GNU Automake.&lt;/li>
-&lt;li>&lt;code>doc&lt;/code>: An interactive documentation viewer for a package&amp;rsquo;s &lt;code>README&lt;/code>, &lt;code>INSTALL&lt;/code>, etc. distribution documents. Interesting.&lt;/li>
-&lt;li>&lt;code>pkgflags&lt;/code>: A replacement for the heavy-weight &lt;code>pkg-config&lt;/code>. These days we have &lt;a href="http://pkgconf.org/">pkgconf&lt;/a> instead, which is compatible with &lt;code>pkg-config&lt;/code>.&lt;/li>
-&lt;li>&lt;code>wizard&lt;/code>: An interactive tool to create a new package, akin to what &lt;code>cargo init&lt;/code> would offer today.&lt;/li>
-&lt;/ul>
-&lt;h1 id="demo">Demo&lt;/h1>
-&lt;p>Alright. Let&amp;rsquo;s now use Buildtool&amp;rsquo;s package creation wizard to initialize a new demo project. The wizard is interactive so I&amp;rsquo;m just going to post the completed output of what I typed:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ mkdir /tmp/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ cd /tmp/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ /tmp/local/bin/buildtool wizard
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Welcome to Buildtool&amp;#39;s Wizard
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-----------------------------
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">This module will help you to set up a basic directory structure
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">for your project, based on your choices.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Each question has associated a default answer, shown inside the
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">brackets. If you hit [RETURN] leaving a question in blank, it
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">will take the default value.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Project definitions:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Unix name [foobar]? demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Initial version [0.1]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- License [bsd]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Maintainer&amp;#39;s email [foo@bar.net]? julio@meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Homepage (if any) []?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Short comment [Sample package]? Remembering Buildtool
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Code details:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Will this package provide one or more programs [y]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Will this package provide one or more libraries [n]? y
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Will you use the C language [y]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Will you use the C++ language [n]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Will you use CVS [y]? n
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Dependancies:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Do you need pkgconfig (not bt_pkgflags) [n]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Do you need threads [n]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Do you need an X Window System [n]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Do you need awk [n]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Do you need a lexical analyzer [n]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Do you need a LARL parser generator [n]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Begin process:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">- Where should files be created [.]?
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating directories... src data lib
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating Generic.bt... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating README.bt... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating src/Logic.bt... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating lib/Logic.bt... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating data/demo.bpf.in... done.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Creating data/Logic.bt... done.
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This asked many more questions than I expected. Looks like I implemented support for many different things.&lt;/p>
-&lt;p>After completing the wizard, we are left with these files:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ find . -type f | sort
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./Generic.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./README.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./data/Logic.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./data/demo.bpf.in
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./lib/Logic.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./src/Logic.bt
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>From the looks of it, we have a top-level configuration file called &lt;code>Generic.bt&lt;/code>, a mysterious &lt;code>data&lt;/code> directory with a &lt;code>bpf&lt;/code> file, a &lt;code>lib&lt;/code> directory to contain the library we&amp;rsquo;ll write, and a &lt;code>src&lt;/code> directory to contain the code of the program we&amp;rsquo;ll write.&lt;/p>
-&lt;h2 id="the-top-level-genericbt-file">The top-level Generic.bt file&lt;/h2>
-&lt;p>First, let&amp;rsquo;s look at the top-level &lt;code>Generic.bt&lt;/code> file:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Buildtool Generic Script&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">defs&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_REQUIRE&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;0.16&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_PKG_NAME&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;demo&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_PKG_VERSION&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;0.1&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_PKG_LICENSE&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;bsd&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_PKG_MAINTAINER&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;julio@meroh.net&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_PKG_COMMENT&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;Remembering Buildtool&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">config_init&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">config&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_check_env_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_generate_output data/demo.bpf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_generate_configh
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">docs&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_doc CHANGES &lt;span class="s2">&amp;#34;Major changes between package versions&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_doc PEOPLE &lt;span class="s2">&amp;#34;Authors and contributors&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_doc README &lt;span class="s2">&amp;#34;General documentation&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_doc TODO &lt;span class="s2">&amp;#34;Missing things&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">logic&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_target lib data src
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;code>Generic.bt&lt;/code> is the package-wide file where it all begins. This file is composed of a collection of user-defined functions that tell Buildtool what to do:&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>defs&lt;/code>: Describes the package&amp;rsquo;s metadata, much like what &lt;code>Cargo.toml&lt;/code>, &lt;code>go.mod&lt;/code> or &lt;code>package.json&lt;/code> do today in popular ecosystems.&lt;/li>
-&lt;li>&lt;code>config_init&lt;/code> and &lt;code>config&lt;/code>: Allow the package to request system feature checks. In other words, these contain what you would typically put in a &lt;code>configure.ac&lt;/code> file with GNU Autoconf.&lt;/li>
-&lt;li>&lt;code>docs&lt;/code>: Configures documentation files, consumed both by the build process and by the &lt;code>buildtool doc&lt;/code> interactive viewer.&lt;/li>
-&lt;li>&lt;code>logic&lt;/code>: The entry point to the build process, aka the equivalent of a top-level &lt;code>Makefile.am&lt;/code> file.&lt;/li>
-&lt;/ul>
-&lt;h2 id="creating-source-files">Creating source files&lt;/h2>
-&lt;p>Before we can successfully build our demo, we have to perform a few edits to the source tree. The wizard didn&amp;rsquo;t tell us we had to do any of these, so I encountered various failures while I played with the tool. Fear not, it wasn&amp;rsquo;t too hard to get past these failures.&lt;/p>
-&lt;p>First, let&amp;rsquo;s create the top-level documents referenced by the &lt;code>docs&lt;/code> function:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ touch CHANGES PEOPLE README TODO
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Next, let&amp;rsquo;s look at what building the &lt;code>lib&lt;/code> subdirectory will require by looking at the &lt;code>lib/Logic.bt&lt;/code> build script:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">logic&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_target demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> target_demo&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_LIB_MAJOR&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">0&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_LIB_MINOR&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">1&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_MANPAGES&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;demo.1&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_SOURCES&lt;/span>&lt;span class="o">=&lt;/span>func1.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_TYPE&lt;/span>&lt;span class="o">=&lt;/span>library
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_INCLUDESDIR&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BT_DIR_INC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/demo&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_INCLUDESDIR_demo_h&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BT_DIR_INC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_INCLUDES&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;demo.h&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Based on this, let&amp;rsquo;s create the files &lt;code>lib&lt;/code> expects:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ cat &amp;gt;lib/demo.h
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">int func1(void);
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">^D
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/demo$ cat &amp;gt;lib/func1.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">int func1(void) { return 42; }
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">^D
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/demo$ touch lib/demo.1
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>After that, let&amp;rsquo;s do the same with the &lt;code>src&lt;/code> subdirectory. Here is what the &lt;code>src/Logic.bt&lt;/code> build script will require:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">logic&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bt_target demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> target_demo&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_MANPAGES&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;demo.1&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_SOURCES&lt;/span>&lt;span class="o">=&lt;/span>main.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nv">BT_TYPE&lt;/span>&lt;span class="o">=&lt;/span>program
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And, as before, let&amp;rsquo;s create the files &lt;code>src&lt;/code> expects:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ cat &amp;gt;src/main.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#include &amp;lt;stdio.h&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#include &amp;#34;lib/demo.h&amp;#34;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">int main(void) {
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> printf(&amp;#34;Calling library: %d\n&amp;#34;, func1());
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> return 0;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">^D
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/demo$ touch src/demo.1
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Finally, because we have made the binary in &lt;code>src&lt;/code> depend on the library in &lt;code>lib&lt;/code>, we have to express this dependency in the &lt;code>src/Logic.bt&lt;/code> script. We can add these two lines to the &lt;code>target_demo&lt;/code> function in &lt;code>src/Logic.bt&lt;/code>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BT_FLAGS_LD&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BT_FLAGS_LD&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2"> -L../lib&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BT_LIBS&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BT_LIBS&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2"> -ldemo&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="configuring-the-demo">Configuring the demo&lt;/h2>
-&lt;p>We are ready to go. Let&amp;rsquo;s configure the demo project against our current system:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ /tmp/local/bin/buildtool config -p /tmp/root
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: loading system-wide configuration
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: starting configuration for demo-0.1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program gcc cc bcc... /usr/bin/cc (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for C compiler name... gnu (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for C compiler version... 13.0.0 (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program cpp... /usr/bin/cpp (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program ld... /usr/bin/ld (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header stdio.h... yes (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header sys/types.h... yes (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header sys/stat.h... yes (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header stdlib.h... yes (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header string.h... yes (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for c header unistd.h... yes (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for host system name... FreeBSD
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for host system type... FreeBSD-13.1-STABLE-amd64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program ar... /usr/bin/ar (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program ranlib... /usr/bin/ranlib (cached)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">checking for program fastdep... not found.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: creating bt_output
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_output: creating data/demo.bpf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: generating C include header
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: generating configuration environment
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_config: generating package dependent build logic
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Configuration summary for demo-0.1:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Prefix is: /tmp/root
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Developer mode: no
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Install documentation: yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Static libraries: no, Shared libraries: yes, rpath: yes
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">===========================================================================
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Pretty standard &lt;code>configure&lt;/code>-like output.&lt;/p>
-&lt;p>What I want you to notice is how pretty much all results were cached. These results come from the system-wide cache we populated with &lt;code>swcgen&lt;/code> after installing Buildtool, so running this step was almost instantaneous. Good time savings.&lt;/p>
-&lt;h2 id="building-the-demo">Building the demo&lt;/h2>
-&lt;p>With a successful configuration step, let&amp;rsquo;s try to build:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ /tmp/local/bin/buildtool build
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `lib&amp;#39; for `build&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[depend] func1.c -&amp;gt; func1.dep
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">c++: warning: treating &amp;#39;c&amp;#39; input as &amp;#39;c++&amp;#39; when in C++ mode, this behavior is deprecated [-Wdeprecated]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[compile] /usr/bin/cc -I/tmp/demo/lib -I/tmp/demo -I/tmp/demo -fPIC -DPIC -shared -o func1.po -c /tmp/demo/lib/func1.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cc: warning: argument unused during compilation: &amp;#39;-shared&amp;#39; [-Wunused-command-line-argument]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[link] /usr/bin/cc -Wl,-R/usr/local/lib -shared -Wl,-soname=libdemo.so.0 -o libdemo.so.0.1 func1.po
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[exec] ln -fs libdemo.so.0.1 libdemo.so.0
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[exec] ln -fs libdemo.so.0.1 libdemo.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `lib&amp;#39; for `build&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `data&amp;#39; for `build&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `data&amp;#39; for `build&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `src&amp;#39; for `build&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[depend] main.c -&amp;gt; main.dep
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">c++: warning: treating &amp;#39;c&amp;#39; input as &amp;#39;c++&amp;#39; when in C++ mode, this behavior is deprecated [-Wdeprecated]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[compile] /usr/bin/cc -I/tmp/demo/src -I/tmp/demo -I/tmp/demo -fPIC -DPIC -shared -o main.po -c /tmp/demo/src/main.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cc: warning: argument unused during compilation: &amp;#39;-shared&amp;#39; [-Wunused-command-line-argument]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[runscript] demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[link] /usr/bin/cc -L/tmp/demo/lib -Wl,-R/usr/local/lib -o real.bt/demo main.po -ldemo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `src&amp;#39; for `build&amp;#39;
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We get a few warnings around shared libraries, as you could imagine from build scripts written almost 20 years ago, but no failures. Neat.&lt;/p>
-&lt;p>But does the built product work?&lt;/p>
-&lt;h2 id="running-the-demo">Running the demo&lt;/h2>
-&lt;p>Let&amp;rsquo;s try to run the final binary we got:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ ./src/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Calling library: 42
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Yay! It does work! But wait a moment:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ file src/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">src/demo: a /tmp/local/libexec/buildtool/bt_sh script, ASCII text executable
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>What is this about? Why is our &lt;code>demo&lt;/code> a script and not a proper binary given that we used C?&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ cat src/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#!/tmp/local/libexec/buildtool/bt_sh
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># File generated by bt_logic.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># Fri May 13 06:35:23 PDT 2022
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">LD_LIBRARY_PATH=:/tmp/demo/lib; export LD_LIBRARY_PATH
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/demo//src/real.bt/demo
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Aha. Much like when using GNU Libtool, a binary cannot be run from the source tree if it links against a library, because the library has not been installed yet. The script is just a wrapper to configure the dynamic loader and make things work. After installation, the rpath functionality will kick in and make the dynamic loader find the library in the right place.&lt;/p>
-&lt;h2 id="installing-the-demo">Installing the demo&lt;/h2>
-&lt;p>Let&amp;rsquo;s install the demo:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ /tmp/local/bin/buildtool install
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `lib&amp;#39; for `install&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing data file /tmp/root/lib/libdemo.so.0.1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[exec] ln -fs libdemo.so.0.1 libdemo.so.0
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[exec] ln -fs libdemo.so.0.1 libdemo.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] creating missing directory /demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">mkdir: /demo: Permission denied
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: process stopped; command exited with error status `1&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `lib&amp;#39; for `install&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `data&amp;#39; for `install&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing data file /tmp/local/share/buildtool/pkgflags/demo.bpf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `data&amp;#39; for `install&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `src&amp;#39; for `install&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing binary file /tmp/root/bin/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing data file /tmp/root/man/man1/demo.1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `src&amp;#39; for `install&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing data file /tmp/root/share/doc/demo/CHANGES
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing data file /tmp/root/share/doc/demo/PEOPLE
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing data file /tmp/root/share/doc/demo/README
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[install] installing data file /tmp/root/share/doc/demo/TODO
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Oops, a little &lt;code>mkdir&lt;/code> error, but it seems to have worked. If we inspect the installation prefix we provided during the configuration step (the &lt;code>-p /tmp/root&lt;/code> flag we specified):&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ find /tmp/root
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/bin
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/bin/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/lib
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/lib/libdemo.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/lib/libdemo.so.0.1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/lib/libdemo.so.0
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/share
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/share/doc
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/share/doc/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/share/doc/demo/PEOPLE
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/share/doc/demo/CHANGES
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/share/doc/demo/TODO
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/share/doc/demo/README
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/man
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/man/man1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/man/man1/demo.1
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And, from these installed files, we can run the demo:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ /tmp/root/bin/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Calling library: 42
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Finally, note how the installed demo is really a proper executable that uses the shared library that was installed along it:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ file /tmp/root/bin/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/bin/demo: ELF 64-bit LSB executable, x86-64, version 1 (FreeBSD), dynamically linked, interpreter /libexec/ld-elf.so.1, for FreeBSD 13.0 (1300525), FreeBSD-style, with debug_info, not stripped
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/demo$ ldd /tmp/root/bin/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/tmp/root/bin/demo:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> libdemo.so.0 =&amp;gt; /tmp/root/lib/libdemo.so.0 (0x200000)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> libc.so.7 =&amp;gt; /lib/libc.so.7 (0x200000)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[preloaded]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> [vdso] (0x7ffffffff5d0)
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="distributing-the-demo">Distributing the demo&lt;/h2>
-&lt;p>As a software package author, installing the program in one&amp;rsquo;s machine is nice, but what about giving the program to other people? This is where the &lt;code>dist&lt;/code> command comes into play, much like GNU Automake&amp;rsquo;s &lt;code>dist&lt;/code> target:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ /tmp/local/bin/buildtool dist
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_dist: cleaning tree (cleandir)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `lib&amp;#39; for `clean&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] func1.po
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] libdemo.so.0.1 libdemo.so.0 libdemo.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `lib&amp;#39; for `clean&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `lib&amp;#39; for `cleandir&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] func1.dep
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `lib&amp;#39; for `cleandir&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `data&amp;#39; for `clean&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] demo.bpf
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `data&amp;#39; for `clean&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `data&amp;#39; for `cleandir&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `data&amp;#39; for `cleandir&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `src&amp;#39; for `clean&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] main.po
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] real.bt/demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `src&amp;#39; for `clean&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: entering directory `src&amp;#39; for `cleandir&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] main.dep
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_logic: leaving directory `src&amp;#39; for `cleandir&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[remove] /tmp/demo/bt_config.h /tmp/demo/bt_config.env /tmp/demo/bt_logic.env /tmp/demo/bt_config.log /tmp/demo/bt_config.sed /tmp/demo/bt_output
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_dist: validating package
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">=&amp;gt; Checking root files
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">WARN: COPYING not found; it is highly recommended
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">=&amp;gt; Checking definitions (/tmp/demo/Generic.bt)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">WARN: no package homepage
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">=&amp;gt; Checking configuration script (/tmp/demo/Generic.bt)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">=&amp;gt; Summary
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_lint: package should be corrected; 2 warnings
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bt_dist: building compressed dist, type tar.gz
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The above invocation above generates a &lt;code>demo-0.1.tar.gz&lt;/code> distributable source package, which we can inspect:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">/tmp/demo$ tar tzf ../demo-0.1.tar.gz
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/PEOPLE
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/lib/
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/CHANGES
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/TODO
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/README.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/data/
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/README
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/src/
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/Generic.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/src/Logic.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/src/main.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/src/demo.1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/data/Logic.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/data/demo.bpf.in
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/lib/func1.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/lib/Logic.bt
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/lib/demo.1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo-0.1/lib/demo.h
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="peeking-into-the-data-directory">Peeking into the data directory&lt;/h2>
-&lt;p>I glanced over the &lt;code>data&lt;/code> directory earlier on, skipping that mysterious &lt;code>bpf&lt;/code> file. If we look at the files that were installed under Buildtool&amp;rsquo;s own prefix (a mistake) when we installed the demo, we can find that our package installed a &lt;code>share/buildtool/pkgflags/demo.bpf&lt;/code> file. Looking at its contents, we see:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># $Id: pkgflags,v 1.1 2003/04/26 21:48:17 jmmv Exp $&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># pkgflags file&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># This file is mostly useful for packages providing libraries.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># If not needed (i.e., if the package is a program), remove it.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">#&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BT_PREFIX&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;/tmp/root&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BT_DIR_LIB&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;/tmp/root/lib&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BT_DIR_INCLUDE&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;/tmp/root/include&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">bpf_name&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;demo&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">bpf_descr&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;Remembering Buildtool&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">bpf_version&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;0.1&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">bpf_libs&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;-L&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BT_DIR_LIB&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2"> -ldemo&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">bpf_cflags&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;-I&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BT_DIR_INCLUDE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This is the equivalent of what a &lt;code>pkg-config&lt;/code> file would provide. And it works. We can query the file using Buildtool&amp;rsquo;s &lt;code>pkgflags&lt;/code> command and obtain the right compiler and linker flags for our demo library:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ /tmp/local/bin/buildtool pkgflags --cflags --libs demo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">setting undefined variable `BT_PREFIX&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">setting undefined variable `BT_DIR_LIB&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">setting undefined variable `BT_DIR_INCLUDE&amp;#39;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-I/tmp/root/include -L/tmp/root/lib -ldemo
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And this concludes the demo.&lt;/p>
-&lt;h1 id="what-happened-to-buildtool">What happened to Buildtool?&lt;/h1>
-&lt;p>Buildtool as it was in its 0.16 release in 2004 seems fairly impressive. The user manual is comprehensive, the tool provides many more features than I remembered, and it still works to this day.&lt;/p>
-&lt;p>So what happened to Buildtool? Why did I officially cancel it in 2005? There are a few reasons.&lt;/p>
-&lt;ol>
-&lt;li>
-&lt;p>The first is that Buildtool collapsed under its own complexity. Shell is not the right language to write a build system in, and &lt;code>bt_logic&lt;/code> became an unmanageable mess to deal with. I&amp;rsquo;m surprised it still works on a modern system to be honest.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The second is that, even though Buildtool seems &amp;ldquo;complete&amp;rdquo;, it still lacks lots of functionality&amp;mdash;and the missing functionality wasn&amp;rsquo;t easy to implement. When I was writing the tool, I found myself leaning on the GNU Autotools manuals to understand how things worked across systems, and I relied on those details to implement my own versions. The more I did this, the more I learned about the GNU Autotools, and the more I realized how knowledgeable the GNU Autotools authors were and how far I was from providing something comparable. This was humbling. Furthermore, during this process, I had become so &amp;ldquo;fluent&amp;rdquo; in the GNU Autotools that it made no sense to continue developing my own thing.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The third is that having to install a supporting build tool to compile fundamental system packages wasn&amp;rsquo;t well-seen at the time. Every time I had to deal with a similar system in pkgsrc (Boost.Jam or whatever Mozilla had, for example), it was a pain. Like it or not, the GNU Autotools are the de-facto standard, and despite all of their flaws, they are the ones that integrate well with packaging systems and system tools.&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;p>My interest in build systems remains and what you have read here partially explains my &lt;a href="/2015/04/on-bazel-and-open-source.html">original critique of Bazel&lt;/a>. I ended up working in Bazel for a few years though because I like the topic. No matter my original comments, Bazel is a great build system from which many others should learn. But it&amp;rsquo;s still missing the kind of system-level integration that Buildtool intended to provide via the &lt;code>install&lt;/code> and &lt;code>pkgflags&lt;/code> commands.&lt;/p>
-&lt;p>One thing I&amp;rsquo;ll note is how Buildtool already had a concept of high-level targets from a semantical perspective. You could make a single build file define various targets (libraries, programs, etc.) and each of those would know how to build, install, and clean itself. You can see that the same ideas have evolved in most of today&amp;rsquo;s build systems in some form or another, and that the file-level dependency tracking that &lt;code>make&lt;/code> provides is &amp;ldquo;a thing of the past&amp;rdquo;.&lt;/p>
-&lt;p>To conclude, let me add that I still believe there is room for something like Buildtool in this day and age to support the foundations of our free Unix-like systems&amp;hellip; but it would need to be much better designed and implemented than Buildtool. I have ideas; I just wish I had the same amount of free time that I had when I was a student.&lt;/p></description></item></channel></rss>
+&lt;p>Thanks for reading, and have fun 😁️.&lt;/p></description></item></channel></rss>
