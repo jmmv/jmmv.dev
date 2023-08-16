@@ -3,10 +3,10 @@
 &lt;p>Yes, this is mostly a rant about the Internet being littered with misleading answers of the kind &amp;ldquo;I reinstalled glibc and my problem is gone!&amp;rdquo;. But this is also the tale of a troubleshooting session&amp;mdash;and you know I like to blog about those.&lt;/p>
 &lt;h1 id="first-steps">First steps&lt;/h1>
 &lt;p>Before even unplugging the Pi from its physical network link, I had to configure its WiFi connection so that I could use it on the dining table. To do so, I was going to need to run more than one command as root so, in preparation for that, I started a root shell. I was helpfully greeted by the following:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3$ sudo su -
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3:~$ sudo su -
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Wi-Fi is currently blocked by rfkill.
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Use raspi-config to set the country before use.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">jmmv@rpi3#
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">jmmv@rpi3:~#
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Nice. Somehow Raspbian expects that what one most likely wants to do after becoming root is to configure the WiFi and it points us in the right direction. That&amp;rsquo;s&amp;hellip; a bold assumption, but hey, it was pretty accurate.&lt;/p>
 &lt;p>In any case, this was the first time I heard of rfkill. From the name, I assumed that this controlled some kind of kill switch for all radio devices in the system&amp;mdash;the kind of switch you would need to implement an &amp;ldquo;airplane mode&amp;rdquo; feature. I further assumed, based on this message, that rfkill was active because one needs to know the location of the device to decide which radio frequencies can be used.&lt;/p>
 &lt;p>I did as told: I ran &lt;code>raspi-config&lt;/code>, went into the network configuration options to set up the WiFi, selected the right country, joined a WiFi network, and dropped back into the shell. As I did that, the WiFi connection was up and running and &lt;code>rfkill&lt;/code> reported the right thing:&lt;/p>
@@ -19,7 +19,7 @@
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Seeing this and knowing from past experience that the &lt;code>raspi-config&lt;/code> setting changes are permanent, I tried to SSH into the Pi over the WiFi adapter, confirmed that it was working, shut the system down, unplugged the Raspberry Pi from the network, brought it into the house from the garage, turned it on and&amp;hellip; it wasn&amp;rsquo;t reachable over WiFi anymore. What the&amp;hellip;!?&lt;/p>
 &lt;h1 id="thinking-about-the-problem">Thinking about the problem&lt;/h1>
 &lt;p>This did not make any sense. The instructions told me to configure a country and I had set one up, but somehow that was insufficient. Interestingly, though, logging back in as &lt;code>root&lt;/code> showed me the same warning about having to configure a country&amp;hellip; so I double-checked things.&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3$ sudo su -
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3:~$ sudo su -
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Wi-Fi is currently blocked by rfkill.
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Use raspi-config to set the country before use.
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">root@rpi3:~# rg country /etc/
@@ -34,7 +34,7 @@
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The WiFi adapter was indeed back to the blocked state. Why? As you might imagine, running the Raspberry Pi in a headless state and with a WiFi connection &lt;em>surely&lt;/em> has to be a well-anticipated scenario, which explains why logging in as root has, of all things, a check for the WiFi state and a pointer to configure it. The WiFi should work without extra effort.&lt;/p>
 &lt;h1 id="initial-research">Initial research&lt;/h1>
 &lt;p>I don&amp;rsquo;t remember how exactly I came across this, but I ended up noticing the following files:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3$ fd rfkill /lib/system
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3:~# fd rfkill /lib/systemd/
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/lib/systemd/system/systemd-rfkill.service
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/lib/systemd/system/systemd-rfkill.socket
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/lib/systemd/systemd-rfkill
