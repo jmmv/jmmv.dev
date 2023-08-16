@@ -1,4 +1,117 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sun, 06 Aug 2023 05:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>A failed experiment with Rust static dispatch</title><link>https://jmmv.dev/2023/08/rust-static-dispatch-failed-experiment.html</link><pubDate>Sun, 06 Aug 2023 05:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/08/rust-static-dispatch-failed-experiment.html</guid><description>&lt;p>Initial versions of the EndBASIC Service, and therefore initial versions of EndTRACKER, used dynamic dispatch to support abstract definitions of system services such as the database they talk to and the clock they use. This looked like a bunch of &lt;code>Arc&amp;lt;dyn Foo&amp;gt;&lt;/code> objects passed around and was done to &lt;a href="/2023/07/unit-testing-a-web-service.html">support extremely fast unit testing&lt;/a>.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 16 Aug 2023 06:20:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Raspberry Pi 3, rfkill, and real root causing</title><link>https://jmmv.dev/2023/08/rpi3-rfkill-root-causing.html</link><pubDate>Wed, 16 Aug 2023 06:20:00 -0700</pubDate><guid>https://jmmv.dev/2023/08/rpi3-rfkill-root-causing.html</guid><description>&lt;p>I&amp;rsquo;ve had a Raspberry Pi 3 in the garage running Raspbian so it was attached to Ethernet for a long time. A few weeks ago, however, I wanted to bring the Pi into the house so that my kid, who was showing interest in robotics, and I could play with it. That required having the ability to place the device onto the dining table, next to a laptop, which meant connecting it to WiFi. Easy peasy, right?&lt;/p>
+&lt;p>Well&amp;hellip; while that should have been trivial, it did not work right away and the solutions I found online back then were all nonsensical. I gave up in desperation because I did not have enough time to find the root cause, and all interest was lost. Until last weekend when I gave this ordeal another try. At this point, I found once again the same nonsensical solutions online, got equally frustrated about the fact that they even existed, and decided to find the real answer to my problem on my own.&lt;/p>
+&lt;p>Yes, this is mostly a rant about the Internet being littered with misleading answers of the kind &amp;ldquo;I reinstalled glibc and my problem is gone!&amp;rdquo;. But this is also the tale of a troubleshooting session, as you know I like to blog about those.&lt;/p>
+&lt;h1 id="first-steps">First steps&lt;/h1>
+&lt;p>Before even unplugging the Pi from its physical network link, I had to configure its WiFi connection so that I could use it on the dining table. To do so, I was going to need to run more than one command as root so, in preparation for that, I started a root shell. I was helpfully greeted by the following:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3$ sudo su -
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Wi-Fi is currently blocked by rfkill.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Use raspi-config to set the country before use.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">jmmv@rpi3#
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Nice. Somehow Raspbian expects that what one most likely wants to do after becoming root is to configure the WiFi and it points us in the right direction. That&amp;rsquo;s&amp;hellip; a bold assumption, but hey, it was pretty accurate.&lt;/p>
+&lt;p>In any case, this was the first time I heard of rfkill. From the name, I assumed that this controlled some kind of kill switch for all radio devices in the system&amp;mdash;the kind of switch you would need to implement an &amp;ldquo;airplane mode&amp;rdquo; feature. I further assumed, based on this message, that rfkill was active because one needs to know the location of the device to decide which radio frequencies can be used.&lt;/p>
+&lt;p>I did as told: I ran &lt;code>raspi-config&lt;/code>, went into the network configuration options to set up the WiFi, selected the right country, joined a WiFi network, and dropped back into the shell. As I did that, the WiFi connection was up and running and &lt;code>rfkill&lt;/code> reported the right thing:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">root@rpi3:~# ifconfig | grep wlan0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">wlan0: flags=4163&amp;lt;UP,BROADCAST,RUNNING,MULTICAST&amp;gt; mtu 1500
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">root@rpi3:~# rfkill
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ID TYPE DEVICE SOFT HARD
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 0 wlan phy0 unblocked unblocked
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1 bluetooth hci0 blocked unblocked
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Seeing this and knowing from past experience that the &lt;code>raspi-config&lt;/code> setting changes are permanent, I tried to SSH into the Pi over the WiFi adapter, confirmed that it was working, shut the system down, unplugged the Raspberry Pi from the network, brought it into the house from the garage, turned it on and&amp;hellip; it wasn&amp;rsquo;t reachable over WiFi anymore. What the&amp;hellip;!?&lt;/p>
+&lt;h1 id="thinking-about-the-problem">Thinking about the problem&lt;/h1>
+&lt;p>This did not make any sense. The instructions told me to configure a country and I had set one up, but somehow that was insufficient. Interestingly, though, logging back in as &lt;code>root&lt;/code> showed me the same warning about having to configure a country&amp;hellip; so I double-checked things.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3$ sudo su -
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Wi-Fi is currently blocked by rfkill.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Use raspi-config to set the country before use.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">root@rpi3:~# rg country /etc/
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/etc/wpa_supplicant/wpa_supplicant.conf
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">3:country=US
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... and more matches ...
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The country seemed to be configured properly in persistent storage in a place that made sense but:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">root@rpi3:~# rfkill
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ID TYPE DEVICE SOFT HARD
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 0 wlan phy0 blocked unblocked
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1 bluetooth hci0 blocked unblocked
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The WiFi adapter was indeed back to the blocked state. Why? As you might imagine, running the Raspberry Pi in a headless state and with a WiFi connection &lt;em>surely&lt;/em> has to be a well-anticipated scenario, which explains why logging in as root has, of all things, a check for the WiFi state and a pointer to configure it. The WiFi should work without extra effort.&lt;/p>
+&lt;h1 id="initial-research">Initial research&lt;/h1>
+&lt;p>I don&amp;rsquo;t remember how exactly I came across this, but I ended up noticing the following files:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">jmmv@rpi3$ fd rfkill /lib/system
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/lib/systemd/system/systemd-rfkill.service
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/lib/systemd/system/systemd-rfkill.socket
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/lib/systemd/systemd-rfkill
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>As it turns out, there is a systemd service to manage the rfkill state. Looking at its manual page (while shocked that one even existed):&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">SYSTEMD-RFKILL.SERVICE(8) systemd-rfkill.service SYSTEMD-RFKILL.SERVICE(8)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> systemd-rfkill.service, systemd-rfkill.socket, systemd-rfkill – Load
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> and save the RF kill switch state at boot and change
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;code>systemd-rfkill&lt;/code> is a shutdown service that saves the blocked/unblocked state of rfkill and restores it at system startup time. It seems that this whole rfkill thing was well-thought after all. But this finding meant that rfkill should have remained unblocked after the reboot. And it didn&amp;rsquo;t. So &lt;em>this&lt;/em> is the question that had to be answered.&lt;/p>
+&lt;h1 id="trying-to-find-an-answer-online">Trying to find an answer online&lt;/h1>
+&lt;p>Searching online for a solution, using obvious queries like &lt;code>raspberry pi enable wifi boot rfkill&lt;/code>, resulted in me finding the following &amp;ldquo;solutions&amp;rdquo;:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Disable rfkill via a kernel command line setting and ask systemd to not restore state.&lt;/strong> Sure, that&amp;rsquo;ll work. But it&amp;rsquo;s&amp;hellip; drastic? Why would I have to do that when the system seems to be prepared to &amp;ldquo;just work&amp;rdquo; after a &lt;code>raspi-config&lt;/code>? Why should I disable a core feature that&amp;rsquo;s installed by default to make headless WiFi work? This will &amp;ldquo;break&amp;rdquo; whatever thing is using rfkill during the boot process to disable the network, and it will possibly break any &amp;ldquo;airplane mode&amp;rdquo;-like toggles that might exist in the UI. Not that I care about the UI, but still.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Add a systemd startup script to force rfkill to the unblocked state.&lt;/strong> Another thing that will work. But why should I do that? This will just paper over whatever exists in the boot process that disables the network after &lt;code>systemd-rfkill&lt;/code> has done its thing. It does not address the root cause.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Create a WiFi configuration file in the boot partition.&lt;/strong> OK, maybe this one makes sense. Maybe if the system knows to configure the WiFi early enough during the boot process, it knows that the WiFi must remain enabled later on. A bit of research proved this solution wrong too though. I stumbled upon &lt;code>/lib/systemd/system/raspberrypi-net-mods.service&lt;/code>, which is the boot code that handles this feature, and it reads like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-ini" data-lang="ini">&lt;span class="line">&lt;span class="cl">&lt;span class="k">[Unit]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">Description&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">Copy user wpa_supplicant.conf&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">ConditionPathExists&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">/boot/wpa_supplicant.conf&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">Before&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">dhcpcd.service&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">After&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">systemd-rfkill.service&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">[Service]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">Type&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">oneshot&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">RemainAfterExit&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">yes&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">ExecStart&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">/bin/mv /boot/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">ExecStartPost&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">/bin/chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">ExecStartPost&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">/usr/sbin/rfkill unblock wifi&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">[Install]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="na">WantedBy&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s">multi-user.target&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This snippet runs when &lt;code>/boot/wpa_supplicant.conf&lt;/code> is present (&lt;code>ConditionPathExists&lt;/code>), but all it does is move that file to the right place and unblocks the WiFi using the &lt;code>rfkill unblock wifi&lt;/code> command&amp;mdash;the same one that &lt;code>raspi-config&lt;/code> invokes and the command I had already tried to run by hand. The key insight is that because this unit moves the file, &lt;em>it only runs once&lt;/em>. That makes sense if you look at this unit as a first-time setup action for headless installations, but it had no chance of fixing my problem.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>So no. None of these &amp;ldquo;solutions&amp;rdquo; address the root cause. They are hacks and workarounds that may achieve the desired outcome, but they don&amp;rsquo;t explain &lt;em>why&lt;/em> the &lt;code>systemd-rfkill&lt;/code> automation, which is built into the system and should restore the changes made by &lt;code>raspbi-config&lt;/code>, isn&amp;rsquo;t working as designed.&lt;/p>
+&lt;h1 id="proper-troubleshooting">Proper troubleshooting&lt;/h1>
+&lt;p>Given that these answers were all misguided, I had to do some extra work to reach the true solution.&lt;/p>
+&lt;p>The first question to answer was: did the &lt;code>systemd-rfkill&lt;/code> service even work fine? It took me a bit of fiddling to discover how to enable debug logging in systemd, but once I did that, I could confirm that this service was indeed working fine. The service correctly persisted the disabled state to a file and restored it on the next boot.&lt;/p>
+&lt;p>This meant that there had to be &lt;em>something else&lt;/em> in the boot process that disabled the WiFi after &lt;code>systemd-rfkill&lt;/code> had run. The question was finding what that was, and having this knowledge meant I could better scope my next searches a bit more accurately.&lt;/p>
+&lt;p>My next thought took me to NetworkManager. I have had my previous fights with this service in the past, so I thought that maybe this was installed on the system to handle the state of network connections in the UI. I do have the standard Raspbian desktop installed but I had no easy way to log into it&amp;hellip; so verifying this wasn&amp;rsquo;t exactly trivial. (In retrospect, I think that if I had gone through the hassle of logging into the UI and clicked on whichever button exists to enable the WiFi, my problems would have been resolved immediately. But then I wouldn&amp;rsquo;t have gained all of this knowledge.)&lt;/p>
+&lt;p>Fear not though. NetworkManager has a CLI to manipulate its state so I could use that. Except for the fact that NetworkManager was nowhere to be seen on the system. Dead end.&lt;/p>
+&lt;p>My next step was to look into the standard Debian configuration under &lt;code>/etc/network/&lt;/code>, but I couldn&amp;rsquo;t find anything obvious either. Actually, I couldn&amp;rsquo;t find &lt;em>anything&lt;/em> because the interfaces aren&amp;rsquo;t apparently configured there at all anymore. Yay for modern Linux?&lt;/p>
+&lt;p>It is then that I reverted to searching online (I don&amp;rsquo;t remember the right search terms though) and I ended in yet another forum that talked about connman. And bingo! I did have connman installed and it sounded like the same NetworkMannager thing I had seen before. Running a &lt;code>connman enable wifi&lt;/code> was all it took to mark the WiFi link enabled and get the right fix in place. And by &amp;ldquo;right fix&amp;rdquo; I mean a fix that works in conjuction with the way the whole system is expected to run, not in spite of it.&lt;/p>
+&lt;p>In other words: it was connman that was kicking in after the &lt;code>systemd-rfkill&lt;/code> startup script, and it was connman the one that was re-disabling the WiFi because connman thought that it had to be disabled. Now, as to why I have connman installed and whether it should be there or not&amp;hellip; I do not know. This Raspbian installation has been in place for years now and has been upgraded a few times, so my guess is that &lt;code>connman&lt;/code> is there to support the lightweight Raspbian desktop, and at some point in the past I logged into it and clicked on the button to disable the WiFi.&lt;/p>
+&lt;h1 id="the-ai-future">The AI future&lt;/h1>
+&lt;p>The Internet being polluted by wrong answers obviously impacts everyone, from beginner engineers and sysadmins that will not know/care enough to find the true root causes behind problems, to our new AI overlords which will outright lie to us.&lt;/p>
+&lt;p>Or will they? Let&amp;rsquo;s try to get an answer from Bing&amp;rsquo;s AI-powered new search engine:&lt;/p>
+&lt;blockquote>
+&lt;p>Q: I enabled the WiFi on the Raspberry Pi with raspi-config but, after a reboot, rfkill reports that the WiFi is blocked. How do I fix it?&lt;/p>
+&lt;p>A: You can try running the command sudo rfkill unblock wifi to unblock the wifi. If that doesn’t work, you can try adding the command rfkill unblock all to /etc/rc.local file before the line that says exit 0. This will ensure that the command is run at boot time and should unblock the wifi.&lt;/p>
+&lt;/blockquote>
+&lt;p>Yeah, no. While that might have the right effect as described earlier, it&amp;rsquo;s not the correct answer. But I &lt;em>know&lt;/em> the answer, so I can cheat and prompt the question towards what I think the problem really is:&lt;/p>
+&lt;blockquote>
+&lt;p>Q: But why doesn&amp;rsquo;t the rfkill unblocked state persist after the reboot? The systemd unit says it should.&lt;/p>
+&lt;p>A: The reason why the rfkill unblocked state doesn&amp;rsquo;t persist after reboot is because the Network Manager is blocking it back¹. You can try creating a service to unblock the wifi devices at boot time. Here&amp;rsquo;s how you can do it:
+&amp;hellip; snippet to modify systemd &amp;hellip;&lt;/p>
+&lt;/blockquote>
+&lt;p>Oh wow, I&amp;rsquo;m actually surprised. This answer was pretty close!&lt;/p>
+&lt;blockquote>
+&lt;p>Q: But I do not have NetworkManager installed. What else could it be?&lt;/p>
+&lt;p>A: If you don&amp;rsquo;t have NetworkManager installed, then it could be that the wifi is being blocked by the kernel. You can try adding the following line to &lt;code>/etc/modprobe.d/raspi-blacklist.conf&lt;/code> file:
+&amp;hellip; more steps &amp;hellip;&lt;/p>
+&lt;/blockquote>
+&lt;p>Back to the wrong heavy-handed solution of fully disabling rfkill. Bing&amp;hellip; you were soooo close, but yet so far. Finally:&lt;/p>
+&lt;blockquote>
+&lt;p>Q: Could it be connman?&lt;/p>
+&lt;p>A: Yes, it could be connman. You can try disabling connman by running the following command:
+&amp;hellip; steps to fully disable &amp;hellip;&lt;/p>
+&lt;/blockquote>
+&lt;p>Of course it could obviously be connman&amp;rsquo;s fault, but the answer is wrong. I might want to have connman installed and the system ought to work with it (it was there by default after all). Uninstalling random system components isn&amp;rsquo;t usually the answer.&lt;/p>
+&lt;hr>
+&lt;p>Is there any moral to this story? Sure there is, the usual one: in order to solve a problem, you must always understand what the root cause really is. This typically requires understanding how the system works top-to-bottom and reasoning about what the behavior should be end-to-end. Only then you can come up with the right fix. Asking &amp;ldquo;why&amp;rdquo; several times in a row tends to work well in discovering what you might be missing. Oh, and this all applies to software bugs as well: the next time you find yourself adding a nullness check to fix a crash&amp;hellip; keep digging!&lt;/p></description></item><item><title>A failed experiment with Rust static dispatch</title><link>https://jmmv.dev/2023/08/rust-static-dispatch-failed-experiment.html</link><pubDate>Sun, 06 Aug 2023 05:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/08/rust-static-dispatch-failed-experiment.html</guid><description>&lt;p>Initial versions of the EndBASIC Service, and therefore initial versions of EndTRACKER, used dynamic dispatch to support abstract definitions of system services such as the database they talk to and the clock they use. This looked like a bunch of &lt;code>Arc&amp;lt;dyn Foo&amp;gt;&lt;/code> objects passed around and was done to &lt;a href="/2023/07/unit-testing-a-web-service.html">support extremely fast unit testing&lt;/a>.&lt;/p>
 &lt;p>When I generalized the core logic of these services into the &lt;a href="/2023/03/introducing-iii-iv.html">III-IV framework&lt;/a>, I decided to experiment with a switch to static dispatch. The rationale was that using static dispatch better aligns with the design of well-regarded crates in the Rust ecosystem, and also because I wanted to avoid unnecessary runtime costs in the foundational pieces of my web services.&lt;/p>
 &lt;p>Let me tell you that this decision was a huge mistake and that the experiment has utterly failed. Using static dispatch has been a constant source of frustration due to the difficulty in passing types around and reasoning about trait bounds. The situation had gotten so bad that I dreaded adding new functionality to my services whenever a change to a statically-typed &lt;code>struct&lt;/code> was needed, because that meant adding yet another type parameter and plumbing it through tens of source files.&lt;/p>
 &lt;p>In lieu of the difficulties, which eventually turned into blockers to implementing new features, I made the choice of going back to dynamic dispatch. The goal was to gain ergonomics at the expense of a supposedly-negligible runtime cost. Let me tell you about the problems I faced, the refactoring journey, and some measurements I gathered after the rewrite.&lt;/p>
@@ -1694,161 +1807,4 @@ But we didn&amp;rsquo;t need any of this to solve the &lt;code>GOTO&lt;/code> pr
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nt">&amp;#34;ul_multi&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">3&lt;/span>
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>I have yet to set up PR validation automation to run &lt;a href="https://github.com/DavidAnson/markdownlint">markdownlint&lt;/a> directly on the content and fail PR merges on mistakes&amp;hellip; but this is an idea I&amp;rsquo;ve just had as I was writing this 😉&lt;/p></description></item><item><title>Speeding up autoconf with caching</title><link>https://jmmv.dev/2022/06/autoconf-caching.html</link><pubDate>Fri, 17 Jun 2022 06:30:00 -0700</pubDate><guid>https://jmmv.dev/2022/06/autoconf-caching.html</guid><description>&lt;p>In the recent &lt;a href="/2022/05/remembering-buildtool.html">Remembering Buildtool&lt;/a> post, I described how setting up a cache of configuration checks was an important step in Buildtool&amp;rsquo;s installation process. The goal was to avoid pointless repetitive work on every build by performing such common checks once.&lt;/p>
-&lt;p>&lt;a href="https://www.bsdnow.tv/457">Episode 457 of BSD Now&lt;/a> featured my post and Allan Jude wondered how much time would be saved in a bulk build of all FreeBSD packages if we could just do that same kind of caching with GNU Autoconf. And, you know what? It is indeed possible to do so. I had mentioned it en passing in my post but I guess I wasn&amp;rsquo;t clear enough, so let&amp;rsquo;s elaborate!&lt;/p>
-&lt;h1 id="the-problem-autoconfs-slowness">The problem: Autoconf&amp;rsquo;s slowness&lt;/h1>
-&lt;p>The &lt;code>configure&lt;/code> scripts generated by GNU Autoconf are slow, &lt;em>very&lt;/em> slow, to the point where sometimes their execution time is longer than the time it takes to build the package they configure. This is especially true on multi-core systems where these scripts make builds drag along.&lt;/p>
-&lt;p>Here, take a look at some package build times on an 8-core machine from 2011:&lt;/p>
-&lt;table>
-&lt;thead>
-&lt;tr>
-&lt;th>Package&lt;/th>
-&lt;th>Type&lt;/th>
-&lt;th style="text-align:right">&lt;code>configure&lt;/code>&lt;/th>
-&lt;th style="text-align:right">&lt;code>make -j8&lt;/code>&lt;/th>
-&lt;/tr>
-&lt;/thead>
-&lt;tbody>
-&lt;tr>
-&lt;td>bmake&lt;/td>
-&lt;td>Small C package&lt;/td>
-&lt;td style="text-align:right">8s&lt;/td>
-&lt;td style="text-align:right">7s&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>coreutils&lt;/td>
-&lt;td>Medium C package&lt;/td>
-&lt;td style="text-align:right">62s&lt;/td>
-&lt;td style="text-align:right">96s&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>m4&lt;/td>
-&lt;td>Small C package&lt;/td>
-&lt;td style="text-align:right">36s&lt;/td>
-&lt;td style="text-align:right">9s&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>pkgconf&lt;/td>
-&lt;td>Small C package&lt;/td>
-&lt;td style="text-align:right">3s&lt;/td>
-&lt;td style="text-align:right">2s&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>kyua&lt;/td>
-&lt;td>Small C++ package&lt;/td>
-&lt;td style="text-align:right">6s&lt;/td>
-&lt;td style="text-align:right">91s&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>tmux&lt;/td>
-&lt;td>Small C package&lt;/td>
-&lt;td style="text-align:right">7s&lt;/td>
-&lt;td style="text-align:right">8s&lt;/td>
-&lt;/tr>
-&lt;/tbody>
-&lt;/table>
-&lt;p>For comparison, here are two of the builds above&amp;mdash;I did not have the patience to run them all&amp;mdash;on an even older single-core PowerBook G4 from 2005:&lt;/p>
-&lt;table>
-&lt;thead>
-&lt;tr>
-&lt;th>Package&lt;/th>
-&lt;th>Type&lt;/th>
-&lt;th style="text-align:right">&lt;code>configure&lt;/code>&lt;/th>
-&lt;th style="text-align:right">&lt;code>make -j1&lt;/code>&lt;/th>
-&lt;/tr>
-&lt;/thead>
-&lt;tbody>
-&lt;tr>
-&lt;td>bmake&lt;/td>
-&lt;td>Small C package&lt;/td>
-&lt;td style="text-align:right">44s&lt;/td>
-&lt;td style="text-align:right">60s&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>tmux&lt;/td>
-&lt;td>Small C package&lt;/td>
-&lt;td style="text-align:right">46s&lt;/td>
-&lt;td style="text-align:right">217s&lt;/td>
-&lt;/tr>
-&lt;/tbody>
-&lt;/table>
-&lt;p>Note the huge cost of the &lt;code>configure&lt;/code> run times &lt;em>relative to&lt;/em> &lt;code>make&lt;/code>.&lt;/p>
-&lt;p>You might think that slow &lt;code>configure&lt;/code> scripts aren&amp;rsquo;t a big deal, but pause for a second to realize that these scripts plague the entire Unix ecosystem. Almost every package in your standard Linux distribution or BSD system has a &lt;code>configure&lt;/code> script of its own, and this script has to run before the package can be built. Considering that this ecosystem favors small source packages, each with its own &lt;code>configure&lt;/code> script, the costs add up quickly.&lt;/p>
-&lt;p>But wait, it gets even worse. All BSD systems and some Linux distributions have some form of &lt;strong>bulk build&lt;/strong>: a long-running process where they rebuild their entire collection of binary packages at once from source. These binary packages are the ones you can later trivially install via, say, &lt;code>pkg&lt;/code> on FreeBSD or &lt;code>dnf&lt;/code> on Fedora. These bulk builds take several hours &lt;em>at best&lt;/em> on the most powerful machines and several &lt;em>weeks&lt;/em> (or is it months?) at worst on legacy platforms. I don&amp;rsquo;t have hard numbers, but based on the simple data presented above, I think it&amp;rsquo;s fair to assume that a large percentage of the total build time is wasted on &lt;code>configure&lt;/code> scripts&amp;mdash;and most of this time is stupidly spent doing the same work over and over and over again.&lt;/p>
-&lt;p>Can we do anything to make these runs faster? Yes, it turns out we can. But before getting into that, lets explore why these scripts are so slow and why they are still a big problem even on modern multi-core machines.&lt;/p>
-&lt;h1 id="why-are-configure-scripts-slow">Why are configure scripts slow?&lt;/h1>
-&lt;p>The reasons &lt;code>configure&lt;/code> scripts are slow are varied:&lt;/p>
-&lt;ol>
-&lt;li>
-&lt;p>They are huge shell scripts. &lt;code>bmake&lt;/code>&amp;rsquo;s &lt;code>configure&lt;/code> to take just one example is about 210kb with a total of 7500 lines. The shell is a language that doesn&amp;rsquo;t win any speed tests.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>They are creating, compiling and running&lt;sup id="fnref:1">&lt;a href="#fn:1" class="footnote-ref" role="doc-noteref">1&lt;/a>&lt;/sup> small programs to verify features of the host system.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>They are sequential and mostly I/O-bound (again, they are shell scripts), which is the worst kind of sequential.&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;p>&amp;rsquo;nuf said.&lt;/p>
-&lt;h1 id="parallel-builds-to-the-rescue">Parallel builds to the rescue?&lt;/h1>
-&lt;p>&amp;ldquo;Ah, but it doesn&amp;rsquo;t matter&amp;rdquo;, you say. &amp;ldquo;While the &lt;code>configure&lt;/code> script of one package may be slow, we are building thousands of packages in a bulk build. Therefore, we can make use of parallelism to hide the costs!&amp;rdquo; Yeah&amp;hellip; not really.&lt;/p>
-&lt;p>You see, the end-to-end build of a package tends to be bimodal: the &lt;code>configure&lt;/code> script is slow, I/O-bound, and sequential, while the build itself is typically reasonably parallel and CPU-bound. (Actually, the end-to-end process is trimodal if we account for the I/O-bound installation step, but let&amp;rsquo;s ignore that in this post.)&lt;/p>
-&lt;p>These different kinds of resource consumption at different stages pose problems when trying to parallelize the build of independent packages.&lt;/p>
-&lt;p>Suppose we have a machine with 8 CPUs and that every package&amp;rsquo;s build stage is parallel enough to consume up to 4 CPUs at any given time. If we try to build 8 of these packages in parallel to paper over the fact that &lt;code>configure&lt;/code> is sequential, we&amp;rsquo;ll have good cases where we are running the 8 scripts at once and making an OK use of resources. Unfortunately, we&amp;rsquo;ll also have bad cases where the 8 packages are in their build stage trying to use 4 CPUs each, which means we&amp;rsquo;ll have 32 CPU-hungry processes scheduling on 8 CPUs. The latter scenario is more likely than the former so this is not great.&lt;/p>
-&lt;p>To &amp;ldquo;fix&amp;rdquo; this under bulk build scenarios, we could say that we don&amp;rsquo;t want to allow parallel builds within a package (i.e. we restrict each build to &lt;code>make -j1&lt;/code>) to keep every package limited to one CPU at most. But if we do that, we&amp;rsquo;ll introduce major choke points in the bulk build because some packages, like &lt;code>clang&lt;/code>, are depended on by almost everything and take forever to build without parallelism.&lt;/p>
-&lt;h1 id="repeated-work">Repeated work&lt;/h1>
-&lt;p>The worst part of all is that a lot of the work that &lt;code>configure&lt;/code> scripts do is pure waste. How many times do you &lt;em>really&lt;/em> need to check during the build of multiple packages that your system has a C compiler? And &lt;code>stdlib.h&lt;/code>? And &lt;code>uint8_t&lt;/code>? And a &lt;em>Fortran&lt;/em> compiler? FFS. Most of these checks are useless in most packages (&lt;code>configure&lt;/code> scripts are cargoculted and almost nobody understands them), and for those that are useful, their answers aren&amp;rsquo;t going to change for the duration of the build. Heck, the answers are likely not going to change for the lifetime of the entire system either.&lt;/p>
-&lt;p>This is particularly frustrating when you want to revive an old machine&amp;mdash;like the PowerBook G4 I mentioned above&amp;mdash;where the only option to get modern software is to build it yourself. Doing so is exasperating because you spend most of your time witnessing &lt;code>configure&lt;/code> scripts doing repeated work and very little time building the code you want to run.&lt;/p>
-&lt;p>All hope is not lost though. I&amp;rsquo;m sure you have occasionally noticed this: when you run &lt;code>configure&lt;/code> in a large project that has recursive &lt;code>configure&lt;/code> invocations, you&amp;rsquo;ll often see &lt;code>(cached)&lt;/code> next to individual checks. In other words, these scripts do know how to reuse results from previous invocations.&lt;/p>
-&lt;p>So, wouldn&amp;rsquo;t it be great if we convinced &lt;code>configure&lt;/code> to avoid doing repeated work across packages? Couldn&amp;rsquo;t we check for these details just &lt;em>once&lt;/em> and reuse cached results later? Well, yes, yes we can!&lt;/p>
-&lt;h1 id="say-hello-to-gnu-autoconf-caching">Say hello to GNU Autoconf caching&lt;/h1>
-&lt;p>GNU Autoconf does have first-class caching features. Using them within a single package is trivial. All we have to do is pass the &lt;code>--config-cache&lt;/code> flag to the script as described in the &lt;a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.71/html_node/Cache-Files.html">Cache Files section of the manual&lt;/a> and it will maintain a &lt;code>config.cache&lt;/code> file with the results of the invocation. You can see the impact of a perfect cache here:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">.../m4-1.4.19$ time ./configure --config-cache &amp;gt;/dev/null
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./configure &amp;gt; /dev/null 16.32s user 12.18s system 90% cpu 31.660 total
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">.../m4-1.4.19$ time ./configure --config-cache &amp;gt;/dev/null
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./configure --config-cache &amp;gt; /dev/null 1.45s user 0.77s system 108% cpu 2.045 total
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In other words, &lt;code>configure&lt;/code>&amp;rsquo;s time went from 31 seconds to just 2 by saving and reusing the previous results. (Note that this is &lt;em>different&lt;/em> than running &lt;code>config.status&lt;/code>, which just recreates output files, but let&amp;rsquo;s leave that aside.)&lt;/p>
-&lt;p>This is nice for a single package, but as it turns out, the &lt;code>--config-cache&lt;/code> flag takes an optional parameter to specify the path to the cache file. There is nothing preventing us from passing a path to a central location and reusing the same cache for various packages!&lt;/p>
-&lt;p>In fact, the GNU Autoconf developers have thought about this problem. On the one hand, the tool supports setting up a system-wide configuration file (known as &lt;code>config.site&lt;/code>) as described in the &lt;a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.71/html_node/Site-Defaults.html">Setting Site Defaults section of the manual&lt;/a>. And on the other hand, the default code snippet that they show in the manual has an explicit mention of using a system-wide cache:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl"># Give Autoconf 2.x generated configure scripts a shared default
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># cache file for feature test results, architecture-specific.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">if test &amp;#34;$cache_file&amp;#34; = /dev/null; then
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> cache_file=&amp;#34;$prefix/var/config.cache&amp;#34;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> # A cache file is only valid for one C compiler.
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> CC=gcc
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">fi
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>It wouldn&amp;rsquo;t be easier, really, to cache results, right? But then&amp;hellip; why aren&amp;rsquo;t we collectively using this feature more widely? Well, caching &lt;code>configure&lt;/code> results willy-nilly can cause random build failures because the checks performed by one package aren&amp;rsquo;t necessarily equivalent to similar-looking checks in another. An obvious case is when the results of a check depend on the results of a previous check: for cache correctness, any two scripts need to run these two checks in the same order, but there is no guarantee that they&amp;rsquo;ll do so.&lt;/p>
-&lt;p>If we want to have system-wide caching of reasonable safety, we need to do better than simply pointing all &lt;code>configure&lt;/code> runs to a central cache file. And this is where &lt;code>autoswc&lt;/code> enters the picture.&lt;/p>
-&lt;h1 id="enter-autoswc">Enter autoswc&lt;/h1>
-&lt;p>&lt;a href="https://pkgsrc.se/pkgtools/autoswc">&lt;code>autoswc&lt;/code>&lt;/a>, whose name stands for &lt;em>Automatic System-Wide Configuration&lt;/em> and was brought to you by yours truly in 2004, is a little tool that exposes GNU Autoconf system-wide caching facilities in a safe manner.&lt;/p>
-&lt;p>The key idea behind &lt;code>autoswc&lt;/code> is that you (the administrator) create a system-wide &lt;code>configure&lt;/code> script with the list of checks you want to cache and then run &lt;code>autoswc&lt;/code> to refresh the cache at specific points in time (say before performing a bulk build). Then, any build you perform from within &lt;code>pkgsrc&lt;/code> (the tool is specific to this packaging system), will reuse those checks&amp;mdash;but these arbitrary builds won&amp;rsquo;t contaminate the central cache.&lt;/p>
-&lt;p>Put it another way: &lt;code>autoswc&lt;/code> helps define a cache of safe checks and automates the process of using those during bulk builds minimizing the risks of bad things happening due to cache contamination.&lt;/p>
-&lt;p>Using this tool is easy. I had not used it in &lt;em>years&lt;/em>, but installing it from pkgsrc and setting it up only required these steps. Just like with Buildtool, I&amp;rsquo;m surprised such old code of mine still works:&lt;/p>
-&lt;ol>
-&lt;li>
-&lt;p>Install the &lt;code>pkgtools/autoswc&lt;/code> package.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Optionally copy &lt;code>/usr/pkg/share/autoswc/configure.ac&lt;/code> to &lt;code>/usr/pkg/etc/autoswc/configure.ac&lt;/code> and extend the sample script with the checks you want to cache.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Append &lt;code>.sinclude &amp;quot;/usr/pkg/share/autoswc/autoswc.mk&amp;quot;&lt;/code> to &lt;code>/etc/mk.conf&lt;/code>.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Occasionally run &lt;code>autoswc&lt;/code> from the command line to update the cache.&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;p>Voila. All package builds done through pkgsrc now benefit from the cached configuration results generated by the files in step 2.&lt;/p>
-&lt;p>Unfortunately, as good as this may seem, &lt;code>autoswc&lt;/code>&amp;rsquo;s results aren&amp;rsquo;t impressive. The main problem is that it&amp;rsquo;s on you (the administrator) to curate the list of checks to cache. This is a very difficult task as it requires looking at what &lt;code>configure&lt;/code> scripts are doing throughout a bulk build and determining which checks are safe to cache and which aren&amp;rsquo;t, and ain&amp;rsquo;t nobody have time for that.&lt;/p>
-&lt;p>I think my hope when I created this tool was that we&amp;rsquo;d get a swarm of people with pkgsrc expertise to curate the predefined list of checks in the sample &lt;code>configure.ac&lt;/code> file and then we&amp;rsquo;d all benefit from the results on our own machines and on the bulk build clusters&amp;hellip; but this obviously did not happen. But the feature in GNU Autoconf exists, &lt;code>autoswc&lt;/code> is still functional and trivially configurable, and with some effort it could potentially bring some tangible speed improvements to builds&amp;mdash;especially on old hardware.&lt;/p>
-&lt;p>Anyhow, now you know about one more &amp;ldquo;hidden&amp;rdquo; feature that GNU Autoconf has and that can potentially speed things up in repeated package builds massively.&lt;/p>
-&lt;p>Thanks for reading and enjoy the weekend!&lt;/p>
-&lt;div class="footnotes" role="doc-endnotes">
-&lt;hr>
-&lt;ol>
-&lt;li id="fn:1">
-&lt;p>Avid readers will note that another consequence of &lt;em>running&lt;/em> the test programs that &lt;code>configure&lt;/code> creates is that &lt;code>configure&lt;/code> scripts are often terrible when trying to cross-build software for other platforms. The test programs must be built for the target system in order to provide correct results, but that means that they cannot be run on the host.&amp;#160;&lt;a href="#fnref:1" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;/div></description></item></channel></rss>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>I have yet to set up PR validation automation to run &lt;a href="https://github.com/DavidAnson/markdownlint">markdownlint&lt;/a> directly on the content and fail PR merges on mistakes&amp;hellip; but this is an idea I&amp;rsquo;ve just had as I was writing this 😉&lt;/p></description></item></channel></rss>
