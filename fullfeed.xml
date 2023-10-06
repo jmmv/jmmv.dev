@@ -1,4 +1,225 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 08 Sep 2023 10:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Good performance is not just big O</title><link>https://jmmv.dev/2023/09/performance-is-not-big-o.html</link><pubDate>Fri, 08 Sep 2023 10:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/09/performance-is-not-big-o.html</guid><description>&lt;p>Having a fast and responsive app is orthogonal to &amp;ldquo;knowing your big &lt;i>O&lt;/i>s&amp;rdquo;. Unfortunately, most tech companies over-emphasize algorithms in interviews and downplay systems knowledge, and I believe that&amp;rsquo;s one reason behind sluggish apps and bloated systems.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 06 Oct 2023 09:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>5 ways to instantiate Rust structs in tests</title><link>https://jmmv.dev/2023/10/rust-test-structs.html</link><pubDate>Fri, 06 Oct 2023 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/rust-test-structs.html</guid><description>&lt;p>I&amp;rsquo;m a big fan of static typing and I&amp;rsquo;ve found that using narrow types for each entity in the object model of my programs reduces errors. Rust is particularly well-suited at this task: its lack of implicit type conversions eliminates surprises, and its ownership semantics allow type transformations with zero cost.&lt;/p>
+&lt;p>Unfortunately, (ab)using narrow types in an app&amp;rsquo;s domain is &lt;em>really&lt;/em> annoying when writing tests. While non-test code rarely instantiates new objects&amp;mdash;in the case of a REST service, this would only happen at the service&amp;rsquo;s boundaries&amp;mdash;tests instantiate objects infinitely more times than non-test code. Code patterns that may seem reasonable in non-test code can become unbearable in tests.&lt;/p>
+&lt;p>In this post, I want to look into the various ways in which you can instantiate strongly-typed objects. For each, I show examples and describe their pros and cons. And yes, as a matter of fact, I have tried them all before&amp;hellip; and I can&amp;rsquo;t yet make my mind as to which one is best.&lt;/p>
+&lt;div class="container action-highlight p-4 my-4 d-md-none">
+&lt;div class="row text-center">
+&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.&lt;/p>
+&lt;/div>
+&lt;div class="row">
+&lt;div class="col">
+&lt;div class="form-group">
+&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
+&lt;input type="text" name="email"
+placeholder="Enter your email"
+class="form-control input-sm text-center my-1"/>
+&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
+&lt;/form>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;div class="row px-2">
+&lt;div class="col col-sm-5 text-left">
+&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
+&lt;/div>
+&lt;div class="col col-sm-7 text-right">
+&lt;p>
+&lt;a rel="me" href="https://mastodon.online/@jmmv">
+&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+&lt;/a>
+&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
+&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+&lt;/a>
+&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
+&lt;/p>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;h1 id="context-setting">Context-setting&lt;/h1>
+&lt;p>Let me introduce you to the &lt;code>Comment&lt;/code> type from the EndTRACKER codebase&amp;mdash;a type that represents a textual comment that someone left on a webpage. I&amp;rsquo;ve simplified it a little for illustration purposes, but the core properties of the type remain:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="k">struct&lt;/span> &lt;span class="nc">Comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">site_id&lt;/span>: &lt;span class="nc">Uuid&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">path&lt;/span>: &lt;span class="nc">Url&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">timestamp&lt;/span>: &lt;span class="nc">OffsetDateTime&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">content&lt;/span>: &lt;span class="nb">String&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">author&lt;/span>: &lt;span class="nb">Option&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="nb">String&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">email&lt;/span>: &lt;span class="nb">Option&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">EmailAddress&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Said core properties are:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>Four required fields for every comment: &lt;code>site_id&lt;/code>, &lt;code>path&lt;/code>, &lt;code>timestamp&lt;/code> and &lt;code>content&lt;/code>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Two optional fields that are only present if the user writing the comment chose to provide them: &lt;code>author&lt;/code> and &lt;code>email&lt;/code>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Strongly-typed fields. Note that only two of them are raw strings; the rest are &lt;em>narrower&lt;/em> types that enforce structure on their values.&lt;/p>
+&lt;p>This is important because, for example, while URLs can be represented as strings, they are &lt;em>not&lt;/em> strings. The domain of all possible URLs is narrower than the domain of all possible strings because URLs have internal structure. Using a narrow type to represent URLs enforces that, once a URL object exists, we can pass it around and all consumers can assume it has undergone proper validation.&lt;/p>
+&lt;p>Note that strong typing can be done in pretty much any language, really, but Rust shines here. It also helps that using narrow types is common practice in this language: in JavaScript, for example, the above would probably have been represented as a loosely-typed &lt;code>Object&lt;/code>; and in Python, it would have been shoehorned into a string-to-whatever dictionary.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Let&amp;rsquo;s look at the ways in which &lt;code>Comment&lt;/code> objects can be constructed. Remember that I&amp;rsquo;m focusing on object creation as part of tests. For this reason, it is not necessary to propagate errors to the caller: panicking internally to fail the test is just fine, which simplifies the design a lot.&lt;/p>
+&lt;h1 id="option-1-struct-literals">Option 1: Struct literals&lt;/h1>
+&lt;p>In the most simple form, a test instantiates a &lt;code>Comment&lt;/code> object by specifying &lt;em>all&lt;/em> fields:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">site_id&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">path&lt;/span>: &lt;span class="nc">url&lt;/span>&lt;span class="o">!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;http://example.com/post.html&amp;#34;&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">timestamp&lt;/span>: &lt;span class="nc">datetime&lt;/span>&lt;span class="o">!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">2023&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">19&lt;/span>:&lt;span class="mi">25&lt;/span>:&lt;span class="mi">00&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="no">UTC&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">content&lt;/span>: &lt;span class="s">&amp;#34;Irrelevant text&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">to_owned&lt;/span>&lt;span class="p">(),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">author&lt;/span>: &lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;The Author&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">to_owned&lt;/span>&lt;span class="p">()),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">email&lt;/span>: &lt;span class="nb">Some&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;the-email@example.com&amp;#34;&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">into&lt;/span>&lt;span class="p">()),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">};&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Pros:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Clarity.&lt;/strong> It&amp;rsquo;s painfully obvious what each field contains in every test object.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Refactor-proof.&lt;/strong> When modifying the &lt;code>Comment&lt;/code> definition, you are forced to revise all places where the object is constructed. This makes you reassess whether existing tests need to care about the changes or not.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Cons:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Lack of conciseness.&lt;/strong> Not all tests care about all possible fields of a type. Some tests may want to validate ordering, in which case they care about specific &lt;code>timestamp&lt;/code> values, whereas other tests may want to check protections against HTML injection, in which case they care about &lt;code>content&lt;/code>. But this is not clear in the test because the test is forced to specify values for all fields even if they are irrelevant.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Refactoring difficulties.&lt;/strong> Even though I listed refactoring in the pros, refactoring is also a con. Having to adjust tens or hundreds of tests every time the struct definition changes is a daunting task, particularly when, in general, existing tests do not care about new fields.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="option-2-the-default-trait">Option 2: The Default trait&lt;/h1>
+&lt;p>The standard answer to the cons listed above is to implement &lt;code>Default&lt;/code> for the type and thus rely on default values for all fields that are irrelevant in a given context. Ideally, by deriving or implementing &lt;code>Default&lt;/code>, we would do something like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">Comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">site_id&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">path&lt;/span>: &lt;span class="nc">url&lt;/span>&lt;span class="o">!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;http://example.com/post.html&amp;#34;&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="o">..&lt;/span>&lt;span class="nb">Default&lt;/span>::&lt;span class="nb">Default&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">};&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Unfortunately, this does not work other than for trivial structs. The problem here is that not all types in the &lt;code>Comment&lt;/code> struct implement &lt;code>Default&lt;/code>, and this problem compounds with any additional type you nest. In this particular example, a &lt;code>Url&lt;/code> cannot be empty and an &lt;code>OffsetDateTime&lt;/code> does not have a reasonable zero value.&lt;/p>
+&lt;p>One possible solution to this issue is fabricate fake values for all fields. To do this, you can rely on the &lt;code>derivative&lt;/code> crate and use it to supply alternate default values for those fields that don&amp;rsquo;t have one of their own. It is critical to do this &lt;em>only&lt;/em> for debug builds so that these fake definitions never taint production. Here is how this would look like:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#[cfg_attr(test, derive(Derivative))]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="cp">#[cfg_attr(test, derivative(Default))]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="nc">Comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">{&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="cp">#[cfg_attr(test, derivative(Default(value = &lt;/span>&lt;span class="s">&amp;#34;Uuid::new_v4()&amp;#34;&lt;/span>&lt;span class="cp">)))]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">site_id&lt;/span>: &lt;span class="nc">Uuid&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="cp">#[cfg_attr(test, derivative(Default(value = r#&lt;/span>&lt;span class="s">&amp;#34;url!(&amp;#34;&lt;/span>&lt;span class="cp">https://UNSET/&lt;/span>&lt;span class="s">&amp;#34;)&amp;#34;&lt;/span>&lt;span class="cp">#)))]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">path&lt;/span>: &lt;span class="nc">Url&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="cp">#[cfg_attr(test, derivative(Default(value = &lt;/span>&lt;span class="s">&amp;#34;OffsetDateTime::UNIX_EPOCH&amp;#34;&lt;/span>&lt;span class="cp">)))]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">timestamp&lt;/span>: &lt;span class="nc">OffsetDateTime&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="cp">#[cfg_attr(test, derivative(Default(value = r#&lt;/span>&lt;span class="s">&amp;#34;&amp;#34;&lt;/span>&lt;span class="cp">Irrelevant&lt;/span>&lt;span class="s">&amp;#34;.to_owned()&amp;#34;&lt;/span>&lt;span class="cp">#)))]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">content&lt;/span>: &lt;span class="nb">String&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">author&lt;/span>: &lt;span class="nb">Option&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="nb">String&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="k">pub&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">email&lt;/span>: &lt;span class="nb">Option&lt;/span>&lt;span class="o">&amp;lt;&lt;/span>&lt;span class="n">EmailAddress&lt;/span>&lt;span class="o">&amp;gt;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>With this, the above instantiation of a &lt;code>Comment&lt;/code> with partial defaults becomes possible.&lt;/p>
+&lt;p>Pros:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Concise and refactor-friendly.&lt;/strong> Tests can now declare objects with only the few properties they care about. Due to this, adding new fields to the &lt;code>Comment&lt;/code> struct does not require modifying the majority of existing tests.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Standard.&lt;/strong> Deriving &lt;code>Default&lt;/code> is a common idiom in Rust, so this leads to few surprises.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Cons:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Complexity.&lt;/strong> The type definitions are quite convoluted, particularly due to the need to couple these fake values to debug builds only.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Noisy.&lt;/strong> Having to call &lt;code>..Default::default()&lt;/code> each time we instantiate a struct is annoying and adds a lot of visual noise.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="option-3-macros">Option 3: Macros&lt;/h1>
+&lt;p>Using macros to instantiate test data is a common idiom in Rust: the macros provide a simpler syntax to instantiate objects and they forcibly unwrap result values because it&amp;rsquo;s OK to panic tests on invalid data. In fact, note that in the above examples I&amp;rsquo;ve already used two macros: &lt;code>url!&lt;/code> to construct &lt;code>Url&lt;/code> values from hardcoded strings assumed to be valid, and &lt;code>datetime!&lt;/code> to construct &lt;code>OffsetDateTime&lt;/code> values from a readable mini-DSL.&lt;/p>
+&lt;p>We could define a &lt;code>comment!&lt;/code> macro that allowed &amp;ldquo;keyword-like&amp;rdquo; arguments to instantiate a test &lt;code>Comment&lt;/code> object, like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="fm">comment!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">site_id&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">path&lt;/span>: &lt;span class="nc">url&lt;/span>&lt;span class="o">!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;http://example.com/post.html&amp;#34;&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">);&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Pros:&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>Concise.&lt;/strong> Same as the &lt;code>Default&lt;/code> approach: tests only declare the properties they must declare for the test to pass.&lt;/li>
+&lt;/ul>
+&lt;p>Cons:&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>Refactoring-unfriendly.&lt;/strong> The Rust auto-formatter does not reformat code inside macros. I rely on this feature too much these days because it&amp;rsquo;s very liberating to not have to care about manual formatting, so this is a non-option for me.&lt;/li>
+&lt;/ul>
+&lt;h1 id="option-4-the-builder-pattern">Option 4: The builder pattern&lt;/h1>
+&lt;p>The next possibility is to use the builder pattern, which I have &lt;a href="/2020/12/builder-pattern-for-tests.html">previously leveraged to define declarative tests&lt;/a>. Constructing a &lt;code>Comment&lt;/code> would then look something like this and, in fact, that&amp;rsquo;s what I had in the code for a little while:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">CommentBuilder&lt;/span>::&lt;span class="n">new&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">site_id&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="fm">url!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;https://example.com/page.html&amp;#34;&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="fm">datetime!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">2023&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">19&lt;/span>:&lt;span class="mi">25&lt;/span>:&lt;span class="mi">00&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="no">UTC&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;Irrelevant text&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">with_author&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;The author&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">with_email&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;the-email@example.com&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">build&lt;/span>&lt;span class="p">();&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This usage of a builder is a bit unorthodox and&amp;hellip; really ugly: the constructor takes positional arguments for all required fields and the various setters return errors when the input values cannot be converted to the inner types that back them. These design decisions came from the fact that I used this builder in non-test code too, so errors had to be propagated.&lt;/p>
+&lt;p>But this is not the only way to define a builder. A more traditional application of the builder pattern would result in:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">CommentBuilder&lt;/span>::&lt;span class="n">default&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">site_id&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">site_id&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">url&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="fm">url!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;https://example.com/page.html&amp;#34;&lt;/span>&lt;span class="p">)))&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">timestamp&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="fm">datetime!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">2023&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">19&lt;/span>:&lt;span class="mi">25&lt;/span>:&lt;span class="mi">00&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="no">UTC&lt;/span>&lt;span class="p">))&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">content&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;Irrelevant text&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">author&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;The author&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">email&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;the-email@example.com&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">build&lt;/span>&lt;span class="p">()&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">unwrap&lt;/span>&lt;span class="p">();&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This second version of the pattern looks better in general (and you could argue that the original version was a mistake). So let&amp;rsquo;s analyze this second version.&lt;/p>
+&lt;p>Pros:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Automatic type conversions.&lt;/strong> The setters can &lt;a href="/2020/04/rust-into-trait.html">leverage &lt;code>Into&lt;/code>&lt;/a> and &lt;code>AsRef&lt;/code>, making it possible to call them quite naturally without needing to create auxiliary types by hand. Note how, for example, &lt;code>email()&lt;/code> takes a string even if the backing type is &lt;code>EmailAddress&lt;/code> because the setter accepts &lt;code>Into&amp;lt;EmailAddress&amp;gt;&lt;/code> and the type implements &lt;code>From&amp;lt;&amp;amp;'static str&amp;gt;&lt;/code> (in test builds &lt;em>only&lt;/em>).&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Conciseness.&lt;/strong> As is the case for the &lt;code>Default&lt;/code> and the macro options, this solution also accepts specifying only the fields that are required for each test. The builder can set defaults for everything else.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Cons:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Verbosity.&lt;/strong> This is no simpler than the &lt;code>Default&lt;/code> option and requires non-trivial code to implement the builder itself.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Delayed validation.&lt;/strong> Delaying validation until the call to &lt;code>build()&lt;/code> isn&amp;rsquo;t always easy. Consider &lt;code>email&lt;/code> again: if we make the &lt;code>email()&lt;/code> setter construct the internal &lt;code>EmailAddress&lt;/code> object, then &lt;code>email()&lt;/code> has to either return an error (a requirement for production usage) or panic (if the builder is exclusively for tests). But if we try to delay error reporting until &lt;code>build()&lt;/code> is called, then the setter cannot leverage &lt;code>Into&lt;/code> and needs to either accept strings alone or already-constructed &lt;code>EmailAddress&lt;/code> objects.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="option-5-helper-functions">Option 5: Helper functions&lt;/h1>
+&lt;p>The final possibility is to define helper functions to instantiate our test objects. And if we are defining helper functions, those can do additional work like storing the objects in a database (which is what most of my tests need to do anyway). Here is an example of such a function:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-rust" data-lang="rust">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">mut&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">context&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">TestContext&lt;/span>::&lt;span class="n">setup&lt;/span>&lt;span class="p">();&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="c1">// ...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="kd">let&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">comment&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="n">context&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">put_comment&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="n">site_id&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="fm">url!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;https://example.com/page.html&amp;#34;&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="fm">datetime!&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">2023&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">10&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="mi">03&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="mi">19&lt;/span>:&lt;span class="mi">25&lt;/span>:&lt;span class="mi">00&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="no">UTC&lt;/span>&lt;span class="p">),&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="s">&amp;#34;Hello&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nb">None&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="k">await&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Pros:&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>Extra logic.&lt;/strong> A helper function can take care of instantiating the test object, but can &lt;em>also&lt;/em> perform other operations such as persisting the object. For tests, this can turn out to be very useful in encapsulating sequences of operations.&lt;/li>
+&lt;/ul>
+&lt;p>Cons:&lt;/p>
+&lt;ul>
+&lt;li>&lt;strong>Inflexibility.&lt;/strong> Helper functions sound nice at first because they only take the fewest arguments possible to satisfy the needs of the tests. But things get unwieldy quickly: in the example above, you can already see a wart in the API because there is a confusing &lt;code>None&lt;/code> that should probably not be there. This ends happening because different tests need different properties to be set and a single function won&amp;rsquo;t satisfy them all, so you end up with parameterized helper functions that contain superfluous in the common case, or with multiple helper functions targeted at different test scenarios.&lt;/li>
+&lt;/ul>
+&lt;p>This approach is very tempting to use because declaring new functions is easy and looks simple, but I&amp;rsquo;ve &lt;em>never ever&lt;/em> seen it evolve well long-term in any language. Stay away except for the most trivial cases.&lt;/p>
+&lt;h1 id="whats-best">What&amp;rsquo;s best?&lt;/h1>
+&lt;p>To be honest&amp;hellip; I do not know. I have tried all of the above and I&amp;rsquo;m not completely satisfied with any option. To let you into a secret, the EndTRACKER data model currently contains a mishmash of all these options because I&amp;rsquo;ve been experimenting with new ideas over time and haven&amp;rsquo;t yet settled on the one I like the best. (Yes, yes, I know. Consistency should have trumped &amp;ldquo;prettiness&amp;rdquo;, but hey, I write side projects because I enjoy exploring different dark corners of my tech of choice.)&lt;/p>
+&lt;p>Right now my thoughts are these: the builder pattern seems to be the nicest option &lt;em>if&lt;/em> you restrict it to tests, because then the builder can encapsulate error unwrapping and callers set all fields by name. However, I&amp;rsquo;m having a hard time justifying this option in favor of the &lt;code>Default&lt;/code> option, because callers look equally complex and the builder option requires a lot of boilerplate to write the builders themselves. And I kinda would like to use the macro option, but the fact that it doesn&amp;rsquo;t work well with auto-formatting is a deal breaker.&lt;/p>
+&lt;p>What are &lt;em>your&lt;/em> thoughts?&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-06-rust-test-structs.png" length="138979" type="image/jpeg"/></item><item><title>Good performance is not just big O</title><link>https://jmmv.dev/2023/09/performance-is-not-big-o.html</link><pubDate>Fri, 08 Sep 2023 10:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/09/performance-is-not-big-o.html</guid><description>&lt;p>Having a fast and responsive app is orthogonal to &amp;ldquo;knowing your big &lt;i>O&lt;/i>s&amp;rdquo;. Unfortunately, most tech companies over-emphasize algorithms in interviews and downplay systems knowledge, and I believe that&amp;rsquo;s one reason behind sluggish apps and bloated systems.&lt;/p>
 &lt;p>I&amp;rsquo;ve seen this play out repeatedly. Interviewers ask a LeetCode-style coding question, which is then followed by the ritual of discussing time and memory complexity. Candidates ace the answers. But then&amp;hellip; their &amp;ldquo;real&amp;rdquo; code suffers from subtle yet impactful performance problems.&lt;/p>
 &lt;p>Focusing on big &lt;em>O&lt;/em> complexity rarely matters in most apps. Sure, it&amp;rsquo;s important to think about your algorithmic choices, but there are so many more details to worry about that have a direct impact on app performance and responsiveness. Let&amp;rsquo;s look at a bunch of them!&lt;/p>
 &lt;div class="container action-highlight p-4 my-4 d-md-none">
@@ -1880,178 +2101,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;p>The process to create III-IV has been incredibly painful: &lt;a href="https://twitter.com/jmmv/status/1630945190331715584">I spent way too long&lt;/a> figuring out how to remove superfluous &lt;code>Box&lt;/code>es and &lt;code>Arc&lt;/code>s used for polymorphism in favor of static dispatch. But, once I was able conquer this hill, new (to me) Rust concepts &amp;ldquo;clicked&amp;rdquo; and I&amp;rsquo;m pretty happy with the results. I&amp;rsquo;m a believer in keeping generic logic separate from domain-specific logic (even within a single project), so creating III-IV and using it to remove code duplication from multiple projects actually feels great.&lt;/p>
 &lt;p>So, what&amp;rsquo;s next? For starters, there is still a bunch of logic in my existing services that would benefit from generalization to keep their clutter to a minimum. Shuffling this functionality into III-IV requires &amp;ldquo;actual&amp;rdquo; redesign work though, and so far I&amp;rsquo;ve only been moving code almost-verbatim. I will only tackle these features whenever I come back to work on these services.&lt;/p>
 &lt;p>And then, well, whichever thing I happen to need for the new &lt;em>web&lt;/em> services I&amp;rsquo;m working on. If a piece of functionality looks generic enough and potentially reusable in other services, it will go into III-IV. Two things that I immediately need are: support for &lt;a href="https://github.com/ramosbugs/openidconnect-rs">OIDC user authentication&lt;/a> via &lt;a href="https://auth0.com/">Auth0&lt;/a> and seamless integration with &lt;a href="https://bootstrap-vue.org/">BootstrapVue&lt;/a> for the frontend components.&lt;/p>
-&lt;p>With that, head to &lt;a href="https://github.com/jmmv/iii-iv">https://github.com/jmmv/iii-iv&lt;/a> for instructions on how to depend on this code from your &lt;code>Cargo.toml&lt;/code> files. Have fun!&lt;/p></description></item><item><title>BASIC parsing difficulties in EndBASIC</title><link>https://jmmv.dev/2023/01/endbasic-parsing-difficulties.html</link><pubDate>Fri, 13 Jan 2023 06:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/01/endbasic-parsing-difficulties.html</guid><description>&lt;p>Happy new year and welcome to 2023!&lt;/p>
-&lt;p>If you have followed me over the past&amp;hellip; three years already? (wow), you know I have been working on an implementation of a BASIC interpreter called EndBASIC. The parser for the language in the &lt;a href="/2020/04/hello-endbasic.html">0.1 release&lt;/a> started as very rudimentary and only supported: scalar variables and assignments; &lt;code>IF&lt;/code>, &lt;code>WHILE&lt;/code> and &lt;code>FOR&lt;/code> control flow primitives; and the ability to invoke built-in commands such as &lt;code>PRINT&lt;/code> and &lt;code>INPUT&lt;/code>. There was nothing else in the language, and I neglected improving it as I favored building the scaffolding around the interpreter&amp;mdash;features like a web UI and a cloud service seemed much more fun to build at the time.&lt;/p>
-&lt;p>Unfortunately, due to the massive limitations of the core language, it was almost impossible to write anything of substance in it. EndBASIC rose to the top page of popular news sites a couple of times, but this criticism was common. So, for a few months before the holidays, I chipped away at the core of the interpreter and made major strides in what the language offers, culminating in the massive &lt;a href="/2022/12/endbasic-0.10.html">0.10 release&lt;/a>. To summarize, this new release brought features like &lt;code>GOTO&lt;/code> and &lt;code>GOSUB&lt;/code>, &lt;code>DO&lt;/code> and &lt;code>SELECT CASE&lt;/code>, and integer and double interop, to name a few.&lt;/p>
-&lt;p>In the context of this post, however, I want to focus on the makings of the parser. In particular, I want to analyze various difficulties I encountered while implementing these improvements to the interpreter. And the reason I want to look into these is because, in various occasions, I got a glimpse of the design choices that the original language designers must have faced when coming up with BASIC in the 1960s given the limitations of the machines at the time. This has been fascinating and enlightening.&lt;/p>
-&lt;p>But also unpleasant. During my implementation work, I have come across many oddities in the language that make it irregular and thus difficult to parse into an &lt;a href="https://en.wikipedia.org/wiki/Abstract_syntax_tree">AST&lt;/a>. All of these oddities have been &amp;ldquo;fixable&amp;rdquo;, but I can tell that BASIC didn&amp;rsquo;t originate with ASTs in mind. For all I can tell, BASIC seems to have been designed for line-by-line interpretation.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="endbasic-self-inflicted-pain">EndBASIC self-inflicted pain&lt;/h1>
-&lt;p>Before diving into the difficulties I have encountered so far in parsing BASIC, let me start by outlining some core design principles behind EndBASIC:&lt;/p>
-&lt;ol>
-&lt;li>
-&lt;p>&lt;strong>&lt;a href="https://github.com/endbasic/endbasic/tree/master/core">Core&lt;/a> vs. &lt;a href="https://github.com/endbasic/endbasic/tree/master/std">standard library&lt;/a> split:&lt;/strong> The core language, which involves parsing, &lt;a href="/2022/11/endbasic-bytecode.html">compiling into bytecode (as of 0.10)&lt;/a>, and executing the results, is supposed to be completely independent from the &amp;ldquo;standard library&amp;rdquo;. This is to ensure that the language remains &amp;ldquo;pure&amp;rdquo; and that nothing in the virtual machine can escape to do I/O unless explicitly allowed to do so by hooking individual standard library components into the interpreter. The consequence is that &lt;em>all&lt;/em> built-in commands and functions, &lt;em>including&lt;/em> &lt;code>PRINT&lt;/code> and &lt;code>INPUT&lt;/code>, cannot be part of the core.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>AST representation:&lt;/strong> The standard library, which provides all common commands and functions, is where the fun lives&amp;mdash;but remember, it is detached from the core. Anything in the standard library must be representable in the AST without command-specific special cases. As we will see later, this is&amp;hellip; tricky, because BASIC commands have some of the most inconsistent structure I&amp;rsquo;ve ever seen.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Hand-made recursive descent parser:&lt;/strong> I have intentionally handcrafted the lexer and parser because this whole project started just as a &amp;ldquo;how hard could it be&amp;rdquo; kind of situation. Nevertheless, I wanted to keep dependencies to a minimum to make the core (not the standard library) tiny and &lt;a href="/2021/01/embedding-endbasic.html">embeddable into other processes&lt;/a>, so I had to get a good grasp of everything involved in the process. This has worked OK so far, but it&amp;rsquo;s not trivial as we will see.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Context-free parsing:&lt;/strong> The parser should not know anything about the meaning of symbols, which is probably the most problematic constraint of all.&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;p>Once again, note that these are all self-imposed constraints. For all I can tell, none of these existed at the time BASIC was designed, and foregoing these constraints would make implementing the parser much simpler.&lt;/p>
-&lt;p>The reason these constraints exist is because I dove into implementing the EndBASIC parser with rudimentary knowledge of BASIC. I had good memories of using BASIC more than 30 years ago but no mastery of the language, so I&amp;rsquo;ve been hitting new corner cases along the way and have had to retrofit support for them into the parser.&lt;/p>
-&lt;p>At the end of this post, I&amp;rsquo;ll briefly discuss how I think these design constraints should change in order to evolve the language even further, but first, let&amp;rsquo;s look into the current parsing difficulties, which is the meat of this post.&lt;/p>
-&lt;h1 id="oddities-and-difficulties">Oddities and difficulties&lt;/h1>
-&lt;h2 id="argument-passing">Argument passing&lt;/h2>
-&lt;p>The first difficulty in implementing the parser was representing commands in the AST and, in particular, their arguments. In any sane and modern language, arguments are separated from each other in one way&amp;mdash;and just one way. If you have a function &lt;code>print&lt;/code> and arguments &lt;code>bar&lt;/code> and &lt;code>baz&lt;/code>, you do things like &lt;code>print bar baz&lt;/code> or &lt;code>print(bar, baz)&lt;/code>, but the separators are all equal and have no special meaning.&lt;/p>
-&lt;p>Things are not as simple in BASIC. You see, BASIC has two (ha ha, stay tuned) argument separators, and their meaning depends on the command being invoked. Here, take a look at the madness that &lt;code>PRINT&lt;/code> is:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Print two arguments with a long separator in-between them.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">3&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">4&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Print two arguments with a short separator in-between them.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">3&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">4&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Mix and match separators, and even leave some empty fields.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">3&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">4&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">5&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">6&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Oh, and you can even have a trailing separator.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">3&lt;/span>&lt;span class="p">,&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Tricky? Sure, but now look at &lt;code>INPUT&lt;/code>, which also supports the two separators but with completely different meanings:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Read a number with a &amp;#34;? &amp;#34; default prompt.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">INPUT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">n&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">INPUT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">n&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Read a number without a prompt.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">INPUT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">n&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Read a string with a prompt followed by &amp;#34;? &amp;#34;.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">INPUT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s2">&amp;#34;What&amp;#39;s your name&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">t$&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Read a string with a prompt with nothing appended to it.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">INPUT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s2">&amp;#34;Enter some words: &amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">t$&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>For a long time, support for these two separators are all that I had implemented in the language, but then&amp;hellip; I stumbled upon the &lt;code>NAME&lt;/code> command in QuickBASIC which is used to rename files. &lt;code>NAME&lt;/code> has this marvelous syntax:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="kr">NAME&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s2">&amp;#34;old name&amp;#34;&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">AS&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s2">&amp;#34;new name&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Uh. There are not two, but &lt;em>three&lt;/em> argument separators, and which ones are valid where and what each means depends on the command being invoked. Things seem to get worse when you start looking at how to open files and represent their file handles, but I won&amp;rsquo;t get there for now because I haven&amp;rsquo;t even tried to implement this yet.&lt;/p>
-&lt;h2 id="array-assignments">Array assignments&lt;/h2>
-&lt;p>The next difficulty arose trying to handle array assignments, a feature that appeared in the &lt;a href="/2021/02/endbasic-0.6.html">0.6 release&lt;/a>. Array references in BASIC use parenthesis, not square brackets as is customary in most other languages. For example:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">DIM&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">vector&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">10&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">AS&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">INTEGER&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="vg">vector&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">2&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">12345&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">vector&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">2&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kd">DIM&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">matrix&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">10&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">10&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">AS&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="k">INTEGER&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="vg">matrix&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">4&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">5&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">987&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">matrix&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">4&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">5&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This is fine: who cares if accessing an array is done with &lt;code>vector[2]&lt;/code> or &lt;code>vector(2)&lt;/code>. Except&amp;hellip; remember the constraint that says that the EndBASIC parser must not know anything about commands? Consider what happens when you try to parse this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="vg">vector&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">2&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">12&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="c1">&amp;#39; Array assignment.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">2&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="c1">&amp;#39; Call to print with an argument wrapped in parenthesis.&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Here is the parser&amp;rsquo;s flow. The parser first sees &lt;code>vector&lt;/code> or &lt;code>PRINT&lt;/code>, which are symbol references for which it knows nothing about. Then the opening parenthesis comes. What are we trying to parse? Will we encounter an equal sign and conclude that this is an array assignment, or will there not be an equal sign and this translates to a command invocation with just one argument? You can&amp;rsquo;t tell until you encounter the equal sign.&lt;/p>
-&lt;p>Obviously, this disambiguation was implemented in the parser as I just described, but it is not trivial. This is another case of self-inflicted pain that results from keeping the parser unaware of the symbols that have been defined so far. Otherwise, if we &lt;em>knew&lt;/em> that &lt;code>vector&lt;/code> is an array, we could immediately conclude that we are facing an array assignment as soon as we see it specified as the first token of a statement; and we could do similarly for &lt;code>PRINT&lt;/code> if we &lt;em>knew&lt;/em> that it is a command.&lt;/p>
-&lt;h2 id="labels">Labels&lt;/h2>
-&lt;p>Labels did not exist in original versions of BASIC, but they did appear in later implementations. One which brought labels is QuickBASIC, where labels are defined by appending a colon character to an identifier:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="nl">label:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kr">INPUT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">foo&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Simple, right? Well, as it turns out&amp;hellip; the colon character is also the statement delimiter in BASIC and can be used to separate different statements in a single line.&lt;/p>
-&lt;p>With that extra bit of knowledge, what does this mean?&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kr">INPUT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">foo&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Are we trying to define a label called &lt;code>PRINT&lt;/code>, or are we calling the &lt;code>PRINT&lt;/code> command without arguments? This is impossible to tell without knowing upfront that &lt;code>PRINT&lt;/code> is a command, but that goes against the design constraints of the EndBASIC core language.&lt;/p>
-&lt;p>This is an ambiguity that cannot be resolved if I stick to those design decisions. I could obviously damage the AST by representing argless commands and maybe-labels in a type like &lt;code>Statement::LabelOrArglessCommandCall&lt;/code>, but that sounds terrible. So, for now, EndBASIC requires labels to start with the &lt;code>@&lt;/code> sign; unorthodox, but it does the job given that I&amp;rsquo;m not targeting compatibility with other BASIC implementations.&lt;/p>
-&lt;h2 id="end-statements-vs-control-flow">END statements vs. control flow&lt;/h2>
-&lt;p>The next difficulty appeared in trying to parse the &lt;code>END&lt;/code> statement. You see, &lt;code>END&lt;/code> can be used like this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Terminate program execution.&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">END&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&amp;#39; Terminate program execution with code 1 (a later extension).&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">END&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">1&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And it can also be used like this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="kr">IF&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">TRUE&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kr">THEN&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="kr">END&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">END&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kr">IF&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note that &lt;code>END&lt;/code> has two very different meanings depending on the token that comes after it, if any.&lt;/p>
-&lt;p>I &lt;em>suspect&lt;/em> that this is why other control flow primitives &lt;em>don&amp;rsquo;t&lt;/em> use &lt;code>END&lt;/code> to check for their termination: &lt;code>WHILE&lt;/code> uses &lt;code>WEND&lt;/code>, &lt;code>DO&lt;/code> uses &lt;code>LOOP&lt;/code>, and &lt;code>FOR&lt;/code> uses &lt;code>NEXT&lt;/code>. Having different keywords as block terminators makes it &lt;em>much&lt;/em> easier to perform parsing because, for example, when you are parsing the contents of a &lt;code>WHILE&lt;/code> loop, you can simply say &amp;ldquo;&lt;em>parse statements until you find &lt;code>WEND&lt;/code>&lt;/em>&amp;rdquo; and call it a day.&lt;/p>
-&lt;p>Of course I wondered why &lt;code>END IF&lt;/code> was not written as a single keyword as well, such as &lt;code>FI&lt;/code> (I see you, POSIX shell), because it breaks this theory and makes parsing unnecessarily hard. Looking at &lt;a href="https://en.wikipedia.org/wiki/Dartmouth_BASIC#First_Edition">the original version of BASIC&lt;/a>, though, reveals the answer: there was no &lt;code>END IF&lt;/code>. The language only supported uni-line &lt;code>IF&lt;/code> statements, which made this point moot.&lt;/p>
-&lt;h2 id="references-vs-values">References vs. values&lt;/h2>
-&lt;p>Let&amp;rsquo;s switch topics to a slightly different difficulty: having to represent variable values and variable references as different elements in the AST. Consider the following code:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="vg">x&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s2">&amp;#34;A string&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kr">LEN&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="vg">x&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In this code snippet, the &lt;code>LEN&lt;/code> function receives &lt;code>x&lt;/code> as an argument, but &lt;code>LEN&lt;/code> doesn&amp;rsquo;t care about &lt;code>x&lt;/code>: it cares about the value of &lt;code>x&lt;/code>, which is &lt;code>A string&lt;/code>.&lt;/p>
-&lt;p>However, consider this other code snippet:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">DIM&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">x&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="il">3&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kr">PRINT&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kr">UBOUND&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="vg">x&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In this case, the &lt;code>UBOUND&lt;/code> function receives &lt;code>x&lt;/code> as an argument, and &lt;code>UBOUND&lt;/code> &lt;em>does&lt;/em> care about &lt;code>x&lt;/code> itself, not its value, to inspect its size and return the array&amp;rsquo;s upper bound. (Because&amp;hellip; what is the &amp;ldquo;value&amp;rdquo; of &lt;code>x&lt;/code> without a subscript, anyway? An address? A copy of the array?)&lt;/p>
-&lt;p>The problem is&amp;hellip; how can these be interned in the AST if we don&amp;rsquo;t know what each function needs or what each variable&amp;rsquo;s type is? Remember that the parser currently does not have this information. Up until now, the AST has just recorded that function calls take expressions as arguments, and one possible expression type is a symbol reference (&lt;code>Expr::Symbol(VarRef)&lt;/code>). Both &lt;code>LEN&lt;/code> and &lt;code>UBOUND&lt;/code> receive unevaluated expressions, and then the implementation of &lt;code>LEN&lt;/code> &lt;em>evaluates&lt;/em> the expression to get its value, whereas the implementation of &lt;code>UBOUND&lt;/code> does &lt;em>not&lt;/em> evaluate the expression and instead uses the argument to look up the symbol&amp;rsquo;s definition.&lt;/p>
-&lt;p>This has worked OK so far but poses new problems when trying to compile expression evaluation into bytecode, which is something that EndBASIC 0.10 notably lacks but that I need to implement for &amp;ldquo;proper&amp;rdquo; compilation. When facing the &lt;code>x&lt;/code> argument in the function calls above, the compiler cannot tell if it should emit code to load the value of &lt;code>x&lt;/code> or if it should emit code to provide a reference to &lt;code>x&lt;/code>. Resolving this would require making the AST aware of valid functions and their syntaxes or the compiler aware of variable types.&lt;/p>
-&lt;h2 id="exponents-and-square-root">Exponents and square root&lt;/h2>
-&lt;p>Switching topics again, another oddity comes from the lack of orthogonality in a recent feature I implemented. Exponents are expressed as an infix operator (&lt;code>8 ^ 2&lt;/code>) whereas square roots are expressed as a function (&lt;code>SQR(8)&lt;/code>).&lt;/p>
-&lt;p>This does not pose a difficulty in parsing, but it clashes with the desire to keep the core parser and the standard library separate: why should exponents be in the core while &lt;code>SQR&lt;/code> is in the standard library? This is inconsistent but cannot be easily resolved in the current implementation.&lt;/p>
-&lt;h2 id="let-vs-not-let">LET vs. not LET&lt;/h2>
-&lt;p>And finally, &lt;code>LET&lt;/code>. For as long as I remember using BASIC myself, which is as far back as the 1980s with Locomotive BASIC 1.1, variable assignment has always been expressed as:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="vg">var&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">1234&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>But the original BASIC also has a &lt;code>LET&lt;/code> keyword to write variable assignments as:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-basic" data-lang="basic">&lt;span class="line">&lt;span class="cl">&lt;span class="kd">LET&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="vg">var&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="il">1234&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The question is: why? Why would you need to have an optional &lt;code>LET&lt;/code> keyword to assign variables when it can be omitted? This is the final telltale sign that gives insight on how original parsing must have been done.&lt;/p>
-&lt;h1 id="welcome-to-the-1960s">Welcome to the 1960s&lt;/h1>
-&lt;p>From the looks of all of this, it is fairly reasonable to assume that original BASIC parsers read code line by line, did simple prefix matching to determine what to do on a single line, and then passed the remainder of the line to a routine to handle it.&lt;/p>
-&lt;p>Something like this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">pc&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">10&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">while&lt;/span> &lt;span class="kc">True&lt;/span>&lt;span class="p">:&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">line&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">get_line&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">pc&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="ow">not&lt;/span> &lt;span class="n">line&lt;/span>&lt;span class="p">:&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">break&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="n">line&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">startswith&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;PRINT&amp;#39;&lt;/span>&lt;span class="p">):&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">do_print&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nb">len&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;PRINT&amp;#39;&lt;/span>&lt;span class="p">):])&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">elif&lt;/span> &lt;span class="n">line&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">startswith&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;INPUT&amp;#39;&lt;/span>&lt;span class="p">):&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">do_input&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nb">len&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;INPUT&amp;#39;&lt;/span>&lt;span class="p">):])&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">elif&lt;/span> &lt;span class="n">line&lt;/span>&lt;span class="o">.&lt;/span>&lt;span class="n">startswith&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;NAME&amp;#39;&lt;/span>&lt;span class="p">):&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">do_name&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">line&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nb">len&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;NAME&amp;#39;&lt;/span>&lt;span class="p">):])&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">else&lt;/span>&lt;span class="p">:&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">raise&lt;/span> &lt;span class="ne">Exception&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;Unknown command&amp;#39;&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">line&lt;/span> &lt;span class="o">+=&lt;/span> &lt;span class="mi">10&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This makes a lot of sense considering the severe limitations of the computers that first ran BASIC in 1963 when it was invented: they had limited computing power, very limited memory, and the code for the interpreter must have been written directly in assembly.&lt;/p>
-&lt;p>With this perspective, it&amp;rsquo;s &amp;ldquo;obvious&amp;rdquo; why each command can behave differently: it is up to their implementation to interpret the remainder of the program line as they see fit. There is no AST. No abstraction over the program. No compilation. Just a loop that reads a line at a time and decides what to do about it right away.&lt;/p>
-&lt;p>In a modern implementation like EndBASIC, however, trying to represent this variety of commands in a generic form to maintain the separation between core language and standard library is difficult. What I ended up doing is capturing the list of arguments as a list of expression/separator pairs and passing those to the command handler&amp;mdash;which works but is ugly because each command has to implement argument parsing in a fragile way and makes compilation to bytecode difficult.&lt;/p>
-&lt;h1 id="potential-fixes-for-endbasic">Potential fixes for EndBASIC&lt;/h1>
-&lt;p>So, any lessons learned? What am I going to do about all of this?&lt;/p>
-&lt;p>I think keeping the EndBASIC core language vs. standard library separation is a worthy goal. But I also think that keeping the language interpreter completely unaware of symbols is a self-imposed limitation that makes some things hard (distinguishing between array assignments and function calls) and makes other things impossible (having labels without &lt;code>@&lt;/code> prefixes). This should change.&lt;/p>
-&lt;p>The language parser will probably have to gain a mechanism to register symbols upfront so that the standard library can register its commands and functions as desired. And the language parser and/or the newly-added compiler will also have to dynamically update this table as it parses code to recognize newly-defined variables, arrays, functions, and commands.&lt;/p>
-&lt;p>The other thing that will need to change is making the parser aware of the signature of commands and functions. This is necessary to fix the compilation problem that arises in the &lt;code>LEN&lt;/code> vs. &lt;code>UBOUND&lt;/code> case, and also to support passing variables by value or by reference to custom procedures and functions (as QuickBASIC supports). The parser or the compiler need to know that &lt;code>LEN&lt;/code> receives an evaluated value whereas &lt;code>UBOUND&lt;/code> receives an array reference in order to emit the right bytecode instructions.&lt;/p>
-&lt;p>Finally, to fix the exponents vs. square roots inconsistency, operators should become function calls provided by the standard library. You could imagine the standard library asking the core to register an infix operator called &lt;code>^&lt;/code> that is executed via a hidden &lt;code>EXP&lt;/code> function, much like many modern languages do. This is, however, a minor annoyance compared to all others that I&amp;rsquo;m not sure is worth fixing.&lt;/p>
-&lt;p>And that&amp;rsquo;s it. This was a very long post full of disconnected thoughts. I&amp;rsquo;m not sure if you have gotten anything useful out of it, but if you have feedback on the content or corrections on historical facts (which I&amp;rsquo;m sure are not accurate), please let me know!&lt;/p></description></item></channel></rss>
+&lt;p>With that, head to &lt;a href="https://github.com/jmmv/iii-iv">https://github.com/jmmv/iii-iv&lt;/a> for instructions on how to depend on this code from your &lt;code>Cargo.toml&lt;/code> files. Have fun!&lt;/p></description></item></channel></rss>
