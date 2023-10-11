@@ -1,4 +1,241 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 06 Oct 2023 09:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>5 ways to instantiate Rust structs in tests</title><link>https://jmmv.dev/2023/10/rust-test-structs.html</link><pubDate>Fri, 06 Oct 2023 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/rust-test-structs.html</guid><description>&lt;p>I&amp;rsquo;m a big fan of static typing and I&amp;rsquo;ve found that using narrow types for each entity in the object model of my programs reduces errors. Rust is particularly well-suited at this task: its lack of implicit type conversions eliminates surprises, and its ownership semantics allow type transformations with zero cost.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 11 Oct 2023 08:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Unit-testing shell scripts and tools with shtk</title><link>https://jmmv.dev/2023/10/unit-testing-with-shtk.html</link><pubDate>Wed, 11 Oct 2023 08:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/unit-testing-with-shtk.html</guid><description>&lt;p>While working on this static blog a few days ago, I made a change to its templates that warranted an automated test. I could have written a trivial shell script to do it, but instead I reached out for shtk&amp;rsquo;s unit-testing module. I &lt;a href="https://twitter.com/jmmv/status/1710309896670081083">tweeted about it&lt;/a> right away to just say that you can, in fact, write tests in shell because lots of developers are skeptical about any script longer than 10 lines of code.&lt;/p>
+&lt;p>Interestingly, this reply came through: a pointer to a contemporary, under-development library for writing tests in Bash. Which made me think: &amp;ldquo;Hey, I had already done that years ago&amp;hellip; but nobody knows about it. Gotta fix that with a blog post!&amp;rdquo; But first, I had to bring shtk back from its ashes because I had not touched it for more than 6 years and it wasn&amp;rsquo;t read for show and tell. So I did something that I wanted to do back in the day but never did: I put together &lt;a href="https://shtk.jmmv.dev/">a website for shtk&lt;/a> to host its &lt;a href="https://shtk.jmmv.dev/docs.html">reference manual&lt;/a> and I fixed a few obvious rough edges.&lt;/p>
+&lt;p>With those tweaks out of the way, we come to this article. In here, I want to show you how writing decent tests in shell is entirely possible and how shtk&amp;rsquo;s testing platform provides unique features to do integration testing of CLI apps written in any language.&lt;/p>
+&lt;div class="container action-highlight p-4 my-4 d-md-none">
+&lt;div class="row text-center">
+&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.&lt;/p>
+&lt;/div>
+&lt;div class="row">
+&lt;div class="col">
+&lt;div class="form-group">
+&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
+&lt;input type="text" name="email"
+placeholder="Enter your email"
+class="form-control input-sm text-center my-1"/>
+&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
+&lt;/form>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;div class="row px-2">
+&lt;div class="col col-sm-5 text-left">
+&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
+&lt;/div>
+&lt;div class="col col-sm-7 text-right">
+&lt;p>
+&lt;a rel="me" href="https://mastodon.online/@jmmv">
+&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+&lt;/a>
+&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
+&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+&lt;/a>
+&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
+&lt;/p>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;h1 id="what-is-shtk-anyway">What is shtk anyway?&lt;/h1>
+&lt;p>The Shell Toolkit, or shtk for short, is a collection of libraries to support the writing of portable shell scripts. shtk grew out of &lt;a href="http://blog.netbsd.org/tnf/entry/introducing_sysbuild_and_sysupgrade">sysbuild and sysupgrade&lt;/a>&amp;rsquo;s common code, a couple of tools I wrote over 10 years ago for NetBSD and that are fully written in shell because of the constraints of the NetBSD base system. In turn, this means that shtk is &lt;em>not&lt;/em> Bash-specific so it avoids imposing a &lt;a href="/2021/08/useless-use-of-gnu.html">useless use of GNU&lt;/a>.&lt;/p>
+&lt;p>From the get go, all of shtk, sysbuild, and sysupgrade had unit tests written with atf-sh, the shell testing library of the &lt;a href="/software/atf.html">Automated Testing Framework&lt;/a>. atf-sh was a rather simplistic library created by yours truly in 2007 and required a complex runtime (atf-run or, later, &lt;a href="/software/kyua.html">Kyua&lt;/a>) to be functional. By 2014, while working at Google, I had been exposed to better ways of writing tests that blended better with the languages they supported (pyUnit and JUnit), and I knew that I needed a replacement for atf-sh.&lt;/p>
+&lt;p>Hence, in 2014, I took the best parts of atf-sh, the core concepts of the xUnit test frameworks, and I created shtk&amp;rsquo;s &lt;code>unittest&lt;/code> module. I then proceeded to migrate all existing tests to this new framework and also used shtk to &lt;a href="/2017/02/introducing-pkg_comp-2.0.html">build pkg_comp 2.x later on in 2017&lt;/a>. But I failed to publicize the library because I didn&amp;rsquo;t quite know how to put together a cool-looking website and I didn&amp;rsquo;t have a good platform to talk about it&amp;mdash;both of which are fixed now.&lt;/p>
+&lt;h1 id="installing-shtk">Installing shtk&lt;/h1>
+&lt;p>If you are on NetBSD or on FreeBSD, you are in luck! There are packages for shtk ready to install, so go ahead and use those.&lt;/p>
+&lt;p>On any other system, you&amp;rsquo;ll have to build shtk from source. Fear not, it&amp;rsquo;s easy:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ curl -LO https://github.com/jmmv/shtk/releases/download/shtk-1.7/shtk-1.7.tar.gz
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ tar xzf shtk-1.7.tar.gz
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ cd shtk-1.7
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ./configure --prefix ~/.local
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ make
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ make install
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>After a successful installation, you should have the &lt;code>shtk&lt;/code> tool in your path. If that&amp;rsquo;s not the case, do this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ PATH=&amp;#34;${HOME}/.local/bin:${PATH}&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ export MANPATH=&amp;#34;${HOME}/.local/share/man:${MANPATH}&amp;#34;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Setting up the &lt;code>MANPATH&lt;/code> is important. shtk&amp;rsquo;s official documentation is written as manual pages to seamlessly integrate with the Unix-y environment it&amp;rsquo;s intended to complement, so you&amp;rsquo;ll want &lt;code>man&lt;/code> invocations to work. If you are curious, start by peeking into &lt;a href="https://shtk.jmmv.dev/shtk.1.html">&lt;code>shtk(1)&lt;/code>&lt;/a> and &lt;a href="https://shtk.jmmv.dev/shtk.3.html">&lt;code>shtk(3)&lt;/code>&lt;/a>.&lt;/p>
+&lt;h1 id="creating-our-first-test">Creating our first test&lt;/h1>
+&lt;p>Now that we have shtk up and running, let&amp;rsquo;s create a test. Write the following contents to a file named &lt;code>demo_test.sh&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">shtk_import unittest
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_test always_fails
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">always_fails_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> assert_equal &lt;span class="m">2&lt;/span> &lt;span class="m">3&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> &lt;span class="s2">&amp;#34;NOT REACHED!&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Done? OK. Something looks funny, doesn&amp;rsquo;t it? &lt;code>shtk_import&lt;/code> is a shell function that brings the &lt;code>unittest&lt;/code> module into scope. But&amp;hellip; where does that function come from? Well, here is the thing: shtk scripts need to be &amp;ldquo;built&amp;rdquo; before they can run. In order for the above to become a runnable test program, you have to do the following:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ shtk build -m shtk_unittest_main demo_test.sh
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>After running the above, you&amp;rsquo;ll end up with a &lt;code>demo_test&lt;/code> executable. This &amp;ldquo;executable&amp;rdquo; is essentially the same as &lt;code>demo_test.sh&lt;/code> but with some preamble code to set up the module import features and a call to the &lt;code>shtk_unittest_main&lt;/code> entry point to execute the tests.&lt;/p>
+&lt;p>Once the script is built, run it and see the single test fail:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ ./demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing always_fails...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: E: Expected value 2 but got 3
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Testing always_fails... FAILED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Ran 1 tests; 1 FAILED
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="advanced-xunit-like-features">Advanced xUnit-like features&lt;/h1>
+&lt;p>The above is nice but&amp;hellip; pretty&amp;hellip; simple? Anyone can write a conditional to check if two values are equal without the need for &amp;ldquo;fancy frameworks&amp;rdquo;, right? Right. But shtk provides much more.&lt;/p>
+&lt;p>Just like asserts, shtk also comes with expects to record soft failures: all &lt;code>assert_*&lt;/code> functions have an &lt;code>expect_*&lt;/code> counterpart. If we tweak our previous test to look like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">shtk_import unittest
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_test always_fails
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">always_fails_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> expect_equal &lt;span class="m">2&lt;/span> &lt;span class="m">3&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> &lt;span class="s2">&amp;#34;REACHED!&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> expect_equal &lt;span class="m">4&lt;/span> &lt;span class="m">5&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We get the following, which shows how the two expect commands ran and detected a failure but didn&amp;rsquo;t stop execution:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ shtk build -m shtk_unittest_main demo_test.sh
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ./demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing always_fails...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Delayed failure: Expected value 2 but got 3
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">REACHED!
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Delayed failure: Expected value 4 but got 5
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Testing always_fails... FAILED (2 delayed failures)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Ran 1 tests; 1 FAILED
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In general, when writing a test, you use asserts for any step that prepares the test scenario, and you use expects for the test scenario itself. This way, the test fails early if it is unable to set up the scenario (because it makes no sense to continue if the scenario is not set up), but it prints as much diagnostic information as possible if the actual test detects problems half-way through.&lt;/p>
+&lt;p>What about fixtures? Setup and teardown routines? shtk has got you covered too:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">shtk_import unittest
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_fixture sample
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sample_fixture&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> setup&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> &lt;span class="s2">&amp;#34;Common setup code&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> &lt;span class="m">123&lt;/span> &amp;gt;data.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> teardown&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> &lt;span class="s2">&amp;#34;Common cleanup code&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> rm -f data.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> shtk_unittest_add_test ok
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ok_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> assert_equal &lt;span class="m">123&lt;/span> &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="k">$(&lt;/span>cat data.txt&lt;span class="k">)&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> &lt;span class="m">125&lt;/span> &amp;gt;data.txt &lt;span class="c1"># Overwrites transient file.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> shtk_unittest_add_test not_ok
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> not_ok_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> assert_equal &lt;span class="m">125&lt;/span> &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="k">$(&lt;/span>cat data.txt&lt;span class="k">)&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Running the above does as you would expect:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ shtk build -m shtk_unittest_main demo_test.sh
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ./demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing sample__ok...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Common setup code
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Common cleanup code
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing sample__ok... PASSED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing sample__not_ok...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Common setup code
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: E: Expected value 125 but got 123
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Common cleanup code
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Testing sample__not_ok... FAILED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Ran 2 tests; 1 FAILED
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note how the setup and teardown routines were executed for each test, which means that the &lt;code>data.txt&lt;/code> file was recreated for every test case and the modifications to the file from one test didn&amp;rsquo;t impact the outcome of the other.&lt;/p>
+&lt;h1 id="the-secret-sauce-assert_command">The secret sauce: assert_command&lt;/h1>
+&lt;p>So far, everything looks very xUnit-like. We have asserts and expects; we have test setup and teardown hooks; we have fixtures. But shell scripts are uniquely suited to test the user interface of a CLI app: after all, users interact with CLI apps from the shell, so it&amp;rsquo;s only natural to use the shell to test arbitrary tools no matter what language they are written in. This is where shtk&amp;rsquo;s magic sauce comes into play.&lt;/p>
+&lt;p>shtk&amp;rsquo;s &lt;code>assert_command&lt;/code> check allows you to run an arbitrary command and to declaratively check its exit condition and its side-effects on stdout and stderr. The feature is inspired by &lt;a href="https://www.gnu.org/software/autoconf/manual/autoconf-2.68/html_node/Writing-Testsuites.html">&lt;code>AT_CHECK&lt;/code> in GNU Autoconf&lt;/a>, to which I was exposed even longer ago (circa 2005) while working on the Monotone project.&lt;/p>
+&lt;p>Take a look at these tests that exercise the &lt;code>cp&lt;/code> tool and pay close attention to the &lt;code>assert_command&lt;/code> calls:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">shtk_import unittest
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_test cp_ok
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cp_ok_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> touch a
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> assert_command cp a b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="o">[&lt;/span> -f b &lt;span class="o">]&lt;/span> &lt;span class="o">||&lt;/span> fail &lt;span class="s2">&amp;#34;b was not created&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_test cp_missing_source
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cp_missing_source_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> assert_command -s exit:1 -e match:&lt;span class="s2">&amp;#34;No such file&amp;#34;&lt;/span> cp a b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_test cp_unexpected_output
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cp_unexpected_output_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> assert_command -s exit:1 -o match:&lt;span class="s2">&amp;#34;Hello&amp;#34;&lt;/span> cp a b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In the first test, &lt;code>cp_ok&lt;/code>, the call to &lt;code>assert_command&lt;/code> has no flags. This means that we expect the command given to the assert to finish successfully and quietly: the exit code of &lt;code>cp a b&lt;/code> should be 0, and both stdout and stderr should be silent.&lt;/p>
+&lt;p>In the second test, &lt;code>cp_missing_source&lt;/code>, the call to &lt;code>assert_command&lt;/code> specifies that the command under test has to terminate with an exit code of 1, and that stderr has match the &lt;code>No such file&lt;/code> regular expression.&lt;/p>
+&lt;p>In the third test, &lt;code>cp_unexpected_output&lt;/code>, the call to &lt;code>assert_command&lt;/code> expects a message to stdout that &lt;code>cp&lt;/code> will not print, and also implies that stderr should be empty.&lt;/p>
+&lt;p>When we run the above after compilation, we get:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ shtk build -m shtk_unittest_main demo_test.sh
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ./demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing cp_ok...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Running checked command: cp a b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing cp_ok... PASSED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing cp_missing_source...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Running checked command: cp a b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing cp_missing_source... PASSED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: I: Testing cp_unexpected_output...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Running checked command: cp a b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Expected regexp &amp;#39;Hello&amp;#39; not found in standard output:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Expected standard error to be empty; found:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cp: a: No such file or directory
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: E: Check of &amp;#39;cp a b&amp;#39; failed; see stdout for details
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Testing cp_unexpected_output... FAILED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">demo_test: W: Ran 3 tests; 1 FAILED
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note that the first two tests passed, but pay attention to the output of the third failed test: the call to &lt;code>assert_command&lt;/code> reports that neither stdout nor stderr matched what we expected and provides details on why.&lt;/p>
+&lt;p>I invite you to take a look at the documentation in &lt;a href="https://shtk.jmmv.dev/shtk_unittest_assert_command.3.html">&lt;code>shtk_unittest_assert_command(3)&lt;/code>&lt;/a> and its supporting &lt;a href="https://shtk.jmmv.dev/shtk_unittest_assert_file.3.html">&lt;code>shtk_unittest_assert_file(3)&lt;/code>&lt;/a> as the features they provide are too numerous to be captured in this post.&lt;/p>
+&lt;h1 id="using-gnu-automake-as-a-test-runner">Using GNU Automake as a test runner&lt;/h1>
+&lt;p>Up until here, I have shown you the features that the shtk library itself provides&amp;hellip; but a testing library to write test programs with is not very useful on its own. What happens when you want to run more than one test program at once? How do you set up the test environment so that tests always run in a consistent manner, free from side-effects? How do you collect results for reporting?&lt;/p>
+&lt;p>This is where test runners come into play, and there are many to choose from. But again, given the nature of shtk and its desire to blend into Unix-y environments, integrating with the de-facto build system of all foundational software is important. So, yes, shtk tests can run via GNU Automake. The test runner provided by this build system isn&amp;rsquo;t state-of-the-art, but it is more than enough for most situations.&lt;/p>
+&lt;p>Here is all it takes to hook the earlier &lt;code>demo_test.sh&lt;/code> shtk-based test into an Automake project:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-makefile" data-lang="makefile">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">TESTS&lt;/span> &lt;span class="o">=&lt;/span> demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">check_SCRIPTS&lt;/span> &lt;span class="o">=&lt;/span> demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">CLEANFILES&lt;/span> &lt;span class="o">+=&lt;/span> demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">EXTRA_DIST&lt;/span> &lt;span class="o">+=&lt;/span> demo_test.sh
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">demo_test&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="k">$(&lt;/span>&lt;span class="nv">srcdir&lt;/span>&lt;span class="k">)&lt;/span>/&lt;span class="n">demo_test&lt;/span>.&lt;span class="n">sh&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">$(&lt;/span>AM_V_GEN&lt;span class="k">)&lt;/span>shtk build -m shtk_unittest_main -o &lt;span class="nv">$@&lt;/span> $&amp;lt;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>You&amp;rsquo;d probably want to add a pkg-config check in &lt;code>configure.ac&lt;/code> to load the path to shtk from the provided &lt;code>shtk.pc&lt;/code> and reference it from here as &lt;code>$(SHTK)&lt;/code>, but I&amp;rsquo;ll leave that as an exercise for you, dear reader.&lt;/p>
+&lt;p>After that, if we run &lt;code>make check&lt;/code>, we&amp;rsquo;ll see something like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">make check-TESTS
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">PASS: demo_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">============================================================================
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Testsuite summary for Demo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">============================================================================
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># TOTAL: 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># PASS: 1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># SKIP: 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># XFAIL: 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># FAIL: 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># XPASS: 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># ERROR: 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">============================================================================
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Neat. Take a look at the &lt;a href="https://www.gnu.org/software/automake/manual/html_node/Tests.html">test suites documentation for GNU Automake&lt;/a> for more details on how to communicate specific return codes (such as &amp;ldquo;skip&amp;rdquo;) to the runner.&lt;/p>
+&lt;h1 id="integrating-with-bazel">Integrating with Bazel&lt;/h1>
+&lt;p>GNU Automake is the de-facto build system for open source projects but it&amp;rsquo;s also&amp;hellip; far from great. This is why I &lt;a href="/2022/05/remembering-buildtool.html">created Buildtool eons ago&lt;/a> and why I got interested in Bazel in the first place. So the question is: can we integrate shtk with Bazel? Of course we can!&lt;/p>
+&lt;p>For the purposes of this post, I hacked up a Bazel rule to show off how running shtk tests with it would look like. And it looks exactly like you would expect:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">load&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;shtk.bzl&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;shtk_test&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">shtk_test&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;demo_test&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">src&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;demo_test.sh&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Followed by:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">$ bazel test --test_output=streamed :faulty_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">WARNING: Streamed test output requested. All tests will be run locally, without sharding, one at a time
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: Analyzed target //:faulty_test (0 packages loaded, 2 targets configured).
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: Found 1 test target...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">faulty_test: I: Testing faulty...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">faulty_test: E: This test fails
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">faulty_test: W: Testing faulty... FAILED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">faulty_test: W: Ran 1 tests; 1 FAILED
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">FAIL: //:faulty_test (see /home/jmmv/.cache/bazel/_bazel_jmmv/828d51923bded9f03acff0119df51adc/execroot/demo/bazel-out/k8-fastbuild/testlogs/faulty_test/test.log)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Target //:faulty_test up-to-date:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bazel-bin/faulty_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: Elapsed time: 0.355s, Critical Path: 0.14s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: 2 processes: 2 linux-sandbox.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: Build completed, 1 test FAILED, 2 total actions
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">//:faulty_test FAILED in 0.0s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /home/jmmv/.cache/bazel/_bazel_jmmv/828d51923bded9f03acff0119df51adc/execroot/demo/bazel-out/k8-fastbuild/testlogs/faulty_test/test.log
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Executed 1 out of 1 test: 1 fails locally.
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Some of the benefits of the Bazel test runner over GNU Automake&amp;rsquo;s are that Bazel adds proper test isolation and cleanup via its local sandboxing feature and that Bazel provides fine-grained test invalidation when dependencies change. These are the two primary properties you want in a modern test runner because they ensure that only the minimum subset of tests run on a given source code change, and that the test results are deterministic across invocations and machines.&lt;/p>
+&lt;h1 id="the-future">The future&lt;/h1>
+&lt;p>Despite its many haters, the shell is a pretty OK language &lt;em>if you treat it as such&lt;/em>. You must learn its syntax and its oddities, but once you do, you can write maintainable and moderately-long programs that are, often enough, much simpler than their Python counterparts. These programs have few dependencies and, given sufficient test coverage, can be as robust as other tools. shtk is just an ingredient that can help you in writing such large scripts in a principled manner and, especially, in testing them.&lt;/p>
+&lt;p>As for what the future will bring for shtk&amp;hellip; &lt;strong>you tell me!&lt;/strong> I had not worked on this project for 6 years and absolutely nobody asked about it during this time. But&amp;hellip; things have changed a lot since then and there might actually be some interest out there. In preparation for this blog post, I migrated shtk&amp;rsquo;s CI system from Travis to GitHub Actions, created a simple website to serve the API documentation&amp;mdash;which was previously locked behind &lt;code>man&lt;/code> invocations in a terminal&amp;mdash;and moved off from Kyua to GNU Automake as the test runner for simplicity.&lt;/p>
+&lt;p>Some ideas about what could be done: additional library modules/functions; a &amp;ldquo;static build&amp;rdquo; feature where the built scripts don&amp;rsquo;t require shtk to be pre-installed; and real Bazel rules (what I showed above was a macro-based hack) to incorporate shtk into your projects so that you can test your command-line tools end-to-end no matter what language they are written in.&lt;/p>
+&lt;p>Please let me know if you have any interest by either voting/replying below or reaching out via social media! And don&amp;rsquo;t forget to visit the brand-new homepage at &lt;a href="https://shtk.jmmv.dev/">https://shtk.jmmv.dev/&lt;/a> to read the documentation.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-11-shell-hammer-wrench.jpg" length="398237" type="image/jpeg"/></item><item><title>5 ways to instantiate Rust structs in tests</title><link>https://jmmv.dev/2023/10/rust-test-structs.html</link><pubDate>Fri, 06 Oct 2023 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/rust-test-structs.html</guid><description>&lt;p>I&amp;rsquo;m a big fan of static typing and I&amp;rsquo;ve found that using narrow types for each entity in the object model of my programs reduces errors. Rust is particularly well-suited at this task: its lack of implicit type conversions eliminates surprises, and its ownership semantics allow type transformations with zero cost.&lt;/p>
 &lt;p>Unfortunately, (ab)using narrow types in an app&amp;rsquo;s domain is &lt;em>really&lt;/em> annoying when writing tests. While non-test code rarely instantiates new objects&amp;mdash;in the case of a REST service, this would only happen at the service&amp;rsquo;s boundaries&amp;mdash;tests instantiate objects infinitely more times than non-test code. Code patterns that may seem reasonable in non-test code can become unbearable in tests.&lt;/p>
 &lt;p>In this post, I want to look into the various ways in which you can instantiate strongly-typed objects. For each, I show examples and describe their pros and cons. And yes, as a matter of fact, I have tried them all before&amp;hellip; and I can&amp;rsquo;t yet make my mind as to which one is best.&lt;/p>
 &lt;div class="container action-highlight p-4 my-4 d-md-none">
@@ -1996,109 +2233,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;hr>
 &lt;p>That&amp;rsquo;s about it for today! Our pilot Bazel builds are now speedier than they were and we have eliminated a major source of frustration for our users during our initial deployment of Bazel: namely, their workstations don&amp;rsquo;t melt under memory pressure any longer.&lt;/p>
 &lt;p>As a personal tip: don&amp;rsquo;t ever give into the temptations of increasing memory limits &lt;em>before&lt;/em> understanding the cause behind growth&amp;mdash;even if you have enough memory to spare and what you are doing is &amp;ldquo;just&amp;rdquo; a small increase. Caving into these temptations without further investigation means you will be oblivious to real bugs that exist in your system and that need to be ironed out for better overall performance. Be skeptical, question assumptions, measure reality, and adjust as necessary.&lt;/p>
-&lt;p>If you like what you read and would enjoy working on similar exciting problems, know that &lt;a href="https://careers.snowflake.com/us/en/job/5436043002/Senior-Software-Engineer-Developer-Productivity-Engineering">we are hiring in the Developer Productivity Engineering team&lt;/a> here at Snowflake.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-03-16-header.jpg" length="345376" type="image/jpeg"/></item><item><title>Introducing III-IV</title><link>https://jmmv.dev/2023/03/introducing-iii-iv.html</link><pubDate>Mon, 13 Mar 2023 06:45:00 -0700</pubDate><guid>https://jmmv.dev/2023/03/introducing-iii-iv.html</guid><description>&lt;p>Over the last couple of years, I have developed two small web services in Rust: &lt;a href="/2021/07/endbasic-0.7.html">one for EndBASIC&lt;/a> and &lt;a href="/2022/02/diy-web-analytics.html">one for this blog&lt;/a>. Those two web services contained significant copy/pasted helper code, which always bothered me because small bug fixes in one rarely propagated to the other. But because this only impacted two inconsequential side projects, the hinderance wasn&amp;rsquo;t a big deal.&lt;/p>
-&lt;p>Until now. I now face the need to write two more web services (details TBA), and duplicating those foundations twice more felt just wrong. So I spent the last couple of weeks pulling the common code out of the existing services into a&amp;hellip; you guessed it&amp;hellip; framework, which I have called III-IV (&amp;quot;&lt;em>three four&lt;/em>&amp;quot; if you read it out loud) and am ready to announce.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;blockquote>
-&lt;p>Find the code in &lt;a href="https://github.com/jmmv/iii-iv">https://github.com/jmmv/iii-iv&lt;/a>.&lt;/p>
-&lt;/blockquote>
-&lt;h1 id="this-is-weird">This is weird&lt;/h1>
-&lt;p>But before getting into the details&amp;hellip; what&amp;rsquo;s up with this weird name? You know, picking a name has been &lt;a href="https://www.karlton.org/2017/12/naming-things-hard/">extremely difficult&lt;/a>: all of the &amp;ldquo;obvious&amp;rdquo; ideas that came to mind were either already in use by other crates or by other projects. After many drafts, I started zoning into 3 and 4, which represent the number of layers you have to implement to develop a service with this framework. And 3 and 4 also represent the third and fourth services that precipitated the creation of this framework. So these numbers seemed fitting. And as you cannot start identifiers with a digit, roman numerals fixed that. Yes, it&amp;rsquo;s a very obscure name, but that&amp;rsquo;s fine because&amp;hellip;&lt;/p>
-&lt;p>Who asked for yet another framework? Aren&amp;rsquo;t there plenty of them out there already? &lt;em>Well akshually&lt;/em>, if you search the web for &amp;ldquo;Rust web framework&amp;rdquo;, you will find things like &lt;a href="https://rocket.rs">Rocket&lt;/a> and &lt;a href="https://github.com/tokio-rs/axum">Axum&lt;/a>, which are great for implementing the HTTP request handling of the service&amp;hellip; but they stop there. In my services, I need consistent features that span all parts of the app, from the HTTP router to the persistence layer, passing by support features like outbound email or OAuth flows&amp;mdash;all while supporting lightweight unit testing at every layer. Glueing all existing pieces together requires a non-trivial amount code, so that&amp;rsquo;s where this comes in.&lt;/p>
-&lt;h1 id="what-is-iii-iv">What is III-IV?&lt;/h1>
-&lt;p>III-IV is a rudimentary and &lt;em>very&lt;/em> opinionated framework with which to write web services in Rust. The framework is really just a thin layer over existing and well-established Rust libraries: all III-IV does is facilitate putting things together and removing boilerplate glue. The goal is to keep each service implementation focused on its business needs in order to more-easily reason about its functionality.&lt;/p>
-&lt;p>&lt;em>Keep in mind that this framework exists to satisfy &lt;strong>my&lt;/strong> needs for &lt;strong>my&lt;/strong> web services.&lt;/em> It won&amp;rsquo;t be big and professional like &lt;a href="https://www.djangoproject.com/">Django&lt;/a> (&lt;a href="https://fossbytes.com/linus-torvaldss-famous-email-first-linux-announcement/">wink, wink&lt;/a>), and I do not expect it to be useful to anyone but me. That said, if you &lt;em>do&lt;/em> find any of this useful, by all means go ahead and use whichever parts you find interesting. Documentation is minimal at this point though. I&amp;rsquo;ll be happy to entertain contributions as well&amp;mdash;but let&amp;rsquo;s discuss any major changes first if you have any.&lt;/p>
-&lt;p>So, what does III-IV offer and what makes it opinionated? This framework assumes that your web service will:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>Adhere to a 3-layer architecture with the specific names: &lt;code>rest&lt;/code>, &lt;code>driver&lt;/code>, &lt;code>db&lt;/code>, and provide a fourth cross-cutting layer named &lt;code>model&lt;/code> to offer data types. This is where the III-IV name comes from.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Use PostgreSQL for serving. SQLite could work too though but not in the context of serverless apps like the ones I&amp;rsquo;ve been deploying.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Use SQLite for unit/integration testing. A major design decision has been to allow &lt;em>super-fast non-flaky testing with zero configuration&lt;/em>. I do not want to have to spin complex dev environments up just to work on my code whenever I have some spare time: all I want is for &lt;code>cargo test&lt;/code> to do the right thing and to do it milliseconds. And I have achieved this.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Use &lt;a href="https://crates.io/crates/axum">the &lt;code>axum&lt;/code> crate&lt;/a> and its ecosystem for HTTP routing. The code in III-IV comes from years of using &lt;a href="https://crates.io/crates/warp">the &lt;code>warp&lt;/code> crate&lt;/a> and I only moved to &lt;code>axum&lt;/code> recently, so some warts may remain.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Use &lt;a href="https://crates.io/crates/sqlx">the &lt;code>sqlx&lt;/code> crate&lt;/a> for database access.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Use &lt;a href="https://crates.io/crates/tokio">the &lt;code>tokio&lt;/code> crate&lt;/a> as the async runtime.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Use &lt;a href="https://crates.io/crates/lettre">the &lt;code>lettre&lt;/code> crate&lt;/a> for SMTP communication.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Be configured via environment variables from &lt;code>main.rs&lt;/code>, some of which have predefined names.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Take minimal dependencies on cloud services, although the provided template favors Azure Functions.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="example-and-template">Example and template&lt;/h1>
-&lt;p>To illustrate how to use III-IV and how it keeps the code of a service free from boilerplate, I have written a tiny sample key/value store. You can find the source code for the example under &lt;a href="https://github.com/jmmv/iii-iv/tree/c37c096cf744072fd2db0abc3463035fd93c388c/example">jmmv/iii-iv/example&lt;/a>.&lt;/p>
-&lt;p>Here are some of the highlights to look for:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>The &lt;a href="https://github.com/jmmv/iii-iv/blob/c37c096cf744072fd2db0abc3463035fd93c388c/example/src/model.rs">&lt;code>model&lt;/code> module&lt;/a> provides high-level data types to represent the concepts in the problem domain. Abusing &lt;a href="https://doc.rust-lang.org/rust-by-example/generics/new_types.html">the newtype idiom&lt;/a> and named structures is a critical aspect of this framework to ensure data correctness throughout (particularly after data values have been interned by the REST layer).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The &lt;a href="https://github.com/jmmv/iii-iv/blob/c37c096cf744072fd2db0abc3463035fd93c388c/example/src/db/mod.rs">&lt;code>db&lt;/code> module&lt;/a> provides a &lt;code>Tx&lt;/code> type. This type offers &amp;ldquo;one shot&amp;rdquo; operations on the data types provided by the &lt;code>model&lt;/code>, and supplies implementations for both PostgreSQL and SQLite. The PostgreSQL variant is used when instantiating the app for serving in &lt;code>lib.rs&lt;/code> and the SQLite variant is used for unit testing with an in-memory database. Both implementations are validated by the exact same test collateral.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The &lt;a href="https://github.com/jmmv/iii-iv/blob/c37c096cf744072fd2db0abc3463035fd93c388c/example/src/driver/mod.rs">&lt;code>driver&lt;/code> module&lt;/a> provides a parameterized &lt;code>Driver&lt;/code> type that holds the state of the application and provides the business logic for the operations that the REST layer will need. This is where the various backend services (in this case, database transactions only) are coordinated.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The &lt;a href="https://github.com/jmmv/iii-iv/blob/c37c096cf744072fd2db0abc3463035fd93c388c/example/src/rest/mod.rs">&lt;code>rest&lt;/code> module&lt;/a> provides the HTTP API entry points and the HTTP router. This layer&amp;rsquo;s responsibility is to parse HTTP requests and write out HTTP responses. No application logic lives here. Of special interest in this layer is the use of the &lt;a href="https://github.com/jmmv/iii-iv/blob/c37c096cf744072fd2db0abc3463035fd93c388c/core/src/rest.rs#L150">&lt;code>OneShotBuilder&lt;/code> utility&lt;/a> to test every HTTP API end-to-end.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The &lt;a href="https://github.com/jmmv/iii-iv/blob/c37c096cf744072fd2db0abc3463035fd93c388c/example/src/lib.rs">&lt;code>top-level&lt;/code> module&lt;/a> instantiates the various layers for the production service.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The &lt;a href="https://github.com/jmmv/iii-iv/blob/c37c096cf744072fd2db0abc3463035fd93c388c/example/src/main.rs">&lt;code>main&lt;/code> entry point&lt;/a> extracts application configuration from environment variables (the variable for the port name assumes deployment to Azure Functions) and runs the app.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>The main purpose of this example is to serve as a template for new services. As a result, its code is overly verbose, in the sense that it includes many more source files and tests than it really deserves. The verbosity is necessary, however, to enforce structure and to allow simpler copy/pasting of the code into new services.&lt;/p>
-&lt;p>Note that the sample service does &lt;em>not&lt;/em> use all features of the framework so it may be hard to see how to leverage some of them. This might change in the future, either via this example or via additional examples. I&amp;rsquo;m finding &lt;a href="https://github.com/tokio-rs/axum/tree/main/examples">the way &lt;code>axum&lt;/code> showcases functionality&lt;/a> to be very amenable to learning.&lt;/p>
-&lt;h1 id="future">Future&lt;/h1>
-&lt;p>The process to create III-IV has been incredibly painful: &lt;a href="https://twitter.com/jmmv/status/1630945190331715584">I spent way too long&lt;/a> figuring out how to remove superfluous &lt;code>Box&lt;/code>es and &lt;code>Arc&lt;/code>s used for polymorphism in favor of static dispatch. But, once I was able conquer this hill, new (to me) Rust concepts &amp;ldquo;clicked&amp;rdquo; and I&amp;rsquo;m pretty happy with the results. I&amp;rsquo;m a believer in keeping generic logic separate from domain-specific logic (even within a single project), so creating III-IV and using it to remove code duplication from multiple projects actually feels great.&lt;/p>
-&lt;p>So, what&amp;rsquo;s next? For starters, there is still a bunch of logic in my existing services that would benefit from generalization to keep their clutter to a minimum. Shuffling this functionality into III-IV requires &amp;ldquo;actual&amp;rdquo; redesign work though, and so far I&amp;rsquo;ve only been moving code almost-verbatim. I will only tackle these features whenever I come back to work on these services.&lt;/p>
-&lt;p>And then, well, whichever thing I happen to need for the new &lt;em>web&lt;/em> services I&amp;rsquo;m working on. If a piece of functionality looks generic enough and potentially reusable in other services, it will go into III-IV. Two things that I immediately need are: support for &lt;a href="https://github.com/ramosbugs/openidconnect-rs">OIDC user authentication&lt;/a> via &lt;a href="https://auth0.com/">Auth0&lt;/a> and seamless integration with &lt;a href="https://bootstrap-vue.org/">BootstrapVue&lt;/a> for the frontend components.&lt;/p>
-&lt;p>With that, head to &lt;a href="https://github.com/jmmv/iii-iv">https://github.com/jmmv/iii-iv&lt;/a> for instructions on how to depend on this code from your &lt;code>Cargo.toml&lt;/code> files. Have fun!&lt;/p></description></item></channel></rss>
+&lt;p>If you like what you read and would enjoy working on similar exciting problems, know that &lt;a href="https://careers.snowflake.com/us/en/job/5436043002/Senior-Software-Engineer-Developer-Productivity-Engineering">we are hiring in the Developer Productivity Engineering team&lt;/a> here at Snowflake.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-03-16-header.jpg" length="345376" type="image/jpeg"/></item></channel></rss>
