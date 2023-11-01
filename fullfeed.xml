@@ -28,7 +28,79 @@
 &lt;p>It&amp;rsquo;s weird, isn&amp;rsquo;t it? Where does it come from? Simply put, I like original blog titles that refer to technology products or concepts, so I wanted one like those too. OS/2 Warp 3 was the alternate operating system that led me into my adventure away from Windows and towards great outcomes back in 1995, so Blog System/5 pays a tribute to that even if I likely won&amp;rsquo;t be blogging about OS/2 at all.&lt;/p>
 &lt;p>So what about the 5? As it turns out, this is the fifth (I &lt;em>think&lt;/em>) iteration of my blog. Going back almost 20 years, my writing journey started in LiveJournal, then moved onto Blogger, then onto a brief stint with Medium, then onto my self-hosted site, and then onto here. If this experiment goes sideways&amp;hellip; well, I&amp;rsquo;ll just keep the title and number for the blog. I like odd numbers.&lt;/p>
 &lt;h1 id="whats-next">What&amp;rsquo;s next?&lt;/h1>
-&lt;p>Easy. You &lt;em>subscribe now&lt;/em> and you receive my detailed recap of BazelCon 2023 as soon as I finish writing it in the next few days. Plus, of course, you&amp;rsquo;ll also receive all future articles and maybe we can build a community around those topics. Don&amp;rsquo;t hesitate to share your thoughts along the way!&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-28-blog-system5-logo.png" length="76109" type="image/jpeg"/></item><item><title>Unit-testing shell scripts and tools with shtk</title><link>https://jmmv.dev/2023/10/unit-testing-with-shtk.html</link><pubDate>Wed, 11 Oct 2023 08:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/unit-testing-with-shtk.html</guid><description>&lt;p>While working on this static blog a few days ago, I made a change to its templates that warranted an automated test. I could have written a trivial shell script to do it, but instead I reached out for shtk&amp;rsquo;s unit-testing module. I &lt;a href="https://twitter.com/jmmv/status/1710309896670081083">tweeted about it&lt;/a> right away to just say that you can, in fact, write tests in shell because lots of developers are skeptical about any script longer than 10 lines of code.&lt;/p>
+&lt;p>Easy. You &lt;em>subscribe now&lt;/em> and you receive my detailed recap of BazelCon 2023 as soon as I finish writing it in the next few days. Plus, of course, you&amp;rsquo;ll also receive all future articles and maybe we can build a community around those topics. Don&amp;rsquo;t hesitate to share your thoughts along the way!&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-28-blog-system5-logo.png" length="76109" type="image/jpeg"/></item><item><title>Build farm visualizations</title><link>https://jmmv.dev/2023/10/build-farm-visualizations.html</link><pubDate>Fri, 20 Oct 2023 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/build-farm-visualizations.html</guid><description>&lt;p>If you have followed our &lt;a href="https://medium.com/snowflake/tagged/infrastructure">recent infrastructure posts&lt;/a>, you know by now that we are actively migrating Snowflake&amp;rsquo;s build to Bazel. What we haven&amp;rsquo;t shared yet is that we have deployed our own &lt;a href="https://github.com/buildbarn">Build Barn&lt;/a> cluster to support Bazel&amp;rsquo;s remote execution features. We have chosen to run our own build farm service for resource governance and security purposes, but also because the behavior of this system impacts the developer experience so directly that we want to have full in-house control and knowledge of it.&lt;/p>
+&lt;p>Things haven&amp;rsquo;t been smooth-sailing though. While the initial deployment was simple, resource provisioning, performance tuning, and stability have been a struggle. Folks in the Build Barn community advised us to over-provision the cache and the worker pool&amp;mdash;and we did&amp;mdash;but such advice didn&amp;rsquo;t sound quite right: we had already invested as many resources in the build farm as we were using for our legacy builds, yet the Bazel builds couldn&amp;rsquo;t keep up with the load.&lt;/p>
+&lt;p>All combined, this was not a great story: users saw builds failing and we didn&amp;rsquo;t have a good grasp about what was going on. Until&amp;hellip; we could &lt;em>see&lt;/em> into the build farm behavior. As soon as we had pictures, the source of these problems became obvious. Let&amp;rsquo;s take a peek at what problems we had, how visualizations helped us diagnose them, and what solutions we applied.&lt;/p>
+&lt;h1 id="initial-setup">Initial setup&lt;/h1>
+&lt;p>When we deployed Build Barn at the beginning of the year in an in-house Kubernetes cluster, we didn&amp;rsquo;t put much thought into resource provisioning because our needs were modest. As we made progress through the migration, and as soon as we had the main product and its tests building with Bazel, we had to set up required Bazel build validation within our Continuous Integration (CI) system to minimize the chances of build regressions. This increased the load on the build farm as well as its reliability expectations.&lt;/p>
+&lt;p>Unfortunately, these led us to infrastructure problems. When those happened, all indicators pointed at issues in the build farm&amp;rsquo;s shared cache nodes. We didn&amp;rsquo;t have many metrics in place yet, but the few we had told us that the cache wasn&amp;rsquo;t keeping up in size or in performance, and we saw significant action queuing. Our reaction was to address the seemingly-obvious cause: the shared cache nodes were backed by slow EBS devices, so we moved them to locally-attached NVMe flash drives. Surprisingly though, this made little difference in overall performance.&lt;/p>
+&lt;p>Why? Why was it that the build farm could not keep up under load?&lt;/p>
+&lt;h1 id="profiling">Profiling&lt;/h1>
+&lt;p>My own hypothesis was that our cache nodes were starved of network. This was based on the observation that we have relatively few of them serving hundreds of workers and clients, and that the pathological workloads that brought us to the outages involved very large artifacts staged on many workers. We had no good data to prove this because we hadn&amp;rsquo;t yet added enough instrumentation to find a smoking gun, and the few metrics we had didn&amp;rsquo;t implicate the network.&lt;/p>
+&lt;p>Resolving this issue was in our critical path to complete the Bazel migration so I was determined to get a better understanding of it. Two previous bits of knowledge helped reach a solution: past experience with &lt;a href="https://tools.bsc.es/paraver">Paraver&lt;/a>, a cluster-level trace visualization tool to observe execution behavior across machines, and the &lt;a href="https://bazel.build/advanced/performance/json-trace-profile">trace profile that Bazel emits&lt;/a>, which looks strikingly similar but is &lt;a href="https://www.chromium.org/developers/how-tos/trace-event-profiling-tool/">opened via Chrome&lt;/a>.&lt;/p>
+&lt;p>I spent a couple of hours prototyping a Python script that queries the database into which we dump build farm events, fetches action scheduling details during a time period, and turns those into a Chrome trace. The idea here was to show, for each worker node in the cluster, what each of its execution threads was doing. That is, I was interested in seeing whether each thread was:&lt;/p>
+&lt;ol>
+&lt;li>&lt;strong>idle&lt;/strong>,&lt;/li>
+&lt;li>&lt;strong>downloading&lt;/strong> input artifacts from the shared cache,&lt;/li>
+&lt;li>&lt;strong>executing&lt;/strong> an action,&lt;/li>
+&lt;li>or &lt;strong>uploading&lt;/strong> output artifacts to the shared cache.&lt;/li>
+&lt;/ol>
+&lt;p>Here is one of the first pictures I obtained for a time period where we observed significant action queuing and thus build farm performance degradation:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-10-20-old-farm-io-issues-trace.png" class="with-border">
+&lt;figcaption>2023-09-13 17:40–18:15 UTC: The X axis shows time and the Y axis shows worker nodes / thread pairs. In the Y axis you can see gray bars with the worker names, each grouping 8 execution threads. Then, for each worker node / thread pair, there are two horizontal colored bars: the bar at the top indicates the name of the action that’s currently running on the execution thread, and the bar at the bottom provides a breakdown of the download, execution, and upload phases.&lt;/figcaption>
+&lt;/figure>
+&lt;p>You can click to zoom into the picture, but the key thing to notice is this: orange corresponds to download/upload whereas green corresponds to execution. And the majority of the picture is orange.&lt;/p>
+&lt;p>This was the first indication that we truly had networking problems as I originally set out to prove. But while this visualization is really powerful to pinpoint the issue, it&amp;rsquo;s hard to quantify it. So I performed other computations and found that, for this period of time, workers were 97% utilized yet&amp;hellip; they were only executing actions 20% of the time. A whopping 77% of the time was being lost to the network.&lt;/p>
+&lt;p>Or, shown another way: if we graph the different phases per second, we get this graph:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-10-20-old-farm-io-issues-chart.png" class="with-border">
+&lt;figcaption>2023–09–13 17:40–18:15 UTC: Tally of where build farm processing time goes during the first 100 seconds of this time window. For each second, we can see what percentage of the time is spent in each phase.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Much easier to see the problem and much easier to see that the networking overheads are constant over time.&lt;/p>
+&lt;h1 id="was-it-the-network-though">Was it the network though?&lt;/h1>
+&lt;p>So far, everything pointed at the network being the problem. But then, I looked at different time periods when the cluster wasn&amp;rsquo;t experiencing queuing and I also looked at the staging cluster which barely had any traffic. And, surprise, &lt;em>all of them&lt;/em> showed the same profile: no matter how busy a cluster was, the workers were only able to execute actions for about 2/3rds of their time.&lt;/p>
+&lt;p>This made no sense. If the problems were with the network, and the assumption was that the cache nodes were starved of network bandwidth, we should only see this behavior during high traffic. Without extra visibility into network metrics, which we didn&amp;rsquo;t have, I was out of ideas, so I did what I always do: write.&lt;/p>
+&lt;p>I collected my thoughts into a shared document and shared it with the team. Almost accidentally, a teammate left a comment saying that the workers were using EBS for their scratch disk space. This was the &lt;em>aha moment&lt;/em> we needed: based on previous experience running Bazel on VMs backed by EBS, we knew that EBS&amp;rsquo; IOPS were insufficient for the high demands of a build, and the same likely applied to the workers.&lt;/p>
+&lt;p>This theory made immediate sense to the team too, so we proceeded to reconfigure our staging cluster with tmpfs for the workers&amp;rsquo; scratch disk space instead of EBS. While RAM-hungry, tmpfs would provide us with the best-case performance scenario. If the experiment succeeded, we could later re-analyze whether we wanted to keep using RAM or to find another VM SKU type with a local disk to cut costs.&lt;/p>
+&lt;p>We rolled out the change to staging and it looked very promising: our reduced collection of workers showed that the fetch and upload phases went to almost zero.&lt;/p>
+&lt;h1 id="scheduler-woes">Scheduler woes&lt;/h1>
+&lt;p>But here is what happened after we rolled this out to production because, even with the tmpfs fix, we observed &lt;em>another&lt;/em> queuing outage:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-10-20-new-farm-scheduler-issues-trace.png" class="with-border">
+&lt;figcaption>2023-10-02 21:00–22:00: Trace view. Same description as before.&lt;/figcaption>
+&lt;/figure>
+&lt;p>There was queuing but the cluster was&amp;hellip; almost idle? Metrics said the workers&amp;rsquo; overall utilization was 14% of which 12% was execution. Put another way:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-10-20-new-farm-scheduler-issues-chart.png" class="with-border">
+&lt;figcaption>2023-10-02 21:00–22:00: Phase breakdown during the first 100 seconds.&lt;/figcaption>
+&lt;/figure>
+&lt;p>As you can see in both pictures, the cluster showed almost no activity. We had significant queuing but the cluster was mostly idle. It was great to see that the fetch and upload bands had almost disappeared, but now the workers were not being utilized.&lt;/p>
+&lt;p>Answering this piece of the puzzle was easier. If the workers weren&amp;rsquo;t receiving enough work to do, we had problems either in the job scheduler or in the frontends. Fortunately, we &lt;em>did&lt;/em> have metrics on the CPU consumption of these actors of the system and they showed a clear problem: the scheduler had an allocation of 0.3 CPUs and it was maxed out.&lt;/p>
+&lt;p>Now&amp;hellip; 0.3 CPUs?! Yes, that was ridiculously low: when provisioning a distributed system, if you have a singleton job, you&amp;rsquo;ll want to over-provision it just in case because, in the grand scheme of things, the cost will be negligible. But we had a low reservation, probably because of a copy/pasted configuration from months ago that we had no reason to revisit.&lt;/p>
+&lt;p>We had to revisit this CPU allocation now. We gave the scheduler more CPU and more RAM and waited for the next burst of activity.&lt;/p>
+&lt;h1 id="stunning-performance">Stunning performance&lt;/h1>
+&lt;p>Here is what we saw after bumping up the scheduler CPU and RAM reservations during another busy time period:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-10-20-new-farm-good-trace.png" class="with-border">
+&lt;figcaption>2023-10-03 23:57–23:59: Trace view. Same description as before.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Notice the green bars? Or rather&amp;hellip; the lack of orange bars? That&amp;rsquo;s right. The workers were now 99% utilized with 97% of their time going into execution. And if we look into the other view of this same data:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-10-20-new-farm-good-chart.png" class="with-border">
+&lt;figcaption>2023-10-03 23:57–23:59: Phase breakdown during the first 100 seconds.&lt;/figcaption>
+&lt;/figure>
+&lt;p>We can also see a sea of green with almost no network transfers and no idle time during busy periods. Problem(s) solved.&lt;/p>
+&lt;p>Our build farm can now support roughly 3x the load that it ran before. Disk-intensive tests are now as fast as when they run on a local development environment. And incremental builds are faster because of reduced end-to-end action execution times. But we aren&amp;rsquo;t done yet! While the system is now performing well, there are additional tuning operations we must do to improve the reliability of the system, to minimize hiccups during maintenance periods, and to reduce the overall monetary cost.&lt;/p>
+&lt;h1 id="takeaways">Takeaways&lt;/h1>
+&lt;p>Here are my takeaways from this exercise:&lt;/p>
+&lt;ol>
+&lt;li>Visualizations are an incredibly powerful tool to understand a distributed system. You can have all the metrics and time series you want about individual performance indicators, but unless you can tie them together and give them meaning, you&amp;rsquo;ll likely not understand what&amp;rsquo;s going on. In our case, the trace visualizations enlightened us almost immediately once we could see them.&lt;/li>
+&lt;li>Hypotheses are great to guide investigations, but measurements are crucial to come out with the correct root causes. In this case, I started with the assumption that we had problems in the cache nodes due to network starvation, and while we did end up finding network issues, they were in a completely different part of the system.&lt;/li>
+&lt;li>Investing time into learning the metrics that your team&amp;rsquo;s telemetry collects is one of the best things you can do during onboarding. For me, this is the third time I join a team and postpone learning the schema and the queries needed to make sense of the data that the team collected, and I&amp;rsquo;ve regretted the delay every time. You can solve a ton of problems by just knowing where and how to look at existing data; stopping to learn these will pay dividends quickly.&lt;/li>
+&lt;li>Developer productivity is an exciting area to work on. Don&amp;rsquo;t get fooled by folks or even companies that treat build engineers as second-class citizens. Developer productivity is a really broad area of engineering that covers everything from single-machine kernel-level tuning to distributed systems troubleshooting, while also interacting with (internal) customers and creating delightful user interfaces.&lt;/li>
+&lt;/ol>
+&lt;p>Sounds like the kind of thing you&amp;rsquo;d like to work on? &lt;a href="https://careers.snowflake.com/us/en/search-results?keywords=developer+productivity">Join our team!&lt;/a> 🙂&lt;/p></description></item><item><title>Unit-testing shell scripts and tools with shtk</title><link>https://jmmv.dev/2023/10/unit-testing-with-shtk.html</link><pubDate>Wed, 11 Oct 2023 08:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/unit-testing-with-shtk.html</guid><description>&lt;p>While working on this static blog a few days ago, I made a change to its templates that warranted an automated test. I could have written a trivial shell script to do it, but instead I reached out for shtk&amp;rsquo;s unit-testing module. I &lt;a href="https://twitter.com/jmmv/status/1710309896670081083">tweeted about it&lt;/a> right away to just say that you can, in fact, write tests in shell because lots of developers are skeptical about any script longer than 10 lines of code.&lt;/p>
 &lt;p>Interestingly, this reply came through: a pointer to a contemporary, under-development library for writing tests in Bash. Which made me think: &amp;ldquo;Hey, I had already done that years ago&amp;hellip; but nobody knows about it. Gotta fix that with a blog post!&amp;rdquo; But first, I had to bring shtk back from its ashes because I had not touched it for more than 6 years and it wasn&amp;rsquo;t read for show and tell. So I did something that I wanted to do back in the day but never did: I put together &lt;a href="https://shtk.jmmv.dev/">a website for shtk&lt;/a> to host its &lt;a href="https://shtk.jmmv.dev/docs.html">reference manual&lt;/a> and I fixed a few obvious rough edges.&lt;/p>
 &lt;p>With those tweaks out of the way, we come to this article. In here, I want to show you how writing decent tests in shell is entirely possible and how shtk&amp;rsquo;s testing platform provides unique features to do integration testing of CLI apps written in any language.&lt;/p>
 &lt;div class="container action-highlight p-4 my-4 d-md-none">
@@ -2029,88 +2101,4 @@ class="form-control input-sm text-center my-1"/>
 // which would benefit this whole function anyway.
 &lt;/code>&lt;/pre>&lt;p>This comment is referring to the logic that computes the historical page views graphs &lt;em>on demand&lt;/em>. Right now, historical queries are limited to just one month because of this, but with deferred task processing, you can imagine having a daily task that calculates which data points are missing in a timeseries and spawns tasks to generate those precomputed data points&amp;hellip; which should be trivial to implement at this point. Furthermore, having this ability to compute summarized timeseries means I could change the service to fully discard request data after processing, further reducing the risk of keeping &lt;em>any&lt;/em> private data in the database.&lt;/p>
 &lt;p>The other use case would arise if I start accepting &amp;ldquo;customers&amp;rdquo; in EndTRACKER. If that were the case, one feature I&amp;rsquo;d want to expose is an &amp;ldquo;export your data as a SQLite database&amp;rdquo; button so that you wouldn&amp;rsquo;t feel trapped in the platform. Implementing such a data dump cannot happen as part of a server request, so it would also benefit from happening via a deferred task.&lt;/p>
-&lt;p>Finally, that&amp;rsquo;s all for today. Remember that &lt;a href="https://github.com/jmmv/iii-iv/">III-IV is open source&lt;/a>, so this queuing system is as well. Maybe you can now find use cases for this little framework yourself!&lt;/p></description></item><item><title>MVC but for non-UI apps</title><link>https://jmmv.dev/2023/06/mvc-non-ui-apps.html</link><pubDate>Tue, 20 Jun 2023 10:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/06/mvc-non-ui-apps.html</guid><description>&lt;p>In &lt;a href="https://collindonnell.com/mvc-isnt-mvc">MVC isn&amp;rsquo;t MVC&lt;/a>, which hit the &lt;a href="https://news.ycombinator.com/item?id=36397058">Hacker News front page overnight&lt;/a>, Collin Donnell describes how the MVC design pattern that we use today isn&amp;rsquo;t really what was originally &lt;a href="https://folk.universitetetioslo.no/trygver/1979/mvc-2/1979-12-MVC.pdf">envisioned in 1979 by Tyrgve Reenskaug&lt;/a>. This prompted me to think about how this architecture, if tweaked even further, maps pretty well to today&amp;rsquo;s designs of &lt;em>other kinds&lt;/em> of programs, and I want to explore two cases in this post: web services and CLI apps. I know I promised a post on the task queuing system I have written in Rust, but that will have to wait for a couple more days.&lt;/p>
-&lt;p>To recap, MVC stands for &lt;a href="https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93controller">Model-View-Controller&lt;/a> and is a software design pattern to structure the implementation of apps that provide a &amp;ldquo;user interface&amp;rdquo;. The core idea of this pattern is to separate the presentation of the app from its business logic, and this same idea can be applied to other types of apps as well.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="mvc-in-web-services">MVC in web services&lt;/h1>
-&lt;p>If we take a look at a web service&amp;mdash;not a web app; we are talking about the server side only here&amp;mdash;we can map the layers of the MVC pattern as follows:&lt;/p>
-&lt;ol>
-&lt;li>
-&lt;p>The View layer is where communication with the world happens. This layer contains the code that receives inbound network requests and writes their responses. This layer is purely in charge of deserializing and validating requests, and serializing responses in whichever protocol the service exposes. The code in this layer must restrict itself to, for example, parsing and emitting JSON, obtaining session details, or converting error types (such as exceptions or &lt;code>Result&lt;/code>s) to HTTP status codes.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The Controller layer is where business logic is implemented and is sometimes called the &amp;ldquo;service layer&amp;rdquo; or, as I call it, the &amp;ldquo;driver&amp;rdquo;. Oftentimes there will be a 1:1 mapping from APIs exposed through the View layer and entry points to the Controller, but not always. This is where all kinds of decisions happen, including authorization checks and coordination of access to the various external resources that the service may need. For example, if various database operations need to be grouped in a transaction and retried on failure, this is where the transaction is created and where the retry logic (policy) lives.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The Model layer is where access to the persisted data happens and is where the high level data types for the application may be defined. This is often an abstraction over a database, but it could also be an abstraction over whichever other dependent system the service needs to talk to. For this reason, this layer may also be referred to as the &amp;ldquo;data access&amp;rdquo; layer or, more generally, the &amp;ldquo;provider&amp;rdquo; layer because it&amp;rsquo;s where the service talks to other services that provide data.&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;p>I saw this design in practice during my time in the Azure Storage team, where our frontend exposed the same set of storage facilities through a multitude of protocols with high code reuse. I have replicated this same design in my own web services with great results and factored out common code in the &lt;a href="/software/iii-iv.html">III-IV framework&lt;/a>, whose name is a direct direct reference to this architecture. See &lt;a href="https://github.com/jmmv/iii-iv/tree/main/example/src">the sample application sources&lt;/a> to witness the three layers in action.&lt;/p>
-&lt;p>But careful: note that just because a piece of code &lt;em>formats data&lt;/em> does not make that code belong to the View layer. Imagine, for example, a web service that has an API to format HTML content as a PDF file. In such a service, the Controller layer would be the one fetching the HTML document and transforming it into the PDF (even if the PDF is a &amp;ldquo;view&amp;rdquo; of some data). The View layer would be in charge of taking the PDF as a blob from the Controller layer and bundling it in whichever output format the API exposes which, in this particular case, might be emitting the blob verbatim with an &lt;code>application/pdf&lt;/code> content type header.&lt;/p>
-&lt;h1 id="mvc-in-cli-apps">MVC in CLI apps&lt;/h1>
-&lt;p>If we take a look at a CLI app&amp;mdash;without a TUI, because if it has a TUI the original concept of &amp;ldquo;views&amp;rdquo; applies quite literally&amp;mdash;we can map the layers of the MVC pattern as follows:&lt;/p>
-&lt;ol>
-&lt;li>
-&lt;p>The View layer is where interactions with the user happen. This is where the app processes the command line flags and arguments and converts them to internal data structures. This is also where help requests are handled, where input data is gathered if the app is interactive, and where progress reporting and error messages are formatted for display. I already &lt;a href="/2013/08/cli-design-cli-is-presentation-layer.html">mentioned this back in 2013&lt;/a>.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The Controller layer is where the application logic belongs. Notably, this layer must not interact with the console at all: &lt;code>printf&lt;/code>s of any kind do not belong here.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The Model layer is where abstractions around the file system&amp;mdash;or whichever other external system the app talks to&amp;mdash;may live. For CLI apps wrapping a web service or a database, this is where the calls to those systems happen.&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;p>CLI apps vary in complexity, however, so structuring the code in these layers may result in overengineering and not be a reasonable thing to do. That said, it is often possible to organize any kind of app in these layers and it is good to &lt;em>think about&lt;/em> how the code could be structured, because this thought process can lead to better design decisions. Take two examples:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>Something as &amp;ldquo;simple&amp;rdquo; as &lt;code>ls(1)&lt;/code> could be organized into these three layers: it has a complex UI due to the myriad flags it supports; it has a certain high-level logic to coordinate various disk operations such as &lt;code>readdir(3)&lt;/code> and &lt;code>stat(2)&lt;/code> calls and order the results based on whichever criteria the user requested; and it needs to access the disk via the libc operations already mentioned.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Something as complex as Git could also be organized into these three layers if it&amp;rsquo;s already not so: the View layer could implement the code to handle the many different commands that the CLI has; the Model layer could implement the core worktree, repository, and index structures and the primitives to manipulate them; and the Controller layer could implement the business logic to do things like commit a change or coordinate with a remote server to synchronize repository contents.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>I am of the strong opinion that separating the View-specific code (command line handling) from the rest of the app is a good practice in general, and is critical to allow easier automated testing of the app&amp;rsquo;s logic. As for the separation of Controller and Model in a CLI app, well, it depends on the size of the codebase really.&lt;/p>
-&lt;h1 id="tweaks">Tweaks&lt;/h1>
-&lt;p>Now, in theory, given that MVC is a layered design, the View layer can only interact with the Controller layer, and the Controller layer can only interact with the Model layer. This sounds nice, but in practice, expressing these layers in code becomes tricky as soon as you introduce high-level data types to represent the in-memory state of the program. And I&amp;rsquo;m a fan of using high-level types to validate program correctness at compile time as much as possible.&lt;/p>
-&lt;p>Consider this example: your service has a &lt;code>Person&lt;/code> structure. &lt;code>Person&lt;/code> instances are created in the Model layer based on a query to the database. The Controller layer calls into the model layer to obtain &lt;code>Person&lt;/code> instances, and returns those to the View layer. The View layer serializes those objects as JSON to return them as part of an API call. So, the question is: where is the &lt;code>Person&lt;/code> type defined? It needs to be defined under the Model layer because this is the lowest layer that needs the type&amp;hellip; but then&amp;hellip; the View layer must skip the Controller layer in order to reach for the &lt;code>Person&lt;/code> type definition. Conceptually that&amp;rsquo;s probably OK, but in code this means adding a build-time dependency between the View and Model layers&amp;mdash;a dependency that should not exist.&lt;/p>
-&lt;p>This is why I have found it useful to extend this layered architecture with two extra &amp;ldquo;layers&amp;rdquo;: a Data model layer which provides dumb high-level data types to represent the data the application manages, and a Utilities layer that encapsulates code that&amp;rsquo;s not specific to the app and that could/should well live in a separate (possibly third-party) library. With these in mind, we end up with the following code structure:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-06-20-mvc-layers.svg" class="with-border">
-&lt;figcaption>Structure of the MVC layers with other layers.&lt;/figcaption>
-&lt;/figure>
-&lt;p>It&amp;rsquo;s critical to note that the objects in the Data model do &lt;em>not&lt;/em> encapsulate data access operations: &lt;em>they are not&lt;/em> &lt;a href="https://en.wikipedia.org/wiki/Data_access_object">DAOs&lt;/a> in the traditional sense of OOO programming. These types are pure in-memory representations of application data with no logic in them. Obtaining instances of these objects from storage and modifying their persisted representation must all happen via direct calls to database layer operations.&lt;/p>
-&lt;p>Anyway. I do not like to get hung up with naming and trying to shoehorn designs into strict &amp;ldquo;patterns&amp;rdquo; when those do not apply. What I described isn&amp;rsquo;t really MVC if you are a purist, but it&amp;rsquo;s nice to see how old concepts from the 70s&amp;ndash;80s still make sense today with minor tweaks. What I will say, though, is that every time I&amp;rsquo;ve sensed this split made sense and cut corners anway because the split seemed to complicate things upfront&amp;hellip; I ended up suffering the consequences very quickly. In particular, development agility slows downs as it becomes hard to reason about changes, and unit testing soon becomes impossible.&lt;/p></description></item></channel></rss>
+&lt;p>Finally, that&amp;rsquo;s all for today. Remember that &lt;a href="https://github.com/jmmv/iii-iv/">III-IV is open source&lt;/a>, so this queuing system is as well. Maybe you can now find use cases for this little framework yourself!&lt;/p></description></item></channel></rss>
