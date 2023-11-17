@@ -1,4 +1,140 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Tue, 31 Oct 2023 12:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Links: October 2023 edition</title><link>https://jmmv.dev/2023/10/links-october-2023-edition.html</link><pubDate>Tue, 31 Oct 2023 12:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/links-october-2023-edition.html</guid><description>&lt;p>Inspired by the works of &lt;a href="https://eatonphil.com/">Phil Eaton&lt;/a>, I&amp;rsquo;ve been highlighting articles and projects that I find interesting in &lt;del>Twitter&lt;/del> X and Mastodon. Some of these posts were more &amp;ldquo;successful&amp;rdquo; than I had expected, which I take to mean that doing this is interesting to you all. So, it&amp;rsquo;s probably a good idea to periodically collect them all in a post with a very brief commentary on each.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sat, 04 Nov 2023 07:50:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>End-to-end tool testing with Bazel and shtk</title><link>https://jmmv.dev/2023/11/end-to-end-tool-testing-with-bazel.html</link><pubDate>Sat, 04 Nov 2023 07:50:00 -0700</pubDate><guid>https://jmmv.dev/2023/11/end-to-end-tool-testing-with-bazel.html</guid><description>&lt;p>If you use Bazel, your project is of moderate size. And because your project is of moderate size, it almost-certainly builds one or more binaries, at least one of which is a CLI tool. But let&amp;rsquo;s face it: you don&amp;rsquo;t have end-to-end testing for those tools, do you?&lt;/p>
+&lt;p>I&amp;rsquo;m &lt;em>sure&lt;/em> you have split the binary&amp;rsquo;s &lt;code>main&lt;/code> function into its own file so that the rest of the tool can be put in a library, and I&amp;rsquo;m &lt;em>extra-sure&lt;/em> that you have unit tests for such library. But&amp;hellip; those tests do little to verify the functionality and quality of the tool &lt;em>as experienced by the end user&lt;/em>. Consider: What exactly does the tool print to the console on success? Does it show errors nicely when they happen, or does it dump internal stack traces? How does it handle unknown flags or bad arguments? Is the built-in help message nicely rendered when your terminal is really wide? What if the terminal is narrow?&lt;/p>
+&lt;p>You must write end-to-end tests for your tools but, usually, that isn’t easy to do. Until today. Combining shtk with Bazel via the new &lt;code>rules_shtk&lt;/code> ruleset makes it trivial to write tests that verify the behavior of your CLI tools&amp;mdash;no matter what language they are written in&amp;mdash;and in this article I’m going to show you how.&lt;/p>
+&lt;h1 id="scenario">Scenario&lt;/h1>
+&lt;p>To put things in perspective, we&amp;rsquo;ll be adding tests to a trivial demo tool written in C (&lt;em>not&lt;/em> shell) that simply adds two numbers and prints the result to the standard output. You can find all of the code for this scenario under &lt;a href="https://github.com/jmmv/rules_shtk/tree/d490cc9fc43cff3db83d12b5dc1a1c6b90ed50c3/examples/test">&lt;code>rules_shtk/examples/test&lt;/code>&lt;/a>.&lt;/p>
+&lt;p>Here is how the demo tool behaves after we build the &lt;code>//:adder&lt;/code> target:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-console" data-lang="console">&lt;span class="line">&lt;span class="cl">&lt;span class="gp">$&lt;/span> ./bazel-bin/adder &lt;span class="m">123&lt;/span> &lt;span class="m">456&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">The sum of 123 and 456 is 579
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span>&lt;span class="gp">$&lt;/span> ./bazel-bin/adder
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder: Requires two integer arguments
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span>&lt;span class="gp">$&lt;/span> ./bazel-bin/adder &lt;span class="m">10000000&lt;/span> &lt;span class="m">345&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder: Invalid first operand: out of range
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Our mission is to add an &lt;code>//:adder_test&lt;/code> target that depends on &lt;code>//:adder&lt;/code> and that exercises the tool &lt;em>exactly as when a user runs it by hand&lt;/em>. We&amp;rsquo;ll create an &lt;code>adder_test.sh&lt;/code> file that uses the &lt;a href="/2023/10/unit-testing-with-shtk.html">shtk testing library&lt;/a> and hook it into the build as an &lt;code>shtk_test&lt;/code> target.&lt;/p>
+&lt;h1 id="depending-on-rules_shtk">Depending on rules_shtk&lt;/h1>
+&lt;p>&lt;code>rules_shtk&lt;/code> is a shiny new ruleset (released just yesterday) and because Bazel 7 is around the corner, I&amp;rsquo;ve opted to go all in for &lt;a href="https://bazel.build/external/overview#bzlmod">bzlmod&lt;/a>. Thanks to bzlmod, setting up a project to use these rules is trivial. All you need is to add the following line to your &lt;code>MODULE.bazel&lt;/code> file:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Add this to MODULE.bazel.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">bazel_dep&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;rules_shtk&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">version&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;1.7&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&amp;hellip; but you&amp;rsquo;ll need to wait until &lt;a href="https://github.com/bazelbuild/bazel-central-registry/pull/1095">bazelbuild/bazel-central-registry#1095&lt;/a> is reviewed and merged. (I don&amp;rsquo;t understand why this choke point exists in the new bzlmod ecosystem; Rust&amp;rsquo;s crates.io doesn&amp;rsquo;t have it, for example.)&lt;/p>
+&lt;p>In the meantime, or if you are not yet ready to upgrade to bzlmod, you can obviously use the old-fashioned and yucky &lt;code>WORKSPACE.bazel&lt;/code> file to pull &lt;code>rules_shtk&lt;/code> in:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Add this to WORKSPACE or WORKSPACE.bazel if you don&amp;#39;t use bzlmod yet.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">load&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;@bazel_tools//tools/build_defs/repo:http.bzl&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;http_archive&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">http_archive&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;bazel_skylib&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">sha256&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;66ffd9315665bfaafc96b52278f57c7e2dd09f5ede279ea6d39b2be471e7e3aa&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">urls&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.4.2/bazel-skylib-1.4.2.tar.gz&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;https://github.com/bazelbuild/bazel-skylib/releases/download/1.4.2/bazel-skylib-1.4.2.tar.gz&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">load&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;@bazel_skylib//:workspace.bzl&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;bazel_skylib_workspace&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">bazel_skylib_workspace&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">http_archive&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;rules_shtk&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">sha256&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;fa47891f27d8d59609732b34dc88020331b81b9767cbd72094fec1be8af4adfc&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">urls&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;https://github.com/jmmv/rules_shtk/releases/download/rules_shtk-1.7.0/rules_shtk-1.7.0.tar.gz&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">strip_prefix&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;rules_shtk-1.7.0&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="requesting-an-shtk-toolchain">Requesting an shtk toolchain&lt;/h1>
+&lt;p>Once you have added &lt;code>rules_shtk&lt;/code> to your project, either via bzlmod or the &lt;code>WORKSPACE.bazel&lt;/code>, you need to tell Bazel which shtk toolchain to use:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Add this to WORKSPACE or WORKSPACE.bazel.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">load&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;@rules_shtk//:repositories.bzl&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;shtk_dist&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">shtk_dist&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The parameterless &lt;code>shtk_dist&lt;/code> macro makes Bazel download &lt;a href="https://github.com/jmmv/shtk/releases/tag/shtk-1.7">shtk 1.7&lt;/a> (because we requested the 1.7.x rules) and puts it to use for all tests that we later build. You cannot configure which version of shtk to download because, so far, all shtk versions are backwards-compatible and this won&amp;rsquo;t change in the 1.x series.&lt;/p>
+&lt;p>There is also an &lt;code>shtk_sytem&lt;/code> macro that makes Bazel discover the shtk toolchain installed in the system, say via your local package manager. This does not make sense for our use case (because we are only running tests within Bazel), but it can be useful if you want to build a script with &lt;code>shtk_binary&lt;/code> that can later be taken out of &lt;code>bazel-bin&lt;/code> and installed into the host system.&lt;/p>
+&lt;h1 id="writing-the-test-rule">Writing the test rule&lt;/h1>
+&lt;p>We now have the rules and a toolchain in place so we can proceed to add an &lt;code>shtk_test&lt;/code> target. Our goal is to test &lt;code>adder.c&lt;/code> with a new &lt;code>adder_test.sh&lt;/code> sibling file, so we can put the test target next to the binary target:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">load&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;@rules_shtk//:rules.bzl&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;shtk_test&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">cc_binary&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;adder&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;adder.c&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">shtk_test&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;adder_test&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">src&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;adder_test.sh&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">data&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;:adder&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>There are different opinions on where tests should live but, personally, I want them as close to the code they test as possible. This makes tests discoverable when editing code, which increases the odds that developers will remember to update them. Also, nobody likes dealing with parallel deep directory hierarchies when working on a piece of code&amp;hellip; thank you, &lt;code>java&lt;/code> and &lt;code>javatests&lt;/code>.&lt;/p>
+&lt;h1 id="writing-the-test-program">Writing the test program&lt;/h1>
+&lt;p>All that&amp;rsquo;s left to do is an &lt;a href="https://en.wikipedia.org/wiki/Small_matter_of_programming">SMOP&lt;/a>. We need to write the tests in &lt;code>adder_test.sh&lt;/code>. Here are just a couple of examples:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># This is a portion of adder_test.sh.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_import unittest
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_test addition_works
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">addition_works_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> expect_command &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -o inline:&lt;span class="s2">&amp;#34;The sum of 2 and 3 is 5\n&amp;#34;&lt;/span> &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> ../adder &lt;span class="m">2&lt;/span> &lt;span class="m">3&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shtk_unittest_add_test bad_arguments
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bad_arguments_test&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> expect_command &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -s &lt;span class="m">1&lt;/span> &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -e inline:&lt;span class="s2">&amp;#34;adder: Requires two integer arguments\n&amp;#34;&lt;/span> &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> ../adder
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>I don&amp;rsquo;t want to dive into the shtk APIs too much, but I want to highlight the &lt;code>expect_command&lt;/code> calls in here. This assertion is the salient feature of shtk&amp;rsquo;s unit-testing module and is what makes testing tools a breeze. Take a look at the &lt;a href="https://shtk.jmmv.dev/shtk_unittest_assert_command.3.html">&lt;code>assert_command&lt;/code>&lt;/a> and &lt;a href="https://shtk.jmmv.dev/shtk_unittest_assert_file.3.html">&lt;code>assert_file&lt;/code>&lt;/a> documentation to demystify the &lt;code>-s&lt;/code>, &lt;code>-o&lt;/code>, and &lt;code>-e&lt;/code> flags shown above.&lt;/p>
+&lt;p>One thing that needs explaining is the &lt;code>../adder&lt;/code> reference to the tool. If we look at the runfiles tree that Bazel creates when building the &lt;code>//:adder_test&lt;/code> target, we see:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-console" data-lang="console">&lt;span class="line">&lt;span class="cl">&lt;span class="gp">$&lt;/span> ls -l bazel-bin/adder_test.runfiles/_main/
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">total 8K
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">lrwxrwxrwx. 1 jmmv jmmv 116 Nov 4 06:17 adder -&amp;gt; /home/jmmv/.cache/bazel/_bazel_jmmv/916b9cbf147e00ff01b88519fdb0f294/execroot/_main/bazel-out/k8-fastbuild/bin/adder
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">lrwxrwxrwx. 1 jmmv jmmv 121 Nov 4 06:17 adder_test -&amp;gt; /home/jmmv/.cache/bazel/_bazel_jmmv/916b9cbf147e00ff01b88519fdb0f294/execroot/_main/bazel-out/k8-fastbuild/bin/adder_test
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>There are no directories in there. So, where does that &lt;code>..&lt;/code> come from in the &lt;code>../adder&lt;/code> reference? Well&amp;hellip; shtk&amp;rsquo;s unit-testing execution engine creates a disposable subdirectory for each test it runs. The reason for this is that, when writing shell tests, it is extremely common to have to create auxiliary files, and shtk accounts for that by cleaning up whichever files you create in the current directory of a test. This is a little oddity you&amp;rsquo;ll have to keep in mind.&lt;/p>
+&lt;h1 id="running-the-test">Running the test&lt;/h1>
+&lt;p>All done. We can finally run the end-to-end test for our demo tool:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-console" data-lang="console">&lt;span class="line">&lt;span class="cl">&lt;span class="gp">$&lt;/span> bazel &lt;span class="nb">test&lt;/span> --nocache_test_results --test_output&lt;span class="o">=&lt;/span>streamed //:adder_test
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">WARNING: Streamed test output requested. All tests will be run locally, without sharding, one at a time
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">INFO: Analyzed target //:adder_test (0 packages loaded, 139 targets configured).
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">INFO: Found 1 test target...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing addition_works...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 2 3
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder -12345 12345
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing addition_works... PASSED
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing bad_first_operand...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 123456789 0
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 0
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 123x 0
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder -123456789 0
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing bad_first_operand... PASSED
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing bad_second_operand...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 0 123456789
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 0
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 0 123x
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 0 -123456789
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing bad_second_operand... PASSED
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing bad_arguments...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 1
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Running checked command: ../adder 1 2 3
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Testing bad_arguments... PASSED
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">adder_test: I: Ran 4 tests; ALL PASSED
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">Target //:adder_test up-to-date:
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go"> bazel-bin/adder_test
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">INFO: Elapsed time: 0.504s, Critical Path: 0.33s
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">INFO: 2 processes: 2 linux-sandbox.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">INFO: Build completed successfully, 2 total actions
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">//:adder_test PASSED in 0.2s
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span>&lt;span class="go">Executed 1 out of 1 test: 1 test passes.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="go">There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;hr>
+&lt;p>As much hate as &amp;ldquo;large&amp;rdquo; shell scripts get, the shell is a uniquely-positioned language to help you write end-to-end tests for your tools. After all, the shell is what you use to &lt;em>run&lt;/em> those precious tools, so the shell is also what you should use to run them in an automated fashion for testing purposes.&lt;/p>
+&lt;p>It&amp;rsquo;s your turn now. Go read the &lt;a href="https://shtk.jmmv.dev">online documentation&lt;/a> for shtk, the previous introductory blog post, and get testing! Your users will be much happier if your tools offer excellent interfaces. And if you need ideas on what to test or how to improve the interface of your tools, take a look at the &lt;a href="/series.html#CLI design">CLI design series&lt;/a> from 2013.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-11-04-bazel-clamp.jpg" length="572746" type="image/jpeg"/></item><item><title>Links: October 2023 edition</title><link>https://jmmv.dev/2023/10/links-october-2023-edition.html</link><pubDate>Tue, 31 Oct 2023 12:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/10/links-october-2023-edition.html</guid><description>&lt;p>Inspired by the works of &lt;a href="https://eatonphil.com/">Phil Eaton&lt;/a>, I&amp;rsquo;ve been highlighting articles and projects that I find interesting in &lt;del>Twitter&lt;/del> X and Mastodon. Some of these posts were more &amp;ldquo;successful&amp;rdquo; than I had expected, which I take to mean that doing this is interesting to you all. So, it&amp;rsquo;s probably a good idea to periodically collect them all in a post with a very brief commentary on each.&lt;/p>
 &lt;p>Here is a recap of the interesting articles that came my way in October 2023. This does &lt;em>not&lt;/em> mean that these articles were published during this period: some of them are older but I just (re)discovered them now. I&amp;rsquo;ll avoid referencing my own articles: you can find those by &lt;a href="/archive.html">in the archive&lt;/a>.&lt;/p>
 &lt;h1 id="articles">Articles&lt;/h1>
 &lt;ul>
@@ -1880,95 +2016,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;h1 id="is-this-enough">Is this enough?&lt;/h1>
 &lt;p>I know this is an overly simplistic view of the world, and that this testing approach can let some subtle bugs slip through. It has actually happened before. But thanks to this testing approach&amp;mdash;and Rust&amp;rsquo;s type system, whose help cannot be overstated&amp;mdash;every new feature I have launched &lt;em>has worked on the first try&lt;/em> and the web services have kept happily chugging along the years. This is critical to me because these web services are just side projects of mine, so I must ensure they cause me the least trouble possible in production.&lt;/p>
 &lt;p>Finally, let me clarify one thing: I&amp;rsquo;ve been talking about &amp;ldquo;unit tests&amp;rdquo; throughout this post, but if we want to be pedantic, almost nothing of what I described are pure unit tests. Every test at every layer relies on the layers below it to behave correctly: the service&amp;rsquo;s own code is never stubbed out so, for example, a test for the REST layer will run code in the driver and database layers. The only thing that&amp;rsquo;s stubbed out are the connections to external services. I believe this style of testing provides much more realistic scenarios at the expense of making them more subtle to breakage when code changes.&lt;/p>
-&lt;p>And that&amp;rsquo;s it for today. If you liked this post, you may also enjoy &lt;a href="/2020/12/unit-testing-a-console-app.html">&amp;ldquo;Unit-testing a console app (a text editor)&amp;rdquo;&lt;/a> from over 2 years ago. It is then that I came up with the idea of using the builder pattern to define tests, and that idea still proves very useful to this day.&lt;/p></description></item><item><title>ldd(1) and untrusted binaries</title><link>https://jmmv.dev/2023/07/ldd-untrusted-binaries.html</link><pubDate>Sat, 01 Jul 2023 16:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/07/ldd-untrusted-binaries.html</guid><description>&lt;p>While diagnosing a non-determinism Bazel issue at work, I had to compare the dynamic libraries used by two builds of the same binary. To do so, I used &lt;code>ldd(1)&lt;/code>. The list of libraries printed by the tool was the same between the two builds, but the numbers next to them were different. Which numbers, you ask? Well, take a look at this sample output:&lt;/p>
-&lt;pre tabindex="0">&lt;code>$ ldd /bin/ls
-linux-vdso.so.1 (0x00007fff5bbed000)
-libselinux.so.1 =&amp;gt; /lib64/libselinux.so.1 (0x00007f7786f48000)
-libcap.so.2 =&amp;gt; /lib64/libcap.so.2 (0x00007f7786f3e000)
-libc.so.6 =&amp;gt; /lib64/libc.so.6 (0x00007f7786d60000)
-libpcre2-8.so.0 =&amp;gt; /lib64/libpcre2-8.so.0 (0x00007f7786cc6000)
-/lib64/ld-linux-x86-64.so.2 (0x00007f7786fad000)
-&lt;/code>&lt;/pre>&lt;p>Without prior knowledge, the numbers next to each library seemed to be the base addresses of the libraries once loaded into memory, and they probably differed across builds because of &lt;a href="https://en.wikipedia.org/wiki/Address_space_layout_randomization">ASLR&lt;/a>. If this was true, it meant that the differences were irrelevant from a build determinism perspective, but I had to confirm this claim because I had never given these numbers a second thought.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;p>To answer the question, I did what one should always do: read the official documentation. I typed &lt;code>man ldd&lt;/code> and was greeted by the following on the CentOS 7 machine I was working on:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-07-01-ldd-manpage.png" width="100%">
-&lt;figcaption>Screenshot of the beginning of the &lt;tt>ldd(1)&lt;/tt> manual page on CentOS 7 with the following text highlighted by me: "&lt;i>Be aware, however, that in some circumestances, some versions of &lt;tt>ldd&lt;/tt> may attempt to obtain the dependency information by directly executing the program. Thus, you should &lt;b>never&lt;/b> employ &lt;tt>ldd&lt;/tt> on an untrusted executable&lt;/i>."&lt;/figcaption>
-&lt;/figure>
-&lt;p>Wait, what? Under some circumstances (which ones?) and with some versions of &lt;code>ldd&lt;/code> (which ones again?&lt;sup id="fnref:1">&lt;a href="#fn:1" class="footnote-ref" role="doc-noteref">1&lt;/a>&lt;/sup>), &lt;code>ldd&lt;/code> may &lt;em>execute&lt;/em> the given binary to determine the libraries it uses. Which means that running &lt;code>ldd&lt;/code> on an untrusted binary could compromise your system. The manual page goes on to say that you should never run &lt;code>ldd&lt;/code> against untrusted binaries.&lt;/p>
-&lt;p>Needless to say, this was really surprising to see. Why would &lt;code>ldd&lt;/code> execute &lt;em>anything&lt;/em> to print details about a file? I quickly posted this on &lt;a href="https://twitter.com/jmmv/status/1674889696294621184">Twitter&lt;/a> and &lt;a href="https://mastodon.online/@jmmv/110635380384812322">Mastodon&lt;/a>, and the higher-than-usual engagement made me think that many more people than I weren&amp;rsquo;t aware of this behavior&amp;hellip; so I had to investigate a bit more.&lt;/p>
-&lt;hr>
-&lt;p>This behavior was originally reported as a security vulnerability in &lt;a href="https://www.cvedetails.com/cve/CVE-2009-5064/">CVE-2009-5064&lt;/a> and the report was closed with the rationale: &lt;em>&amp;ldquo;not a security vulnerability because &lt;code>ldd&lt;/code> must not be run on untrusted binaries&amp;rdquo;&lt;/em>. While this may be literally true, I find the answer quite dismissive: how does one &lt;em>know&lt;/em> that, say, &lt;code>readelf&lt;/code> or &lt;code>objdump&lt;/code> can be run against untrusted binaries but &lt;code>ldd&lt;/code> cannot? When giving a file to a tool, the common expectation is that the tool will read and parse the file&lt;sup id="fnref:2">&lt;a href="#fn:2" class="footnote-ref" role="doc-noteref">2&lt;/a>&lt;/sup>, not &lt;em>run&lt;/em> it. This violates the &lt;a href="https://en.wikipedia.org/wiki/Principle_of_least_astonishment">Principle of least astonishment (POLA)&lt;/a>, for me at least.&lt;/p>
-&lt;p>Even though upstream did not agree to the security vulnerability report, various people thought there was a real problem, so some Linux distributions &lt;em>did&lt;/em> patch &lt;code>ldd&lt;/code> to not execute binaries directly. I do not have access to an old-enough unpatched Linux system to verify this surprising behavior, but there is a trivial repro in the &lt;a href="https://www.openwall.com/lists/oss-security/2011/03/07/13">&amp;ldquo;ldd can execute an app unexpectedly&amp;rdquo;&lt;/a> email thread along with a simple fix.&lt;/p>
-&lt;p>And if my reading is correct, this surprising behavior was removed from the upstream sources back in 2017 (eight years after the original report) in commit &lt;a href="https://sourceware.org/git/?p=glibc.git;a=commit;h=eedca9772e99c72ab4c3c34e43cc764250aa3e3c">&lt;code>eedca9772e&lt;/code>&lt;/a>. It&amp;rsquo;s quite hard to tell if this change was addressing the reported security issue because the commit has no written rationale nor reference to the CVE. Which makes the whole thing feel worse: what I sense is a security-fix-in-disguise begrudgingly accepted after many years of saying this was not a problem&amp;hellip; which is never great. But that&amp;rsquo;s just my read of the whole thing and I&amp;rsquo;m probably wrong.&lt;/p>
-&lt;p>In any case, even if &lt;em>this&lt;/em> particular issue is fixed, &lt;strong>it is still unsafe to run &lt;code>ldd&lt;/code> against untrusted binaries&lt;/strong>. &lt;code>ldd&lt;/code> uses the dynamic linker to &lt;em>load&lt;/em> the binary and its dependencies into memory, and then relies on the dynamic linker itself to print details to the console. And because of this, this process can be abused in other working-as-intended ways to trigger code injection as explained in &lt;a href="https://www.cvedetails.com/cve/CVE-2019-1010023">CVE-2019-1010023&lt;/a>. All of these require social engineering though&amp;hellip; but we all know that humans are often the weakest link in security.&lt;/p>
-&lt;hr>
-&lt;p>So why does &lt;code>ldd&lt;/code> look so problematic anyway? Let&amp;rsquo;s look at the internals of this tool.&lt;/p>
-&lt;p>My first surprise was to see that, on Linux, &lt;code>ldd&lt;/code> is a shell script&lt;sup id="fnref:3">&lt;a href="#fn:3" class="footnote-ref" role="doc-noteref">3&lt;/a>&lt;/sup>&amp;mdash;and a very simple one at that. Poking through &lt;a href="https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/ldd.bash.in;h=e45dec5894fe561585da01ea64b651663128e8d5;hb=HEAD">the contents of &lt;code>/usr/bin/ldd&lt;/code>&lt;/a>, you&amp;rsquo;ll notice that all this script does is pass the given binary to a collection of built-in dynamic linkers (stored in &lt;code>RTLDLIST&lt;/code>) and, once it finds a dynamic linker that can process the binary, it runs the linker against the binary with the &lt;code>LD_TRACE_LOADED_OBJECTS=1&lt;/code> setting. The linker then lays out the binary inside a new process along &lt;em>all&lt;/em> the direct and indirect libraries it requires, dumps information to the console, and exits.&lt;/p>
-&lt;p>We can do the same by hand:&lt;/p>
-&lt;pre tabindex="0">&lt;code>$ /lib64/ld-linux-x86-64.so.2 --verify /bin/ls &amp;amp;&amp;amp; echo &amp;#39;Supported!&amp;#39;
-Supported!
-$ LD_TRACE_LOADED_OBJECTS=1 /lib64/ld-linux-x86-64.so.2 /bin/ls
-linux-vdso.so.1 (0x00007ffd28dc4000)
-libselinux.so.1 =&amp;gt; /lib64/libselinux.so.1 (0x00007feb357d8000)
-libcap.so.2 =&amp;gt; /lib64/libcap.so.2 (0x00007feb357ce000)
-libc.so.6 =&amp;gt; /lib64/libc.so.6 (0x00007feb355f0000)
-libpcre2-8.so.0 =&amp;gt; /lib64/libpcre2-8.so.0 (0x00007feb35556000)
-/lib64/ld-linux-x86-64.so.2 (0x00007feb3583d000)
-&lt;/code>&lt;/pre>&lt;p>Voila! We get the exact same output that &lt;code>ldd&lt;/code> would produce modulo differences in the addresses across different executions.&lt;/p>
-&lt;hr>
-&lt;p>I&amp;rsquo;ll probably continue to use &lt;code>ldd&lt;/code> because it is very convenient and I rarely face situations where I have to analyze untrusted binaries. But if those situations ever arise, here are some alternatives:&lt;/p>
-&lt;ul>
-&lt;li>&lt;a href="https://github.com/haampie/libtree">&lt;code>libtree the-binary&lt;/code>&lt;/a>, which displays the direct and indirect libraries required by a binary as a tree.&lt;/li>
-&lt;li>&lt;code>objdump -p the-binary | grep NEEDED&lt;/code>, which is the solution provided in the &lt;code>ldd(1)&lt;/code> manual page I quoted earlier but is not equivalent to &lt;code>ldd&lt;/code> because it can only handle direct dependencies.&lt;/li>
-&lt;li>&lt;code>readelf -d the-binary | grep NEEDED&lt;/code>, which is a similar solution to the previous one with the same caveats.&lt;/li>
-&lt;/ul>
-&lt;p>Before parting, the question I have is: why doesn&amp;rsquo;t &lt;code>ldd&lt;/code> walk the library tree by inspecting ELF headers instead of loading the libraries into a process? The answer might be in the name: I&amp;rsquo;m guessing that &lt;code>ldd&lt;/code> stands for &amp;ldquo;&lt;code>ld&lt;/code> dump&amp;rdquo; and thus it is &lt;em>supposed&lt;/em> to run the dynamic linker.&lt;/p>
-&lt;div class="footnotes" role="doc-endnotes">
-&lt;hr>
-&lt;ol>
-&lt;li id="fn:1">
-&lt;p>This type of unspecific language is what you get when the manual pages are written by a different set of people than those that write the code and when the manual pages are shipped separately from the tools they document. Thanks Linux. This type of nonsense does not happen on the BSDs.&amp;#160;&lt;a href="#fnref:1" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
-&lt;/li>
-&lt;li id="fn:2">
-&lt;p>There is always the risk that the parser has bugs that can be exploited by a malicious file, resulting in untrusted code execution, but that&amp;rsquo;s a different class of issue than &amp;ldquo;let&amp;rsquo;s just run the binary!&amp;rdquo;.&amp;#160;&lt;a href="#fnref:2" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
-&lt;/li>
-&lt;li id="fn:3">
-&lt;p>This might help explain my long-standing question on why macOS does not ship with &lt;code>ldd&lt;/code> and why I always had to use &lt;code>otool&lt;/code>.&amp;#160;&lt;a href="#fnref:3" class="footnote-backref" role="doc-backlink">&amp;#x21a9;&amp;#xfe0e;&lt;/a>&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;/div></description></item></channel></rss>
+&lt;p>And that&amp;rsquo;s it for today. If you liked this post, you may also enjoy &lt;a href="/2020/12/unit-testing-a-console-app.html">&amp;ldquo;Unit-testing a console app (a text editor)&amp;rdquo;&lt;/a> from over 2 years ago. It is then that I came up with the idea of using the builder pattern to define tests, and that idea still proves very useful to this day.&lt;/p></description></item></channel></rss>
