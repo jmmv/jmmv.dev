@@ -1,4 +1,61 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sun, 03 Dec 2023 10:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Strings, encodings, NULs and Bazel</title><link>https://jmmv.dev/2023/12/strings-encodings-nuls-and-bazel.html</link><pubDate>Sun, 03 Dec 2023 10:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/12/strings-encodings-nuls-and-bazel.html</guid><description>&lt;p>Just yesterday, &lt;a href="https://twitter.com/vkrajacic/status/1730891609191981305">Twitter user @vkrajacic wrote&lt;/a>:&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 08 Dec 2023 14:45:00 -0800</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>A CLI text editor? In my Windows?</title><link>https://jmmv.dev/2023/12/a-cli-text-editor-in-my-windows.html</link><pubDate>Fri, 08 Dec 2023 14:45:00 -0800</pubDate><guid>https://jmmv.dev/2023/12/a-cli-text-editor-in-my-windows.html</guid><description>&lt;p>&lt;em>It&amp;rsquo;s more likely than you think!&lt;/em>&lt;/p>
+&lt;p>In a surprising twist of events, Microsoft is &lt;a href="https://twitter.com/plante_msft/status/1732857615997132834">exploring the addition of a command-line (CLI) text editor to Windows&lt;/a>. If you ask me, &lt;em>not&lt;/em> having a CLI text editor on Windows is mind-boggling: you can access a Windows machine via SSH these days, so not having an editor that works in the console is a big handicap for remote system administration. So, should Windows bundle a CLI text editor? Of course it should.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-12-08-windows-95-edit-com.png" class="with-border">
+&lt;figcaption>Windows 95 running an MS-DOS Prompt with the &lt;tt>EDIT.COM&lt;/tt> that shipped with it.&lt;/figcaption>
+&lt;/figure>
+&lt;p>But&amp;hellip; wait as second. Didn&amp;rsquo;t Windows use to ship with a CLI text editor? The one inherited from MS-DOS? Yes it did. So what happened? How was the editor lost? Let&amp;rsquo;s take a peek at the history and let&amp;rsquo;s see if you agree with me that Microsoft should revive the old editor instead of bundling modern-yet-alien Vim or Emacs.&lt;/p>
+&lt;p>By the way, this post is brought to you by the inspiration provided by my first paid subscriber. Thank you very much, K., for taking this step and supporting my work.&lt;/p>
+&lt;h1 id="in-the-beginning-there-was-edlin">In the beginning, there was Edlin&lt;/h1>
+&lt;p>Early versions of DOS (1980) all the way through MS-DOS 5.0 (1990) included a &amp;ldquo;line editor&amp;rdquo; called &lt;a href="https://en.wikipedia.org/wiki/Edlin">Edlin&lt;/a> and nothing else. You may have never heard of or used a line editor, so let me show you how they look like and work. Here is a sample session with Edlin:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">C:\&amp;gt;EDLIN TEST.TXT
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">New file
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*I
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1:*second line
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 2:*delete me
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 3:*[Ctrl+Z followed by Enter]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*L
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1: second line
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 2: delete me
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*1I
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1:*first line
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 2:*[Ctrl+Z followed by Enter]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*L
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1: first line
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 2:*second line
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 3: delete me
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*3D
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*W
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">*E
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">C:\&amp;gt;TYPE TEST.TXT
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">first line
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">second line
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">C:\&amp;gt;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>As you can see from the above, a line editor does not have a full-screen UI. Instead, the editor works by letting you issue textual commands that affect the contents of a file. You can insert new lines, delete existing ones, modify their content, and list what the file has in it&amp;mdash;much like how you enter programs in a line-oriented BASIC interpreter or how you interact with the files on your machine via the shell.&lt;/p>
+&lt;p>Needless to say, and while line editors work and are truly amenable to scripting, they are not particularly intuitive nor user-friendly. I have to wonder why MS-DOS shipped with &lt;em>just&lt;/em> Edlin until 1990. After all, by the time Edlin was created in 1980, full-screen editors like &lt;code>vi(1)&lt;/code> had already existed for 4 years so it&amp;rsquo;s not like they were impossible to create. However, it&amp;rsquo;s plausible that the limitations of DOS and the machines that DOS ran on made it much more difficult to recreate an editor like &lt;code>vi(1)&lt;/code>, which was made for Unix systems that ran on more powerful hardware.&lt;/p>
+&lt;p>As an aside: &lt;code>ed(1)&lt;/code> and &lt;code>ex(1)&lt;/code> are similar to Edlin and you have both &lt;em>today&lt;/em> on pretty much any Unix or Linux system you access. And the &lt;code>vi(1)&lt;/code> that you like is &amp;ldquo;just&amp;rdquo; a facade over &lt;code>ex(1)&lt;/code>. When you use the &lt;code>:&lt;/code> command to get to the &lt;code>vi(1)&lt;/code> prompt to type a command, what you are typing are &lt;code>ex(1)&lt;/code> commands. Keep that in mind if you ever face a situation where the terminal doesn&amp;rsquo;t work and all you can use are the line editors: previous &lt;code>vi(1)&lt;/code> knowledge could come in handy.&lt;/p>
+&lt;h1 id="and-microsoft-said-let-there-be-editcom">And Microsoft said, &amp;ldquo;Let there be EDIT.COM&amp;rdquo;&lt;/h1>
+&lt;p>In 1990, Microsoft launched MS-DOS 5.0 and, with it, a full-screen text editor called &lt;a href="https://en.wikipedia.org/wiki/MS-DOS_Editor">MS-DOS Editor&lt;/a>, or &lt;code>EDIT.COM&lt;/code> for short. This editor was built on QBasic and it featured a full-screen interactive UI. The latest version of the editor, which was included with Windows 9x (MS-DOS 7.x), looked like this:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-12-08-dosbox-edit-com.png" class="with-border">
+&lt;figcaption>The original &lt;tt>EDIT.COM&lt;/tt> from Windows 9x running in DOSBox.&lt;/figcaption>
+&lt;/figure>
+&lt;p>This new version of the editor was obviously much more usable and welcoming than Edlin. As you can see from the picture, &lt;code>EDIT.COM&lt;/code> featured a full-screen windowed textual interface with support for multiple files (in its Windows 9x versions), drop down menus, and even mouse integration. These interfaces were extremely common back in the day in DOS: almost every program you ran launched a full-screen UI with textual windows and menus.&lt;/p>
+&lt;p>Interestingly, interfaces like these were never a thing on Unix systems and I must confess I was shocked when I first moved from DOS to Linux. I was used to Borland Turbo C++ and WordPerfect 5.1, so when I faced &lt;code>vi(1)&lt;/code> on Linux for the first time, I couldn&amp;rsquo;t believe my eyes: what was this barren interface with its awkward commands? I eventually learned the &lt;code>vi(1)&lt;/code> and Emacs ways, but it&amp;rsquo;s a pity that those interfaces have been lost. They were really intuitive and powerful, and they would be wonderful to have in these days of cloud computing where we access remote computers over SSH all the time.&lt;/p>
+&lt;h1 id="but-then-darkness-settled-in">But then&amp;hellip; darkness settled in&lt;/h1>
+&lt;p>Unfortunately, both Edlin and &lt;code>EDIT.COM&lt;/code> were 16-bit DOS applications and they were never ported to 32-bit Windows. They were able to stay bundled with all 32-bit x86 Windows editions up to Windows 10 because Windows could run such ancient binaries via &lt;a href="https://en.wikipedia.org/wiki/Virtual_DOS_machine">NT&amp;rsquo;s Virtual DOS Machines&lt;/a>&amp;hellip; but the two editors were scraped in the x64 editions. Yes, this means that all 64-bit Windows editions have been devoid of a CLI text editor from the beginning.&lt;/p>
+&lt;p>You could say that this is not a big deal because Windows still includes Notepad and Notepad is similar to &lt;code>EDIT.COM&lt;/code> in its feature set. And yes, they are similar&amp;hellip; but with a critical and obvious difference: Notepad cannot be used on a remote machine via SSH. For someone that has grown up routinely accessing other machines to do work on them via SSH, this sounded like a ridiculous move and further perpetuated the feeling that administering a Windows machine from the shell was a joke&amp;mdash;even with all effort that the PowerShell developers have put to make this possible.&lt;/p>
+&lt;h1 id="and-in-the-end-there-may-be-light">And in the end, there may be light&lt;/h1>
+&lt;p>But hey, it seems like Microsoft may be correcting course here thanks to, and this is the big surprise, the Windows Terminal team. In discussion &lt;a href="https://github.com/microsoft/terminal/discussions/16440">#16440&lt;/a>, the team is exploring (re)adding a CLI text editor to Windows. As the discussion says: &lt;em>&amp;ldquo;A CLI editor is a core tool for system admins, developers, and power users.&amp;rdquo;&lt;/em> Well, yes, no kidding. I&amp;rsquo;m just surprised it took this long to reach this conclusion.&lt;/p>
+&lt;p>Now, what would &lt;em>you&lt;/em> pick as the default text editor for the Windows textual console?&lt;/p>
+&lt;p>Personally, and while I&amp;rsquo;d quickly say &amp;ldquo;just bundle Vim&amp;rdquo; like many others have&amp;hellip; I acknowledge it would feel out of place. Vim, Emacs, or even Nano are &lt;em>not&lt;/em> Windows applications. Yes, they work on Windows, but they don&amp;rsquo;t embody the traditional way things have worked on this platform. I feel that integrating any of these editors into Windows would further perpetuate the impression that Windows is just trying to copy Linux without actually being Linux.&lt;/p>
+&lt;p>So, if you ask me, I&amp;rsquo;d vote for the re-addition of &lt;code>EDIT.COM&lt;/code>. Obviously not a verbatim copy of what it was because it&amp;rsquo;d be nice to have one or two extra features added to it: I&amp;rsquo;d personally welcome making the editor respect indentation when inserting lines and maybe having some sort of syntax highlighting (without going all the way with LSP support). The key would be to preserve the simple, full-screen UI.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2023-12-08-yori-yedit.png" class="with-border">
+&lt;figcaption>YEdit running in a Yori Windows Terminal session on Windows 11.&lt;/figcaption>
+&lt;/figure>
+&lt;p>And as it turns out, the foundations for this already exist in &lt;a href="http://www.malsmith.net/edit/">YEdit&lt;/a>, a modern free reimplementation of the old editor for Windows. It has even been brought up in the discussion, so it seems I&amp;rsquo;m not the only one thinking this way.&lt;/p>
+&lt;p>In any case, I encourage you to leave your thoughts in the comments section below or, even better, join the official discussion at &lt;a href="https://github.com/microsoft/terminal/discussions/16440">microsoft/terminal#16440&lt;/a>.&lt;/p></description></item><item><title>Strings, encodings, NULs and Bazel</title><link>https://jmmv.dev/2023/12/strings-encodings-nuls-and-bazel.html</link><pubDate>Sun, 03 Dec 2023 10:30:00 -0700</pubDate><guid>https://jmmv.dev/2023/12/strings-encodings-nuls-and-bazel.html</guid><description>&lt;p>Just yesterday, &lt;a href="https://twitter.com/vkrajacic/status/1730891609191981305">Twitter user @vkrajacic wrote&lt;/a>:&lt;/p>
 &lt;blockquote>
 &lt;p>Advice for new C programmers: &amp;ldquo;Avoid null-terminated strings; they&amp;rsquo;re outdated, inefficient and impractical.&amp;rdquo;&lt;/p>
 &lt;p>Create your own type with basic functions. It&amp;rsquo;s not that hard, and it goes a long way. One of the benefits of this approach, among others, is slicing without copying.&lt;/p>
@@ -1334,162 +1391,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;h1 id="whats-best">What&amp;rsquo;s best?&lt;/h1>
 &lt;p>To be honest&amp;hellip; I do not know. I have tried all of the above and I&amp;rsquo;m not completely satisfied with any option. To let you into a secret, the EndTRACKER data model currently contains a mishmash of all these options because I&amp;rsquo;ve been experimenting with new ideas over time and haven&amp;rsquo;t yet settled on the one I like the best. (Yes, yes, I know. Consistency should have trumped &amp;ldquo;prettiness&amp;rdquo;, but hey, I write side projects because I enjoy exploring different dark corners of my tech of choice.)&lt;/p>
 &lt;p>Right now my thoughts are these: the builder pattern seems to be the nicest option &lt;em>if&lt;/em> you restrict it to tests, because then the builder can encapsulate error unwrapping and callers set all fields by name. However, I&amp;rsquo;m having a hard time justifying this option in favor of the &lt;code>Default&lt;/code> option, because callers look equally complex and the builder option requires a lot of boilerplate to write the builders themselves. And I kinda would like to use the macro option, but the fact that it doesn&amp;rsquo;t work well with auto-formatting is a deal breaker.&lt;/p>
-&lt;p>What are &lt;em>your&lt;/em> thoughts?&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-06-rust-test-structs.png" length="138979" type="image/jpeg"/></item><item><title>Good performance is not just big O</title><link>https://jmmv.dev/2023/09/performance-is-not-big-o.html</link><pubDate>Fri, 08 Sep 2023 10:00:00 -0700</pubDate><guid>https://jmmv.dev/2023/09/performance-is-not-big-o.html</guid><description>&lt;p>Having a fast and responsive app is orthogonal to &amp;ldquo;knowing your big &lt;i>O&lt;/i>s&amp;rdquo;. Unfortunately, most tech companies over-emphasize algorithms in interviews and downplay systems knowledge, and I believe that&amp;rsquo;s one reason behind sluggish apps and bloated systems.&lt;/p>
-&lt;p>I&amp;rsquo;ve seen this play out repeatedly. Interviewers ask a LeetCode-style coding question, which is then followed by the ritual of discussing time and memory complexity. Candidates ace the answers. But then&amp;hellip; their &amp;ldquo;real&amp;rdquo; code suffers from subtle yet impactful performance problems.&lt;/p>
-&lt;p>Focusing on big &lt;em>O&lt;/em> complexity rarely matters in most apps. Sure, it&amp;rsquo;s important to think about your algorithmic choices, but there are so many more details to worry about that have a direct impact on app performance and responsiveness. Let&amp;rsquo;s look at a bunch of them!&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>On algorithms&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>📜 Is your complex O(n) algorithm faster than the trivial O(n&lt;sup>2&lt;/sup>)? Theoretical complexity matters, but know your expected value of &amp;ldquo;n&amp;rdquo;. The linear algorithm may be slower than the quadratic one for your specific scenarios and harder to prove correct.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>📜 Are you aware of how interfaces can bite you? E.g. in Java, the &lt;code>List.get&lt;/code> generic method will run in O(1) time for &lt;code>ArrayList&lt;/code> but in O(n) time for &lt;code>LinkedList&lt;/code>, and computing dict hash keys is likely not O(1). These are &lt;em>not&lt;/em> obvious at the call site.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>📜 Do you grasp how much work fits in short periods of time? 1ps, 1ns, 1us, 1ms, 1s&amp;hellip; they all sound small but their relative differences are huge. Map them to 1 second, 16 minutes, 277 hours, 380 months, and 317 centuries respectively. Not the same, huh?&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>On storage&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>💾 Where does your data live? Different memory/storage mediums have vastly different access times. Know the relative differences in speed between register accesses (ps), L1/L2/L3 (few ns), RAM (many ns), SSD (us), HDD (few ms), and network (many ms).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>💾 How do you access storage drives? Large sequential I/O operations are faster than lots of random small ones. This is true of HDDs (seek time is ~3-10ms), but also of SSDs due to the fact that processing more ops takes more processing time.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>💾 What about the file system on top of those drives? ext4, ZFS, NTFS&amp;hellip; they are all vastly different, and the types of I/O patterns that work well in one may be slow in another.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>💾 Are you accessing an SSD or an old spinning hard disk? Hard disks still exist. It might be safe to assume SSDs for certain apps, but not always. E.g. users may store large photo libraries in HDDs: can you handle I/O from those efficiently?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>💾 Are you doing pure data copies via the CPU? There are features like DMA to offload data transfers to I/O devices, and there are features to minimize userspace&amp;lt;-&amp;gt;kernel copies. But, in any case, memory bandwidth isn&amp;rsquo;t free and is rarely thought about.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>On networking&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>🌐 Do you know that high latency usually limits max bandwidth? Bandwidth and latency are two orthogonal metrics. Most networked apps will probably feel fine on a low-bandwidth connection but will feel terrible on a high-latency one. Simulate these scenarios.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🌐 How do you handle high network latency? Does your code block, slowing down everything else? Do you really have to block the UI? Can you schedule other work too happen in the meantime?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🌐 How many network requests do you need per interaction? Each request adds a multi-ms penalty and every request increases the chances of hitting high latency. If a service you depend on gives you p50=10ms and p99=1s, you&amp;rsquo;ll hit a 1s delay if you send 100 requests.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🌐 How do you handle retries on failed requests? Any retry will tank performance and how you expose or hide what&amp;rsquo;s going on can make a world of a difference. Perception matters.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>On data handling&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>❄️ Are you using your database&amp;rsquo;s query facilities or are you fetching all data and then filtering on your own? Databases can perform elaborate queries. Favor running those on the database: the server is closer to the data and you&amp;rsquo;ll minimize network transfers.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>❄️ Are your database queries degrading to full table scans? Maybe you don&amp;rsquo;t have the right indexes or partitioning schemes to support the common queries that your app needs. Analyze and profile query execution. You probably don&amp;rsquo;t need to jump to NoSQL.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🪵 How many log messages do you emit? Logging is not free. It has a cost on performance (I&amp;rsquo;ve seen servers spend ~20% of their CPU &lt;em>just&lt;/em> for background logging, all the time), and noisy logs also have an operational cost.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>On CPU and memory&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>🖥️ How do you lay large amounts of data in memory? What are the access patterns? Cache locality matters. Remember the relative differences in access times between the L1, L2 and L3 caches vs. main memory (days vs. years if scaled up).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🖥️ How data-intensive are your tight loops? It&amp;rsquo;s easy to think about CPU speed, RAM usage and I/O times&amp;hellip; but memory bandwidth is a fourth dimension that almost nobody thinks about, and it is becoming scarcer with faster CPUs and I/O.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>On concurrency&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>🧵 Do you take advantage of multiple cores? Single cores aren&amp;rsquo;t getting faster fast enough anymore, but computers usually have cores to spare. Can you use them at all? Effectively?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🧵 Do you use multiple threads to parallelize CPU-intensive operations, or do you use them to handle blocking I/O? In the former case, you want as many threads as cores. In the latter, switching to an event loop model may work better than a large thread pool.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🧵 Do you perform expensive computation on the thread that&amp;rsquo;s responsive for the app&amp;rsquo;s UI? This will introduce pauses and render your app unusable for periods of time, which will make it feel slow. Perception matters.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>On graphics&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>✏️ Are you rendering directly onto the screen? Flushing your drawing operations right away? Read on double buffering, but beware of the latency you introduce by delaying the final display.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>✏️ Are you leveraging your graphic card&amp;rsquo;s features, or are you drawing on the CPU? Contrary to popular belief, fancy desktop effects are not expensive if done on the GPU&amp;mdash;and, actually, doing them on the GPU frees CPU resources.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>On development time&lt;/strong>&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>🗣️ How much performance are you leaving on the table by &amp;ldquo;coding faster&amp;rdquo; in an interpreted language? Computers might be &amp;ldquo;fast enough&amp;rdquo; now, but interpreted languages tend to be slower than compiled ones and may make the overall system sluggish.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>🪨 How big is your compiled app? Multi-MB apps are a problem when downloaded over the network, but they are also a problem on disk because they are slow to install and uninstall. Big apps may run fast, but they start slow. Perception matters.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>⌚ How long does your code take to compile? If it takes too long, the team suffers and features and bug fixes will be delayed. Different choices in how you write code and how you modularize it can bring big differences in productivity.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>⌚ How long do the tests take to run? If they take too long, they won&amp;rsquo;t be run on every commit, introducing friction for everyone else down the road and delaying product launches.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;p>That&amp;rsquo;s all I could think of for now! I&amp;rsquo;m not a performance expert at all, but I do like systems and enjoy thinking about their holistic behavior. If you have any more tips, feel free to add them to the thread and I may incorporate them into the list!&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-09-08-speed-bumps-limit.jpg" length="372231" type="image/jpeg"/></item></channel></rss>
+&lt;p>What are &lt;em>your&lt;/em> thoughts?&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-06-rust-test-structs.png" length="138979" type="image/jpeg"/></item></channel></rss>
