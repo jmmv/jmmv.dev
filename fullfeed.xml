@@ -1,4 +1,162 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sun, 31 Dec 2023 09:40:00 +0100</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Links: December 2023 edition</title><link>https://jmmv.dev/2023/12/links-december-2023-edition.html</link><pubDate>Sun, 31 Dec 2023 09:40:00 +0100</pubDate><guid>https://jmmv.dev/2023/12/links-december-2023-edition.html</guid><description>&lt;p>December draws to a close as does 2023, which means it&amp;rsquo;s time for yet another monthly links recap.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 17 Jan 2024 09:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>From 0 to 1 MB in DOS</title><link>https://jmmv.dev/2024/01/from-0-to-1-mb-in-dos.html</link><pubDate>Wed, 17 Jan 2024 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/01/from-0-to-1-mb-in-dos.html</guid><description>&lt;p>Since the last article on &lt;a href="/2023/12/the-ides-we-had-30-years-ago.html">the text-based IDEs of old&lt;/a>, I&amp;rsquo;ve been meaning to write about the GCC port to DOS, namely &lt;a href="https://www.delorie.com/djgpp/">DJGPP&lt;/a>. As I worked on the draft for that topic, I realized that there is a ton of ground to cover to set the stage so I took most of the content on memory management out and wrote this separate post.&lt;/p>
+&lt;p>This article is a deep dive on how DOS had to pull out tricks to maximize the use of the very limited 1 MB address space of the 8086. Those tricks could exist because of the features later introduced by the 80286 and the 80386, but these were just clutches to paper over the fact that DOS could not leverage the real improvements provided by protected mode.&lt;/p>
+&lt;p>This detour is long but I hope you&amp;rsquo;ll enjoy it as much as I enjoyed researching the topic. I&amp;rsquo;ll walk you through the changes in the x86 architecture over time, starting with the 8086 and ending in the 80386, and how DOS kept up along the way. I&amp;rsquo;ll conclude with a peek into DOS&amp;rsquo; own &lt;tt>MEM&lt;/tt> and MemMaker utilities. I must omit details to keep the text manageable in size though, so please excuse the lack of detail in some areas; just follow the links to external documentation to learn more.&lt;/p>
+&lt;div class="container action-highlight p-4 my-4 d-md-none">
+&lt;div class="row text-center">
+&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.&lt;/p>
+&lt;/div>
+&lt;div class="row">
+&lt;div class="col">
+&lt;div class="form-group">
+&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
+&lt;input type="text" name="email"
+placeholder="Enter your email"
+class="form-control input-sm text-center my-1"/>
+&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
+&lt;/form>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;div class="row px-2">
+&lt;div class="col col-sm-5 text-left">
+&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
+&lt;/div>
+&lt;div class="col col-sm-7 text-right">
+&lt;p>
+&lt;a rel="me" href="https://mastodon.online/@jmmv">
+&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+&lt;/a>
+&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
+&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+&lt;/a>
+&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
+&lt;/p>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;p>&lt;em>Before we begin, I&amp;rsquo;d like to thank neozeed from &lt;a href="https://virtuallyfun.com/">Virtually Fun&lt;/a> for his in-depth review of this article. Head to his blog for a lot of interesting and related content!&lt;/em>&lt;/p>
+&lt;h1 id="the-8086-and-real-mode">The 8086 and real mode&lt;/h1>
+&lt;p>Back in the 1980s, the &lt;a href="https://en.wikipedia.org/wiki/Intel_8086">Intel 8086&lt;/a> was &lt;em>the&lt;/em> processor for PCs (along with its crippled sibling 8088 which I&amp;rsquo;ll ignore throughout this post). The 8086 was a simple chip with significant limitations, but it was incredibly successful and is the foundation of the x86 architecture that we still use today. Because the 8086 powered PCs, and DOS was the operating system that IBM chose for the PC, DOS was designed to work for the 8086.&lt;/p>
+&lt;p>For the purposes of our article, let&amp;rsquo;s focus on two details: the 8086 CPU had a 20-bit address bus, which means it could only address 1 MB of memory, and it was a 16-bit CPU, which means that its internal registers were all 16-bit long. Which begs the question: if registers could only represent &lt;code>2^16 = 64K&lt;/code> different values, how could code reference a 20-bit address space?&lt;/p>
+&lt;p>The answer is &lt;em>segmentation&lt;/em>. In the 8086, every instruction that references memory does so by specifying an address as two separate 16-bit quantities: a &lt;em>segment&lt;/em> and an &lt;em>offset&lt;/em> within the segment. Because segments are 16-bit long, there can be up to 64KB segments&amp;mdash;and if we take the 1 MB total address space and divide it by 64KB, we deduce that segments are offset from each other by 16 bytes.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-8086-segments.png" />
+&lt;figcaption>Representation of the way segmentation slices the 8086 1 MB address space into 64KB overlapping segments offset by 16 bytes from each other.&lt;/figcaption>
+&lt;/figure>
+&lt;p>There are two things of note in the diagram. First, segments overlap, meaning that a single memory location can be referenced by many different segment/offset combinations. And, second, all segments after &lt;code>0xF000&lt;/code> reference memory positions above the 1 MB address space that don&amp;rsquo;t exist, which the 8086 chose to wrap around by ignoring the 21st bit of an address. After all, there is no 21st line in the address bus.&lt;/p>
+&lt;p>When accessing a piece of memory with an address of the form &lt;code>segment:offset&lt;/code>, say &lt;code>81DA:72C3&lt;/code>, the 8086 multiplies &lt;code>0x81DA&lt;/code> by 16 (a simple 4-bit shift to the left) and adds the &lt;code>0x72C3&lt;/code> offset to the result to obtain address &lt;code>0x89063&lt;/code>. From there on, the 8086 reads from or writes to that memory location and calls it a day. There is no &lt;a href="https://en.wikipedia.org/wiki/Memory_management_unit">Memory Management Unit (MMU)&lt;/a>: every memory access can reference any address, and all accesses are legal (including those that wrap around!) which means null or dangling pointer dereferences don&amp;rsquo;t cause any sort of crash.&lt;/p>
+&lt;p>This type of MMU-less segmented addressing is known as &lt;em>real mode&lt;/em>, but this name didn&amp;rsquo;t appear until the 80286 had to give it a name to distinguish it from &lt;em>protected mode&lt;/em>. But before introducing the latter, let&amp;rsquo;s talk about memory maps for a second.&lt;/p>
+&lt;h1 id="conventional-and-upper-memory">Conventional and upper memory&lt;/h1>
+&lt;p>Just because the 8086 processor can reference 1 MB of memory does not mean that 8086 machines came equipped with 1 full MB of RAM. Machines typically included &lt;em>less&lt;/em> than that for cost reasons, so it&amp;rsquo;s critical to understand that the &lt;em>address space&lt;/em>&amp;mdash;that is, the set of addresses that can be &lt;em>referenced&lt;/em>&amp;mdash;is different from the amount of memory installed. No surprise there: the same is true today of modern 64-bit CPUs.&lt;/p>
+&lt;p>This fact was advantageous because certain system devices prefer to expose themselves as part of the address space. For example: the BIOS ROM is accessible via a range of addresses in upper memory. Or another example: video cards tend to expose their framebuffer as a memory-mapped device so that applications can directly write to well-known addresses to manipulate video memory&amp;mdash;bypassing the separate I/O bus and instruction set.&lt;/p>
+&lt;p>The question is: where do such devices live within the address space? The choice is pretty much arbitrary, so what IBM did was split the &lt;a href="https://wiki.osdev.org/Memory_Map_(x86)">address space of the original PC&lt;/a> in two parts. The first 640 KB, known as &lt;em>conventional memory&lt;/em>, were mapped to available RAM and were readily usable by applications. The upper 384 KB, known as &lt;em>upper memory&lt;/em> or the &lt;em>Upper Memory Area (UMA)&lt;/em>, were reserved for memory-mapped devices. This assignment of &lt;em>meaning&lt;/em> to portions of the address space for specific purposes is what&amp;rsquo;s called a &lt;em>memory map&lt;/em>, and this was the memory map of the original PC.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-8086-memory-map.png" />
+&lt;figcaption>Representation of the 8086 PC memory map. Solid blocks correspond to mapped memory and dashed parts correspond to unmapped memory.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Note how conventional memory may not be fully usable: as shocking as it may sound today, PCs could have even less than 640 KB of installed RAM. More importantly for our purposes, the upper memory is &lt;em>sparse&lt;/em>: certain address ranges are assigned to devices, but there may be gaps between devices. What happens when reading from or writing to unmapped addresses is hard to tell as this depends on the chipset&amp;mdash;not the CPU&amp;mdash;but remember that all accesses had to be valid in some form.&lt;/p>
+&lt;p>And by the way, there is one teeny tiny exception to the &amp;ldquo;all first 640 KB are free to use to applications&amp;rdquo;: the very first 1 KB of RAM is reserved for the Interrupt Vector Table, which is what the 8086 uses to look for interrupt handlers when it receives an interrupt, and a few more bytes after that are used by the BIOS to map volatile data. We can ignore these.&lt;/p>
+&lt;h1 id="expanded-memory-specification-ems">Expanded Memory Specification (EMS)&lt;/h1>
+&lt;p>As you can imagine, 640 KB of RAM were soon &lt;em>not&lt;/em> enough for many programs. Applications needed access to more memory, but the limitations of the 8086 20-bit address bus made it difficult. Yet there was a need for an immediate solution. The &lt;a href="https://en.wikipedia.org/wiki/Expanded_memory">Expanded Memory Specification (EMS)&lt;/a> was one of those first solutions and was originally designed by Lotus in order to support their star application &lt;a href="https://en.wikipedia.org/wiki/Lotus_1-2-3">1-2-3&lt;/a>.&lt;/p>
+&lt;p>The idea is simple. Remember how upper memory is &lt;em>sparse&lt;/em>? What if we could map a window in that address space to a different portion of memory? And what if we could control, via software, which portion of memory was exposed through such window at any given time?&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-8086-ems.png" />
+&lt;figcaption>Representation of the 8086 PC memory map and an EMS window in upper memory mapped to a portion of memory provided by an external ISA card.&lt;/figcaption>
+&lt;/figure>
+&lt;p>This is precisely what EMS did. EMS brought the idea of having a software API that allowed applications to select views into &amp;ldquo;other&amp;rdquo; memory by mapping a 64 KB window in upper memory to another memory chip. Originally, this other memory was supplied by expansion ISA cards like the one below, which means that EMS required hardware support and hardware-specific drivers to perform the window remappings. This also means, by the way, that this memory could be much slower than standard RAM.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-emulex-persyst-4mb-isa.jpg" />
+&lt;figcaption>An Emulex Persyst ISA card providing 4 MB of additional memory. It's notable how huge this was. Photo taken from the Wikipedia; &lt;a href="https://en.wikipedia.org/wiki/File:EmulexPersyst_4M_ISA.jpeg">see original&lt;/a>.&lt;/figcaption>
+&lt;/figure>
+&lt;p>As you can imagine, this trick offered the theoretical ability to access &lt;em>any&lt;/em> amount of extra RAM on a machine&amp;hellip; at the expense of having to structure your application so that it explicitly (re)configured the window. Implementing such applications is difficult and is also insufficient when applications need a larger address space to function comfortably. EMS was a useful kludge, but still a kludge.&lt;/p>
+&lt;h1 id="the-80286-and-protected-mode">The 80286 and protected mode&lt;/h1>
+&lt;p>As the needs of programs and operating systems grew, processors themselves needed to grow more advanced features as well. In particular, they needed to gain the ability to access much more than just 1 MB of memory, and they needed to offer memory protection features to isolate programs from each other.&lt;/p>
+&lt;p>The 80286, still a 16-bit CPU, grew the address space to 24 bits to support up to 16 MB of RAM. It introduced a MMU to offer memory isolation. But there was a problem here: the 8086 memory addressing mode of 16-bit &lt;code>segment:offset&lt;/code> pairs did not permit addressing memory beyond the first 1 MB. Thus the 80286 had to find a different way to reference the RAM beyond 1 MB, also known as &lt;em>extended memory&lt;/em>, and it did so by introducing a completely different operation mode known as &lt;em>protected mode&lt;/em>.&lt;/p>
+&lt;p>Once in protected mode, all memory access rules change. For one, the MMU takes charge of all memory accesses, ensuring that they are valid according to predefined protections. For another, the &lt;code>segment:offset&lt;/code> addresses change their semantics. The segment portion of an address stops being a scaled down memory address, and instead becomes an &lt;em>index&lt;/em> &lt;a href="https://wiki.osdev.org/Global_Descriptor_Table">into a table&lt;/a> (the GDT or LDT) of segment descriptors. Each segment descriptor describes the base address of a segment as a 32-bit quantity, the size of the segment as a 20-bit quantity, the access protections of the segment, and a bunch of flags.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-80286-mmu-access.png" />
+&lt;figcaption>Diagram representing the operations that the 80286 does, in hardware, to resolve a &lt;tt>segment:address&lt;/tt> memory reference.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Under this model, instead of having an address like &lt;code>81DA:72C3&lt;/code>, we might see &lt;code>13:72C3&lt;/code>. To access this address, the MMU looks up entry 13 in the GDT, finds a descriptor that says that the segment starts at address &lt;code>0x81DA&lt;/code> and that it is &lt;code>0x7200&lt;/code> bytes long, and concludes that the &lt;code>13:72C3&lt;/code> reference is out of bounds, raising a &lt;a href="https://en.wikipedia.org/wiki/General_protection_fault">General Protection Fault&lt;/a> hardware exception (your dreaded &lt;a href="https://en.wikipedia.org/wiki/Segmentation_fault">&amp;ldquo;Segmentation fault&amp;rdquo;&lt;/a> error these days).&lt;/p>
+&lt;p>But this access model is really different from what DOS applications were used to in real mode, and DOS itself was only designed to run in real mode. So DOS and all of its ecosystem were stuck in the real mode world, limited to addressing just 1 MB of memory without the ability to access extended memory&amp;hellip; or were they?&lt;/p>
+&lt;h1 id="the-high-memory-area-hma">The High Memory Area (HMA)&lt;/h1>
+&lt;p>Avid readers might have noticed in a previous picture that, in real mode, there are a few segments that could, in theory, allow access to addresses above the 1 MB mark. Take &lt;code>FFFF:0010&lt;/code>, which is &lt;code>0xFFFF * 0x10 + 0x10 = 0x100000 = 2^20&lt;/code> or 1 followed by 20 zeroes in binary form. This is the first address into extended memory. The 8086 was able to produce such addresses, but they would wrap around because the 8086 had no way to issue the 21st bit to the memory bus.&lt;/p>
+&lt;p>For compatibility reasons, the 80286 had to truncate these addresses in real mode, and it did so by wiring the 21st line of the address bus (the A20) to zero. But what if the addresses &lt;em>didn&amp;rsquo;t&lt;/em> wrap around? What if we told the 80286 to &lt;em>not&lt;/em> truncate them? This can, in fact, be done by enabling the &lt;a href="https://en.wikipedia.org/wiki/A20_line#A20_gate">A20 gate&lt;/a>&amp;mdash;a task achieved via the keyboard controller, mind you. Enabling the A20 is a prerequisite for entering protected mode, but if done in real mode, it becomes possible to access an extra 64 KB of memory. This extra memory is known as the &lt;a href="https://en.wikipedia.org/wiki/High_memory_area">High Memory Area (HMA)&lt;/a>.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-80286-hma.png" />
+&lt;figcaption>Representation of the way segmentation slices the 80286 real mode 1 MB address space into 64KB overlapping segments offset by 16 bytes from each other, and how the last few segments can be made to spill into extended memory.&lt;/figcaption>
+&lt;/figure>
+&lt;p>The HMA isn&amp;rsquo;t big by any means, but conventional memory was so limited that any tricks to gain extra memory were welcome and DOS did precisely that. By loading the &lt;code>HIMEM.SYS&lt;/code> driver and by specifying &lt;code>DOS=HIGH&lt;/code> in the &lt;code>CONFIG.SYS&lt;/code> file, DOS would relocate parts of itself into the HMA to free up to 64 KB of conventional memory.&lt;/p>
+&lt;p>Unfortunately, 64 KB of extra memory really aren&amp;rsquo;t that much. This is a nice trick, but applications really needed access to more memory.&lt;/p>
+&lt;h1 id="extended-memory-specification-xms">eXtended Memory Specification (XMS)&lt;/h1>
+&lt;p>Another technique to access extended memory (the memory visible beyond the first 1 MB) came in the form of the &lt;a href="https://en.wikipedia.org/wiki/Extended_memory#Extended_Memory_Specification_(XMS)">eXtended Memory Specification (XMS)&lt;/a>.&lt;/p>
+&lt;p>The idea of XMS is to provide an API that real mode applications can use to allocate chunks of extended memory and to copy data from/to those chunks via explicit calls. This is different from EMS because we aren&amp;rsquo;t talking about a fixed window of the address space referencing some external memory: we are talking about an API that is able to allocate arbitrary chunks of memory and return references to them, much like &lt;code>malloc&lt;/code> and &lt;code>free&lt;/code> do. Applications then use extra APIs to copy memory from/to those extended memory chunks into conventional memory.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-80386-xms.png" />
+&lt;figcaption>Representation of the 80286 memory map with a block of extended memory copied into conventional memory by means of XMS.&lt;/figcaption>
+&lt;/figure>
+&lt;p>To implement the &lt;a href="http://www.phatcode.net/res/219/files/xms30.txt">XMS API&lt;/a>, a driver such as &lt;code>HIMEM.SYS&lt;/code> uses protected mode to manipulate the extended memory blocks, but the real mode applications never have to. Because XMS requires protected mode, this feature is only available in the 80286 and above processors, whereas EMS could be used by the 8086 with the right hardware assistance.&lt;/p>
+&lt;p>Much like EMS, XMS provided the theoretical ability to access an unlimited amount of extended memory from real mode at the expense of having to manually transfer small pieces of it into the limited 1 MB address space. This is not a trivial difficulty and is why even modern architectures like the &lt;a href="https://en.wikipedia.org/wiki/Cell_(processor)">Cell processor&lt;/a> and its &lt;a href="https://en.wikipedia.org/wiki/Cell_(processor)#Synergistic_Processing_Elements_(SPE)">SPEs&lt;/a> with a separate and limited address space didn&amp;rsquo;t succeed.&lt;/p>
+&lt;p>So far so good, but&amp;hellip; we can still squeeze some extra memory out of the real mode segmented address space. In particular, we still have some gaps in upper memory that we haven&amp;rsquo;t put to use.&lt;/p>
+&lt;h1 id="the-80386-and-vm86-mode">The 80386 and VM86 mode&lt;/h1>
+&lt;p>To make further improvements possible, we need the additional processor features that came with the 80386. Compared to the 80286, the 80386 was a 32-bit processor capable of addressing up to 4 GB of RAM. More interesting for our discussion, however, were the addition of pagination&amp;mdash;which is the foundation of any modern operating system&amp;mdash;and a new execution mode known as &lt;a href="https://en.wikipedia.org/wiki/Virtual_8086_mode">&lt;em>Virtual 8086&lt;/em>&lt;/a> or VM86 for short.&lt;/p>
+&lt;p>VM86 was originally envisioned to fix a major deficiency in the 80286: that is, the ability to run &lt;em>multiple&lt;/em> concurrent real mode applications from within a protected mode operating system because that&amp;rsquo;s what Windows and OS/2 wanted to provide. In today&amp;rsquo;s terms, VM86 acts as virtual machine hypervisor, providing the processor with a mechanism to enter a mode that behaves like real mode but that is backed by the protected mode MMU. All memory accesses are subject to translation via pagination and all privileged operations trap into protected mode, meaning that a hypervisor process can place VM86 tasks anywhere in the 4 GB memory address space and can context-switch between them.&lt;/p>
+&lt;p>But what if our hypervisor only spawned a single VM86 task to run DOS in? What if, then, the hypervisor leveraged the MMU to relocate portions of the real mode address space into portions of extended memory? That way, we could emulate EMS without dedicated hardware, providing applications a trivial way to peek into extended memory via 64 KB windows, or we could play other tricks&amp;hellip; like UMBs.&lt;/p>
+&lt;h1 id="upper-memory-blocks-umbs">Upper Memory Blocks (UMBs)&lt;/h1>
+&lt;p>Remember the sparse upper memory area? Those 384 KB of memory wired to hardware devices but with gaps in them? What if we could take those gaps in upper memory and map them to some extended memory so that they were directly addressable from real mode? This is precisely what &lt;a href="https://en.wikipedia.org/wiki/Upper_memory_area">Upper Memory Blocks (UMBs)&lt;/a> are: portions of the upper memory area remapped to extended memory by means of VM86, transparently offering access to more memory from real mode.&lt;/p>
+&lt;p>As an example, think about the video memory mappings in the original PC specification. The memory map reserved two chunks of the address space for video: one for monochrome displays and one for color displays. But only one of them can be in use at any given time. So whichever video mode is selected leaves the address space of the other mode unused, and thus such address space can be leveraged by the system as an UMB into which to load drivers or place user data.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-80386-umb.png" />
+&lt;figcaption>Representation of the 80386 VM86 memory map with two UMBs in upper memory mapped to extended memory by means of the MMU and its pagination features.&lt;/figcaption>
+&lt;/figure>
+&lt;p>In DOS, the &lt;code>EMM386.EXE&lt;/code> driver is in charge of providing UMBs. In principle, the chipset could also implement them in older processors, but the 80386 made this all possible in software by entering VM86 and then leveraging pagination to map pages of extended memory in the upper memory area.&lt;/p>
+&lt;p>When UMBs are available, DOS offered ways to move load drivers and &lt;a href="https://en.wikipedia.org/wiki/Terminate-and-stay-resident_program">TSR programs&lt;/a> into UMBs by specifying &lt;code>DOS=UMB&lt;/code> in the &lt;code>CONFIG.SYS&lt;/code> file and then using the &lt;code>DEVICEHIGH&lt;/code> and &lt;code>LOADHIGH&lt;/code> commands.&lt;/p>
+&lt;h1 id="putting-it-all-together">Putting it all together&lt;/h1>
+&lt;p>In summary, we have seen four different techniques that evolved over time to squeeze the most memory out of the incredibly limited 1 MB address space of the 8086. These limitations haunted the PC ecosystem until Windows took over and it can be argued that Windows &amp;ldquo;won&amp;rdquo; because it made it much easier to take advantage of the larger address space of the 80386. Until that happened, however, users had to live with the EMS, XMS, HMA, and UMB mess.&lt;/p>
+&lt;p>And a mess it was, and it was so pervasive that it leaked to users. Let&amp;rsquo;s take a look at the output of the &lt;code>MEM&lt;/code> command, which was a very common utility to run when trying to maximize free conventional memory. In one of its simplest forms, &lt;code>MEM /C&lt;/code>, the command shows a summary of the memory usage per program and whether they are loaded in conventional or upper memory:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-mem-c-1.png" />
+&lt;figcaption>First page of the output of the &lt;tt>MEM /C /P&lt;/tt> command.&lt;/figcaption>
+&lt;/figure>
+&lt;p>&lt;code>MEM /D&lt;/code>, which I did not know about back in the day, is more interesting. I have to show you its output as three separate images due to console size limitations:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-mem-d-1.png" />
+&lt;figcaption>First page of the output of the &lt;tt>MEM /D /P&lt;/tt> command.&lt;/figcaption>
+&lt;/figure>
+&lt;figure>
+&lt;img src="/images/2024-01-17-mem-d-2.png" />
+&lt;figcaption>Second page of the output of the &lt;tt>MEM /D /P&lt;/tt> command.&lt;/figcaption>
+&lt;/figure>
+&lt;figure>
+&lt;img src="/images/2024-01-17-mem-d-3.png" />
+&lt;figcaption>Third page of the output of the &lt;tt>MEM /D /P&lt;/tt> command.&lt;/figcaption>
+&lt;/figure>
+&lt;p>&lt;code>MEM /D&lt;/code> shows us the memory map of the machine along with details about the location of each program. We can also see mentions of the conventional vs. upper address space, whether the HMA is in use, and consumption of XMS memory.&lt;/p>
+&lt;p>But in all of these outputs, we see that upper memory is not in use &lt;em>at all&lt;/em>. Why is that? Well, because MS-DOS out of the box doesn&amp;rsquo;t attempt to load drivers into it. For that, we have to manually modify &lt;code>CONFIG.SYS&lt;/code> and &lt;code>AUTOEXEC.BAT&lt;/code> with special commands and reorder entries to maximize the usage of the upper memory and the HMA. A black art.&lt;/p>
+&lt;p>Which brings me to MemMaker, a tool that debuted with MS-DOS 6. This tool attempted to automatically reconfigure all drivers and TSRs loaded during boot so that the largest/majority of them fit in upper memory, leaving as much conventional memory free for application usage.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-memmaker-intro.png" />
+&lt;figcaption>Welcome page to the MemMaker utility.&lt;/figcaption>
+&lt;/figure>
+&lt;p>As automated as it was, however, I&amp;rsquo;d say that MemMaker was an experts-only tool. Take a look at its advanced configuration options page, which I had to fiddle with to make the tool work in a KVM virtual machine running MS-DOS 6.22. You really need to understand the intricate details of real mode memory management to know what each of these options is about.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-memmaker-options.png" />
+&lt;figcaption>Advanced options in the MemMaker utility.&lt;/figcaption>
+&lt;/figure>
+&lt;p>But if you made MemMaker run successfully, it would then greet you with a pretty cool page after a reboot. This page showed a breakdown of the changes made by MemMaker and how it was able to reclaim conventional memory.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-memmaker-results.png" />
+&lt;figcaption>Final report of the changes made by the MemMaker utility.&lt;/figcaption>
+&lt;/figure>
+&lt;p>After that, we can look at the changes that MemMaker applied to the &lt;code>CONFIG.SYS&lt;/code> and &lt;code>AUTOEXEC.BAT&lt;/code> files. I never truly understood what all of these magic numbers meant, but now that I went through the hassle of researching and writing this article, I finally do. Just 30 years after I regularly used MemMaker to be able to play games in my multimedia 80386.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-01-17-memmaker-changes.png" />
+&lt;figcaption>Content of the &lt;tt>CONFIG.SYS&lt;/tt> and &lt;tt>AUTOEXEC.BAT&lt;/tt> files after MemMaker is done making changes.&lt;/figcaption>
+&lt;/figure>
+&lt;p>You can much read more in Microsoft&amp;rsquo;s own now-archived &lt;a href="https://jeffpar.github.io/kbarchive/kb/095/Q95555/">KB-Q9555 article&lt;/a> or the &lt;a href="https://archive.org/details/DOS_Beyond_640K_2nd_edition">DOS Beyond 640KB book&lt;/a>.&lt;/p>
+&lt;p>And that&amp;rsquo;s it for today folks. I intentionally did &lt;em>not&lt;/em> touch on DPMI&amp;mdash;the technology that truly allowed DOS applications to break free from the 1 MB memory limitation&amp;mdash;because I&amp;rsquo;m saving that for the next article. So, make sure to come back for more!&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-01-17-8086-dos.jpg" length="220943" type="image/jpeg"/></item><item><title>Links: December 2023 edition</title><link>https://jmmv.dev/2023/12/links-december-2023-edition.html</link><pubDate>Sun, 31 Dec 2023 09:40:00 +0100</pubDate><guid>https://jmmv.dev/2023/12/links-december-2023-edition.html</guid><description>&lt;p>December draws to a close as does 2023, which means it&amp;rsquo;s time for yet another monthly links recap.&lt;/p>
 &lt;p>For context to everyone new around here, what follows is my manual curation of cool articles, videos, and projects I stumbled upon during this time period. But this is not &lt;em>just&lt;/em> a dump of links: &lt;em>each link is accompanied by a short commentary&lt;/em> that justifies why I thought the material was interesting, why it is relevant to this publication and, more importantly, an attempt to nudge you into reading it.&lt;/p>
 &lt;p>December has been a slow month though. During the first half, only a handful of articles caught my attention; and during the second half, I&amp;rsquo;ve been traveling so I haven&amp;rsquo;t paid much attention to news sites. In any case, there is some good content to enjoy this month. Read on and have a good entry to 2024!&lt;/p>
 &lt;p>Happy new year!&lt;/p>
@@ -1094,34 +1252,4 @@ Cover image (and link) to the Bazel interview in Software Engineering Daily.
 &lt;li>&lt;a href="https://github.com/facebook/sapling">Sapling from Facebook (git-compatible highly-scalable SCM)&lt;/a>&lt;/li>
 &lt;li>&lt;a href="https://www.microsoft.com/en-us/research/uploads/prod/2018/03/build-systems.pdf">Build systems à la carte&lt;/a>&lt;/li>
 &lt;li>&lt;a href="https://github.com/microsoft/scalar">Scalar (Microsoft extensions for very large git repos)&lt;/a>&lt;/li>
-&lt;/ul></description><enclosure url="https://jmmv.dev/images/2023-10-30-bazelcon.jpg" length="663230" type="image/jpeg"/></item><item><title>Hello, Blog System/5!</title><link>https://jmmv.dev/2023/10/hello-blog-system5.html</link><pubDate>Fri, 27 Oct 2023 16:14:00 +0200</pubDate><guid>https://jmmv.dev/2023/10/hello-blog-system5.html</guid><description>&lt;p>&lt;a href="https://blogsystem5.substack.com/">Blog System/5&lt;/a> is my new Substack publication in which I write about the variety of software and systems engineering topics that pique my interest. If that sounds too generic to you, it&amp;rsquo;s because it is: there are too many cool things to write about!&lt;/p>
-&lt;p>But in particular, I&amp;rsquo;ll be covering:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>operating systems, including the BSDs, Linux, macOS and maybe Windows;&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>build systems, which mostly means Bazel;&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>programming languages, including Rust and shell (talk about opposites!);&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>and general engineering practices to build sustainable, high-quality systems.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>My essays are based on my day-to-day professional experiences at Google as an SRE in the storage stack and SWE in Blaze; Microsoft as an SDE in Azure Storage; and Snowflake as a SWE in developer productivity. But also, these essays are based on my own side projects like &lt;a href="https://www.endbasic.dev/">EndBASIC&lt;/a> or &lt;a href="https://shtk.jmmv.dev/">shtk&lt;/a>, and on my distant past contributions to FreeBSD, NetBSD and Gnome.&lt;/p>
-&lt;blockquote>
-&lt;p>Subscribe now to help build a community of like-minded individuals. It&amp;rsquo;s free, and a stable subscribers group makes a difference!&lt;/p>
-&lt;p>&lt;a href="https://blogsystem5.substack.com/">https://blogsystem5.substack.com/&lt;/a>&lt;/p>
-&lt;/blockquote>
-&lt;h1 id="but-why">But why?&lt;/h1>
-&lt;p>You may have read my blog at &lt;a href="https://jmmv.dev/">https://jmmv.dev/&lt;/a> (this site), which is still alive and kicking, so what&amp;rsquo;s up with this newsletter? Doesn&amp;rsquo;t the introduction above sound exactly like what my blog is about?&lt;/p>
-&lt;p>Well&amp;hellip; yeah, but I want to run an experiment. Growing the readership of my home-grown blog has been extremely hard: some of my articles occasionally end up in the Hacker News front page, but those only result in one-off traffic spikes with no recurrent engagement, which is a tad sad. I&amp;rsquo;ve witnessed other authors build nice communities around their publications in Substack, so I want to check first-hand how this platform helps achieve those goals.&lt;/p>
-&lt;p>My tentative plan is to post new articles here first and then re-post them to my personal blog a few days later. The reasons for this structure are two: first, because I want to &lt;a href="/2016/01/medium-experiment-wrapup.html">own my content long-term&lt;/a>; and, second, because I do not want to force you all to subscribe to Substack if you don&amp;rsquo;t want to: the usual &lt;a href="/feed.xml">RSS&lt;/a> and &lt;a href="/2023/06/in-house-email-subscriptions.html">email subscription mechanism&lt;/a> will continue to work.&lt;/p>
-&lt;p>But&amp;hellip; I can imagine sending you some &amp;ldquo;fresh&amp;rdquo; content that wouldn&amp;rsquo;t really fit as a long-form blog article, but I&amp;rsquo;m not sure yet. So, we&amp;rsquo;ll see.&lt;/p>
-&lt;h1 id="whats-in-the-name">What&amp;rsquo;s in the name?&lt;/h1>
-&lt;p>It&amp;rsquo;s weird, isn&amp;rsquo;t it? Where does it come from? Simply put, I like original blog titles that refer to technology products or concepts, so I wanted one like those too. OS/2 Warp 3 was the alternate operating system that led me into my adventure away from Windows and towards great outcomes back in 1995, so Blog System/5 pays a tribute to that even if I likely won&amp;rsquo;t be blogging about OS/2 at all.&lt;/p>
-&lt;p>So what about the 5? As it turns out, this is the fifth (I &lt;em>think&lt;/em>) iteration of my blog. Going back almost 20 years, my writing journey started in LiveJournal, then moved onto Blogger, then onto a brief stint with Medium, then onto my self-hosted site, and then onto here. If this experiment goes sideways&amp;hellip; well, I&amp;rsquo;ll just keep the title and number for the blog. I like odd numbers.&lt;/p>
-&lt;h1 id="whats-next">What&amp;rsquo;s next?&lt;/h1>
-&lt;p>Easy. You &lt;em>subscribe now&lt;/em> and you receive my detailed recap of BazelCon 2023 as soon as I finish writing it in the next few days. Plus, of course, you&amp;rsquo;ll also receive all future articles and maybe we can build a community around those topics. Don&amp;rsquo;t hesitate to share your thoughts along the way!&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-28-blog-system5-logo.png" length="0" type="image/jpeg"/></item></channel></rss>
+&lt;/ul></description><enclosure url="https://jmmv.dev/images/2023-10-30-bazelcon.jpg" length="663230" type="image/jpeg"/></item></channel></rss>
