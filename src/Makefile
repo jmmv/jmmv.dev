@@ -1,6 +1,7 @@
 .PHONY: all clean
 all: builder-pattern-for-tests
 all: cmdline-args-unix-vs-windows
+all: djgpp
 all: inline-array-go
 all: powershell-cmdlet-params
 all: rest-api-go
@@ -9,6 +10,7 @@ all: unreal-mode
 all: wait-for-process-group
 clean: clean-builder-pattern-for-tests
 clean: clean-cmdline-args-unix-vs-windows
+clean: clean-djgpp
 clean: clean-inline-array-go
 clean: clean-powershell-cmdlet-params
 clean: clean-rest-api-go
@@ -28,6 +30,12 @@ cmdline-args-unix-vs-windows:
 	( cd cmdline-args-unix-vs-windows && make all )
 clean-cmdline-args-unix-vs-windows:
 	( cd cmdline-args-unix-vs-windows && make clean )
+
+.PHONY: clean-djgpp djgpp
+djgpp:
+	( cd djgpp && make all )
+clean-djgpp:
+	( cd djgpp && make clean )
 
 .PHONY: clean-inline-array-go inline-array-go
 inline-array-go:
