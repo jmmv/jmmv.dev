@@ -129,7 +129,7 @@ start:
     mov [code_base_mid], al
     mov [data_base_mid], al
     mov [code_base_high], ah
-    mov [data_base_mid], al
+    mov [data_base_high], ah
 
     ;; Populate the GDT descriptor with the linear address of the GDT.
     xor eax, eax
