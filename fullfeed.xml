@@ -1,4 +1,59 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Thu, 29 Feb 2024 08:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Links: February 2024 edition</title><link>https://jmmv.dev/2024/02/links-february-2024-edition.html</link><pubDate>Thu, 29 Feb 2024 08:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/02/links-february-2024-edition.html</guid><description>&lt;p>Hi folks! Another month has passed so it&amp;rsquo;s time for a brief recap of the main news, articles, and projects that made the rounds during this period and are on topic for Blog System/5.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sat, 09 Mar 2024 09:50:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>How "new type" helps avoid production outages</title><link>https://jmmv.dev/2024/03/new-type-and-production-outages.html</link><pubDate>Sat, 09 Mar 2024 09:50:00 -0700</pubDate><guid>https://jmmv.dev/2024/03/new-type-and-production-outages.html</guid><description>&lt;p>My &lt;a href="/2024/01/links-january-2024-edition.html">January links recap&lt;/a> included the &lt;a href="https://experimentalworks.net/posts/2024-01-22-simple-phantom-types/">&amp;ldquo;Phantom Types&amp;rdquo;&lt;/a> article by David Soria Parra. In it, the author briefly touches upon the &amp;ldquo;new type&amp;rdquo; idiom, its typical implementation in Rust, and then proceeds to propose a better alternative. But the question arises: why should you care?&lt;/p>
+&lt;p>To answer why this idiom is useful, I want to present you with a real production problem we faced in the Storage Infrastructure team at Google circa 2010. That issue made me a convert and I&amp;rsquo;ve kept it in mind when designing APIs since then.&lt;/p>
+&lt;h1 id="what-is-new-type-anyway">What is &amp;ldquo;new type&amp;rdquo; anyway?&lt;/h1>
+&lt;p>The &lt;a href="https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html">&amp;ldquo;new type&amp;rdquo; idiom&lt;/a> is a programming pattern whereby you define domain-specific types to wrap native types. Then, you use those types in your code and only &amp;ldquo;lower&amp;rdquo; them to their underlying types when passing the values to any external APIs.&lt;/p>
+&lt;p>More specifically, your public interfaces&amp;mdash;but also private methods and functions&amp;mdash;should never receive primitive types like integers or strings. A function like &lt;code>allow_write(username: String, size: usize)&lt;/code> should not exist in your code base.&lt;/p>
+&lt;p>Instead, what you&amp;rsquo;d do is define two new types, &lt;code>Username&lt;/code> and &lt;code>Size&lt;/code>, that wrap the string and integer values. These types are trivial wrappers over the native types (e.g. &lt;code>struct Username(String)&lt;/code> and &lt;code>struct Size(usize)&lt;/code>) with the goal of making them zero-cost abstractions.&lt;/p>
+&lt;p>However, as David&amp;rsquo;s article describes, this simplistic way to implement the pattern lends itself to code duplication for every type. And, as you know, code duplication leads to slight inconsistencies over time, which may increase maintenance costs.&lt;/p>
+&lt;p>But this is not relevant now. &amp;ldquo;New type&amp;rdquo; is &amp;ldquo;new type&amp;rdquo; no matter how you implement it and no matter which language you choose. What I want to showcase here is &lt;em>why&lt;/em> adopting this pattern helps at all. And, for that, it&amp;rsquo;s time to dive into the story.&lt;/p>
+&lt;h1 id="quota-management-outage">Quota management outage&lt;/h1>
+&lt;p>Back in the early days of the Storage Infrastructure at Google, we the SRE team managed tens of shared file system deployments (aka &lt;em>cells&lt;/em>). Those file systems were multi-user and had support for quotas&amp;mdash;like pretty much any file system worthy of consideration.&lt;/p>
+&lt;p>Storage quotas are typically expressed as two quantities: a &lt;em>bytes quota&lt;/em>, which says how much disk space a user can use; and a &lt;em>files quota&lt;/em>, which says how many files a user can store. Tracking byte usage limits disk usage and tracking file usage limits metadata overhead.&lt;/p>
+&lt;p>Now, even with the replicated and zonal system that Google had, it was convenient to &lt;em>manage&lt;/em> user quotas in a centralized way. So that&amp;rsquo;s what we also had: the equivalent of a MySQL database tracking how much quota each user had allocated in which cell, world-wide.&lt;/p>
+&lt;p>So far so good. But how do you keep the decentralized storage cells decoupled from the quota database? Easy! Via a cron job that reads the quotas and pushes them to cluster-local &amp;ldquo;configuration&amp;rdquo; files so that each cell doesn&amp;rsquo;t need to know about the central database.&lt;/p>
+&lt;p>Of course, this cron job is code. And code has bugs. So here is what happened: there was some function somewhere that looked like this: &lt;code>set_quota(user: String, bytes: usize, files: usize)&lt;/code>. And, for whatever reason, a caller invoked it as &lt;code>set_quota(user, files, bytes)&lt;/code>.&lt;/p>
+&lt;p>Notice the problem? The caller swapped the arguments but the language did not flag this issue and&amp;hellip; the tests didn&amp;rsquo;t catch it either! It&amp;rsquo;s unfortunately too common for people to write the same sentinel values (&lt;code>set_quota(&amp;quot;foo&amp;quot;, 100, 100)&lt;/code>) for different test arguments.&lt;/p>
+&lt;p>Soon after this change was checked in, the code rolled out to production and&amp;hellip; of course, the moment it touched the first canary deployment, things went south. Users started receiving out of quota alerts even when they should have had, in theory, plenty of available quota.&lt;/p>
+&lt;div class="container action-highlight p-4 my-4 d-md-none">
+&lt;div class="row text-center">
+&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.&lt;/p>
+&lt;/div>
+&lt;div class="row">
+&lt;div class="col">
+&lt;div class="form-group">
+&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
+&lt;input type="text" name="email"
+placeholder="Enter your email"
+class="form-control input-sm text-center my-1"/>
+&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
+&lt;/form>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;div class="row px-2">
+&lt;div class="col col-sm-5 text-left">
+&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
+&lt;/div>
+&lt;div class="col col-sm-7 text-right">
+&lt;p>
+&lt;a rel="me" href="https://mastodon.online/@jmmv">
+&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+&lt;/a>
+&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
+&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+&lt;/a>
+&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
+&lt;/p>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;h1 id="the-aftermath">The aftermath&lt;/h1>
+&lt;p>The fix to the above was trivial: swap the arguments in the problematic caller and call it a day. But that&amp;rsquo;s a naïve fix. It just corrects the immediate problem but does not minimize the chances of it happening again. That is: this change is a &lt;em>mitigation&lt;/em>, not a &lt;em>fix&lt;/em>.&lt;/p>
+&lt;p>In good SRE fashion, the team went a bit further to prevent this issue from ever recurring. They adopted the &amp;ldquo;new type&amp;rdquo; pattern, created two separate types&amp;mdash;&lt;code>BytesQuota&lt;/code> and &lt;code>FilesQuota&lt;/code>&amp;mdash;and plumbed them through the whole program. And note: Rust wasn&amp;rsquo;t really a thing in 2010.&lt;/p>
+&lt;p>Furthermore, the team contributed an entry to the &lt;a href="https://testing.googleblog.com/2007/01/introducing-testing-on-toilet.html">Testing on the Toilet blog&lt;/a>, describing the issue and how this same problem had &lt;em>just&lt;/em> bitten a major financial company and had made them lose millions of dollars.&lt;/p>
+&lt;p>And that&amp;rsquo;s the simple story of the day. Please adopt the new type pattern. Future-you will be happy that you did when the compiler or language interpreter yells at you about something that&amp;rsquo;s obviously wrong.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-03-09-new-types-store.jpg" length="552435" type="image/jpeg"/></item><item><title>Links: February 2024 edition</title><link>https://jmmv.dev/2024/02/links-february-2024-edition.html</link><pubDate>Thu, 29 Feb 2024 08:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/02/links-february-2024-edition.html</guid><description>&lt;p>Hi folks! Another month has passed so it&amp;rsquo;s time for a brief recap of the main news, articles, and projects that made the rounds during this period and are on topic for Blog System/5.&lt;/p>
 &lt;p>As usual, this is not just a list: every entry is accompanied by a short blurb detailing why I found the content interesting, which is meant to nudge you into reading it! Also, the list is ordered by when the links made it my way, not chronologically, and some items are &lt;em>not&lt;/em> from this time period.&lt;/p>
 &lt;p>Let&amp;rsquo;s get to it.&lt;/p>
 &lt;h1 id="the-links">The links&lt;/h1>
@@ -1621,20 +1676,4 @@ Cover image (and link) to the Bazel interview in Software Engineering Daily.
 &lt;/figcaption>
 &lt;/figure>
 &lt;/a>
-&lt;/blockquote></description><enclosure url="https://jmmv.dev/images/2023-11-24-showstopper-pile.jpg" length="180641" type="image/jpeg"/></item><item><title>Code reviews: A success story</title><link>https://jmmv.dev/2023/11/code-reviews-a-success-story.html</link><pubDate>Tue, 21 Nov 2023 13:50:00 -0800</pubDate><guid>https://jmmv.dev/2023/11/code-reviews-a-success-story.html</guid><description>&lt;p>Code reviews have a bad rep: they are antagonistic in nature and, sometimes, pure red tape. Some argue that they are bad practice; others say that peer programming is better. And while these &lt;em>may&lt;/em> be true, I want to tell you a story about a case where code reviews worked well!&lt;/p>
-&lt;p>Meet X: a junior engineer in the Bazel team circa 2018, tasked to implement two features: A and B. As you may know, Google is big into code reviews&amp;mdash;and their tooling for this is awesome; believe me&amp;mdash;so this was the standard process for X to get his code checked in.&lt;/p>
-&lt;p>For Feature A, X was working with two engineers in his same office: Y and Z. Engineer Y was a junior engineer as well but with more coding experience than X. Y wrote code really fast and didn&amp;rsquo;t like process. Y rubber-stamped long code reviews with little care about the details.&lt;/p>
-&lt;p>Engineer Z was a high-level tech lead in the team. Z had a lot of experience and knew the product top-to-bottom, but didn&amp;rsquo;t have much time for code reviews. Worse yet, Z didn&amp;rsquo;t have enough spare time to closely mentor X or Y.&lt;/p>
-&lt;p>For Feature B, X was working with me, who was 6000 km away and with a 6-hour time difference between us. I was known for tough code reviews. I also pushed for breaking large changes into smaller commits, because it is impossible to do a thorough review otherwise.&lt;/p>
-&lt;p>And I also pushed for writing unit and integration tests in each change, guiding X into a good testing approach for feature B at each small step. You might say that this is important but isn&amp;rsquo;t part of a code review, but this is where the issues surfaced.&lt;/p>
-&lt;p>My review comments were copious, so I classified them in three categories: nits, which were inconsequential style changes; optional suggestions, which X could ignore; and important comments, which required X to change code or for us to have a detailed discussion.&lt;/p>
-&lt;p>Importantly, I always justified my review comments, &lt;em>especially&lt;/em> if they were personal opinions or optional suggestions. Most of the time, X took my advice and addressed nits and optional suggestions, because he was convinced by my explanations.&lt;/p>
-&lt;p>Other times, X pushed back. Maybe I hadn&amp;rsquo;t understood the change or maybe I was just simply wrong. These cases needed further discussion and often resulted in side 1:1 conversations or even the request to write a mini design doc to flush out unclear ideas.&lt;/p>
-&lt;p>The time to ship came. For context, Bazel used to be released once every two weeks within Google. New features were gated behind feature flags, which minimized risk in the release process. And if something went wrong, the two-week release cadence allowed addressing bugs quickly.&lt;/p>
-&lt;p>Feature A was ready before feature B&amp;hellip; or was it? The overhead of the reviews in A had been minimal so the code shipped quickly. However&amp;hellip; feature A did not work. X needed multiple release cycles to address bugs, all under pressure because the feature &amp;ldquo;had already launched&amp;rdquo;.&lt;/p>
-&lt;p>Feature B, on the other hand&amp;hellip; took longer to ship. But once it did, it worked &lt;em>on the first try&lt;/em>. Sure, it wasn&amp;rsquo;t perfect and needed some iteration to address small issues, but the bulk of the code just worked. This made X proud and understood why I had been thorough.&lt;/p>
-&lt;p>To this day, X still remembers shipping these two features. He has told the story above multiple times and praised the process we followed for feature B. For me, it was mostly &amp;ldquo;business as usual&amp;rdquo; and didn&amp;rsquo;t really notice the (positive) impact it had on him.&lt;/p>
-&lt;p>X also claims to have learned a lot just by reading my comments, thinking about them, and having to do the tricky work to write small, well-tested changes. And you know what? He has recently earned the title of CTO at an exciting startup.&lt;/p>
-&lt;p>Anyhow. I realize this whole story shows flaws in various places. Z should probably have paid more attention to X and Y. Maybe X should have written more-detailed design docs upfront. Maybe we should all have pair-programmed. No team is perfect.&lt;/p>
-&lt;p>But code reviews do work. Yes, they can be problematic, but I don&amp;rsquo;t think that code reviews are intrinsically antagonistic: it&amp;rsquo;s the people involved. Code reviews are just &lt;em>a tool&lt;/em> to achieve the goals of quality and mentoring, and as a tool, it has to be used wisely.&lt;/p>
-&lt;p>And one last thing: code reviews are truly async-friendly. This may be why they are popular in open source, and in this particular case, they truly helped X and I due to the physical distance between us. Q.E.D.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-11-21-code-review.png" length="134980" type="image/jpeg"/></item></channel></rss>
+&lt;/blockquote></description><enclosure url="https://jmmv.dev/images/2023-11-24-showstopper-pile.jpg" length="180641" type="image/jpeg"/></item></channel></rss>
