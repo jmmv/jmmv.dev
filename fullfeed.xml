@@ -1,4 +1,86 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Mon, 09 Sep 2024 08:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Windows NT vs. Unix: A design comparison</title><link>https://jmmv.dev/2024/09/windows-nt-vs-unix-design.html</link><pubDate>Mon, 09 Sep 2024 08:30:00 -0700</pubDate><guid>https://jmmv.dev/2024/09/windows-nt-vs-unix-design.html</guid><description>&lt;p>Over the years, I&amp;rsquo;ve repeatedly heard that Windows NT is a very advanced operating system and, being a Unix person myself, it has bothered me to not know &lt;em>why&lt;/em>. I&amp;rsquo;ve been meaning to answer this question for years and I can do so now, which means I want to present you my findings.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Mon, 30 Sep 2024 08:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Revisiting the DOS memory models</title><link>https://jmmv.dev/2024/09/dos-memory-models.html</link><pubDate>Mon, 30 Sep 2024 08:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/09/dos-memory-models.html</guid><description>&lt;p>At the beginning of the year, I wrote a bunch of articles on the various tricks DOS played to overcome the tight memory limits of x86&amp;rsquo;s real mode. There was one question that came up and remained unanswered: what were the various &amp;ldquo;models&amp;rdquo; that the compilers of the day offered? Take a look at Borland Turbo C++&amp;rsquo;s code generation menu:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-09-30-turbo-cxx-memory-models.png" class="with-border" />
+&lt;figcaption>Borland Turbo C++ showing its Code Generation menu, which displays the list of models we cover in this article.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Tiny, small, medium, compact, large, huge&amp;hellip; What did these options mean? What were their effects? And, more importantly&amp;hellip; is any of that legacy relevant today in the world of 64-bit machines and gigabytes of RAM? To answer those questions, we must start with a brief review of the 8086 architecture and the binary formats supported by DOS.&lt;/p>
+&lt;h1 id="8086-segmentation">8086 segmentation&lt;/h1>
+&lt;p>In the 8086 architecture, which is the architecture that DOS targeted, memory references are composed of two parts: a &lt;strong>2-byte segment&lt;/strong> &amp;ldquo;identifier&amp;rdquo; and a &lt;strong>2-byte offset&lt;/strong> within the segment. These pairs are often expressed as &lt;code>segment:offset&lt;/code>.&lt;/p>
+&lt;p>Segments are contiguous 64KB chunks of memory and are identified by their base address. To be able to address the full 1MB of memory that the 8086 supports, segments are offset from each other by 16 bytes. As you can deduce from this, segments overlap, which means that a specific physical memory position can be referenced by many segment/offset pairs.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-09-30-dos-memory-models-8086-segments.png" />
+&lt;figcaption>Representation of two consecutive 8086 segments and how a single physical memory address can be expressed as different segment/offset pairs.&lt;/figcaption>
+&lt;/figure>
+&lt;p>As an example, the segmented address &lt;code>B800h:0032h&lt;/code> corresponds to the physical address &lt;code>B8032h&lt;/code> computed via &lt;code>B800h * 10h + 0032h&lt;/code>. While this pair is human-readable, that&amp;rsquo;s not how the machine-level instructions encode it. Instead, instructions rely on &lt;strong>segment registers&lt;/strong> to specify the segment to access, and the 8086 supports four of these: CS (code segment), DS (data segment), ES (extra data segment), and SS (stack segment). Knowing this, accessing this sample memory position requires first loading &lt;code>B800h&lt;/code> into &lt;code>DS&lt;/code> and then referencing &lt;code>DS:0032h&lt;/code>.&lt;/p>
+&lt;p>One of the reasons instructions rely on segment registers instead of segment identifiers on every memory access is efficiency: encoding the segment register to use requires only 2 bits (we have 4 segment registers in total) vs. the 2 bytes that would be necessary to store the segment base. More on this later.&lt;/p>
+&lt;h1 id="com-files">COM files&lt;/h1>
+&lt;p>&lt;a href="https://en.wikipedia.org/wiki/COM_file">COM files&lt;/a> are the most trivial executable format you can think of: they contain raw machine code that can be placed at pretty much any memory location and executed without any sort of post-processing. There are no relocations, no shared libraries, no nothing to worry about: you can just blit the binary into memory and run it.&lt;/p>
+&lt;p>The way this works is by leveraging the 8086 segmented architecture: the COM image is loaded into &lt;em>any&lt;/em> segment and always at offset 100h within that segment. All memory addresses within the COM image must be relative to this offset (which explains the &lt;code>ORG 100h&lt;/code> you might have seen in the past), but the image doesn&amp;rsquo;t need to know which segment it is loaded into: the loader (DOS in our case, but COM files come from CP/M actually) sets CS, DS, ES, and SS to the exact same segment and transfers control to &lt;code>CS:100h&lt;/code>.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-09-30-dos-memory-models-com-file.png" />
+&lt;figcaption>At the top, representation of a COM file as it is stored on disk. At the bottom, an explanation of how DOS proceeds to load this COM file into two different segments.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Magic! COM files are essentially PIE (&lt;a href="https://en.wikipedia.org/wiki/Position-independent_code">Position Independent Executables&lt;/a>) without requiring any sort of MMU or fancy memory management by the kernel.&lt;/p>
+&lt;p>Unfortunately, not everything is rosy. The problem with COM files is that they are limited in size: because they are loaded into one segment and segments are 64KB-long at most, the largest a COM file can be is 64KB (minus the 256 bytes reserved for the PSP at the front). This includes code &lt;em>and&lt;/em> data, and 64KB isn&amp;rsquo;t much of either. Obviously, when the COM program is running, it has free reign over the processor and can access any memory outside of its single segment by resetting CS, DS, ES, and/or SS, but all memory management is left to the programmer.&lt;/p>
+&lt;h1 id="exe-files">EXE files&lt;/h1>
+&lt;p>To resolve the limitations of COM files in DOS, Microsoft came up with a different executable format for DOS: the &lt;a href="https://en.wikipedia.org/wiki/DOS_MZ_executable">EXE file&lt;/a>, also known as an MZ executable.&lt;/p>
+&lt;p>Compared to COM files, EXE files have some internal structure and are not bound by the 64KB limit: they can contain larger code and data blocks in them. But&amp;hellip; how is that possible given that 8086 segments are still 64KB-long at most? The answer is simple: EXE files contain &lt;em>multiple&lt;/em> segments and spread code and data over them.&lt;/p>
+&lt;p>To support multiple segments at runtime, EXE files contain relocation information in their header. Conceptually, relocations tell the loader which positions in the binary image contain &amp;ldquo;incomplete&amp;rdquo; pointers that need to be fixed up with the segment base addresses of the segments after they are loaded in memory. DOS, acting as the loader, is responsible for doing this patching.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-09-30-dos-memory-models-exe-file.png" />
+&lt;figcaption>Representation of an EXE file and the content of one of its code segments. Within the code, we can see a near pointer and two far pointers that will require patching at runtime to point to the other segments in the binary.&lt;/figcaption>
+&lt;/figure>
+&lt;p>How many segments go into the EXE though? Well, it depends, because not all programs have the same needs. Some programs are tiny overall and could fit in a COM file. Other programs contain large portions of data but little code. Another set of programs contain a lot of code and data. Etc.&lt;/p>
+&lt;p>So then the question becomes: how can the one-size-fits-all EXE format support these options in an efficient manner? This is where memory models become important, but to talk about those, we must do another detour through pointer types.&lt;/p>
+&lt;h1 id="pointer-types">Pointer types&lt;/h1>
+&lt;p>&lt;a href="https://en.wikipedia.org/wiki/Locality_of_reference">The locality principle&lt;/a> says that &amp;ldquo;a processor tends to access the same set of memory locations repetitively over a short period of time&amp;rdquo;. This is easy to reason about: code normally runs almost-sequentially and data is often packed in consecutive chunks of memory like arrays or structs.&lt;/p>
+&lt;p>Because of this, expressing &lt;em>all&lt;/em> memory addresses as 4-byte &lt;code>segment:offset&lt;/code> pairs would be wasteful, and this is where 8086&amp;rsquo;s segmentation plays in our favor again. We can first load a segment register with the base address of &amp;ldquo;all of our data&amp;rdquo; and then all we need to do is record addresses as offsets within that segment. The fewer times we have to reload segment registers, the better because the less information we have to carry around in every instruction and in every memory reference.&lt;/p>
+&lt;p>But we can&amp;rsquo;t just always use offsets within a single segment because we may be dealing with more than one segment. And offsets come in various sizes so using a unique size for them all would be wasteful too. Which means memory addresses, or &lt;em>pointers&lt;/em>, need to have different shapes and forms, each best suited for a specific use case.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-09-30-dos-memory-models-short-pointer.png" />
+&lt;figcaption>Representation of two short pointers: one addressing a higher memory address (possibly a forward jump to skip a conditional branch) and one addressing a lower memory address (probably a backwards jump to return to the beginning of a loop).&lt;/figcaption>
+&lt;/figure>
+&lt;p>&lt;strong>Short pointers&lt;/strong> take just 1 byte and express a &lt;em>relative&lt;/em> address from the instruction being executed. These are specially useful in jump instructions to keep their binary representation compact: jumps appear in every conditional or loop, and in many cases, conditional branches and loop bodies are so short that minimizing the amount of code required to express these branch points is worthwhile.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-09-30-dos-memory-models-near-pointer.png" />
+&lt;figcaption>Representation of a near pointer.&lt;/figcaption>
+&lt;/figure>
+&lt;p>&lt;strong>Near pointers&lt;/strong> can reference addresses within the 64KB segment implied &amp;ldquo;by context&amp;rdquo; and are 2-byte long. For example, an instruction like &lt;code>JMP 12829h&lt;/code> does not usually need to carry information about the segment this address references because code jumps are almost-always within the same CS of the code issuing the jump. Similarly, an instruction like &lt;code>MOV AX, [5610h]&lt;/code> assumes that the given address references the currently-selected DS so that it doesn&amp;rsquo;t have to express the segment every time. The offset encoded by the near pointer can be relative or absolute.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-09-30-dos-memory-models-far-pointer.png" />
+&lt;figcaption>Representation of a far pointer referencing an address in another segment.&lt;/figcaption>
+&lt;/figure>
+&lt;p>&lt;strong>Far pointers&lt;/strong> can reference any memory address by encoding a segment and an offset. They are 4-byte long. When used in pointer arithmetic, the segment stays fixed and only the offset varies. This is relevant, for example, when iterating over arrays as we can load the base address into DS or ES just once and then manipulate the offset within the segment. However, this means that such iteration has a maximum range of 64KB.&lt;/p>
+&lt;p>&lt;strong>Huge pointers&lt;/strong> are like far pointers in that they are also 4-byte long and can reference any memory address, but they eliminate the 64KB limitations around pointer arithmetic. They do so by recomputing the segment and offset portions on every memory access (remember that segments are overlapping so we can come up with multiple segment/offset pairs for any physical address). As you can imagine, this requires extra code on every memory access and thus huge pointers impose a noticeable tax on run time.&lt;/p>
+&lt;h1 id="memory-models">Memory models&lt;/h1>
+&lt;p>And now that we know about 8086 segmentation, EXE files, and pointer types&amp;hellip; we can finally tie all of these concepts together to demystify the memory models we used to see in old compilers for DOS.&lt;/p>
+&lt;p>Here is the breakdown:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Tiny&lt;/strong>: This is the memory model of COM images. The whole program fits in one 64KB segment and all segment registers are set to this one segment at startup. This means that all pointers within the program are short or near because they always reference this same 64KB segment.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Small&lt;/strong>: Uses near pointers everywhere, but the data and stack segments are different from the code segment. This means that these programs have 64KB for code and 64KB for data.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Compact&lt;/strong>: Uses short pointers for the code but far pointers for the data. This means that these programs can use the full 1 MB memory space for data and, as such, it was particularly useful for games where the code would be as tight as possible while being able to load and reference all assets in memory.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Medium&lt;/strong>: The opposite from compact. Uses far pointers for code and short pointers for data. This model is weird because, if you had a program with a lot of code, it was probably the kind of program that handled a lot of data too.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Large&lt;/strong>: Uses far pointers everywhere so both code and data can reference the full 1 MB address space. However, because of what far pointers are, all memory &lt;em>offsets&lt;/em> are 64 KB at most which means data structures and arrays are limited in size.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Huge&lt;/strong>: Uses huge pointers everywhere. This overcomes the limitations of the large model by emitting code to compute the absolute addresses of every memory access and allows structs and arrays that span over 64 KB of memory. Obviously, this comes at a cost: the program code is now larger and the runtime cost is much bigger.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>And that&amp;rsquo;s it!&lt;/p>
+&lt;p>It is worth highlighting that these models were all &lt;em>conventions&lt;/em> that a vintage C compiler used to emit code. If you were writing assembly by hand, you could mix-and-match pointer types to do whatever you wanted given that these concepts had no special meaning to the OS.&lt;/p>
+&lt;h1 id="evolving-to-todays-world">Evolving to today&amp;rsquo;s world&lt;/h1>
+&lt;p>Everything I have told you about until now is legacy stuff that you could easily dismiss as useless knowledge. Or could you?&lt;/p>
+&lt;p>One thing I did &lt;em>not&lt;/em> touch upon is the concept of &lt;strong>code density&lt;/strong> and how it relates to performance. The way we choose to express pointers in the code has a direct impact on code density, so when we evolve computing from 16-bit machines like the 8086 to contemporary 64-bit machines, pointer representations grow by &lt;em>a lot&lt;/em> and we face some hard choices.&lt;/p>
+&lt;p>But to explain all of this and answer the performance questions, you&amp;rsquo;ll have to wait for the next article. So subscribe now to not miss out on that one!&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-09-30-turbo-cxx-memory-models.png" length="140059" type="image/jpeg"/></item><item><title>Windows NT vs. Unix: A design comparison</title><link>https://jmmv.dev/2024/09/windows-nt-vs-unix-design.html</link><pubDate>Mon, 09 Sep 2024 08:30:00 -0700</pubDate><guid>https://jmmv.dev/2024/09/windows-nt-vs-unix-design.html</guid><description>&lt;p>Over the years, I&amp;rsquo;ve repeatedly heard that Windows NT is a very advanced operating system and, being a Unix person myself, it has bothered me to not know &lt;em>why&lt;/em>. I&amp;rsquo;ve been meaning to answer this question for years and I can do so now, which means I want to present you my findings.&lt;/p>
 &lt;p>My desire to know about NT&amp;rsquo;s internals started in 2006 when I applied to the Google Summer of Code program to develop Boost.Process. I needed such a library for ATF, but I also saw the project as a chance to learn something about the Win32 API. This journey then continued in 2020 with me &lt;a href="/2020/10/bye-google-hi-microsoft.html">choosing to join Microsoft&lt;/a> after a long stint at Google and me buying the &lt;a href="https://www.amazon.com/Windows-Internals-Part-architecture-management/dp/0735684189?crid=2F7UR8S48RP6O&amp;amp;dib=eyJ2IjoiMSJ9.p9cBb_-Q8GjuK0z0kDLKG6xoExPM_2QWt_jn0PlqVBSWYNyqRp2Cd7MHXFeQ4EiRACaX_Y_9xzECC0YpECzSl5kCBD3u1KUPduAgmnO732G9aqw1aLdQszw8LIXBOE1cYvOf3KYQmQ5vdFV6i4eFOttVvIa2XerkHVGiPd1OzTk32tEOchCbnUqpzW3QqCG7AjEmmKHFGuo5T2_UQDUERaSVRa26oAZHYuePCzDrwbY.bcHnZQWFYjmL64ZRnMieVsUH5JVx-T-WY88kj8V-uno&amp;amp;dib_tag=se&amp;amp;keywords=windows+internals&amp;amp;qid=1725808358&amp;amp;sprefix=windows+internals%2Caps%2C155&amp;amp;sr=8-1&amp;amp;linkCode=ll1&amp;amp;tag=blogsystem5-20&amp;amp;linkId=08d00ee830fe99b6e648add99e1b64c5&amp;amp;language=en_US&amp;amp;ref_=as_li_ss_tl">Windows Internals&lt;/a> 5th edition book in 2021 (which I never fully read due to its incredible detail and length). None of these made me learn what I wanted though: the ways in which NT fundamentally differs from Unix, if at all.&lt;/p>
 &lt;p>Then, at the end of 2023, the &lt;a href="/2023/11/windows-nt-peeking-into-the-cradle.html">Showstopper&lt;/a> book sparked this curiosity once again. And soon, a new thought came to mind: the Windows Internals 5th edition book was too obtuse but&amp;hellip; what about the first edition? Surely it must have been easier to digest because the system was much simpler back in the early 1990s. So lo and behold, I searched for this edition, found it under the title &lt;a href="https://www.amazon.com/Inside-Windows-NT-Helen-Custer/dp/155615481X?crid=1DW4GVN0DXZR4&amp;amp;dib=eyJ2IjoiMSJ9.T5IY8OXVnanYLCjv3cX4UA18lTT67S00r-GHOWD5mzHAUtLk4np5tyXDZB6t25N5JGVVo4y_Yi-4Fv6TrXMJ_rs_BjLK_hTqetPsJAsHRsaw6ZbhMH07OitAfS2LpgEmdUNfdU8KoIM8BEJHof4aPIJMHkemWy0IFcaXoyQ9TLMcgLdTlMVF5Yqen-dG6NZeJ03UYK9NJXzHMgt4noQO1UmhxTMA2xw2Bhi-GDbZT4k.vGalnM5AX1xcE149fGsl5IjcbdD3yE0gw0F7_RojBV4&amp;amp;dib_tag=se&amp;amp;keywords=inside+windows+nt&amp;amp;qid=1725808269&amp;amp;sprefix=inside+windows+nt%2Caps%2C160&amp;amp;sr=8-1&amp;amp;linkCode=ll1&amp;amp;tag=blogsystem5-20&amp;amp;linkId=3f47c0d7cea553fed13057b16d417b6c&amp;amp;language=en_US&amp;amp;ref_=as_li_ss_tl">Inside Windows NT&lt;/a>, read it cover to cover, and took notes to evaluate NT vs. Unix.&lt;/p>
 &lt;p>Which brings me to this article&amp;mdash;a collection of thoughts comparing the design of NT (July 1993) against contemporary Unix systems such as 4.4BSD (June 1994) or Linux 1.0 (March 1994). Beware that, due to my background, the text is written from the point of view of a Unix &amp;ldquo;expert&amp;rdquo; and an NT &amp;ldquo;clueless&amp;rdquo;, so it focuses on describing the things that NT does differently.&lt;/p>
@@ -1914,136 +1996,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;hr>
 &lt;p>&lt;strong>&lt;a href="https://blog.yossarian.net/2020/06/13/How-x86_64-addresses-memory">&amp;ldquo;How x86_64 addresses memory&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
 &lt;em>By William Woodruff on June 13th, 2020&lt;/em>&lt;/p>
-&lt;p>&lt;code>mov&lt;/code> is &lt;em>the&lt;/em> x86 instruction, and this article does a good job at looking at all possible memory addressing modes. The reason this is interesting is because the article also looks at &lt;em>why&lt;/em> each addressing mode is useful by mapping it to a C construct that benefits from it.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-31-links.png" length="56457" type="image/jpeg"/></item><item><title>The IDEs we had 30 years ago... and we lost</title><link>https://jmmv.dev/2023/12/the-ides-we-had-30-years-ago.html</link><pubDate>Mon, 25 Dec 2023 10:40:00 +0100</pubDate><guid>https://jmmv.dev/2023/12/the-ides-we-had-30-years-ago.html</guid><description>&lt;p>I grew up learning to program in the late 1980s / early 1990s. Back then, I did not fully comprehend what I was doing and why the tools I used were impressive given the constraints of the hardware we had. Having gained more knowledge throughout the years, it is now really fun to pick up DOSBox to re-experience those programs and compare them with our current state of affairs.&lt;/p>
-&lt;p>This time around, I want to look at the pure text-based IDEs that we had in that era before Windows eclipsed the PC industry. I want to do this because those IDEs had little to envy from the IDEs of today&amp;mdash;yet it feels as if we went through a dark era where we lost most of those features for years and they are only resurfacing now.&lt;/p>
-&lt;p>If anything, stay for a nostalgic ride back in time and a little rant on &amp;ldquo;bloat&amp;rdquo;. But, more importantly, read on to gain perspective on what existed before so that you can evaluate future feature launches more critically.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="first-editors-and-tuis">First editors and TUIs&lt;/h1>
-&lt;p>In the 1990s, almost every DOS program you ran had a full-screen Text User Interface (TUI) which sported text-based windows, drop shadows, colors, and mouse support. Here is just one example:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-edit-com-colors.png" class="with-border">
-&lt;figcaption>The MS-DOS Editor (aka &lt;tt>EDIT.COM&lt;/tt>) with one of its settings dialog open. Note the menu bar, the rich dialog with list selectors and buttons, and the status bar documenting navigation shortcuts.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Each program was its own island because its interface was unique to the program. However, they were all so similar in how they looked like&amp;mdash;80x25 characters didn&amp;rsquo;t leave much room for uniqueness&amp;mdash;and how they worked that the differences didn&amp;rsquo;t really get in the way of usability and discoverability. Once you learned that the Alt key opened the menus and that Tab moved across input fields and buttons, you could navigate almost any program with ease.&lt;/p>
-&lt;p>But let&amp;rsquo;s talk about editors. MS-DOS shipped with a TUI text editor since version 5 (1991), which &lt;a href="/2023/12/a-cli-text-editor-in-my-windows.html">I previously covered in a recent article&lt;/a> and is shown above. This editor &amp;ldquo;worked&amp;rdquo;, but it was really inconvenient for coding: you needed to exit the editor to compile and run your code, and when you re-ran the editor, you&amp;rsquo;d have to navigate back to where you were before.&lt;/p>
-&lt;p>&amp;ldquo;In my house&amp;rdquo;, we used something called &lt;a href="https://en.wikipedia.org/wiki/Borland_Sidekick">SideKick Plus&lt;/a> (1984), which wasn&amp;rsquo;t really a code editor: it was more of a Personal Information Management (PIM) system with a built-in notepad. The cool thing about it, however, was that it was a Terminate and Stay Resident (TSR) program, which meant that it loaded in the background and you could bring it up at any time by pressing Ctrl+Alt.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-sidekick-plus.png" class="with-border">
-&lt;figcaption>SideKick Plus' main screen after pressing Ctrl+Alt to bring it up. Note how DOS remains in the background.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Think of this TSR feature as rudimentary multitasking for an OS that did &lt;em>not&lt;/em> have multitasking. This was really effective because quickly switching between code editing and building is critical for an efficient inner development loop. (And by the way, this past experience explains the design of the &lt;a href="https://www.endbasic.dev/docs.html#intro-first">code editing flow in EndBASIC&lt;/a>. I did not implement the equivalent of Ctrl+Alt, but I&amp;rsquo;ve considered it many times.)&lt;/p>
-&lt;p>By this point, however, real IDEs had already existed for a few years. Turbo Pascal 1.0 (1983) shows the beginning of an integrated experience, although it did not feature its iconic TUI yet. QuickBASIC 2.0 (1986) shows more of a &amp;ldquo;traditional&amp;rdquo; TUI (the same as &lt;code>EDIT.COM&lt;/code>, because they are the same editor), and MS-DOS 5 came with QBasic, a reduced version of QuickBASIC that didn&amp;rsquo;t allow compiling to native code but that had the same look.&lt;/p>
-&lt;h1 id="the-borland-turbo-series">The Borland Turbo series&lt;/h1>
-&lt;p>The crown jewel of IDEs, in my opinion, were the later Borland Turbo series, which included Turbo C++ (1990), Turbo Assembler and Turbo Pascal. These IDEs were language specific, but they had full-screen TUIs and were extremely powerful.&lt;/p>
-&lt;p>Here, take a look at what we had. Syntax highlighting:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-turbo-cpp-syntax-highlighting.png" class="with-border">
-&lt;figcaption>Borland Turbo C++ showing a "Hello World" program to demonstrate syntax highlighting.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Compiler integration and diagnostics:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-turbo-cpp-warnings.png" class="with-border">
-&lt;figcaption>Borland Turbo C++ after compiling a program, showing a warning because I did not return a value from &lt;tt>main()&lt;/tt>.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Integrated project and build system management:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-turbo-cpp-project.png" class="with-border">
-&lt;figcaption>Borland Turbo C++ showing its project management and multi-window features. In the picture, you can see two C++ source files, with one depending on the other, and the project window listing all files that need to be compiled together.&lt;/figcaption>
-&lt;/figure>
-&lt;p>A debugger with breakpoints, stack traces, and the like:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-turbo-cpp-debugger.png" class="with-border">
-&lt;figcaption>Borland Turbo C++ showing a debugging session with a program that contains multiple functions, a breakpoint, and the current call stack.&lt;/figcaption>
-&lt;/figure>
-&lt;p>And even a full reference manual:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-turbo-cpp-help.png" class="with-border">
-&lt;figcaption>Borland Turbo C++ showing its integrated help system, with the "Hello World" program in the background and the help for &lt;tt>printf&lt;/tt>.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Remember: all of this in the early 1990s&amp;mdash;a little over 30 years ago at the time of this writing.&lt;/p>
-&lt;p>I was an avid user of Turbo C++, with which I learned a lot. I remember using their &lt;code>conio.h&lt;/code> libraries to implement TUIs of my own, and then their builtin &lt;code>graphics.h&lt;/code> libraries to play with implementing GUIs. And note: this was &lt;em>without the Internet&lt;/em>. There was no option for many to just &amp;ldquo;look up how things worked&amp;rdquo; in Stack Overflow: the IDE had to be discoverable right away (which it was) and self-contained to offer you a complete development experience.&lt;/p>
-&lt;h1 id="what-about-linux-back-then">What about Linux back then?&lt;/h1>
-&lt;p>Now take a moment to compare this scene with Linux in the early 1990s.&lt;/p>
-&lt;p>In Linux, almost every program was &lt;em>also&lt;/em> text based, but those programs did not come with a full-screen TUI. It just wasn&amp;rsquo;t &amp;ldquo;the Unix way&amp;rdquo;. I remember watching the X11 configuration tool (&lt;a href="https://www.xfree86.org/3.3.6/QuickStart3.html">&lt;code>XF86Setup&lt;/code>&lt;/a>) or the OpenBSD installer and feeling shocked by how simplistic those were: me, a young teenager with barely any &amp;ldquo;real&amp;rdquo; coding experience, had written better-looking programs already.&lt;/p>
-&lt;p>In any case, this didn&amp;rsquo;t stop me from my quest to &lt;em>not&lt;/em> use Windows. I continued to learn the ways of Linux and soon faced the &amp;ldquo;best&amp;rdquo; editors recommended by every book and community online: Vim and Emacs. And I could not understand why they were praised. Using these was like stepping back into the past. They were full-screen programs indeed, but they seemed pretty arcane. Vim did have syntax highlighting but it was far from being an IDE. Emacs could be configured to integrate with some code assisting features and the like, but it was far from being &amp;ldquo;fire and forget&amp;rdquo; like the Turbo family of IDEs.&lt;/p>
-&lt;p>Just look at the default Emacs configuration &lt;em>today&lt;/em>, which hasn&amp;rsquo;t changed much (if at all) since then. It does have windows, but they aren&amp;rsquo;t decorated. It didn&amp;rsquo;t have colors (and now barely has), because why? It didn&amp;rsquo;t use to have mouse support. It &lt;em>does&lt;/em> have a menu bar though, but it is just a gimmick? If you press &lt;tt>M-`&lt;/tt> as the instructions tell you, you face a truly strange interface to navigate the menu&amp;mdash;which makes one wonder why they even bothered to waste a full line of screen real state to show a menu bar that does nothing.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-emacs-menubar.png" class="with-border">
-&lt;figcaption>A fresh installation of Emacs in the console, with the standard welcome screen in the background and the "menu" open after pressing &lt;tt>M-`&lt;/tt>.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Now try giving this to anyone with little coding experience and getting them to create, compile, and debug a program. They will have trouble just navigating the editor, and they won&amp;rsquo;t find any of the features that would allow for project management or compiler integration.&lt;/p>
-&lt;p>For comparison, in writing this post, I fired up Turbo C++ in DOSBox and I was able to create a &amp;ldquo;hello world&amp;rdquo; project and navigate the environment in minutes&amp;mdash;all without prior knowledge (everything I had known has been forgotten by now). The environment is intuitive and, as an IDE, integrated all around.&lt;/p>
-&lt;h1 id="contemporary-tui-ides">Contemporary TUI IDEs&lt;/h1>
-&lt;p>Anyhow. Let&amp;rsquo;s forget about the past and look at what we have today in TUI-land. I don&amp;rsquo;t want to look at GUIs because&amp;hellip; well, Visual Basic was the pinnacle of graphics programming and we don&amp;rsquo;t have that either anymore&amp;mdash;which is also a topic for another day. (Well, OK, you have &lt;a href="https://gambas.sourceforge.net/">Gambas&lt;/a>&amp;hellip; but who knows about it?)&lt;/p>
-&lt;p>The closest more-modern equivalent to the Borland Turbo C++ environment is &lt;a href="https://directory.fsf.org/wiki/RHIDE">RHIDE&lt;/a>. As you can see in the picture below, it looks incredibly similar&amp;mdash;and you&amp;rsquo;d be forgiven if you thought this &lt;em>is&lt;/em> Turbo C++. Unfortunately, it is DOS-only and seems to be mostly abandoned by now with its latest release dated 7 years ago.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-rhide.png" class="with-border">
-&lt;figcaption>The RHIDE IDE showing the same "hello world" program as before, with no errors nor warnings after compilation.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Then we have &lt;a href="https://www.freepascal.org/">Free Pascal&lt;/a>. This is the closest you&amp;rsquo;ll get to the old experience but with a modern codebase, running natively on Unix systems and leveraging terminals of any size.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-free-pascal.png" class="with-border">
-&lt;figcaption>The Free Pascal IDE with a trivial "hello world" program and overlapping windows for a built-in ASCII table and a calculator.&lt;/figcaption>
-&lt;/figure>
-&lt;p>And lastly we have &lt;a href="https://qb64.com/">QB64&lt;/a>. This closely resembles Microsoft QuickBasic but&amp;hellip; don&amp;rsquo;t let it trick you: even though it looks like a TUI, it is actually a GUI application that simulates a TUI. You cannot run QB64 in a terminal.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-qb64.png" class="with-border">
-&lt;figcaption>The QB64 IDE, which looks textual but is actually a graphical program.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Both Free Pascal and QB64 are maintained and under relatively-active development, with their most recent releases in 2021&amp;hellip; but they are mostly ignored because they expose arcane languages that most people have no interest in these days.&lt;/p>
-&lt;h1 id="real-contemporary-console-ides">&amp;ldquo;Real&amp;rdquo; contemporary console IDEs&lt;/h1>
-&lt;p>So what are we left with for &lt;em>modern&lt;/em> languages today?&lt;/p>
-&lt;p>The state of the art seems to be &lt;a href="https://neovim.io/">Neovim&lt;/a>, &lt;a href="https://github.com/doomemacs/doomemacs">Doom Emacs&lt;/a>, or even &lt;a href="https://helix-editor.com/">Helix&lt;/a>. These editors are very powerful and, thanks to various plugins, offer reasonable IDE-like experiences. That said, if you ask me, none of these provide the same kind of experience that the previous Borland products offered: their interfaces are obscure and, due to their multi-language nature, they work OK for almost everything but they aren&amp;rsquo;t great for anything. &amp;ldquo;Jack of all trades, master of none&amp;rdquo; if you will.&lt;/p>
-&lt;p>In any case, the preferred &amp;ldquo;simple&amp;rdquo; TUI editor, based on what I observed in the deranged &lt;a href="https://github.com/microsoft/terminal/discussions/16440">microsoft/terminal#16440&lt;/a> discussion, seems to be&amp;hellip; &lt;a href="https://www.nano-editor.org/">GNU Nano&lt;/a>&amp;hellip; which OK, it works, but first: it&amp;rsquo;s no IDE, and second, to me this looks like WordStar. Yeah, I know it isn&amp;rsquo;t WordStar: if you want WordStar, the closest you&amp;rsquo;ll find is &lt;a href="https://joe-editor.sourceforge.io/">Joe&lt;/a>, but the &lt;em>looks&lt;/em> of Nano remind me of my first experiences with a word processor back in the CP/M days. Here, look:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2023-12-25-nano.png" class="with-border">
-&lt;figcaption>The GNU Nano editor in its default setup, with an empty file open.&lt;/figcaption>
-&lt;/figure>
-&lt;p>So even though we &lt;em>do&lt;/em> have powerful console editors these days, they don&amp;rsquo;t quite offer the same usable experience we had 30 years ago. In fact, it feels like during these 30 years, we regressed in many ways, and only now are reaching feature parity with some of the features we used to have.&lt;/p>
-&lt;p>It is natural that TUIs diminished in popularity once graphical OSes gained traction, and it is somewhat interesting that they are making a comeback just now. As for why, I think we have to thank the invention of &lt;a href="https://microsoft.github.io/language-server-protocol/">LSP&lt;/a> for most of the recent progress in this area. TUI editors were &amp;ldquo;on hold&amp;rdquo; for many years because building IDE features for them was a lot of effort and their small maintainer base could not afford to implement them. LSP unlocked access to existing language-specific integrations and reinfused interest in the old-and-trusty Vim and Emacs. Hopefully, the upcoming &lt;a href="https://build-server-protocol.github.io/">BSP&lt;/a> will do even more to make these TUIs more IDE-like.&lt;/p>
-&lt;h1 id="why-tui-ides-anyway">Why TUI IDEs anyway?&lt;/h1>
-&lt;p>It is fair to ask &amp;ldquo;Who cares? Every desktop and laptop runs a graphical OS now!&amp;rdquo;&lt;/p>
-&lt;p>And it&amp;rsquo;s a good question. In general, you probably &lt;em>don&amp;rsquo;t&lt;/em> want a TUI IDE. If VSCode is your jam, its remoting abilities are superb and VSCode has a reasonably good graphical interface without being a full-blown IDE. But there are a few things that VSCode doesn&amp;rsquo;t give us.&lt;/p>
-&lt;p>The first is that a TUI IDE is excellent for work on remote machines&amp;mdash;even better than VSCode. You can SSH into &lt;em>any&lt;/em> machine with ease and launch the IDE. &lt;a href="/2015/09/my-coding-workflow.html">Combine it with tmux and you get &amp;ldquo;full&amp;rdquo; multitasking.&lt;/a> Yes, you could instead use a remote desktop client instead of SSH, but I&amp;rsquo;ve always found them clunky due to lag and the improper integration with the local desktop shortcuts.&lt;/p>
-&lt;p>The second is that &lt;a href="https://code.visualstudio.com/docs/remote/faq#_why-arent-the-remote-development-extensions-or-their-components-open-source">VSCode&amp;rsquo;s remote extensions are &lt;em>not&lt;/em> open source&lt;/a>, which isn&amp;rsquo;t a major problem&amp;hellip; except for the fact that they don&amp;rsquo;t work on, say, FreeBSD and there is no way to fix them. So this makes it impossible for me to remote into my primary development server with VSCode.&lt;/p>
-&lt;p>And the third is&amp;hellip; reduced resource consumption.&lt;/p>
-&lt;h1 id="bloat-everywhere">Bloat everywhere&lt;/h1>
-&lt;p>I can&amp;rsquo;t leave without ranting about &amp;ldquo;bloat&amp;rdquo; for a little bit. Borland Turbo C++, with all its bells and whistles (the UI, the C++ toolchain, the integrated manuals&amp;hellip;), is less than 9 MB after installation and ran within 640kb of RAM.&lt;/p>
-&lt;p>For comparison, Helix is 16 MB on disk, which is pretty impressive (and honestly unexpected), but Doom Emacs is about 500 MBs and consumes many MBs of RAM. Note, however, that none of these numbers account for the language toolchains or help systems, and toolchains nowadays rank in the GBs of disk space.&lt;/p>
-&lt;p>To get &amp;ldquo;real&amp;rdquo; IDEs, we have to jump to graphical programs like IntelliJ or VSCode. VSCode, for example, is about 350 MBs on disk (surprisingly less than Doom Emacs) but it will eat your computer for lunch: it&amp;rsquo;s Electron after all. I have noticed very significant savings in laptop battery life by dropping VSCode and moving to Doom Emacs.&lt;/p>
-&lt;p>So the question I want to part with is: have we advanced &lt;em>much&lt;/em> in 30 years? Modern IDEs have some better refactoring tools, better features, and support more languages, but fundamentally&amp;hellip; they haven&amp;rsquo;t changed much. The only major difference that we are &lt;em>starting&lt;/em> to see might be AI-assisted coding, but this is a feature mostly provided by a remote service, not even by the installed code!&lt;/p>
-&lt;p>And that&amp;rsquo;s all for today. On my side, I&amp;rsquo;ll happily continue using &lt;em>all of&lt;/em> Doom Emacs, Vim, VSCode, and IntelliJ depending on the situation. Merry Christmas if this is your thing!&lt;/p></description></item></channel></rss>
+&lt;p>&lt;code>mov&lt;/code> is &lt;em>the&lt;/em> x86 instruction, and this article does a good job at looking at all possible memory addressing modes. The reason this is interesting is because the article also looks at &lt;em>why&lt;/em> each addressing mode is useful by mapping it to a C construct that benefits from it.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-31-links.png" length="56457" type="image/jpeg"/></item></channel></rss>
