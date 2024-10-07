@@ -1,4 +1,231 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Mon, 30 Sep 2024 08:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Revisiting the DOS memory models</title><link>https://jmmv.dev/2024/09/dos-memory-models.html</link><pubDate>Mon, 30 Sep 2024 08:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/09/dos-memory-models.html</guid><description>&lt;p>At the beginning of the year, I wrote a bunch of articles on the various tricks DOS played to overcome the tight memory limits of x86&amp;rsquo;s real mode. There was one question that came up and remained unanswered: what were the various &amp;ldquo;models&amp;rdquo; that the compilers of the day offered? Take a look at Borland Turbo C++&amp;rsquo;s code generation menu:&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Mon, 07 Oct 2024 09:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>The costs of the i386 to x86-64 upgrade</title><link>https://jmmv.dev/2024/10/x86-64-programming-models.html</link><pubDate>Mon, 07 Oct 2024 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/10/x86-64-programming-models.html</guid><description>&lt;p>If you read my previous article on &lt;a href="/2024/09/dos-memory-models.html">DOS memory models&lt;/a>, you may have dismissed everything I wrote as &amp;ldquo;legacy cruft from the 1990s that nobody cares about any longer&amp;rdquo;. After all, computers have evolved from sporting 8-bit processors to 64-bit processors and, on the way, the amount of memory that these computers can leverage has grown orders of magnitude: the 8086, a 16-bit machine with a 20-bit address space, could only use 1MB of memory while today&amp;rsquo;s 64-bit machines can theoretically access 16EB.&lt;/p>
+&lt;p>All of this growth has been in service of ever-growing programs. But&amp;hellip; even if programs are now more sophisticated than they were before, do they all &lt;em>really&lt;/em> require access to a 64-bit address space? Has the growth from 8 to 64 bits been a net positive in performance terms?&lt;/p>
+&lt;p>Let&amp;rsquo;s try to answer those questions to find some very surprising answers. But first, some theory.&lt;/p>
+&lt;h1 id="code-density">Code density&lt;/h1>
+&lt;p>An often overlooked property of machine code is &lt;em>code density&lt;/em>, a loose metric that quantifies how many instructions are required to execute a given &amp;ldquo;action&amp;rdquo;. I double-quote action because an &amp;ldquo;action&amp;rdquo; in this context is a subjective operation that captures a programmer-defined outcome.&lt;/p>
+&lt;p>Suppose, for example, that you want to increment the value of a variable that resides in main memory, like so:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">int&lt;/span> &lt;span class="n">a&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// ...
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="n">a&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">a&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>On a processor with an ISA that provides complex instructions and addressing modes, you can potentially do so in just one machine instruction:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">; Take the 32-bit quantity at the address indicated by the
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">; 00001234h immediate, increment it by one, and store it in the
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">; same memory location.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">add&lt;/span> &lt;span class="no">dword&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="mi">1234&lt;/span>&lt;span class="no">h&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="mi">1&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In contrast, on a processor with an ISA that strictly separate memory accesses from other operations, you&amp;rsquo;d need more steps:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="nf">li&lt;/span> &lt;span class="no">r8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1234&lt;/span>&lt;span class="no">h&lt;/span> &lt;span class="c1">; Load the address of the variable into r8.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">lm&lt;/span> &lt;span class="no">r1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r8&lt;/span> &lt;span class="c1">; Load the content of the address into r1.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">li&lt;/span> &lt;span class="no">r2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span> &lt;span class="c1">; Load the immediate value 1 into r2.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">add&lt;/span> &lt;span class="no">r3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r2&lt;/span> &lt;span class="c1">; r3 = r1 + r2
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">sm&lt;/span> &lt;span class="no">r8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r3&lt;/span> &lt;span class="c1">; Store the result in r3 into the address in r8.
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Which ISA is better, you ask? Well, as usual, there are pros and cons to each approach:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>The former type of ISA offers a denser representation of the operation so it can fit more instructions in less memory. But, because of the semantic complexity of each individual instruction, the processor has to do more work to execute them (possibly requiring more transistors and drawing more power). This type of ISA is usually known as &lt;a href="https://en.wikipedia.org/wiki/Complex_instruction_set_computer">CISC&lt;/a>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>The latter type of ISA offers a much more verbose representation of the operation but the instructions that the processor executes are simpler and can likely be executed faster. This type of ISA is usually known as &lt;a href="https://en.wikipedia.org/wiki/Reduced_instruction_set_computer">RISC&lt;/a>.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>This is the eternal debate between CISC and RISC but note that the distinction between the two is not crystal clear: some RISC architectures support &lt;em>more&lt;/em> instructions that CISC architectures, and contemporary Intel processors translate their CISC-style instructions into internal RISC-style &lt;a href="https://en.wikipedia.org/wiki/Intel_microcode">micro-operations&lt;/a> immediately after decoding the former.&lt;/p>
+&lt;h1 id="its-the-bytes-that-matter">It&amp;rsquo;s the bytes that matter&lt;/h1>
+&lt;p>Code density is not about instruction &lt;em>count&lt;/em> though. Code density is about the &lt;em>aggregate size&lt;/em>, in bytes, of the instructions required to accomplish a specific outcome.&lt;/p>
+&lt;p>In the example I presented above, the single CISC-style &lt;code>mov&lt;/code> x86 instruction is encoded using anywhere from 2 to 8 bytes depending on its arguments, whereas the fictitious RISC-style instructions typically take 4 bytes each. Therefore, the CISC-style snippet would take 8 bytes total whereas the RISC-style snippet would take 20 bytes total, while achieving the same conceptual result.&lt;/p>
+&lt;p>Is that increase in encoded bytes bad? Not necessarily because &amp;ldquo;bad&amp;rdquo; is subjective and we are talking about trade-offs here, but it&amp;rsquo;s definitely an important consideration due to its impact in various dimensions:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Memory usage&lt;/strong>: Larger programs take more memory. You might say that memory is plentiful these days, and that&amp;rsquo;s true, but it wasn&amp;rsquo;t always the case: when computers could only address 1 MB of RAM or less, the size of a program&amp;rsquo;s binary mattered a lot. Furthermore, even today, memory &lt;em>bandwidth&lt;/em> is limited, and this is an often-overlooked property of a system.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Disk space&lt;/strong>: Larger programs take more disk space. You might say that disk space is plentiful these days too and that program code takes a tiny proportion of the overall disk: most space goes towards storing media anyway. And that&amp;rsquo;s true, but I/O bandwidth is not as unlimited as disk space, and loading these programs from disk isn&amp;rsquo;t cheap. Have you noticed how utterly slow is it to open an Electron-based app?&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>L1 thrashing&lt;/strong>: Larger or more instructions mean that you can fit fewer of them in the L1 instruction cache. Proper utilization of this cache is critical to achieve reasonable levels of computing performance, and even though main memory size can now be measured in terabytes, the L1 cache is still measured in kilobytes.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>We could beat the dead horse over CISC vs. RISC further but that&amp;rsquo;s not what I want to focus on. What I want to focus on is one very specific dimension of the instruction encoding that affects code density in all cases. And that&amp;rsquo;s the &lt;em>size of the addresses&lt;/em> (pointers) required to reference program code or data.&lt;/p>
+&lt;p>Simply put, the larger the size of the addresses in the program&amp;rsquo;s code, the lower the code density. The lower the code density, the more memory and disk space we need. And the more memory code takes, the more L1 thrashing we will see.&lt;/p>
+&lt;p>So, for good performance, we probably want to optimize the way we represent addresses in the code and take advantage of surrounding context. For example: if we have a tight loop like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">int&lt;/span> &lt;span class="n">a&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">...&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">for&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">&amp;lt;&lt;/span> &lt;span class="mi">100&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span>&lt;span class="o">++&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">a&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">a&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The corresponding assembly code may be similar to this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; i = 0.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nl">repeat:&lt;/span> &lt;span class="nf">cmp&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">100&lt;/span> &lt;span class="c1">; i &amp;lt; 100?
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">je&lt;/span> &lt;span class="no">out&lt;/span> &lt;span class="c1">; If i == 100, jump to out.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">add&lt;/span> &lt;span class="no">dword&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="mi">01234&lt;/span>&lt;span class="no">h&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="mi">1&lt;/span> &lt;span class="c1">; Increment a.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">add&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span> &lt;span class="c1">; i++.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">jmp&lt;/span> &lt;span class="no">repeat&lt;/span> &lt;span class="c1">; Jump back to repeat.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nl">out:&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now the questions are:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>Given that &lt;code>repeat&lt;/code> and &lt;code>out&lt;/code> are labels for memory addresses, how do we encode the &lt;code>je&lt;/code> (jump if equal) and &lt;code>jmp&lt;/code> (unconditional jump) instructions as bytes? On a 32-bit machine, do we encode the full 32-bit addresses (4 bytes each) in each instruction, or do we use 1-byte relative short pointers because the jump targets are within a 127-byte distance on either side of the jump instruction?&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>How do we represent the address of the &lt;code>a&lt;/code> variable? Do we express it as an absolute address or as a relative one? Do we store &lt;code>1234h&lt;/code> as a 32-bit quantity or do we use fewer bytes because this specific number is small?&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>How big should &lt;code>int&lt;/code> be? The &lt;code>dword&lt;/code> above implies 32 bits but&amp;hellip; that&amp;rsquo;s just an assumption I made when writing the snippet. &lt;code>int&lt;/code> could have been 16 bits, or 64 bits, or anything else you can imagine (which is a design mistake in C, if you ask me).&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>The answers to the questions above are &lt;em>choices&lt;/em>: we can decide whichever encoding we want for code and data addresses, and these choices have consequences on code density. This was true many years ago during the DOS days, which is why we had short, near, and far pointer types, and &lt;a href="https://web.eece.maine.edu/~vweaver/papers/iccd09/iccd09_density.pdf">is still true today&lt;/a> as we shall see.&lt;/p>
+&lt;h1 id="the-switch-to-32-bits">The switch to 32 bits&lt;/h1>
+&lt;p>It is no secret that programming 16-bit machines was limiting, and we can identify at least two reasons to back this claim.&lt;/p>
+&lt;p>First, 16-bit machines usually had limited address spaces. It&amp;rsquo;s important to understand that a processor&amp;rsquo;s native register size has no direct connection to the size of the addresses the processor can reference. In theory, these machines could have leveraged larger chunks of memory and, in fact, the 16-bit 8086 proved this to be true with its 20-bit address space. But the point is that, &lt;em>in the era&lt;/em> of 16-bit machines, 1 MB of RAM was considered &amp;ldquo;a lot&amp;rdquo; and so machines didn&amp;rsquo;t have much memory.&lt;/p>
+&lt;p>Second, 16-bit machines can only operate on 16-bit quantities at a time, and 16 bits only allow representing integers with limited ranges: a signed number between -32K and +32K isn&amp;rsquo;t&amp;hellip; particularly large. Like before, it&amp;rsquo;s important to clarify that the processor&amp;rsquo;s native register size does not impose restrictions on the size of the numbers the processor can manipulate, but it does add limitations on how &lt;em>fast&lt;/em> it can do so: operating 32-bit numbers on 16-bit machines requires at least twice the number of instructions for each operation.&lt;/p>
+&lt;p>So, when 32-bit processors entered the scene, it was pretty much a no-brainer that programs had to become 32-bit by default: all memory addresses and default integer types grew to 32 bits. This allowed programmers to not worry about memory limits for a while: 32 bits can address 4GB of memory, which was a huge amount back then and should &lt;em>still&lt;/em> be huge if it wasn&amp;rsquo;t due to bloated software. Also, this upgrade allowed programmers to efficiently manipulate integers with large-enough ranges for most operations.&lt;/p>
+&lt;p>In technical mumbo-jumbo, what happened here was that C adopted the ILP32 programming model: integers (I), longs (L), and pointers (P) all became 32 bits, whereas chars and shorts remained 8-bit and 16-bit respectively.&lt;/p>
+&lt;p>It didn&amp;rsquo;t have to be this way though: if we look at the model for 16-bit programming, shorts and integers were 16-bit whereas longs were 32-bit, so why did integers change size but longs remained the same as integers? I do not have an answer for this, but if longs had become 64 bits back then, maybe we wouldn&amp;rsquo;t be in the situation today where &lt;a href="https://en.wikipedia.org/wiki/Year_2038_problem">2038 will bring mayhem to Unix systems&lt;/a>.&lt;/p>
+&lt;h1 id="evolving-towards-x86-64">Evolving towards x86-64&lt;/h1>
+&lt;p>4GB of RAM were a lot when 32-bit processors launched but slowly became insufficient as software kept growing. To support those needs, there were clutches like &lt;a href="https://en.wikipedia.org/wiki/Physical_Address_Extension">Intel&amp;rsquo;s PAE&lt;/a>, which allowed manipulating up to 64GB of RAM on 32-bit machines without changing the programming model, but they were just that: hacks.&lt;/p>
+&lt;p>The thing is: it&amp;rsquo;s not only software that grew. It&amp;rsquo;s the &lt;em>kinds of things&lt;/em> that people wanted to do with software that changed: people wanted to edit high-resolution photos and video as well as play more-realistic games, and writing code to achieve those goals on a limited 4GB address space was possible but not &lt;em>convenient&lt;/em>. With 64-bit processors, &lt;code>mmap&lt;/code>ing huge files made those programs easier to write, and using native 64-bit integers made them faster too. So 64-bit machines became mainstream sometime around the introduction of the Athlon 64 processor and the Power Mac G5, both in 2003.&lt;/p>
+&lt;p>So what happened to the programming model? ILP32 was a no-brainer for 32-bit machines, but were LP64 or ILP64 no-brainers for 64-bit machines? These 64-bit models were definitely tempting because they allowed the programmer to leverage the machine&amp;rsquo;s resources freely. Larger pointers allowed addressing &amp;ldquo;unlimited&amp;rdquo; memory transparently, and a larger long type naturally bumped file offsets (&lt;code>ino_t&lt;/code>), timestamps (&lt;code>time_t&lt;/code>), array lengths (&lt;code>size_t&lt;/code>), and more to 64 bits as well. Without a lot of work from programmers, programs could &amp;ldquo;just do more&amp;rdquo; by simply recompiling them.&lt;/p>
+&lt;p>But there was a downside to that choice. According to the theory I presented earlier, LP64 would make programs bigger and would decrease code density when compared to ILP32. And lower code density could lead to L1 instruction cache thrashing, which is an important consideration to this day because a modern Intel Core i7-14700K from 2023 has just 80 KB of L1 cache and an Apple Silicon M3 from 2023 has less than 200KB. (These numbers are&amp;hellip; &lt;em>not big&lt;/em> when you stack them up against the multi-GB binaries that comprise modern programs, are they?)&lt;/p>
+&lt;p>We now know that LP64 was the preferred choice and that it became the default programming model for 64-bit operating systems, which means we can compare its impact against ILP32. So what are the consequences? Let&amp;rsquo;s take a look.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-10-07-x86-64-iso-images.png" class="with-border" alt="Comparison of ISO image sizes for various operating systems" />
+&lt;/figure>
+&lt;p>Wait, what? The FreeBSD x86-64 installation image is definitely larger than the i386 one&amp;hellip; but all other images are &lt;em>smaller&lt;/em>? What&amp;rsquo;s going on here? This contradicts everything I said above!&lt;/p>
+&lt;h1 id="down-the-rabbit-hole">Down the rabbit hole&lt;/h1>
+&lt;p>I was genuinely surprised by this and I had to dig a bit. Cracking open the FreeBSD bootonly image revealed some differences in the kernel (slightly bigger binaries, but different sets of modules) which made it difficult to compare the two. But looking into the Debian netinst images, I did find that almost all i386 binaries were larger than their x86-64 counterparts.&lt;/p>
+&lt;p>To try to understand why that was, the first thing I did was compile a simple hello-world program on my x86-64 Debian VM, targeting both 64-bit and 32-bit binaries:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ gcc-14 -o hello64 hello.c
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ i686-linux-gnu-gcc-14 -o hello32 hello.c
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ file hello32 hello64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hello32: ELF 32-bit LSB pie executable, Intel 80386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2, for GNU/Linux 3.2.0, not stripped
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hello64: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=f1bf851d7f1d56ae5d50eb136793066f67607e06, for GNU/Linux 3.2.0, not stripped
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ls -l hello32 hello64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rwxrwxr-x 1 jmmv jmmv 15040 Oct 4 17:45 hello32
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rwxrwxr-x 1 jmmv jmmv 15952 Oct 4 17:45 hello64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Based on this, it &lt;em>looks&lt;/em> as if 32-bit binaries are indeed smaller than 64-bit binaries. But a &amp;ldquo;hello world&amp;rdquo; program is trivial and not worth 15kb of code: those 15kb shown above are definitely &lt;em>not&lt;/em> code. They are probably mostly ELF overhead. Indeed, if we look at just the text portion of the binaries:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ objdump -h hello32 | grep text
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 14 .text 00000169 00001060 00001060 00001060 2**4
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump -h hello64 | grep text
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 14 .text 00000103 0000000000001050 0000000000001050 00001050 2**4
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&amp;hellip; we find that &lt;code>hello32&lt;/code>&amp;rsquo;s text is 169h bytes whereas &lt;code>hello64&lt;/code>&amp;rsquo;s text is 103h bytes. And if we disassemble the two:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hello32
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">00001189 &amp;lt;main&amp;gt;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1189: 8d 4c 24 04 lea 0x4(%esp),%ecx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 118d: 83 e4 f0 and $0xfffffff0,%esp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1190: ff 71 fc push -0x4(%ecx)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1193: 55 push %ebp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1194: 89 e5 mov %esp,%ebp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1196: 53 push %ebx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1197: 51 push %ecx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1198: e8 28 00 00 00 call 11c5 &amp;lt;__x86.get_pc_thunk.ax&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 119d: 05 57 2e 00 00 add $0x2e57,%eax
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11a2: 83 ec 0c sub $0xc,%esp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11a5: 8d 90 14 e0 ff ff lea -0x1fec(%eax),%edx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11ab: 52 push %edx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11ac: 89 c3 mov %eax,%ebx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11ae: e8 8d fe ff ff call 1040 &amp;lt;puts@plt&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11b3: 83 c4 10 add $0x10,%esp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11b6: b8 00 00 00 00 mov $0x0,%eax
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11bb: 8d 65 f8 lea -0x8(%ebp),%esp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11be: 59 pop %ecx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11bf: 5b pop %ebx
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11c0: 5d pop %ebp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11c1: 8d 61 fc lea -0x4(%ecx),%esp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11c4: c3 ret
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hello64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0000000000001139 &amp;lt;main&amp;gt;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1139: 55 push %rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113a: 48 89 e5 mov %rsp,%rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113d: 48 8d 05 c0 0e 00 00 lea 0xec0(%rip),%rax # 2004 &amp;lt;_IO_stdin_used+0x4&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1144: 48 89 c7 mov %rax,%rdi
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1147: e8 e4 fe ff ff call 1030 &amp;lt;puts@plt&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 114c: b8 00 00 00 00 mov $0x0,%eax
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1151: 5d pop %rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1152: c3 ret
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We observe massive differences in the machine code generated for the trivial &lt;code>main&lt;/code> function. The 64-bit code is definitely &lt;em>smaller&lt;/em> than the 32-bit code, contrary to my expectations. But the code is also &lt;em>very&lt;/em> different; so different, in fact, that ILP32 vs. LP64 doesn&amp;rsquo;t explain it.&lt;/p>
+&lt;p>The first difference we can observe is around calling conventions. The i386 architecture has a limited number of registers, favors passing arguments via the stack, and only 3 registers can be clobbered within a function. x86-64, on the other hand, prefers passing arguments through registers as much as possible and defines 7 registers as volatile.&lt;/p>
+&lt;p>The second difference is that we don&amp;rsquo;t see 64-bit addresses anywhere in the code above. Jump addresses are encoded using near pointers, and data addresses are specified as offsets over a 64-bit base previously stored in a register. I found it smart that those addresses are relative to the program counter (the RIP register).&lt;/p>
+&lt;p>There may be more differences, but these two alone seem to be the reason why 64-bit binaries end up being more compact than 32-bit ones. &lt;em>On Intel x86&lt;/em>, that is. You see: Intel x86&amp;rsquo;s instruction set is so versatile that the compiler and the ABI can play tricks to hide the cost of 64-bit pointers.&lt;/p>
+&lt;p>Is that true of more RISC-y 64-bit architectures though? I installed the PowerPC 32-bit and 64-bit toolchains and ran the same test. And guess what? The PowerPC 64-bit binary was indeed larger than the 32-bit one, so &lt;em>maybe&lt;/em> it&amp;rsquo;s true. Unfortunately, running a broader comparison than this is difficult: there is no full operating system I can find that ships both builds any longer, and ARM images can&amp;rsquo;t easily be compared.&lt;/p>
+&lt;h1 id="its-all-about-the-data">It&amp;rsquo;s all about the data&lt;/h1>
+&lt;p>OK, fine, we&amp;rsquo;ve settled that 64-bit &lt;em>code&lt;/em> isn&amp;rsquo;t necessarily larger than 32-bit code, at least on Intel, and thus any adverse impact on the L1 instruction cache is probably negligible. But&amp;hellip; what about &lt;em>data density&lt;/em>?&lt;/p>
+&lt;p>Pointers don&amp;rsquo;t only exist in instructions or as jump targets. They also exist within the most modest of data types: lists, trees, graphs&amp;hellip; all contain pointers in them. And in those, unless the programmer explicitly plays complex &lt;a href="https://v8.dev/blog/pointer-compression">tricks to compress pointers&lt;/a>, we&amp;rsquo;ll usually end up with larger data structures by simply jumping to LP64. The same applies to the innocent-looking &lt;code>long&lt;/code> type by the way, which appears throughout codebases and also grows with this model.&lt;/p>
+&lt;p>And &lt;em>this&lt;/em>&amp;mdash;a decrease in data density&amp;mdash;is where the real performance penalty comes from: it&amp;rsquo;s not so much about the code size but about the data size.&lt;/p>
+&lt;p>Let&amp;rsquo;s take a look. I wrote a simple program that creates a linked list of integers with 10 million nodes and then iterates over them in sequence. Each node is 8 bytes in 32-bit mode (4 bytes for the &lt;code>int&lt;/code> and 4 bytes for the &lt;code>next&lt;/code> pointer), whereas it is 16 bytes in 64-bit mode (4 bytes for the &lt;code>int&lt;/code>, &lt;em>4 bytes of padding&lt;/em>, and 8 bytes for the &lt;code>next&lt;/code> pointer). I then compiled that program in 32-bit and 64-bit mode, measured it, and ran it:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ gcc -o list64 list.c
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ i686-linux-gnu-gcc-14 -o list32 list.c
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump -h list32 | grep text
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 13 .text 000001f6 00001070 00001070 00001070 2**4
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump -h list64 | grep text
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 14 .text 000001b0 0000000000001060 0000000000001060 00001060 2**4
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ hyperfine --warmup 1 ./list32 ./list64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Benchmark 1: ./list32
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Time (mean ± σ): 394.2 ms ± 2.1 ms [User: 311.4 ms, System: 83.1 ms]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Range (min … max): 392.1 ms … 398.2 ms 10 runs
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Benchmark 2: ./list64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Time (mean ± σ): 502.4 ms ± 4.5 ms [User: 334.9 ms, System: 167.8 ms]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Range (min … max): 494.9 ms … 509.5 ms 10 runs
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Summary
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ./list32 ran
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1.27 ± 0.01 times faster than ./list64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>As before with the hello-world comparison, this simple microbenchmark&amp;rsquo;s 32-bit code continues to be slightly larger than its 64-bit counterpart (1F6h bytes vs 1B0h). However, its runtime is &lt;em>27% faster&lt;/em>, and it is no wonder because the doubling of the linked list node size implies doubling the memory usage and thus the halving of cache hits. We can confirm the impact of this using the &lt;code>perf&lt;/code> tool:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ perf stat -B -e cache-misses ./list32 2&amp;gt;&amp;amp;1 | grep cpu_core
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 2,400,339 cpu_core/cache-misses:u/ (99.33%)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ perf stat -B -e cache-misses ./list64 2&amp;gt;&amp;amp;1 | grep cpu_core
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 4,687,156 cpu_core/cache-misses:u/ (99.34%)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The 64-bit build of this microbenchmark incurs almost double the cache misses than the 32-bit build.&lt;/p>
+&lt;p>Of course, this is just a microbenchmark, and tweaking it slightly will make it show very different results and make it say whatever we want. I tried to add jitter to the memory allocations so that the nodes didn&amp;rsquo;t end up as consecutive in memory, and then the 64-bit version executed faster. I suspect this is due to the memory allocator having a harder time handling memory when the address space is limited.&lt;/p>
+&lt;p>The impact on real world applications is harder to quantify. It is difficult to find the same program built in 32-bit and 64-bit mode and to run it on the same kernel. It is even more difficult to find one such program where the difference matters. But at the end of the day, the differences exist, and I bet they are more meaningful than we might think in terms of bloat&amp;mdash;but I did not intend to write a research paper here, so I&amp;rsquo;ll leave that investigation to someone else&amp;hellip; or another day.&lt;/p>
+&lt;h1 id="the-x32-abi">The x32 ABI&lt;/h1>
+&lt;p>There is one last thing to discuss before we depart. While we find ourselves using the LP64 programming model on x86-64 processors, remember that this was a choice and there were and are other options on the table.&lt;/p>
+&lt;p>Consider this: we could have made the operating system kernel leverage 64 bits to gain access to a humongous address space, but we could have kept the user-space programming model as it was before&amp;mdash;that is, we could have kept ILP32. And we could have gone even further and optimized the calling conventions to reduce the binary code size by leveraging the additional general-purpose registers that x86-64 provides.&lt;/p>
+&lt;p>And in fact, this exists and is known as &lt;a href="https://en.wikipedia.org/wiki/X32_ABI">x32&lt;/a>.&lt;/p>
+&lt;p>We can install the x32 toolchain and see that it effectively works as we&amp;rsquo;d imagine:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ gcc -o hello64 hello.c
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ x86_64-linux-gnux32-gcc-14 -o hellox32 hello.c
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hello64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0000000000001139 &amp;lt;main&amp;gt;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1139: 55 push %rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113a: 48 89 e5 mov %rsp,%rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113d: 48 8d 05 c0 0e 00 00 lea 0xec0(%rip),%rax # 2004 &amp;lt;_IO_stdin_used+0x4&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1144: 48 89 c7 mov %rax,%rdi
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1147: e8 e4 fe ff ff call 1030 &amp;lt;puts@plt&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 114c: b8 00 00 00 00 mov $0x0,%eax
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1151: 5d pop %rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1152: c3 ret
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hellox32
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">00401126 &amp;lt;main&amp;gt;:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401126: 55 push %rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401127: 89 e5 mov %esp,%ebp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401129: b8 04 20 40 00 mov $0x402004,%eax
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 40112e: 89 c0 mov %eax,%eax
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401130: 48 89 c7 mov %rax,%rdi
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401133: e8 f8 fe ff ff call 401030 &amp;lt;puts@plt&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401138: b8 00 00 00 00 mov $0x0,%eax
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 40113d: 5d pop %rbp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 40113e: c3 ret
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now, the &lt;code>main&lt;/code> method of our hello-world program is really similar between the 64-bit and 32-bit builds, but pay close attention to the x32 version: it uses the same calling conventions as x86-64, but it contains a mixture of 32-bit and 64-bit registers, delivering a more compact binary size.&lt;/p>
+&lt;p>Unfortunately:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ ./hellox32
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">zsh: exec format error: ./hellox32
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can&amp;rsquo;t run the resulting binary. x32 is an ABI that impacts the kernel interface too, so these binaries cannot be executed on a regular x86-64 kernel. Sadly, and as far as I can tell, x32 is pretty much abandonware today. Gentoo claims to support it but there are no official builds of any distribution I can find that are built in x32 mode.&lt;/p>
+&lt;hr>
+&lt;p>In the end, even though LP64 &lt;a href="https://unix.org/version2/whatsnew/lp64_wp.html">wasn&amp;rsquo;t the obvious choice&lt;/a> for x86-64, it&amp;rsquo;s the compilation mode that won and stuck.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-10-07-x86-64-cover-image.jpg" length="992004" type="image/jpeg"/></item><item><title>Revisiting the DOS memory models</title><link>https://jmmv.dev/2024/09/dos-memory-models.html</link><pubDate>Mon, 30 Sep 2024 08:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/09/dos-memory-models.html</guid><description>&lt;p>At the beginning of the year, I wrote a bunch of articles on the various tricks DOS played to overcome the tight memory limits of x86&amp;rsquo;s real mode. There was one question that came up and remained unanswered: what were the various &amp;ldquo;models&amp;rdquo; that the compilers of the day offered? Take a look at Borland Turbo C++&amp;rsquo;s code generation menu:&lt;/p>
 &lt;figure>
 &lt;img src="/images/2024-09-30-turbo-cxx-memory-models.png" class="with-border" />
 &lt;figcaption>Borland Turbo C++ showing its Code Generation menu, which displays the list of models we cover in this article.&lt;/figcaption>
@@ -1896,104 +2123,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;figcaption>Content of the &lt;tt>CONFIG.SYS&lt;/tt> and &lt;tt>AUTOEXEC.BAT&lt;/tt> files after MemMaker is done making changes.&lt;/figcaption>
 &lt;/figure>
 &lt;p>You can much read more in Microsoft&amp;rsquo;s own now-archived &lt;a href="https://jeffpar.github.io/kbarchive/kb/095/Q95555/">KB-Q9555 article&lt;/a> or the &lt;a href="https://archive.org/details/DOS_Beyond_640K_2nd_edition">DOS Beyond 640KB book&lt;/a>.&lt;/p>
-&lt;p>And that&amp;rsquo;s it for today folks. I intentionally did &lt;em>not&lt;/em> touch on DPMI&amp;mdash;the technology that truly allowed DOS applications to break free from the 1 MB memory limitation&amp;mdash;because I&amp;rsquo;m saving that for the next article. So, make sure to come back for more!&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-01-17-8086-dos.jpg" length="220943" type="image/jpeg"/></item><item><title>Links: December 2023 edition</title><link>https://jmmv.dev/2023/12/links-december-2023-edition.html</link><pubDate>Sun, 31 Dec 2023 09:40:00 +0100</pubDate><guid>https://jmmv.dev/2023/12/links-december-2023-edition.html</guid><description>&lt;p>December draws to a close as does 2023, which means it&amp;rsquo;s time for yet another monthly links recap.&lt;/p>
-&lt;p>For context to everyone new around here, what follows is my manual curation of cool articles, videos, and projects I stumbled upon during this time period. But this is not &lt;em>just&lt;/em> a dump of links: &lt;em>each link is accompanied by a short commentary&lt;/em> that justifies why I thought the material was interesting, why it is relevant to this publication and, more importantly, an attempt to nudge you into reading it.&lt;/p>
-&lt;p>December has been a slow month though. During the first half, only a handful of articles caught my attention; and during the second half, I&amp;rsquo;ve been traveling so I haven&amp;rsquo;t paid much attention to news sites. In any case, there is some good content to enjoy this month. Read on and have a good entry to 2024!&lt;/p>
-&lt;p>Happy new year!&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://dudemanguy.github.io/blog/posts/2022-06-10-wayland-xorg/wayland-xorg.html">&amp;ldquo;Wayland Isn&amp;rsquo;t Going to Save The Linux Desktop&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By dudemanguy on June 10, 2022&lt;/em>&lt;/p>
-&lt;p>Do you know how Wayland works, how it differs from X.org, and how it has some architectural limitations that prevent it from solving some problems that X11 does not have? If not, this one is for you. This article is from 2022 but recently surfaced as a timely rant because Fedora is planning to drop X.org in the upcoming Fedora 40 release.&lt;/p>
-&lt;p>Things will be&amp;hellip; &amp;ldquo;fun&amp;rdquo; for some of us soon. In my case, I use Fedora 39 and Wayland recently decided to stop working on my Mac Pro 2013 and fell back to X.org. And on my Surface Go 2, on which I need to use &amp;ldquo;bounce keys&amp;rdquo; to prevent repeated input due to some issues with the keyboard, the feature only works with X.org and not Wayland.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="/2023/12/strings-encodings-nuls-and-bazel.html">&amp;ldquo;Strings, encodings, NULs and Bazel&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By yours truly on December 3rd, 2023&lt;/em>&lt;/p>
-&lt;p>I came across a random tweet that suggested newcomers to C to represent strings as an array plus a length, without the traditional NUL terminator. The slightly-inflammatory tweet prompted me to write about why doing this is a bad idea and showed an example of the inefficiencies that arise from choosing to go your own way.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://virtuallyfun.com/2023/12/08/bsd-on-windows-things-i-wish-i-knew-existed/">&amp;ldquo;BSD on Windows: Things I wish I knew existed&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By neozeed on December 8th, 2023&lt;/em>&lt;/p>
-&lt;p>Here is a thing from 1995 that I didn&amp;rsquo;t know existed: a BSD Unix distribution that ran on Windows 3.x. I wonder why this didn&amp;rsquo;t catch on but the likes of Cygwin did. By the way, this post made me remember &lt;strong>&lt;a href="https://www.delorie.com/djgpp/">DJGPP&lt;/a>&lt;/strong>, a distribution of GCC for DOS, and it&amp;rsquo;s something I&amp;rsquo;m considering to analyze and write about in an upcoming article.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="/2023/12/a-cli-text-editor-in-my-windows.html">&amp;ldquo;A CLI text editor? In my Windows?&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By yours truly on December 8th, 2023&lt;/em>&lt;/p>
-&lt;p>The Windows Terminal team at Microsoft is considering the addition of a command-line text editor by default in Windows. The thing is: Windows used to ship with one (&lt;code>EDIT.COM&lt;/code>) until they dropped the editor when moving to 64-bit editions&amp;hellip; and I&amp;rsquo;m kinda proposing that they bring something like the old editor back.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://github.com/TobyLobster/multiply_test">&amp;ldquo;6502 Integer Multiplication - which is best?&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By Toby Nelson&lt;/em>&lt;/p>
-&lt;p>Discovered via a &lt;a href="https://news.ycombinator.com/item?id=38598940">discussion in HN&lt;/a>, this is a project that collects more than 120 multiplication algorithms and analyzes their behavior in detail on the 6502 8-bit processor. I barely knew this processor existed before seeing this article so I don&amp;rsquo;t particularly care for it, but the analysis is just mesmerizing and worth a read.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://www.whizzy.org/2023-12-14-bricked-xmas/">&amp;ldquo;Bricked Xmas&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By Will Cooke on December 14th, 2023&lt;/em>&lt;/p>
-&lt;p>An article on how to reverse-engineer Christmas LED lights that use Bluetooth to control the flashing patterns and how this process resulted in the bricking of said lights. The most interesting content in the article is the very foundations of reverse engineering a binary protocol when all you can do is see packets flow through the wire.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="/2023/12/hard-disk-leds-and-noisy-machines.html">&amp;ldquo;Hard disk LEDs and noisy machines&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By yours truly on December 15th, 2023&lt;/em>&lt;/p>
-&lt;p>While looking at yet another unexplained performance inefficiency that I observed, I wondered how many of these slip through because the machines we have today are &amp;ldquo;so powerful and quiet&amp;rdquo; that they absorb such abuse of resources without making a big fuss. I wrote a Twitter thread that explains how useful it was to have flashing LEDs for disk activity and loud fans during heavy CPU load, with a suggestion on what to do these days instead on your silent laptops.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://belkadan.com/blog/2022/10/Swift-in-the-OS/">&amp;ldquo;Swift was always going to be part of the OS&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By Jordan Rose on October 9th, 2022&lt;/em>&lt;/p>
-&lt;p>Using a language as part of an OS poses challenges on how the language and the OS can evolve, if at all, while preserving backwards compatibility. This article explains such difficulties in the context of Swift and justifies the choices that Apple made to allow using Swift for its own frameworks. The same challenges are not unique as they also apply to e.g. .NET in Windows, which Microsoft chose to solve in different ways.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://tim.siosm.fr/blog/2023/12/19/ssh-over-unix-socket/">&amp;ldquo;sudo without a setuid binary or SSH over a UNIX socket&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By Timothée Ravier on December 19th, 2023&lt;/em>&lt;/p>
-&lt;p>Have you ever considered using SSH as a replacement for &lt;code>sudo&lt;/code> by leveraging a Unix socket and file permissions to protect access? I hadn&amp;rsquo;t, but after reading the title, this interesting solution sounded obvious. There is a lot of nuance though, so make sure to read on.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="/2023/12/bazel-interview-at-software-engineering.html">&amp;ldquo;Bazel interview at Software Engineering Daily&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By yours truly on December 21st, 2023&lt;/em>&lt;/p>
-&lt;p>Two months ago, Jordi Mon Companys interviewed me about various Bazel topics and the podcast episode finally came out this month. I wrote a detailed summary of the 45-minute recording so that you can know what to expect and where exactly to fast-forward to if you want to skip certain topics.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://arne.me/articles/emacs-from-scratch-part-one-foundations">&amp;ldquo;Emacs From Scratch, Part 1: Foundations&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By Arne Bahlo on December 22nd, 2023&lt;/em>&lt;/p>
-&lt;p>Doom Emacs is my go-to editor. This Emacs &amp;ldquo;distribution&amp;rdquo; is great because its configuration files are trivial to read and edit, but I still feel a bit uncomfortable due to the many abstractions in between those files and the &amp;ldquo;real Emacs&amp;rdquo;&amp;mdash;particularly when Doom Emacs greets me with &amp;ldquo;loaded 200 packages&amp;rdquo; that I know little about. In that regard, this article series seems promising and I might go back to configuring a minimal setup at some point. (The second part is already out at the time of this writing, by the way.)&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://retrofun.pl/2023/12/18/was-basic-that-horrible-or-better/">&amp;ldquo;Was BASIC that horrible or&amp;hellip; better?&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By Ikari on December 18th, 2023&lt;/em>&lt;/p>
-&lt;p>BASIC has received a lot of hatred throughout the years, with Dijkstra claiming &amp;ldquo;It is practically impossible to teach good programming to students that have had a prior exposure to BASIC: as potential programmers they are mentally mutilated beyond hope of regeneration.&amp;rdquo; Which, OK, fine. I can see that happening if you look at the original Dartmouth BASIC from the 1970s&amp;hellip; but later editions of BASIC included proper flow control to make these criticisms unfounded. Much more on this topic in the referenced article.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="/2023/12/the-ides-we-had-30-years-ago.html">&amp;ldquo;The IDEs we had 30 years ago&amp;hellip; and we lost&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By yours truly on December 25th, 2023&lt;/em>&lt;/p>
-&lt;p>My Christmas gift to you all: a tour of the text-based IDEs we had about 30 years ago in DOS land to show how powerful and tiny they were at the time. The article contrasts them with the huge beasts we have nowadays and how they aren&amp;rsquo;t really that novel. And I write this as a &amp;ldquo;Unix convert&amp;rdquo; for many years.&lt;/p>
-&lt;p>This is one of my most popular articles and further proves that my experiment with the move to Substack is worthwhile to gain an audience. Previous similarly-successful articles in my blog only brought in a handful of new subscribers, but this one has already raked tens in.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://github.com/minimaxir/hacker-news-undocumented/blob/master/README.md">&amp;ldquo;A List of Hacker News&amp;rsquo;s Undocumented Features and Behaviors&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By Max Woolf&lt;/em>&lt;/p>
-&lt;p>If you are an avid Hacker News user like I am, this living guide is a must read. You&amp;rsquo;ll learn many of the ways in which content moderation works, a bunch of hidden endpoints, and the kinds of features that karma points enable.&lt;/p>
-&lt;hr>
-&lt;p>&lt;strong>&lt;a href="https://blog.yossarian.net/2020/06/13/How-x86_64-addresses-memory">&amp;ldquo;How x86_64 addresses memory&amp;rdquo;&lt;/a>&lt;/strong>&lt;br/>
-&lt;em>By William Woodruff on June 13th, 2020&lt;/em>&lt;/p>
-&lt;p>&lt;code>mov&lt;/code> is &lt;em>the&lt;/em> x86 instruction, and this article does a good job at looking at all possible memory addressing modes. The reason this is interesting is because the article also looks at &lt;em>why&lt;/em> each addressing mode is useful by mapping it to a C construct that benefits from it.&lt;/p></description><enclosure url="https://jmmv.dev/images/2023-10-31-links.png" length="56457" type="image/jpeg"/></item></channel></rss>
+&lt;p>And that&amp;rsquo;s it for today folks. I intentionally did &lt;em>not&lt;/em> touch on DPMI&amp;mdash;the technology that truly allowed DOS applications to break free from the 1 MB memory limitation&amp;mdash;because I&amp;rsquo;m saving that for the next article. So, make sure to come back for more!&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-01-17-8086-dos.jpg" length="220943" type="image/jpeg"/></item></channel></rss>
