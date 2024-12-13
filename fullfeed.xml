@@ -1,4 +1,150 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Tue, 10 Dec 2024 10:00:00 -0800</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Demystifying secure NFS</title><link>https://jmmv.dev/2024/11/demystifying-secure-nfs.html</link><pubDate>Sun, 03 Nov 2024 16:00:00 -0800</pubDate><guid>https://jmmv.dev/2024/11/demystifying-secure-nfs.html</guid><description>&lt;p>I recently got a &lt;a href="https://sy.to/hekgh">Synology DS923+&lt;/a> for evaluation purposes which led me to setting up NFSv4 with Kerberos. I had done this about a year ago with FreeBSD as the host, and going through this process once again reminded me of how painful it is to secure an NFS connection.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 13 Dec 2024 09:10:00 -0800</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Synology DS923+ vs. FreeBSD w/ZFS</title><link>https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html</link><pubDate>Fri, 13 Dec 2024 09:10:00 -0800</pubDate><guid>https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html</guid><description>&lt;p>My interest in storage is longstanding&amp;mdash;I loved playing with different file systems in my early Unix days and then I worked on Google&amp;rsquo;s and Microsoft&amp;rsquo;s distributed storage solutions&amp;mdash;and, about four years ago, I started running a home-grown NAS leveraging FreeBSD and its excellent ZFS support. I first hosted the server on a PowerMac G5 and then upgraded it to an overkill 72-core ThinkStation that I snapped second-hand for a great price.&lt;/p>
+&lt;p>But as stable and low maintenance as FreeBSD is, running day-to-day services myself is not my idea of &amp;ldquo;fun&amp;rdquo;. This drove me to replace this machine&amp;rsquo;s routing functionality with a dedicated pfSense box a year ago and, for similar reasons, I have been curious about dedicated NAS solutions.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-13-ds923-unboxed.jpg" />
+&lt;figcaption>Synology DS923+ on top of its shipping box right after unboxing it.&lt;/figcaption>
+&lt;/figure>
+&lt;p>I was pretty close to buying a second-hand NAS from the work classifieds channel when a Synology marketing person (hi Kyle!) contacted me to offer a partnership: they&amp;rsquo;d ship me &lt;a href="https://sy.to/hekgh">one of their devices&lt;/a> for free in exchange for me publishing a few articles about it. Given my interest to drive-test one of these appliances without committing to buying one (they ain&amp;rsquo;t cheap and I wasn&amp;rsquo;t convinced I wanted to get rid of my FreeBSD-based solution), I was game.&lt;/p>
+&lt;p>And you guessed right: this article is one of those I promised to write but, before you stop reading, the answer is no. This post is &lt;em>not&lt;/em> sponsored by Synology and has not been reviewed nor approved by them. The content here, including any opinions, are purely my own. And what I want do do here is compare how the Synology appliance stacks against my home-built FreeBSD server.&lt;/p>
+&lt;!-- more -->
+&lt;div class="container action-highlight p-4 my-4 d-md-none">
+&lt;div class="row text-center">
+&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.&lt;/p>
+&lt;/div>
+&lt;div class="row">
+&lt;div class="col">
+&lt;div class="form-group">
+&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
+&lt;input type="text" name="email"
+placeholder="Enter your email"
+class="form-control input-sm text-center my-1"/>
+&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
+&lt;/form>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;div class="row px-2">
+&lt;div class="col col-sm-5 text-left">
+&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
+&lt;/div>
+&lt;div class="col col-sm-7 text-right">
+&lt;p>
+&lt;a rel="me" href="https://mastodon.online/@jmmv">
+&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+&lt;/a>
+&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
+&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+&lt;/a>
+&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
+&lt;/p>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;h1 id="the-hardware">The hardware&lt;/h1>
+&lt;p>Here are the two contenders in my comparison:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-13-ds923-and-thinkstation.jpg" />
+&lt;figcaption>Synology D923+ next to my ThinkStation P710 on top of a dusty LackRack in the garage.&lt;/figcaption>
+&lt;/figure>
+&lt;ul>
+&lt;li>&lt;strong>My home-built NAS:&lt;/strong>
+&lt;ul>
+&lt;li>&lt;strong>Hardware:&lt;/strong> &lt;a href="https://amzn.to/3DaBQze">ThinkStation P710&lt;/a> equipped with 2x Intel Xeon E5-2697 v4 processors (18c/36t) at 2.30GHz, 64GB of RAM, 2x &lt;a href="https://amzn.to/3ZvimN7">Seagate 4TB Enterprise Capacity 7200 RPM&lt;/a> drives and a &lt;a href="https://amzn.to/49zx3DE">Samsung 970 EVO Plus SSD&lt;/a> 500GB.&lt;/li>
+&lt;li>&lt;strong>Operating system:&lt;/strong> FreeBSD 14.&lt;/li>
+&lt;li>&lt;strong>Storage configuration:&lt;/strong> ZFS with the two HDD drives in mirror mode and with the SSD set up as the L2ARC plus ZIL log for the drive pool.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>&lt;strong>The Synology NAS:&lt;/strong>
+&lt;ul>
+&lt;li>&lt;strong>Hardware:&lt;/strong> &lt;a href="https://amzn.to/3ZL7sUI">Synology DS923+&lt;/a> equipped with 3x &lt;a href="https://amzn.to/4g73s6S">Synology Plus Series 4TB 5400 RPM&lt;/a> drives and the same &lt;a href="https://amzn.to/49zx3DE">Samsung 970 EVO Plus SSD&lt;/a> 500GB that I moved from one machine to the other. The box is equipped with a 4-core AMD Ryzen Embedded R1600 and 4GB of RAM.&lt;/li>
+&lt;li>&lt;strong>Operating system:&lt;/strong> Synology&amp;rsquo;s own DiskStation Manager (DSM).&lt;/li>
+&lt;li>&lt;strong>Storage configuration:&lt;/strong> btrfs with the three HDD drives set up in RAID 5 mode and with the SSD set up to act as the cache for the drive pool.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>The two configurations are quite different&amp;mdash;after all, I am comparing a workstation machine with lots of spare CPU and RAM to a dedicated machine specifically crafted for file sharing&amp;mdash;so it&amp;rsquo;s going to be difficult to be &amp;ldquo;fair&amp;rdquo; in any comparison. In any case, here are a few things to contrast:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>IOPS:&lt;/strong> The P710 runs with 2 7200 RPM drives in mirror mode whereas the DS923+ runs with 3 5400 RPM drives in RAID 5 mode. The number of total IOPS from each is going to differ but&amp;hellip; for all purposes, the 1Gbit NIC that each machine has is the limiting factor in performance so I haven&amp;rsquo;t bothered to run any performance tests. Both can saturate the network, so there is that.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Quality:&lt;/strong> Both the P710 and the DS923+ are impressive machines&amp;mdash;maybe not PowerMac G5 impressive levels, but pretty, pretty close. I love the ThinkStation&amp;rsquo;s outer design and the interior shows great cable management and airflow. As for the NAS, I love the lightweight and small form factor that allows placing it pretty much anywhere. Both are tool-less enclosures.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Noise:&lt;/strong> When idle, both machines are equally quiet. The ThinkStation gets really, really loud under heavy load though, and it is also uncomfortably loud even at idle when the room temperature is warm (around or over 25C). The DS923+, however, seems quiet throughout. The Synology Plus Series HDDs are also quieter than the ones I had in the ThinkStation, and that&amp;rsquo;s partly because they are slower 5400 RPM drives. In any case, these two machines stay in my garage so I don&amp;rsquo;t care about their noise.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Power consumption:&lt;/strong> I unfortunately do not own a tool to measure it, but it&amp;rsquo;d be neat to compare how these two stack up. I&amp;rsquo;m sure I&amp;rsquo;ve thrown money away by keeping the ThinkStation online 24x7 and having those drives never rest (ZFS doesn&amp;rsquo;t let them spin down) but it&amp;rsquo;s hard to care about it because my power bill is dominated by heating almost year-round.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="freebsd-and-zfs">FreeBSD and ZFS&lt;/h1>
+&lt;p>FreeBSD is my current favorite system for servers. FreeBSD remains close to its Unix roots and maintains rational and orthogonal tooling (unlike Linux), is quick and trivial to maintain (I could run through the 13 to 14 upgrade in&amp;hellip; 15 minutes?), and bundles modern technology like ZFS and bhyve (unlike NetBSD, sadly, which used to be my BSD of choice).&lt;/p>
+&lt;p>It is true that FreeBSD gave me some headaches when I ran it on the PowerMac G5, but that&amp;rsquo;s expected due to the machine being 20 years old and &lt;a href="https://www.freebsd.org/platforms/ppc/">FreeBSD&amp;rsquo;s PowerPC support&lt;/a> being a Tier 2 platform. The thing is that I never intended to run a NAS on the G5; it just so happened to be the only machine I had available for it. In any case, I have had &lt;em>zero&lt;/em> problems on the ThinkStation. Mind you: when I bought this machine, both Windows and Fedora experienced occasional freezes with their default installations (before pulling upgrades from the network) and FreeBSD never has shown any signs of instability.&lt;/p>
+&lt;p>As for ZFS, it is hard to convey the feeling of &amp;ldquo;power&amp;rdquo; you experience when you type &lt;code>zpool&lt;/code> and &lt;code>zfs&lt;/code> commands and see the machine coordinate multiple disks to offer you a dependable storage solution. Creating file systems on a pool, creating raw volumes for VMs or iSCSI targets, taking snapshots, replicating snapshots over the network or to backup USB drives, scrubbing the drives to verify data integrity&amp;hellip; all are trivial commands away.&lt;/p>
+&lt;p>ZFS feels slow though. I grew up thinking of file systems as contiguous portions of a disk and tinkering with their partitioning scheme to keep groups of data unfragmented for speedy access. Due to the way ZFS operates, however, none of this archaic knowledge applies (and to be honest, I do not know how ZFS works in detail internally). That said, a hard drive&amp;rsquo;s seek time is around 10ms and has been like that for decades, which combined with the fact that we are now spoiled by having SSDs everywhere, exacerbates how slow an HDD-based solution feels no matter the file system.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-13-defrag.png" class="with-border" />
+&lt;figcaption>Did I just mention disk fragmentation? Yeah I did, and I could not resist including this screenshot of MS-DOS 6.22's &lt;tt>DEFRAG.EXE&lt;/tt> here. Just because.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Regarding network connectivity, FreeBSD offers all sorts of networked file systems and services. The base system provides NFSv3, NFSv4, FTP, and iSCSI targets. The ports (packages) system offers whatever else you may need, including SMB, DLNA, and even ancient protocols like AppleTalk or distributed protocols like Ceph. All configuration is done by hand over SSH in the traditional Unix way of editing configuration files&amp;mdash;aka messing around with different, inconsistent text formats.&lt;/p>
+&lt;h1 id="synologys-dsm-and-btrfs">Synology&amp;rsquo;s DSM and btrfs&lt;/h1>
+&lt;p>The DS923+ runs Synology&amp;rsquo;s own operating system: the &lt;a href="https://www.synology.com/en-us/dsm">DiskStation Manager (DSM)&lt;/a>. The DSM is a headless-first system designed to be accessed over the network, which is no surprise. What &lt;em>is&lt;/em> surprising is the choice of the interface: while most networked devices offer some sort of a web-based tabbed UI, the DSM offers a desktop environment&amp;mdash;with overlapping windows no less. This feels like a gimmick to me, and a quite neat one, but overkill nonetheless.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-13-synology-dsm-overview.png" />
+&lt;figcaption>The DSM desktop with the &lt;i>Control Panel&lt;/i> and the &lt;i>File Station&lt;/i> apps open to demonstrate the appearance of the web-based windowing system.&lt;/figcaption>
+&lt;/figure>
+&lt;p>If we peek under the covers, which we can do by logging into the machine over SSH, we find that the DSM is a Linux system. No surprises here after seeing that its choice of file system is btrfs. But what kind of Linux is it? A weird one, let me tell you. Luckily, you do not have to interact with it at all if you don&amp;rsquo;t want to, but hey, I&amp;rsquo;m curious so I did look.&lt;/p>
+&lt;p>The DSM seems to be some sort of Debian derivative based on the fact that &lt;code>dpkg&lt;/code> is installed, but otherwise I cannot find any other obvious remains of what might have been a Debian installation; even &lt;code>dpkg -l&lt;/code> shows nothing. What I can tell is that the btrfs file systems are mounted under &lt;code>/volume1&lt;/code> and, in there, we can find one directory per shared folder that we create in the UI. We can also find various directories prefixed with &lt;code>@&lt;/code>, which is a&amp;hellip; weird choice for Unix file names, and I understand are managed by the DSM. These include things like &lt;code>@appdata&lt;/code> or &lt;code>@userpreference&lt;/code>, which carry strong Windows vibes.&lt;/p>
+&lt;p>Considering that the DS923+ is almost a PC and runs Linux, I did look to see if it was possible to run FreeBSD instead. It turns out some people have tried this, and FreeBSD does run, but it lacks drivers to control power to the drives so it cannot actually leverage the storage devices. From what I understood, the DS923+ seems to have dedicated hardware to control power the drive pool, and this hardware logic is controlled via GPIO.&lt;/p>
+&lt;p>Which got me even more curious: if the DSM explicitly controls power to the drive pool, how does it boot and how does it remain responsive even after shutting down the drives? I guessed that the device comes with a tiny drive to hold the DSM and boots off of it, and upon inspecting the &lt;code>dmesg&lt;/code> and looking for non-obvious stuff, I found this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">sd 7:0:0:0: Attached scsi generic sg3 type 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sd 7:0:0:0: [synoboot] 245760 512-byte logical blocks: (126 MB/120 MiB)
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sd 7:0:0:0: [synoboot] Write Protect is off
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sd 7:0:0:0: [synoboot] Mode Sense: 23 00 00 00
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sd 7:0:0:0: [synoboot] No Caching mode page found
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sd 7:0:0:0: [synoboot] Assuming drive cache: write through
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sd 7:0:0:0: [synoboot] Attached SCSI disk
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Ah-ha. A small 120MB (flash?) drive that acts as the system device. However&amp;hellip; this separation of system vs. drive pool comes with a price: the drive pool often shuts off, and powering it back on is &lt;em>slow&lt;/em> (10&amp;ndash;15 seconds are not unusual). When you try to reach the NAS over the network and the pool is off, it can feel as if the NAS is unreachable / down, which has already confused me a few times and caused me to started diagnosing network issues. Quite annoying to be honest, but obviously this can be configured in the &lt;em>Hardware &amp;amp; Power&lt;/em> menu:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-13-synology-dsm-hardware-and-power.png" />
+&lt;figcaption>The list of available options under the Hardware &amp; Power menu.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Regarding network connectivity, the DSM offers multiple networked file systems and services out of the box, namely: SMB, NFS v3, NFS v4, AFP, FTP, and rsync. I&amp;rsquo;m actually surprised to see AFP, AppleTalk&amp;rsquo;s &amp;ldquo;replacement&amp;rdquo;, in the default set of supported file systems in this day and age, but there it is. Additionally, the DSM provides its own package management system to install a limited set of additional services and utilities, which I used to add DLNA support.&lt;/p>
+&lt;h1 id="seeding-the-nas">Seeding the NAS&lt;/h1>
+&lt;p>Anyhow, let&amp;rsquo;s change topics and talk about the DS923+ itself.&lt;/p>
+&lt;p>The first thing I had to do after getting the device was to seed it with data. I needed to copy about 1TB of photos and documents from the FreeBSD machine to the DS923+, which is not a lot, but is large enough that different copy mechanisms can make a huge difference in the time the copy takes. In particular, the choice of &lt;em>protocol&lt;/em> matters for a quick copy: both SMB and NFS are OK with large files, but transferring many small files with them is painful. Fortunately, the DSM allows rsync over SSH and I used that to do the initial seeding.&lt;/p>
+&lt;p>Now, using rsync came with two &amp;ldquo;problems&amp;rdquo;. The first is that I had to know the &lt;em>path&lt;/em> to the shared folders in the file system to specify the rsync targets. This is not clearly exposed through the UI, so I had to rely on SSH to log into the machine and figure out that the shared folders are at &lt;code>/volume1/&amp;lt;shared_folder&amp;gt;/&lt;/code> as I briefly mentioned in the previous section.&lt;/p>
+&lt;p>Which led to the second problem or, rather, surprise: even though I had set up 2FA for the user accounts I created in the DSM UI, 2FA was meaningless when accessing the machine over SSH. I understand why that may be, but then I question what the point of enabling 2FA really is if one can gain access to the machine without it. The same is true of SMB by the way: you just need an account&amp;rsquo;s password, not the 2FA. So, unless you disable all networked file systems and only allow web access to the NAS, all the 2FA does is give you a false sense of security.&lt;/p>
+&lt;h1 id="peace-of-mind">Peace of mind&lt;/h1>
+&lt;p>When comparing my custom FreeBSD server to the newer DS923+, the main difference I can notice is an increase in &amp;ldquo;peace of mind&amp;rdquo;. Yes, FreeBSD is very stable and ZFS is great&amp;hellip; but I wasn&amp;rsquo;t running the ThinkStation as a dedicated NAS: I was mixing the machine&amp;rsquo;s NAS responsibilities with those of a host for development tasks. I always felt uncomfortable about the health of the system and I wasn&amp;rsquo;t convinced that my maintenance was &amp;ldquo;good enough&amp;rdquo; to safeguard my data.&lt;/p>
+&lt;p>As you can imagine, being uncomfortable about your data is not something you want to feel: trust is &lt;em>The Thing&lt;/em> you most want in a storage solution, and there are a few things that stand out during the setup of the system that gave me warm feelings on this topic.&lt;/p>
+&lt;p>The first and obvious one is that the DSM offers to encrypt the pool right from the beginning, which is something you should always do in this day and age: encryption is cheap in CPU terms, the data you own is precious, and the devices that store it tend to be small and light so they are at risk of theft. But beware: the key is stored on the device to allow auto-mounting by default, which means a knowledgeable thief could still gain access. Thus, this level of encryption is only useful to facilitate the disposal of drives. That said, you can configure additional encryption on each shared folder if you want per-user password-protected encryption.&lt;/p>
+&lt;p>The second thing is that, nowhere in the setup process I was asked to create a Synology account for the NAS to be fully functional. You might think that this is a given, but seeing the state of other hardware or software products these days&amp;hellip; it&amp;rsquo;s not. So this sent a very welcome message. I ended up needing to create an account for certain features that required it, but these were completely optional.&lt;/p>
+&lt;p>The third thing, which is actually one of those features that required creating a Synology account, is the ability to send email notifications for system alerts. Email-based alerts are terrible in large organizations, but for my personal use case, they are perfect and make a huge difference with my previous FreeBSD setup. I can rest assured that I&amp;rsquo;ll be told about anything unusual with the DS932+ in a way that I will notice. With my custom build, I had certain monitoring features in place like weekly disk scrubs and periodic online backups&amp;hellip; but no way to properly notify me of problems with either: if anything went wrong, I would not have known on time, and that was very unsettling.&lt;/p>
+&lt;p>The fourth and final thing is that the DSM has been built throughout the years by people that deal with storage all the time, and it&amp;rsquo;s fair to assume that they know a thing or two about running a NAS. I have reasonable confidence that the configuration of the system and the storage pool is going to be &amp;ldquo;correct&amp;rdquo; over time, particularly across upgrades, whereas I was never quite sure of it with my manual FreeBSD setup. One such example is with the NFS configuration: setting up the NFSv4 server in the DSM was pretty much knob-free&amp;mdash;so &lt;a href="/2024/11/demystifying-secure-nfs.html">when things didn&amp;rsquo;t work with the clients&lt;/a>, I could assume that the issue was almost certainly with the clients themselves.&lt;/p>
+&lt;h1 id="additional-apps">Additional apps&lt;/h1>
+&lt;p>As I mentioned earlier, the DS923+ is pretty much a PC with Linux in a tiny box, so in principle it can host any kind of software you like. The way this works is via DSM&amp;rsquo;s own &amp;ldquo;marketplace&amp;rdquo; where you can find new services to add to the machine.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-13-synology-dsm-package-center.png" />
+&lt;figcaption>The DSM desktop showing the &lt;i>Package Center&lt;/i> application.&lt;/figcaption>
+&lt;/figure>
+&lt;p>I did add the optional DLNA service so that I could play videos from my Xbox, and also toyed with with the Domain Server (and later gave up due to the sheer complexity of setting up a domain just for home use). But there are other interesting optional features. For example, you can create virtual machines on the DS923+ which, despite the limited CPU and RAM of the machine, can come in handy from time to time. I suppose with a more powerful box from Synology, the story here would be quite different.&lt;/p>
+&lt;p>One thing to highlight is that these extra pieces of software are &lt;em>curated&lt;/em>: you aren&amp;rsquo;t just installing an extra service to the underlying Linux machine. You are installing an extension to the DSM, which comes with new configuration panels in the UI and full integration with the system. You never have to know that Linux is there if you don&amp;rsquo;t want to.&lt;/p>
+&lt;h1 id="backup-solutions">Backup solutions&lt;/h1>
+&lt;p>Having a dedicated NAS with a storage pool that protects against corruption is great, but a singly-homed box like this is still subject to massive data loss due to ransomware, physical damage caused by fire or flooding, and correlated disk failures. Backups are critically important.&lt;/p>
+&lt;p>With the FreeBSD setup, my backup strategy involved using &lt;code>zfs send&lt;/code> and &lt;code>zfs receive&lt;/code> to back up snapshots into two USB drives: one kept in a fire safe and one kept offsite. This worked but I had to figure out the syntax of these commands over and over again, which didn&amp;rsquo;t make me feel confident about these actions. I did also back up irreplaceable data to a OneDrive account using &lt;code>rclone&lt;/code>, which was good but&amp;hellip; manual and ad-hoc as well. Needless to say, while the backups existed, they were often stale and they were a pain to manage.&lt;/p>
+&lt;p>Backing up a NAS is difficult though. For one, a NAS is designed to store &lt;em>lots&lt;/em> of data, which means the backup targets have to be large capacity-wise too. And for another, given the DS923+ reduced physical size, it is likely to end up placed in a location that isn&amp;rsquo;t super convenient to access, which will make attaching temporary USB drives and the like an annoying experience.&lt;/p>
+&lt;p>For now, what I have tried is the optional &lt;em>Cloud Sync&lt;/em> package that allows replicating to many cloud services, including OneDrive. And it&amp;rsquo;s a joy to use. I could trivially install the package, log into my Microsoft account, and configure the two specific folders I care about backing up. I could even respect the previous file layout of my OneDrive account so I did not have to re-upload anything. And the tool supports encryption too, which you may want if you really don&amp;rsquo;t like those cloud providers from training their AI systems with your data.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-13-synology-dsm-cloud-sync.png" />
+&lt;figcaption>Sample configuration of cloud syncing to OneDrive.&lt;/figcaption>
+&lt;/figure>
+&lt;p>There is more though. Synology offers a variety of products for remote and physical backup. The one that does interest me the most is &lt;a href="https://www.synology.com/en-global/dsm/feature/snapshot_replication">Snapshot Replication&lt;/a>, which provides something similar to what I was doing with &lt;code>zfs send&lt;/code> and &lt;code>zfs receive&lt;/code>, but unfortunately requires a second Synology system offsite that I don&amp;rsquo;t have. The other solutions are &lt;a href="https://sy.to/hf5yf">Active Backup for Business&lt;/a> and &lt;a href="https://sy.to/tntsi">Hyper Backup&lt;/a>, which I still would like to evaluate but haven&amp;rsquo;t had a chance to look into.&lt;/p>
+&lt;h1 id="future">Future&lt;/h1>
+&lt;p>To conclude this brief review and comparison, let me say that I&amp;rsquo;m happy with the DS923+ experience so far. I don&amp;rsquo;t think I &lt;em>need&lt;/em> it because my FreeBSD solution worked well enough, but considering that I like to use the ThinkStation as the host for my VMs and as my primary development machine&amp;mdash;aka, a fun toy&amp;mdash;I feel more at peace with a dedicated appliance that stores my precious data.&lt;/p>
+&lt;p>For more details, you can visit Synology&amp;rsquo;s product pages for the &lt;a href="https://sy.to/hekgh">DS923+&lt;/a> and the &lt;a href="https://sy.to/drkom">Plus Series HDDs&lt;/a>. And if you want to roll your own FreeBSD-based solution, &lt;a href="https://docs.freebsd.org/en/books/handbook/zfs/">Chapter 22 of the FreeBSD handbook on ZFS&lt;/a> is a good place to start.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-12-13-ds923-and-thinkstation.jpg" length="329916" type="image/jpeg"/></item><item><title>Demystifying secure NFS</title><link>https://jmmv.dev/2024/11/demystifying-secure-nfs.html</link><pubDate>Sun, 03 Nov 2024 16:00:00 -0800</pubDate><guid>https://jmmv.dev/2024/11/demystifying-secure-nfs.html</guid><description>&lt;p>I recently got a &lt;a href="https://sy.to/hekgh">Synology DS923+&lt;/a> for evaluation purposes which led me to setting up NFSv4 with Kerberos. I had done this about a year ago with FreeBSD as the host, and going through this process once again reminded me of how painful it is to secure an NFS connection.&lt;/p>
 &lt;p>You see, Samba is much easier to set up, but because NFS is the native file sharing protocol of Unix systems, I felt compelled to use it instead. However, if you opt for NFSv3 (the &amp;ldquo;easy default&amp;rdquo;), you are left with a system that has zero security: traffic travels unencrypted and unsigned, and the server trusts the client when the client asserts who is who. Madness for today&amp;rsquo;s standards. Yet, when you look around, people say &amp;ldquo;oh, but NFSv3 is fine if you trust the network!&amp;rdquo; But seriously, who trusts the network in this day and age?&lt;/p>
 &lt;p>You have to turn to NFSv4 &lt;em>and&lt;/em> combine it with Kerberos for a secure file sharing option. And let me tell you: the experience of setting these up and getting things to work is horrible, and the documentation out there is terrible. Most documents are operating-system specific so they only tell you what works when a specific server and a specific client talk to each other. Other documents just &lt;em>assume&lt;/em>, and thus omit, various important details of the configuration.&lt;/p>
 &lt;p>So. This article is my recollection of &amp;ldquo;lab notes&amp;rdquo; on how to set this whole thing up along with the necessary background to understand NFSv4 and Kerberos. My specific setup involes the Synology DS923+ as the NFSv4 server; Fedora, Debian, and FreeBSD clients; and the supporting KDC on a pfSense (or FreeBSD) box.&lt;/p>
@@ -2413,358 +2559,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;figure>
 &lt;img src="/images/2024-02-14-dosbox-djgpp.png"/>
 &lt;/figure>
-&lt;p>Pretty neat stuff, huh?&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-02-14-djgpp-cover-image.png" length="253620" type="image/jpeg"/></item><item><title>Beyond the 1 MB barrier in DOS</title><link>https://jmmv.dev/2024/02/beyond-the-1-mb-barrier-in-dos.html</link><pubDate>Wed, 07 Feb 2024 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/02/beyond-the-1-mb-barrier-in-dos.html</guid><description>&lt;p>In &lt;a href="/2024/01/from-0-to-1-mb-in-dos.html">&amp;ldquo;From 0 to 1 MB in DOS&amp;rdquo;&lt;/a>, I presented an overview of all the ways in which DOS and its applications tried to maximize the use of the 1 MB address space inherited from the 8086&amp;mdash;even after the 80286 introduced support for 16 MB of memory and the 80386 opened the gates to 4 GB.&lt;/p>
-&lt;p>I know I promised that this follow-up article would be about DJGPP, but before getting into &lt;em>that&lt;/em> review, I realized I had to take another detour to cover three more topics. Namely: &lt;em>unreal mode&lt;/em>, which I intentionally ignored to not derail the post; &lt;em>LOADALL&lt;/em>, which I didn&amp;rsquo;t know about until you readers mentioned it; and &lt;em>DOS extenders&lt;/em>, which I was planning to describe in the DJGPP article but they are a better fit for this one.&lt;/p>
-&lt;p>So&amp;hellip; strap your seat belts on and dive right in for another tour through the ancient techniques that DOS had to pull off to peek into the memory address space above the first MB. And get your hands ready because we&amp;rsquo;ll go over assembly code for a step-by-step jump into unreal mode.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="what-is-unreal-mode-anyway">What is unreal mode anyway?&lt;/h1>
-&lt;p>Having read the preceding post, you should know by now what the real, protected, and VM86 modes of the x86 processors are. But there is one extra unofficial mode I did not talk about, and that is the &lt;em>unreal mode&lt;/em>. The mode with the coolest name if you ask me.&lt;/p>
-&lt;p>Unreal mode is a special state of the processor in which the CPU acts as if it was in real mode&amp;hellip; but with segment descriptors that allow it to reference memory above the 1 MB limit. These segments are impossible to define in real mode but, with different tricks for the 80286 and 80386, they become a possibility.&lt;/p>
-&lt;p>To understand how unreal mode works, we need to go back to the diagram I presented earlier describing the address resolution process that the 80286&amp;rsquo;s MMU executes on every memory access:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-01-17-80286-mmu-access.png" />
-&lt;figcaption>Diagram representing the operations that the 80286 does, in hardware, to resolve a &lt;tt>segment:address&lt;/tt> memory reference.&lt;/figcaption>
-&lt;/figure>
-&lt;p>As you can see in the diagram, for every memory access of the form &lt;code>segment:offset&lt;/code>, the MMU:&lt;/p>
-&lt;ol>
-&lt;li>decodes the segment selector specified by &lt;code>segment&lt;/code> to determine whether to query the GDT or LDT and which segment descriptor to read,&lt;/li>
-&lt;li>reads the determined segment descriptor by indexing into the GDT or LDT tables,&lt;/li>
-&lt;li>decodes the segments&amp;rsquo; base address and limit as stored in the descriptor,&lt;/li>
-&lt;li>checks the privileges of the executing code against the protections recorded in the descriptor,&lt;/li>
-&lt;li>and ensures the &lt;code>offset&lt;/code> is within the segment limit defined in the descriptor.&lt;/li>
-&lt;/ol>
-&lt;p>Only after these steps complete successfully, the memory access is allowed; otherwise, the processor raises a General Protection Fault exception.&lt;/p>
-&lt;p>This is all conceptually good until you realize that the GDT and LDT live in main memory&amp;hellip; and main memory is slow&amp;mdash;&lt;em>excruciatingly&lt;/em> so in processor time. Having to read from main memory to resolve &lt;em>every&lt;/em> memory access, even with a good L1 or L2 cache, would have a big performance impact on most applications.&lt;/p>
-&lt;p>To resolve this inefficiency, the processor has a cache of segment descriptors. Instructions that update the segment registers, such as &lt;code>MOV DS, AX&lt;/code>, fetch descriptors from the GDT or LDT tables and store them in the cache. Instructions that reference memory, such as &lt;code>MOV AX, DS:1234h&lt;/code>, read the descriptors from the cache without ever reaching out to main memory.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-07-descriptor-cache.png" />
-&lt;figcaption>Diagram representing how the instructions used to load a register like &lt;tt>DS&lt;/tt> are decoupled from the instructions that later consume the details about &lt;tt>DS&lt;/tt>. It is crucial to note how the segment descriptor cache completely shields the second instruction from accessing main memory to resolve the address.&lt;/figcaption>
-&lt;/figure>
-&lt;p>So far so good, but let&amp;rsquo;s add another twist. The diagram I presented earlier showing how the 80286 resolves a memory address does not only apply to protected mode: it applies to real mode too. In both modes, the processor accesses the descriptor cache to peek at the segment limits and protection settings. This means that, for real mode to work as 8086 code expects, the cache must contain values that are compatible with real mode: in particular, the limits must be set to 64 KB.&lt;/p>
-&lt;p>But what if we could somehow load arbitrary segment descriptors into the processor&amp;rsquo;s cache and leverage those in real mode? If we could do that, we could increase the segment limits stored in the cache, and then any memory references that use those cached descriptors would be able to bypass the real mode rules and access extended memory directly.&lt;/p>
-&lt;p>And this, dear reader, is what unreal mode is about. There is a ton of nuance about how this mode was discovered and how it got its name, and to learn more about that story, I&amp;rsquo;ll redirect you to &lt;a href="https://www.os2museum.com/wp/a-brief-history-of-unreal-mode/">OS/2 Museum&amp;rsquo;s excellent history of the unreal mode&lt;/a>. But keep in mind that unreal mode is a clutch that DOS applications used to access memory above the 1 MB mark while avoiding expensive protected mode switches.&lt;/p>
-&lt;h1 id="leveraging-unreal-mode">Leveraging unreal mode&lt;/h1>
-&lt;p>Before describing how we can switch the processor to unreal mode, we must first look at how we can actually take advantage of this mode.&lt;/p>
-&lt;p>In the 80286 case, unreal mode is annoying to use: the 80286 is a 16-bit CPU, which means that the &lt;code>offset&lt;/code> part of a memory reference is limited to 64 KB. We can configure segments whose base address lies beyond the 1 MB address space, allowing us to read extended memory from real mode, but we can only do so in 64 KB chunks at a time.&lt;/p>
-&lt;p>The 80386 fares better due to it being a 32-bit CPU: the &lt;code>offset&lt;/code> part of a memory reference can be expressed as a 32-bit quantity. We can do both &lt;code>MOV AX, DS:[SI]&lt;/code> and &lt;code>MOV AX, DS:[ESI]&lt;/code>, which means that if &lt;code>DS&lt;/code> has a base of zero, we can reference any memory position in the 4 GB address space when using the &lt;code>ESI&lt;/code> offset. Crucially, and contrary to what some people think, we can issue these two variants from 16-bit real mode: 32-bit instructions are &lt;em>not&lt;/em> restricted to protected mode.&lt;/p>
-&lt;p>The way the 80386 allows 32-bit instructions in 16-bit mode and vice versa is via two properties. The first is an instruction width setting at the code segment level: segment descriptors can indicate that the code they contain is 16-bit or 32-bit. The default for real mode is to assume that code segments are set to 16 bits, but in protected mode we can choose whatever we prefer. The second is the &lt;code>0x66&lt;/code> instruction prefix, which tells the processor that the following instruction operates in &lt;em>the opposite&lt;/em> mode of what is configured in the current code segment: e.g. if the current code segment is a 16-bit segment, the &lt;code>0x66&lt;/code> prefix marks 32-bit instructions.&lt;/p>
-&lt;p>Knowing this, we can see that unreal mode is most useful in the 80386 because, once enabled, code can easily reference any extended memory address using 32-bit offsets and the &lt;code>0x66&lt;/code> prefix. But the 16-bit constraints of the 80286 don&amp;rsquo;t make unreal mode less useful given how much the DOS ecosystem needed to escape the real mode address space limitations and how difficult it was to leave protected mode in the 80286.&lt;/p>
-&lt;p>With that out of the way, what we are missing in our discussion are the ways by which to enter unreal mode. There are at least two: the undocumented LOADALL instruction and an unsupported jump from protected mode to real mode. Let&amp;rsquo;s take a look at both.&lt;/p>
-&lt;h1 id="loadall">LOADALL&lt;/h1>
-&lt;p>LOADALL is an undocumented instruction of the 80286 and 80386 processors. This instruction has a long history and I&amp;rsquo;m not going to cover it in detail because &lt;a href="https://rep-lodsb.mataroa.blog/blog/intel-286-secrets-ice-mode-and-f1-0f-04/">others have done a much better job than I could&lt;/a>. I&amp;rsquo;ll restrict my explanation to what the instruction does and why it is useful to enter unreal mode.&lt;/p>
-&lt;p>Simply put, all LOADALL does is, as its name implies, set all processor registers at once with values that come from a memory region. This is similar to the widely unused built-in task switching functionality of x86 processors, which reloads the processor state with register values stored in a &lt;a href="https://en.wikipedia.org/wiki/Task_state_segment">Task State Segment (TSS)&lt;/a> descriptor.&lt;/p>
-&lt;p>But LOADALL has some quirks that the TSS descriptor doesn&amp;rsquo;t have, and those are what make it interesting. Witness the contents of the memory that LOADALL reads on an 80286:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-text" data-lang="text">&lt;span class="line">&lt;span class="cl">Physical Address CPU Register
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">---------------- ------------
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0800h-0805h None
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0806h-0807h MSW
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0808h-0815h None
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0816h-0817h TR
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0818h-0819h Flag word
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">081Ah-081Bh IP
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">081Ch-081Dh LDT
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">081Eh-081Fh DS
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0820h-0821h SS
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0822h-0823h CS
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0824h-0825h ES
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0826h-0827h DI
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0828h-0829h SI
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">082Ah-082Bh BP
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">082Ch-082Dh SP
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">082Eh-082Fh BX
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0830h-0831h DX
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0832h-0833h CX
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0834h-0835h AX
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0836h-083Bh ES descriptor cache
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">083Ch-0841h CS descriptor cache
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0842h-0847h SS descriptor cache
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0848h-084Dh DS descriptor cache
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">084Eh-0853h GDTR
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0854h-0859h LDT descriptor cache
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">085Ah-085Fh IDTR
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0860h-0865h TSS descriptor cache
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Registers, registers, more registers, descriptor cache&amp;hellip; Wait, what? Entries for the &lt;em>cached&lt;/em> segment descriptors? That&amp;rsquo;s interesting. These are the actual values for the segment descriptors that the processor stores in its internal cache. Which means that, by issuing a carefully-crafted LOADALL, we can tell the processor to set the cached descriptors to values that are nonsensical for the current operation mode&amp;mdash;and the processor does &lt;em>not&lt;/em> complain.&lt;/p>
-&lt;p>In essence, with just one instruction, we can tell the processor that the cached descriptors have base addresses above the 1 MB limit and/or that they have limits larger than 64 KB. And the processor will just accept those into the cache and use them for future memory references.&lt;/p>
-&lt;p>As it turns out, &lt;a href="https://www.os2museum.com/wp/himem-sys-unreal-mode-and-loadall/">&lt;code>HIMEM.SYS&lt;/code> did leverage LOADALL&lt;/a> and we can even find its &lt;a href="https://github.com/neozeed/himem.sys-2.06">original source code&lt;/a> to peek into &lt;a href="https://github.com/neozeed/himem.sys-2.06/blob/main/oemsrc/xm286.asm#L241">how it achieved&lt;/a> this feat. It&amp;rsquo;s not trivial to do, but the performance gains of such an undocumented instruction were too hard to pass on in order to implement efficient transfers between conventional and extended memory.&lt;/p>
-&lt;p>This made me curious so I tried replicating LOADALL&amp;rsquo;s usage in &lt;a href="https://www.dosbox.com/">DOSBox&lt;/a> and&amp;hellip; failed because DOSBox does not implement this instruction&amp;mdash;which is understandable because it was not documented, it was very specific to two processors, and it apparently was not widely used outside of &lt;code>HIMEM.SYS&lt;/code>. Maybe more-accurate processor emulators supply it, but I didn&amp;rsquo;t bother trying.&lt;/p>
-&lt;p>Which brings us to the other way to enter unreal mode: an unsupported jump from protected mode to real mode in the 80386.&lt;/p>
-&lt;h1 id="real-to-protected-mode-and-back">Real to protected mode and back&lt;/h1>
-&lt;p>Protected mode fascinated me as a child when I read about it in books that didn&amp;rsquo;t &amp;ldquo;belong&amp;rdquo; to my age. After having dipped my toes in 8086 assembly and having toyed around with boot sectors and the like, I fantasized about how protected mode &amp;ldquo;unlocked&amp;rdquo; enormous power. I knew I had to learn such black arts to write my own operating system and I remember writing code that tried to enter protected mode and always failed&amp;mdash;yet it sounded so easy from the books: just set bit 0 of &lt;code>CR0&lt;/code> to 1!&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-07-assembly-books.jpg" />
-&lt;figcaption>The assembly and processor books I read once upon a time and that got me interested in all of this low-level systems programming.&lt;/figcaption>
-&lt;/figure>
-&lt;p>It wasn&amp;rsquo;t until many years later, around 2007, that I decided I wanted to fulfill my long-term dream to write an operating system. At that point, I invested some time to get protected mode to work&amp;mdash;and I finally did, with interrupts enabled and all. (Spoiler alert: I never got to write an OS though&amp;hellip; yet?) But even if that worked, getting into protected mode is always a frustrating experience of having to get many teeny tiny details right just so that the machine doesn&amp;rsquo;t crash. You do it right and you see absolutely nothing; you do it wrong and you see absolutely nothing either.&lt;/p>
-&lt;p>But wait. Why am I telling you all this? Ah yes, because another way of entering unreal mode is the following dance:&lt;/p>
-&lt;ol>
-&lt;li>Switch to protected mode.&lt;/li>
-&lt;li>Set up segment registers to segment descriptors that provide access to the full address space, causing the cached descriptors to have a 4 GB limit.&lt;/li>
-&lt;li>Switch back to real mode with the previous unsupported segment configuration in place.&lt;/li>
-&lt;/ol>
-&lt;p>Upon switching back to real mode, the properties of the segment descriptors that don&amp;rsquo;t make sense in real mode (those limits higher than 64 KB) are &lt;em>sticky&lt;/em>, meaning that no architectural operations such as &lt;code>MOV DS, AX&lt;/code> touch those bits of the cache. With that, it becomes possible to address extended memory.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-07-real-mode-load.png" />
-&lt;figcaption>Diagram representing how a real mode segment descriptor load does &lt;i>not&lt;/i> modify the limit or flags already stored in the descriptor cache.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Unfortunately, the 80286 did not have a mechanism to switch from protected mode back to real mode. Creative folks found ways to do this by triple-faulting the CPU and carefully setting registers to skip the BIOS POST code, but this process was extremely slow and thus unfeasible for frequent switches. At the time, the lack of this feature in the 80286 was a major complaint from OS vendors because it made it difficult to support running DOS programs from within a modern operating system.&lt;/p>
-&lt;p>Intel addressed those concerns with the launch of the 80386 and its new VM86 mode. But&amp;hellip; that wasn&amp;rsquo;t the only change. The 80386 also added the ability to return to real mode from protected mode&amp;mdash;with a lot of caveats. Intel was prescriptive in how exactly to return to real mode and never described what would happen if you didn&amp;rsquo;t follow the rules to the letter&amp;hellip; which was essentially begging for someone to try and see what would happen when doing that.&lt;/p>
-&lt;p>The answer, as we saw above, is unreal mode.&lt;/p>
-&lt;h1 id="hands-on-unreal-mode">Hands-on unreal mode&lt;/h1>
-&lt;p>All of the above research made me really curious so I got the urge to see unreal mode in action. So, in preparation for this article, I wrote a trivial DOS program that enters unreal mode and shows it working.&lt;/p>
-&lt;p>As in the past, getting this demo to a functional state was a frustrating experience of fighting with carefully-crafted register values and memory offsets, DOSBox crashes, and &lt;a href="https://bochs.sourceforge.io/">Bochs&lt;/a> oddities. But in the end my demo ran successfully, and because I couldn&amp;rsquo;t find any trivial, readily-available sample piece of code online that did this, I concluded that I &lt;em>had to&lt;/em> present it to you here for posterity&amp;rsquo;s sake.&lt;/p>
-&lt;p>So. Let&amp;rsquo;s get our hands dirty. All you need is &lt;a href="https://github.com/doomemacs/doomemacs">&lt;del>Doom Emacs&lt;/del>&lt;/a> a text editor, &lt;a href="https://www.nasm.org/">NASM&lt;/a>, and DOSBox. Our goal is to:&lt;/p>
-&lt;ol>
-&lt;li>write a flat COM executable,&lt;/li>
-&lt;li>without sections (code and data mixed),&lt;/li>
-&lt;li>all in 16-bit code with the occasional 32-bit operation override,&lt;/li>
-&lt;li>that enters protected mode,&lt;/li>
-&lt;li>that stores a string somewhere in extended memory far from the reach of real mode,&lt;/li>
-&lt;li>that drops back to (un)real mode,&lt;/li>
-&lt;li>that copies the string we stored in extended memory to conventional memory,&lt;/li>
-&lt;li>that tells DOS to print the string we fetched,&lt;/li>
-&lt;li>and that finally returns to DOS to prove that DOS still works.&lt;/li>
-&lt;/ol>
-&lt;p>Let&amp;rsquo;s begin.&lt;/p>
-&lt;p>The first thing we have to do is set up the GDT. We&amp;rsquo;ll use statically-configured descriptors in the code, like these:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">;;; Null descriptor.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">dq&lt;/span> &lt;span class="mi">0&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">;;; Code descriptor for this binary. The base address needs fixup at
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">;;; runtime to point to the location where the code was loaded.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">CODE_DESC&lt;/span> &lt;span class="no">equ&lt;/span> &lt;span class="mi">1&lt;/span> &lt;span class="err">&amp;lt;&amp;lt;&lt;/span> &lt;span class="mi">3&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">dw&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="no">ffffh&lt;/span> &lt;span class="c1">; Low 16 bits of the limit.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">code_base_low&lt;/span> &lt;span class="no">dw&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; Low 16 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">code_base_mid&lt;/span> &lt;span class="no">db&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; Middle 8 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">10011110&lt;/span>&lt;span class="no">b&lt;/span> &lt;span class="c1">; Code/data, exec, conforming, read allowed.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">00000000&lt;/span>&lt;span class="no">b&lt;/span> &lt;span class="c1">; Not 4KB, 16-bit, no long mode, limit 00h.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">code_base_high&lt;/span> &lt;span class="no">db&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; High 8 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">;;; Data/stack descriptor for this binary. The base address needs fixup
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">;;; at runtime to point to the location where the code was loaded.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">DATA_DESC&lt;/span> &lt;span class="no">equ&lt;/span> &lt;span class="mi">2&lt;/span> &lt;span class="err">&amp;lt;&amp;lt;&lt;/span> &lt;span class="mi">3&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">dw&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="no">ffffh&lt;/span> &lt;span class="c1">; Low 16 bits of the limit.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">data_base_low&lt;/span> &lt;span class="no">dw&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; Low 16 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">data_base_mid&lt;/span> &lt;span class="no">db&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; Middle 8 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">10010010&lt;/span>&lt;span class="no">b&lt;/span> &lt;span class="c1">; Code/data, data, grows up, read-write.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">00000000&lt;/span>&lt;span class="no">b&lt;/span> &lt;span class="c1">; Not 4KB, 16-bit, no long mode, limit 00h.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">data_base_high&lt;/span> &lt;span class="no">db&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; High 8 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">;;; Linear data descriptor covering the full 4 GB address space. No fixup
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">;;; necessary.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">LINEAR_DESC&lt;/span> &lt;span class="no">equ&lt;/span> &lt;span class="mi">3&lt;/span> &lt;span class="err">&amp;lt;&amp;lt;&lt;/span> &lt;span class="mi">3&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">dw&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="no">ffffh&lt;/span> &lt;span class="c1">; Low 16 bits of the limit.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">dw&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; Low 8 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; Middle 8 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">10010010&lt;/span>&lt;span class="no">b&lt;/span> &lt;span class="c1">; Code/data, data, grows up, read-write.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">11001111&lt;/span>&lt;span class="no">b&lt;/span> &lt;span class="c1">; 4KB, 16-bit, no long mode, limit=0fh.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">db&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; High 8 bits of the base address.
-&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The GDT presented above defines four descriptors:&lt;/p>
-&lt;ol>
-&lt;li>The null descriptor, which is unused but must be present.&lt;/li>
-&lt;li>The code descriptor (&lt;code>CODE_DESC&lt;/code>) for our COM executable. This is configured to 16 bits so that we don&amp;rsquo;t have to mix 16-bit and 32-bit sections in the same source file (which is easy but I wanted to avoid). Note also that the base address is zero, but we&amp;rsquo;ll have to patch it up at runtime to point to the actual location where DOS loaded our executable. We cannot predict this and all the offsets built into the code must remain valid when in protected mode, so we must compute this dynamically.&lt;/li>
-&lt;li>The data and stack descriptor (&lt;code>DATA_DESC&lt;/code>) for our COM executable. For the same reasons as the code descriptor, we must compute its base address at runtime.&lt;/li>
-&lt;li>A linear data descriptor (&lt;code>LINEAR_DESC&lt;/code>) to be able to reference the whole 4 GB address space. We&amp;rsquo;ll use this one to set up the segments for unreal mode.&lt;/li>
-&lt;/ol>
-&lt;p>Next up, we need to define the descriptor for the GDT itself right after the GDT data section:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="nf">gdt_desc&lt;/span> &lt;span class="no">equ&lt;/span> &lt;span class="no">$-gdt&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">gdt_base&lt;/span> &lt;span class="no">dd&lt;/span> &lt;span class="mi">0&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Easy, but again, note how &lt;code>gdt_base&lt;/code> is zero. The address to the GDT needs to be a linear address, and because we don&amp;rsquo;t know where the COM file will be loaded, we have to compute this address at runtime.&lt;/p>
-&lt;p>After this, it&amp;rsquo;s time to start the code section. The first thing we do is fix up all of the base addresses we left blank in the GDT itself and the GDT descriptor. Note that, because we target a COM binary (or a boot sector if you are so inclined), we can assume that &lt;code>CS&lt;/code>, &lt;code>DS&lt;/code>, &lt;code>ES&lt;/code>, and &lt;code>SS&lt;/code> all point to the same place, which makes things significantly easier:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Assume CS = DS = ES = SS (COM file or boot sector).
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">real_cs&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">cs&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Populate the GDT code and data descriptors with our actual base address
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="c1">;; so that the built-in code offsets work once we enter protected mode.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">xor&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">eax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">cs&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">shl&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">4&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">code_base_low&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">data_base_low&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">shr&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">16&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">code_base_mid&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">al&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">data_base_mid&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">al&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">code_base_high&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">ah&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">data_base_mid&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">al&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Populate the GDT descriptor with the linear address of the GDT.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">xor&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">eax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ds&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">shl&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">4&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">add&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">gdt&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">gdt_base&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="no">eax&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Then, we do preparatory work to enter protected mode: namely, we disable the &lt;a href="https://wiki.osdev.org/Non_Maskable_Interrupt">Non-Maskable Interrupt (NMI)&lt;/a> and interrupts in general, and we enable the A20 gate:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Disable the Non-Maskable Interrupt (NMI) and interrupts.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">in&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">70&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">or&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">80&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">out&lt;/span> &lt;span class="mi">70&lt;/span>&lt;span class="no">h&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">al&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">in&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">71&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">cli&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Enable the A20 gate.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">in&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">92&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">or&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">2&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">out&lt;/span> &lt;span class="mi">92&lt;/span>&lt;span class="no">h&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">al&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And then, we can finally do the magic to enter protected mode by loading the GDT descriptor, updating the &lt;code>PE&lt;/code> (0th) bit in the &lt;code>CR0&lt;/code> register, and doing a long jump:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Load the GDT.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">lgdt&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">gdt_desc&lt;/span>&lt;span class="p">]&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Enable protected mode.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">cr0&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">or&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">cr0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">eax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Flush out the processor pipeline and reload CS.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">jmp&lt;/span> &lt;span class="no">CODE_DESC&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="no">protected_mode&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>That&amp;rsquo;s it. We have reached the protected mode realm! How exciting is &lt;em>that&lt;/em>? We are now in a 16-bit code segment but the machine state is mostly &amp;ldquo;unusable&amp;rdquo;. None of the segment registers except &lt;code>CS&lt;/code> are valid and interrupts are disabled (because we didn&amp;rsquo;t bother to set up the IDT&amp;mdash;and we don&amp;rsquo;t have to for this simple experiment). So let&amp;rsquo;s do the minimum set up that we need:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="nl">protected_mode:&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Set up the data and stack segments.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">DATA_DESC&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ds&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ss&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now that the basic segments are configured, let&amp;rsquo;s copy the &lt;code>msg&lt;/code> string built into the binary into extended memory. We do this by pointing &lt;code>ES&lt;/code> to our linear segment and using the &lt;code>EXTENDED_ADDR&lt;/code> offset, which I set to an arbitrary 4 MB:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Store a message in extended memory. We are in protected mode so this
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="c1">;; works by design.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">LINEAR_DESC&lt;/span> &lt;span class="c1">; Load the linear address space in ES.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">es&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">esi&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">msg&lt;/span> &lt;span class="c1">; Point DS:[ESI] to our message.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">edi&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">EXTENDED_ADDR&lt;/span> &lt;span class="c1">; Point ES:[EDI] to extended memory.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">MSGLEN&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">o32&lt;/span> &lt;span class="no">rep&lt;/span> &lt;span class="no">movsb&lt;/span> &lt;span class="c1">; Must use 32-bit addressing.
-&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Once this is done, we prepare the &lt;code>FS&lt;/code> segment with a large limit so that we can use it from unreal mode and restore &lt;code>ES&lt;/code> to the conventional values:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Set up FS as an &amp;#34;unreal mode&amp;#34; segment.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">LINEAR_DESC&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">fs&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; ... but restore ES to have standard real mode limits. Not strictly
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="c1">;; necessary but helps to prove our example.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">DATA_DESC&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">es&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And, with that, we are ready to pivot back to real mode&amp;hellip;&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Disable protected mode.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">cr0&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">and&lt;/span> &lt;span class="no">eax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="err">~&lt;/span>&lt;span class="mi">1&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">cr0&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">eax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; And now return to real mode with a far jump.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">pushf&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">push&lt;/span> &lt;span class="no">word&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="no">real_cs&lt;/span>&lt;span class="p">]&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">push&lt;/span> &lt;span class="no">unreal_mode&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">iret&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&amp;hellip; except that it isn&amp;rsquo;t &amp;ldquo;valid&amp;rdquo; real mode! Remember that we left &lt;code>FS&lt;/code> configured with a high, non-standard limit of 4 GB? Such non-standard limit remains in the segment cache. But before leveraging that, let&amp;rsquo;s make our new machine state functional to continue executing the COM binary:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="nl">unreal_mode:&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Reload real mode COM segment layout.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">bx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">cs&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ds&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">bx&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">es&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">bx&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ss&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">bx&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can now also reenable interrupts, which we must do before we decide to return to DOS:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Reenable the NMI and interrupts.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">sti&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">in&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">70&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">and&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">7&lt;/span>&lt;span class="no">fh&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">out&lt;/span> &lt;span class="mi">70&lt;/span>&lt;span class="no">h&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">al&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">in&lt;/span> &lt;span class="no">al&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">71&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>But, crucially, we keep the A20 enabled in order to correctly reference extended memory later on!&lt;/p>
-&lt;p>And after all of this dance, that&amp;rsquo;s really it. We are in unreal mode. Any memory references we make through the &lt;code>FS&lt;/code> segment register can use offsets beyond the 1 MB limit no matter what its segment base is and no matter if the segment base &lt;em>changes&lt;/em>.&lt;/p>
-&lt;p>Easy to say, hard to believe. Let&amp;rsquo;s prove that this is true. Let&amp;rsquo;s first fetch the message we stored in extended memory by copying it to conventional memory:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Fetch the message from extended memory by using a large offset. This
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="c1">;; would not work in real mode or VM86 (even with 32-bit addressing), but
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="c1">;; does because we are actually in unreal mode.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">xor&lt;/span> &lt;span class="no">ax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ax&lt;/span> &lt;span class="c1">; Clear FS to show its high limits remain.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">fs&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">ax&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">esi&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">EXTENDED_ADDR&lt;/span> &lt;span class="c1">; Point FS:[ESI] to extended memory.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">edi&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">msgcopy&lt;/span> &lt;span class="c1">; Point ES:[EDI] to our buffer.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">MSGLEN&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">o32&lt;/span> &lt;span class="no">fs&lt;/span> &lt;span class="no">rep&lt;/span> &lt;span class="no">movsb&lt;/span> &lt;span class="c1">; Must use 32-bit addressing.
-&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And now that we got it copied, let&amp;rsquo;s call into DOS to print the message and return control to DOS:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; Print the message we fetched from extended mode.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ah&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">40&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">bx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">cx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">MSGLEN&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">dx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">msgcopy&lt;/span> &lt;span class="c1">; Remember this was all ... at first!
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">int&lt;/span> &lt;span class="mi">21&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">;; And jump back to DOS.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ax&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">4&lt;/span>&lt;span class="no">c00h&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">int&lt;/span> &lt;span class="mi">21&lt;/span>&lt;span class="no">h&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>If all goes well, you should see &lt;code>Hello, unreal mode!&lt;/code> in the console and the usual &lt;code>C:\&amp;gt;&lt;/code> prompt should greet you again.&lt;/p>
-&lt;p>But, wait, there is more! If you happen to be running this under Bochs&amp;mdash;and I recommend that you do because it offers much better debugging facilities than DOSBox&amp;mdash;you can pause the simulation with &lt;code>CTRL+C&lt;/code> and dump the segment registers with &lt;code>sreg&lt;/code>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">&amp;lt;bochs:2&amp;gt; sreg
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">es:0x010e, dh=0x00009300, dl=0x10e0ffff, valid=7
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Data segment, base=0x000010e0, limit=0x0000ffff, Read/Write, Accessed
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cs:0x000f, dh=0x00009300, dl=0x00f0ffff, valid=3
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Data segment, base=0x000000f0, limit=0x0000ffff, Read/Write, Accessed
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ss:0x010e, dh=0x00009300, dl=0x10e0ffff, valid=7
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Data segment, base=0x000010e0, limit=0x0000ffff, Read/Write, Accessed
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ds:0x010e, dh=0x00009300, dl=0x10e0ffff, valid=3
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Data segment, base=0x000010e0, limit=0x0000ffff, Read/Write, Accessed
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">fs:0x0000, dh=0x00cf9300, dl=0x0000ffff, valid=11
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Data segment, base=0x00000000, limit=0xffffffff, Read/Write, Accessed
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">gs:0x0000, dh=0x00009300, dl=0x0000ffff, valid=7
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Data segment, base=0x00000000, limit=0x0000ffff, Read/Write, Accessed
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ldtr:0x0000, dh=0x00008200, dl=0x0000ffff, valid=1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tr:0x0000, dh=0x00008b00, dl=0x0000ffff, valid=1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">gdtr:base=0x0000000000011c72, limit=0x20
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">idtr:base=0x0000000000000000, limit=0x3ff
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Pay attention to the details for the &lt;code>limit&lt;/code> field of all the segment registers. You can see how the value is &lt;code>0x0000ffff&lt;/code> for all of them as you&amp;rsquo;d expect in real mode&amp;hellip; but &lt;code>FS&lt;/code>&amp;rsquo;s limit is the non-standard &lt;code>0xffffffff&lt;/code>. We did it. We are in unreal mode and DOS still runs fine. (In fact, remember that &lt;code>HIMEM.SYS&lt;/code> itself &lt;em>does&lt;/em> leverage unreal mode and this driver was active almost all the time in a DOS installation.)&lt;/p>
-&lt;p>IMPORTANT: You can download the full source code by clicking on &lt;a href="/src/unreal-mode/unreal.asm">&lt;code>unreal.asm&lt;/code>&lt;/a>.&lt;/p>
-&lt;p>Once you download the source code, you can build it with:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">nasm -o unreal.com unreal.asm
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And once built, you can run it within DOSBox by copying the binary into a directory you mount within the emulator or use &lt;a href="https://www.gnu.org/software/mtools/">mtools&lt;/a> to copy it into a DOS boot disk image for Bochs.&lt;/p>
-&lt;h1 id="dos-extenders">DOS extenders&lt;/h1>
-&lt;p>If you resisted the urge to keep toying with the example code presented above and are still reading, great! We can continue onto our final topic: &lt;a href="https://en.wikipedia.org/wiki/DOS_extender">DOS extenders&lt;/a>. These programs are what truly set DOS free from the 1 MB address space limitations and thus are the right way to conclude this article.&lt;/p>
-&lt;p>A DOS extender, in rough terms, is a wrapper for your code that enters protected mode and transfers control back to you. This is very useful because, by running in protected mode, your &lt;em>code&lt;/em> segment can span more than 640 KB, finally letting you run large binaries without resorting to ancient spells like &lt;a href="https://en.wikipedia.org/wiki/Overlay_(programming)">overlays&lt;/a>. But if that was the only thing that a DOS extender did, it would be too simple of a thing and not make it a DOS-anything.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-07-dos-extender.png" />
-&lt;figcaption>Representation of the structure of a DOS-extended application and how it relates to a DOS extender, DOS drivers, and raw hardware access.&lt;/figcaption>
-&lt;/figure>
-&lt;p>The crucial feature that DOS extenders provide is a mechanism to call &lt;em>back&lt;/em> into the BIOS and DOS to access the services these provide. In particular, this means accessing &lt;em>drivers&lt;/em> and &lt;em>the file system&lt;/em>. They do so by exposing the same &lt;a href="https://en.wikipedia.org/wiki/DOS_API">DOS API&lt;/a> of the real mode host in protected mode, and they do this so that they can transparently service it in an efficient manner.&lt;/p>
-&lt;p>The general mechanics behind DOS extenders are very similar to what I described earlier: they enter protected mode to use extended memory and run your code, but they &lt;em>temporarily&lt;/em> return to real mode to issue BIOS and DOS service calls. Unfortunately, this naive implementation would be quite inefficient, so DOS extenders actually service various APIs in protected mode to avoid returning to real mode, and they optimize large buffer transfers to minimize the number of switches when they &lt;em>do&lt;/em> have to switch modes. In other words, DOS extenders are their own mini OS on top of DOS.&lt;/p>
-&lt;p>DOS extenders were widely used in games, and you may well remember the iconic message that DOOM printed on startup:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">C:\&amp;gt;DOOM
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">DOS/4GW Protected Mode Run-time Version 1.97
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Copyright (c) Rational Systems, Inc. 1990-1994
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>These messages came from &lt;a href="https://en.wikipedia.org/wiki/DOS/4G">DOS/4G&lt;/a>, the most common DOS extender of all. The reason it was so common is because the &amp;ldquo;W version&amp;rdquo; was the free (but limited) edition of DOS/4G, and it shipped with the popular &lt;a href="https://en.wikipedia.org/wiki/Watcom_C/C%2B%2B">Watcom&lt;/a> C compiler that produced protected mode binaries. But pay attention to &amp;ldquo;run-time&amp;rdquo; in that message. Why run-time?&lt;/p>
-&lt;p>DOS extenders were not the only system component that entered protected mode. By the time DOS extenders became popular, Windows was already a thing and Windows likes protected mode too. And as we saw in the previous post, DOS itself came with &lt;code>EMM386.EXE&lt;/code>, another mini hypervisor that put DOS inside a VM86 instance so that it could easily reference extended memory. So what if you wanted to run a popular DOS-extended program, say DOOM, inside one of these also-popular protected mode environments?&lt;/p>
-&lt;p>Tough luck. Nesting protected modes was impossible until &lt;a href="https://en.wikipedia.org/wiki/X86_virtualization">virtualization appeared&lt;/a>. VM86 was close to what was necessary but it didn&amp;rsquo;t allow running protected mode programs from within it. So, how did this work? How could you run a DOS-extended program inside Windows or while &lt;code>EMM386.EXE&lt;/code> was running?&lt;/p>
-&lt;p>Like in any computing problem, the answer is simple: by means of an abstraction layer! To support this flow, Microsoft defined the &lt;a href="https://en.wikipedia.org/wiki/DOS_Protected_Mode_Interface">DOS Protected Mode Interface (DPMI)&lt;/a>, an API to abstract the core services to interact with protected mode. DPMI is &lt;em>not&lt;/em> a replacement for a DOS extender though: DPMI is an API that DOS extenders themselves use to deal with protected mode operations.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-07-dpmi.png" />
-&lt;figcaption>Simple representation of the role that DPMI plays in DOS-extended applications and different host operating systems.&lt;/figcaption>
-&lt;/figure>
-&lt;p>In the case of DOS-extended programs, the first thing that they do at startup is check if a DPMI kernel is present. If one exists, such as when the DOS program runs within Windows, then the DOS extender leverages Windows&amp;rsquo; DPMI services and delegates all operations to Windows. But if such a provider isn&amp;rsquo;t running, the DOS extender starts the DPMI kernel typically built into itself.&lt;/p>
-&lt;p>If you want to see even more code in action, I refer you to skim through the sources of the free &lt;a href="https://sourceforge.net/projects/dos32a/">DOS/32&lt;/a> extender and the free &lt;a href="https://en.wikipedia.org/wiki/CWSDPMI">CWSDPMI&lt;/a> host.&lt;/p>
-&lt;p>And with that, I&amp;rsquo;m hoping that the next article will finally be the one talking about DJGPP and everything else it had to do to make Unix applications run semi-seamlessly on DOS&amp;hellip; unless some other preparatory essay becomes necessary!&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-02-07-80386-dos.jpg" length="152971" type="image/jpeg"/></item></channel></rss>
+&lt;p>Pretty neat stuff, huh?&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-02-14-djgpp-cover-image.png" length="253620" type="image/jpeg"/></item></channel></rss>
