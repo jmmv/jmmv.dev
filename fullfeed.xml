@@ -1,4 +1,156 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 27 Dec 2024 10:00:00 +0100</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Synology DS923+ vs. FreeBSD w/ZFS</title><link>https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html</link><pubDate>Fri, 13 Dec 2024 09:10:00 -0800</pubDate><guid>https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html</guid><description>&lt;p>My interest in storage is longstanding&amp;mdash;I loved playing with different file systems in my early Unix days and then I worked on Google&amp;rsquo;s and Microsoft&amp;rsquo;s distributed storage solutions&amp;mdash;and, about four years ago, I started running a home-grown NAS leveraging FreeBSD and its excellent ZFS support. I first hosted the server on a PowerMac G5 and then upgraded it to an overkill 72-core ThinkStation that I snapped second-hand for a great price.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sat, 28 Dec 2024 08:50:00 +0100</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Revisiting the NetBSD build system</title><link>https://jmmv.dev/2024/12/netbsd-build-system.html</link><pubDate>Sat, 28 Dec 2024 08:50:00 +0100</pubDate><guid>https://jmmv.dev/2024/12/netbsd-build-system.html</guid><description>&lt;p>I recently picked up an embedded project in which I needed to build a highly customized full system image with minimal boot times. As I explored my options, I came to the conclusion that NetBSD, the often-forgotten BSD variant, was the best viable choice for my project.&lt;/p>
+&lt;p>One reason for this choice is NetBSD&amp;rsquo;s build system. Once you look and get past the fact that it feels frozen in time since 2002, you realize it is still one of the most advanced build systems you can find for an OS. And it shows: the NetBSD build system allows you to build the full OS from scratch, on pretty much any host POSIX platform, while targeting any hardware architecture supported by NetBSD. All without root privileges.&lt;/p>
+&lt;p>Another reason for this choice is that NetBSD was my daily workhorse for many years and I&amp;rsquo;m quite familiar with its internals, which is useful knowledge to quickly achieve the goals I have in mind. In fact, I was a NetBSD Developer with capital D: I had commit access to the project from about 2002 through 2012 or so, and I have just revived my account in service of this project. &lt;code>jmmv@&lt;/code> is back!&lt;/p>
+&lt;p>So, strap onto your seats and let&amp;rsquo;s see how today&amp;rsquo;s NetBSD build system looks like and what makes it special. I&amp;rsquo;ll add my own critique at the end, because it ain&amp;rsquo;t perfect, but overall it continues to deliver on its design goals set in the late 1990s.&lt;/p>
+&lt;div class="container action-highlight p-4 my-4 d-md-none">
+&lt;div class="row text-center">
+&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.&lt;/p>
+&lt;/div>
+&lt;div class="row">
+&lt;div class="col">
+&lt;div class="form-group">
+&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
+&lt;input type="text" name="email"
+placeholder="Enter your email"
+class="form-control input-sm text-center my-1"/>
+&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
+&lt;/form>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;div class="row px-2">
+&lt;div class="col col-sm-5 text-left">
+&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
+&lt;/div>
+&lt;div class="col col-sm-7 text-right">
+&lt;p>
+&lt;a rel="me" href="https://mastodon.online/@jmmv">
+&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
+&lt;/a>
+&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
+&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
+&lt;/a>
+&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
+&lt;/p>
+&lt;/div>
+&lt;/div>
+&lt;/div>
+&lt;h1 id="the-basics">The basics&lt;/h1>
+&lt;p>The NetBSD build system is powerful and featureful, but it&amp;rsquo;s also arcane as it&amp;rsquo;s based on a combination of the BSD variant of make and shell scripts. Just peek through the files under &lt;a href="https://cvsweb.netbsd.org/bsdweb.cgi/src/share/mk/">&lt;code>src/share/mk/&lt;/code>&lt;/a>, the directory that contains the bulk of the infrastructure, to see what I mean.&lt;/p>
+&lt;p>As a user of the build system, however, you rarely interact with make directly. Instead, you use the &lt;code>build.sh&lt;/code> script located at the top of the source tree. This script provides a user-friendly interface to most operations you may want to do, and abstracts away the intricacies of the targets that coordinate the build of the system and the configuration that controls it.&lt;/p>
+&lt;p>The structure of the command is to pass high-level &amp;ldquo;goals&amp;rdquo; to &lt;code>build.sh&lt;/code> as arguments, which indicate the operations to perform. In its most simple form, all you need to do to build a full system distribution targeting the architecture of the host is:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh tools release
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>But hey, I promised you can trivially cross-build too, right? Sure, let&amp;rsquo;s compile the system for a Raspberry Pi with a 64-bit chip, produce the USB image that we can write to an SD card, and do everything as an unprivileged user:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -U -a aarch64 -m evbarm tools release disk-image
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>That&amp;rsquo;s it, really. That&amp;rsquo;s all it takes.&lt;/p>
+&lt;p>We must dig deeper though, so let&amp;rsquo;s look at some of those &amp;ldquo;goals&amp;rdquo; to see what &lt;code>tools&lt;/code> means and understand how a release is put together without root privileges.&lt;/p>
+&lt;h1 id="the-toolchain">The toolchain&lt;/h1>
+&lt;p>The very first step of any &lt;code>build.sh&lt;/code> invocation is to generate the toolchain used to build the rest of the system. This is true of any build, including those that target the host machine, because this ensures that the build is independent of the host&amp;rsquo;s state. In particular, this avoids the situation where you might have to upgrade certain components before building, which was/is common in other BSDs.&lt;/p>
+&lt;p>And you have seen this prerequisite step in the previous section, by the way: all sample &lt;code>build.sh&lt;/code> invocations I showed you included &lt;code>tools&lt;/code> as the first goal. Now, you don&amp;rsquo;t &lt;em>have&lt;/em> to provide &lt;code>tools&lt;/code> to &lt;em>every&lt;/em> invocation of the script: as soon as you have built a toolchain, you can reuse it in subsequent invocations.&lt;/p>
+&lt;p>Building a toolchain with &lt;code>build.sh&lt;/code> is incredibly handy on its own, as you can produce cross-build toolchains and use them for other purposes outside of building NetBSD itself. Zig&amp;rsquo;s build system has often been praised for this reason, but NetBSD&amp;rsquo;s has nothing to envy. For example, if we do this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -a aarch64 -m evbarm -T ~/tools tools
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We end up with a cross-build C and C++ toolchain under &lt;code>~/tools/&lt;/code> that targets NetBSD running on ARM 64 bits. And what goes into the toolchain, you ask?&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-28-netbsd-tools.png" />
+&lt;figcaption>Directory listing of &lt;tt>tools&lt;/tt> as produced by the command above and its &lt;tt>bin&lt;/tt> subdirectory.&lt;/figcaption>
+&lt;/figure>
+&lt;p>In this listing, you can see a bunch of binaries prefixed with &lt;code>aarch64--netbsd-&lt;/code>. These are all part of the C and C++ toolchain. The rest of the tools, prefixed with &lt;code>nb&lt;/code>, are NetBSD-specific tools required during the build. These are programs that are part of a normal NetBSD installation and would be available without the &lt;code>nb&lt;/code> prefix if we were building on a NetBSD host, but remember, the build system supports &lt;em>any&lt;/em> POSIX host OS. Take &lt;code>nbsed&lt;/code> as an example: yes, all POSIX hosts provide a &lt;code>sed&lt;/code> tool, but its syntax varies among systems so the NetBSD build system isolates itself from those differences by compiling &lt;code>sed&lt;/code> as a host tool and using that throughout.&lt;/p>
+&lt;p>One special tool from this listing is &lt;code>nbmake-evbarm&lt;/code>. This is not the binary for make (which is itself stored as &lt;code>nbmake&lt;/code>). This is a shell script that captures all settings provided to &lt;code>build.sh&lt;/code> and then invokes &lt;code>nbmake&lt;/code> with those, and this script is useful when you want to manually rebuild portions of the tree. Not something you would want to use as an &amp;ldquo;end user&amp;rdquo; of the build, but something you definitely will want to use as a NetBSD developer.&lt;/p>
+&lt;h1 id="build-structure">Build structure&lt;/h1>
+&lt;p>Let&amp;rsquo;s explore the source tree a bit, which is the prime example of a monorepo in an open source project:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-28-netbsd-src-bin-ls.png" />
+&lt;figcaption>Directory listing of the source tree, its &lt;tt>bin&lt;/tt> and &lt;tt>bin/ls&lt;/tt> subdirectories, and the content of &lt;tt>bin/ls/Makefile&lt;/tt>.&lt;/figcaption>
+&lt;/figure>
+&lt;p>In this picture, you can see first the content of the top-level directory of the source tree. It all looks pretty simple: there are various subdirectories, such as &lt;code>bin&lt;/code>, &lt;code>lib&lt;/code>, or &lt;code>usr.bin&lt;/code>, that roughly track the structure of the installed system; there is the &lt;code>build.sh&lt;/code> script that I previously described; and there is a &lt;code>Makefile&lt;/code> as well. Looking into one subdirectory, like &lt;code>bin&lt;/code>, we see another &lt;code>Makefile&lt;/code> and many more subdirectories, one per tool installed onto &lt;code>/bin/&lt;/code>.&lt;/p>
+&lt;p>Knowing this directory-based structure, we can use the &lt;code>nbmake-evbarm&lt;/code> wrapper script I mentioned earlier to operate on just a portion of the monorepo. Focusing on the &lt;code>ls&lt;/code> example shown in the screenshot, we could build and upgrade this piece of the system on its own by doing:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ cd ~/src/bin/ls
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ~/tools/bin/nbmake-evbarm all
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... console noise ...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo ~/tools/bin/nbmake-evbarm install
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... console noise ...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Another extra detail to highlight from the screenshot is that NetBSD&amp;rsquo;s &lt;code>Makefile&lt;/code>s are mostly declarative. Each &lt;code>Makefile&lt;/code> defines a bunch of variables to specify what is being built and, at the end, includes one of the many &lt;code>bsd.*.mk&lt;/code> files that pull in the build logic. Among these, we have &lt;code>bsd.prog.mk&lt;/code> to build one program, &lt;code>bsd.lib.mk&lt;/code> to build one static/shared library, and &lt;code>bsd.subdir.mk&lt;/code> to recurse into subdirectories. Importantly, the general design is to build just &lt;em>one&lt;/em> item per directory&amp;mdash;although I myself broke this rule when I added &lt;code>bsd.tests.mk&lt;/code> to build tests because splitting them into subdirectories would have added too much noise to the tree.&lt;/p>
+&lt;p>This declarative design is interesting because it maps well to the foundations of modern build systems like Bazel. In fact, the design of the NetBSD build system is what fueled my interest in build systems, influenced the design of &lt;a href="/2022/05/remembering-buildtool.html">my own Buildtool&lt;/a>, and made me like &lt;del>Bazel&lt;/del> Blaze as soon as I first saw it in 2008.&lt;/p>
+&lt;h1 id="the-destdir">The destdir&lt;/h1>
+&lt;p>In order to produce the structure of the final installation, the build system uses the &amp;ldquo;destdir&amp;rdquo; concept. A destdir is a staging location where built files are installed, but paths to this staging location are &lt;em>not&lt;/em> used within the artifacts produced by the build. This idea &lt;a href="https://www.gnu.org/software/automake/manual/html_node/DESTDIR.html">exists in other build systems such as GNU Automake&lt;/a> and is pretty much a necessity to build multiple pieces of software together before installing them or to package software without root privileges.&lt;/p>
+&lt;p>Imagine that you want to build a library, say &lt;code>libm&lt;/code> (the math library), and a tool that uses it, say &lt;code>bc&lt;/code> (the calculator). &lt;code>libm&lt;/code> typically goes into &lt;code>/lib/&lt;/code> so we cannot just build and install it in place: for one, we may &amp;ldquo;break&amp;rdquo; the existing system if the new version happens to be backwards-incompatible; for another, we may be targeting a different architecture so we cannot just replace &lt;code>/lib/libm.so&lt;/code> with an incompatible version.&lt;/p>
+&lt;p>The destdir comes to the rescue. We first build &lt;code>libm&lt;/code> as if it would be installed into &lt;code>/lib/&lt;/code>. However, during &lt;em>installation&lt;/em>, we prefix all file copy operations with the destdir. In this way, we build a separate &amp;ldquo;system root&amp;rdquo;, say &lt;code>/tmp/destdir/lib/&lt;/code>, that contains the newly-built &lt;code>libm.so&lt;/code>. After that, we build &lt;code>bc&lt;/code> and point it to the &lt;code>libm&lt;/code> that&amp;rsquo;s in &lt;code>/tmp/destdir/lib/&lt;/code>, but&amp;hellip; we have a problem: we can&amp;rsquo;t allow the &lt;code>/tmp/destdir/&lt;/code> path to appear anywhere inside the &lt;code>bc&lt;/code> binary because this directory is transient. To fix this, we must separate build paths from runtime paths during the build: when we build &lt;code>bc&lt;/code>, we tell the linker to look for libraries under &lt;code>/tmp/destdir/lib/&lt;/code> via the &lt;code>-L&lt;/code> flag, and we also tell the linker that, at &lt;em>runtime&lt;/em>, libraries will be available in &lt;code>/lib/&lt;/code> via the &lt;code>--rpath&lt;/code> flag (which stands for runtime path).&lt;/p>
+&lt;p>As you can imagine, the NetBSD build system heavily relies on this idea and, after a &lt;code>distribution&lt;/code> build (implied by the &lt;code>release&lt;/code> goal I showed earlier):&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -D /tmp/testdir/ distribution
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>we end up with a destdir that contains all system files laid out exactly as they need to be installed.&lt;/p>
+&lt;p>In fact, if you run the build as root and target the host system (where the host is NetBSD), the destdir can serve as the target of a chroot. So, if you do:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">chroot /tmp/destdir
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>you essentially can enter the freshly-built system. This may or may not work, however: the newly-built binaries might require new kernel features, which is likely true if you are building a more modern NetBSD release from an older release or if you are tracking NetBSD-current. And this obviously won&amp;rsquo;t work if you are cross-building.&lt;/p>
+&lt;h1 id="distribution-media">Distribution media&lt;/h1>
+&lt;p>The destdir serves as a staging area but it does not represent the final artifacts of the build. To put the destdir to use, we either have to &amp;ldquo;copy&amp;rdquo; the staging area onto the host to perform an in-place upgrade, or we need to build distribution media.&lt;/p>
+&lt;p>The former case of an in-place upgrade is tricky because it requires issuing manual post-installation steps, so I&amp;rsquo;m not going to describe it here. But the latter case of producing distribution media is trivial. For example, we can do:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh release
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>to produce the release &amp;ldquo;sets&amp;rdquo; for the system from the contents of the destdir, or we can do:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh iso-image install-image live-image
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>to create various types of installation media (a bootable CD, a bootable USB image, a live system image&amp;hellip;) from the contents of the destdir as well.&lt;/p>
+&lt;p>The release sets are an interesting thing to discuss because they form the core of a NetBSD distribution. You see: NetBSD ships as a collection of tarballs, and installing NetBSD amounts to simply unpacking those tarballs onto a file system and performing a few post-installation configuration steps.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2024-12-28-netbsd-amd64-binary-sets.png" class="with-border" />
+&lt;figcaption>Content of the &lt;tt>binary/sets&lt;/tt> directory of the NetBSD/amd64 distribution.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Now, the way these tarballs are produced from the destdir is by leveraging &lt;code>mtree&lt;/code>, a really cool tool that is not known in Linux land. The purpose of this tool is to compare a textual &amp;ldquo;golden&amp;rdquo; representation of a directory against the actual contents of the directory, and highlight where they might differ.&lt;/p>
+&lt;p>BSD systems use &lt;code>mtree&lt;/code> to describe how the installed system looks like and, as you can imagine, NetBSD is no exception. The NetBSD build system uses &lt;code>mtree&lt;/code> files to ensure the destdir contents match expectations, and also uses the &lt;code>mtree&lt;/code> &amp;ldquo;manifests&amp;rdquo; to &amp;ldquo;bucketize&amp;rdquo; the files from the destdir into the individual release sets. You can find these golden manifests in the &lt;a href="https://cvsweb.netbsd.org/bsdweb.cgi/src/distrib/sets/lists/">&lt;code>src/distrib/sets/lists/&lt;/code>&lt;/a> directory.&lt;/p>
+&lt;h1 id="unprivileged-builds">Unprivileged builds&lt;/h1>
+&lt;p>These &lt;code>mtree&lt;/code> files are also critical for another very important feature: namely, the ability to build the whole NetBSD system as an unprivileged user. This, to me, is one of the most impressive features of this build system: you can produce the full build, including disk images, without ever running &lt;code>sudo&lt;/code> or using weird intercept tools like Debian&amp;rsquo;s &lt;code>fakeroot&lt;/code>.&lt;/p>
+&lt;p>Here is how this works. When building in unprivileged mode (enabled via the &lt;code>-U&lt;/code> flag to &lt;code>build.sh&lt;/code>), the build system produces a &lt;code>METALOG&lt;/code> file under the destdir. This file looks like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ grep &amp;#39;^\./sbin&amp;#39; ~/destdir/METALOG | head -n 5
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin type=dir uname=root gname=wheel mode=0755
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/amrctl type=file uname=root gname=wheel mode=0555 size=72120 time=1735119460.0 sha256=d6f474441dc98648a4e8ec633dd76fc3349c85a0af9830ce8eb6566e94291fdb
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/apmlabel type=file uname=root gname=wheel mode=0555 size=72360 time=1735119460.0 sha256=731cf433328bd14c6d3f322ef60fa92eb9eaa2725baa0cb52253b50743d9d324
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/atactl type=file uname=root gname=wheel mode=0555 size=73512 time=1735119461.0 sha256=74a15335c8715513ac50f615a8e906319df79f76dad601bc688ae214b3e41673
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/badsect type=file uname=root gname=wheel mode=0555 size=72328 time=1735119461.0 sha256=76e34649bf100fe490befb2a4ec58455a7710a665dd59bcbbd8c672a6086bde8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Every line of this file maps a file system entry (a directory, a file, a device&amp;hellip;) stored in the destdir to its properties, including ownership information and permissions. These entries are generated from metadata encoded in the &lt;code>Makefile&lt;/code>s whenever the build system places a new file under the destdir via the &lt;code>install&lt;/code> command (another nice tool often unknown to Linux users). The &lt;code>METALOG&lt;/code> is the key that allows building media images without root privileges.&lt;/p>
+&lt;p>If you think about it, media images are simply files with an internal structure that represents disk partitions, file systems, and metadata. Because they are simply files, there is no need to have root access nor to make the host&amp;rsquo;s &lt;code>passwd&lt;/code> file contain all users represented by entries in these file systems. Traditionally, OS builds have needed root because it&amp;rsquo;s easier to leverage the kernel&amp;rsquo;s virtual devices and file system implementations, but there is not inherent reason for that to be the only choice. All the work can be done in user space, and that&amp;rsquo;s precisely what NetBSD does.&lt;/p>
+&lt;p>Now, go back and revisit the screenshot above that showed the toolchain contents. You&amp;rsquo;ll notice tools like &lt;code>nbmakefs&lt;/code> (the tool to format a file system) and &lt;code>nbgpt&lt;/code> (the tool to create a GPT partitioning scheme). These tools are part of the toolchain because they are needed to generate installation media, and these tools know how to read the &lt;code>METALOG&lt;/code> in order to embed the right permissions and special file modes into the built images. All without ever becoming root.&lt;/p>
+&lt;h1 id="sysbuild">sysbuild&lt;/h1>
+&lt;p>Now, as simple and powerful as &lt;code>build.sh&lt;/code> might be, I find it cumbersome for day to day use if you want to customize any of its default settings. It is not uncommon to end up running &lt;code>build.sh&lt;/code> with invocations like:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -O ../obj -T ../tools -U -u -V &lt;span class="nv">MKDEBUG&lt;/span>&lt;span class="o">=&lt;/span>no -V &lt;span class="nv">MKGCC&lt;/span>&lt;span class="o">=&lt;/span>no distribution
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>which the official documentation describes as &amp;ldquo;golden invocations&amp;rdquo; and I have no desire to type or even remember.&lt;/p>
+&lt;p>This is what drove me to &lt;a href="/software/sysbuild.html">write sysbuild&lt;/a>: a layer of abstraction over &lt;code>build.sh&lt;/code> &lt;em>and&lt;/em> &lt;code>cvs&lt;/code> that coordinates updating the source tree and building it. The tool even integrates with &lt;code>cron&lt;/code> trivially, providing a mechanism to keep NetBSD-current installations up-to-date.&lt;/p>
+&lt;p>sysbuild is driven by configuration &amp;ldquo;profiles&amp;rdquo; which allow you to customize the paths and settings of a build in just one place and then puts them to use with a trivial command. For example, with a configuration file like the following stored in &lt;code>~/.sysbuild/rpi.conf&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BUILD_ROOT&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">HOME&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/netbsd&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BUILD_TARGETS&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;tools sets disk-image&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">CVSROOT&lt;/span>&lt;span class="o">=&lt;/span>:ext:anoncvs@cvs.NetBSD.org:/cvsroot
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">MACHINES&lt;/span>&lt;span class="o">=&lt;/span>amd64
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">RELEASEDIR&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BUILD_ROOT&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/release&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">SRCDIR&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BUILD_ROOT&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/src&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">UPDATE_SOURCES&lt;/span>&lt;span class="o">=&lt;/span>no
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can simply run:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">sysbuild -c rpi build
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>to update the NetBSD source tree to the latest version, ensure that the tools are up-to-date, and produce the USB disk images for a Raspberry Pi.&lt;/p>
+&lt;h1 id="deficiencies">Deficiencies&lt;/h1>
+&lt;p>Not everything about the NetBSD build system is rosy though.&lt;/p>
+&lt;p>&lt;em>The&lt;/em> thing that differentiates a good build system from a &amp;ldquo;meh&amp;rdquo; one for me personally is the behavior of incremental builds and, in particular, two aspects of these:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>First, incremental builds need to do minimal work, especially when there is &amp;ldquo;nothing to do&amp;rdquo;. The NetBSD build system is a recursive make one (which comes with its own &lt;a href="https://accu.org/journals/overload/14/71/miller_2004/">set of problems&lt;/a>), so it does &lt;em>not&lt;/em> do minimal work. On my 72-core machine, it takes about 3 minutes to run through a &lt;code>build.sh release&lt;/code> invocation that does nothing. This is OK for end users looking to upgrade their running machine, but it is painful because it makes iterating on system changes difficult. As a developer, you end up needing to know how to surgically rebuild individual subdirectories using the &lt;code>nbmake-&amp;lt;arch&amp;gt;&lt;/code> wrappers I described earlier, and manually track dependencies across those.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Second, incremental builds must &lt;a href="/2020/12/google-no-clean-builds.html">always deliver correct results&lt;/a> &lt;em>without&lt;/em> having to do a &lt;code>make clean&lt;/code> in between. But that&amp;rsquo;s generally not true for make-based build systems&amp;mdash;and NetBSD&amp;rsquo;s is no exception. Generally, an incremental build after a &lt;code>git pull&lt;/code> (sorry, a &lt;code>cvs update&lt;/code>) will work fine, but sometimes it won&amp;rsquo;t. And if you start playing with build-time switches (things like &lt;code>MKDEBUG&lt;/code>), then you are out of luck and must resort to a &lt;code>make clean&lt;/code> to &amp;ldquo;switch configurations&amp;rdquo;.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>And there are other problems. Running a parallel build on a system with many cores sometimes leads to spurious build failures because the interdependencies between components are not always precisely specified (it&amp;rsquo;s &lt;em>really&lt;/em> difficult to be correct with make). And the build is inefficient: of those 3 minutes I mentioned earlier, you can see that &lt;em>most of the time&lt;/em> is wasted by make recursing through directories and discovering there is nothing to do, whereas other times, make &amp;ldquo;chokes&amp;rdquo; on way too many C++ compiles at once that lead to out of memory situations.&lt;/p>
+&lt;p>It has been &lt;a href="/2015/04/on-bazel-and-open-source.html">my dream since the publication of Bazel&lt;/a> as open source to have a Bazel-based build of NetBSD. I think Bazel is the perfect build system for such a project because it&amp;rsquo;d deliver correct and efficient incremental builds to NetBSD&amp;rsquo;s monorepo, and it would save tons of resources when running on many-core machines. Except for the fact that it&amp;rsquo;s written in Java, so it&amp;rsquo;d be a really odd choice for such project. Maybe Buck 2 would be suitable. Anyway, one can only dream&amp;hellip;&lt;/p>
+&lt;h1 id="but-why">But why?&lt;/h1>
+&lt;p>Why I&amp;rsquo;m looking at this at all again, after years of not touching NetBSD? I said it in the opening: I&amp;rsquo;m working on a new embedded project for which NetBSD is the greatest fit. I could tell you what it is about but it&amp;rsquo;s easier to just show you:&lt;/p>
+&lt;figure>
+&lt;video width="100%" controls>
+&lt;source src="/images/2024-12-28-endbasic-rpi-boot.mp4" type="video/mp4">
+&lt;/video>
+&lt;figcaption>Second iteration of the "boot to EndBASIC" prototype.&lt;/figcaption>
+&lt;/figure>
+&lt;p>OK, fine, in words: I am building a minimal system that boots straight into EndBASIC with quick build times and low overhead. You&amp;rsquo;ll have to wait a bit more to get your hands on this though, as I&amp;rsquo;m still ironing out various details and want to end up providing a pre-built &amp;ldquo;box&amp;rdquo; with the right hardware and software combination.&lt;/p>
+&lt;p>I&amp;rsquo;m also becoming &lt;em>super&lt;/em> tempted to migrate NetBSD&amp;rsquo;s build to Bazel to make my own life easier in this journey. This is a monumental task&amp;hellip; but I&amp;rsquo;m not sure that it&amp;rsquo;d be crazy to tackle the minimum subset of NetBSD that I need for this minimal disk image and port only those portions to Bazel. The results might impress some and then want to help the effort. Right?&lt;/p>
+&lt;p>In the meantime, I encourage you to read through the comprehensive &lt;a href="https://www.netbsd.org/docs/guide/en/part-compile.html">Building the system&lt;/a> portion of &lt;a href="https://www.netbsd.org/docs/guide/en/index.html">The NetBSD guide&lt;/a>, and to play with building a NetBSD image straight from your Linux machine. You may like it.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-12-28-cover-image.jpg" length="403124" type="image/jpeg"/></item><item><title>Synology DS923+ vs. FreeBSD w/ZFS</title><link>https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html</link><pubDate>Fri, 13 Dec 2024 09:10:00 -0800</pubDate><guid>https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html</guid><description>&lt;p>My interest in storage is longstanding&amp;mdash;I loved playing with different file systems in my early Unix days and then I worked on Google&amp;rsquo;s and Microsoft&amp;rsquo;s distributed storage solutions&amp;mdash;and, about four years ago, I started running a home-grown NAS leveraging FreeBSD and its excellent ZFS support. I first hosted the server on a PowerMac G5 and then upgraded it to an overkill 72-core ThinkStation that I snapped second-hand for a great price.&lt;/p>
 &lt;p>But as stable and low maintenance as FreeBSD is, running day-to-day services myself is not my idea of &amp;ldquo;fun&amp;rdquo;. This drove me to replace this machine&amp;rsquo;s routing functionality with a dedicated pfSense box a year ago and, for similar reasons, I have been curious about dedicated NAS solutions.&lt;/p>
 &lt;p>I was pretty close to buying a second-hand NAS from the work classifieds channel when a Synology marketing person (hi Kyle!) contacted me to offer a partnership: they&amp;rsquo;d ship me &lt;a href="https://sy.to/hekgh">one of their devices&lt;/a> for free in exchange for me publishing a few articles about it. Given my interest to drive-test one of these appliances without committing to buying one (they ain&amp;rsquo;t cheap and I wasn&amp;rsquo;t convinced I wanted to get rid of my FreeBSD-based solution), I was game.&lt;/p>
 &lt;p>And you guessed right: this article is one of those I promised to write but, before you stop reading, the answer is no. This post is &lt;em>not&lt;/em> sponsored by Synology and has not been reviewed nor approved by them. The content here, including any opinions, are purely my own. And what I want do do here is compare how the Synology appliance stacks against my home-built FreeBSD server.&lt;/p>
@@ -2276,282 +2428,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;p>Paraphrasing Joel Spolksy&amp;rsquo;s article titled &lt;a href="https://www.joelonsoftware.com/2005/12/29/the-perils-of-javaschools-2/">&amp;ldquo;The perils of JavaSchools&amp;rdquo;&lt;/a> from 2005: there are only two types of programmers: those that know pointers (and recursion), and those that don&amp;rsquo;t.&lt;/p>
 &lt;p>This aligns with my experience after interviewing 100+ candidates: there is a stark contrast between those that don&amp;rsquo;t known anything about memory management and those that do. I couldn&amp;rsquo;t care less about what language you choose, but I want to see if you know how things work.&lt;/p>
 &lt;p>Because, remember: these three topics have nothing to do with C per se: they are concepts that apply to almost any language. For example, you also deal with memory in Rust via &lt;code>Box&lt;/code>, but a &lt;code>Box&lt;/code> is is more opaque than explicit &lt;code>malloc&lt;/code> and &lt;code>free&lt;/code> calls.&lt;/p>
-&lt;p>So: don&amp;rsquo;t be worried if you don&amp;rsquo;t know C, but also don&amp;rsquo;t be afraid to learn it! Just, please, don&amp;rsquo;t use it to start any new project. Keep C to yourself as a learning exercise, or leverage it as a tool to deal with legacy codebases.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-02-21-to-c-or-not-to-c.png" length="326255" type="image/jpeg"/></item><item><title>Running GNU on DOS with DJGPP</title><link>https://jmmv.dev/2024/02/djgpp.html</link><pubDate>Wed, 14 Feb 2024 09:00:00 -0700</pubDate><guid>https://jmmv.dev/2024/02/djgpp.html</guid><description>&lt;p>The recent deep dive into &lt;a href="/2023/12/the-ides-we-had-30-years-ago.html">the IDEs of the DOS times 30 years ago&lt;/a> made me reminisce of DJGPP, a distribution of the GNU development tools for DOS.&lt;/p>
-&lt;p>I remember using DJGPP back in the 1990s before I had been exposed to Linux and feeling that it was a strange beast. Compared to the Microsoft C Compiler and Turbo C++, the tooling was bloated and alien to DOS, and the resulting binaries were huge. But DJGPP provided a complete development environment &lt;em>for free&lt;/em>, which I got from a monthly magazine, and I could even look at its source code if I wished. You can&amp;rsquo;t imagine what a big deal that was at the time.&lt;/p>
-&lt;p>But even if I could look under the cover, I never did. I never really understood why was DJGPP so strange, slow, and huge, or why it even existed. Until now. As I&amp;rsquo;m in the mood of looking back, I&amp;rsquo;ve spent the last couple of months figuring out what the foundations of this software were and how it actually worked. Part of this research has resulted in the previous two posts on DOS memory management. And part of this research is this article. Let&amp;rsquo;s take a look!&lt;/p>
-&lt;p>&lt;em>Special thanks go to DJ Delorie himself for reviewing a draft of this article. Make sure to &lt;a href="https://delorie.com/">visit his website&lt;/a> for DJGPP and a lot more cool stuff!&lt;/em>&lt;/p>
-&lt;h1 id="what-is-djgpp">What is DJGPP?&lt;/h1>
-&lt;p>Simply put, DJGPP is a port of the GNU development tools to DOS. You would think that this was an easy feat to achieve given that other compilers did exist for DOS. However&amp;hellip; you should know that Richard Stallman (RMS)&amp;mdash;the creator of GNU and GCC&amp;mdash;thought that GCC, a 32-bit compiler, was too big to run on a 16-bit operating system restricted to 1 MB of memory. DJ Delorie took this as a challenge in 1989 and, with all the contortions that we shall see below, made GCC and other tools like GDB and Emacs work on DOS.&lt;/p>
-&lt;p>To a DOS and Windows user, DJGPP was, and still is, an alien development environment: the tools&amp;rsquo; behavior is strange compared to other DOS compilers, and that&amp;rsquo;s primarily due to their Unix heritage. For example, as soon as you start using DJGPP, you realize that flags are prefixed by a dash instead of a slash, paths use forward slashes instead of backward slashes, and the files don&amp;rsquo;t ship in a flat directory structure like most other programs did. But hey, all the tools worked and, best of all, they were free!&lt;/p>
-&lt;p>In fact, from reading about &lt;a href="https://www.delorie.com/djgpp/doc/eli-m17n99.html#Introduction">the historical goals of the project&lt;/a>, I gather that a secondary goal was for DJ to evangelize free software to as many people as possible, meeting them where they already were: PC users with a not-very-powerful machine that ran DOS. Mind you, this plan worked on some of us as we ended up moving to Linux and the free software movement later on.&lt;/p>
-&lt;p>In any case, being a free alien development environment doesn&amp;rsquo;t explain why it had to be huge and slow compared to other others. To explain this, we need to look at the &amp;ldquo;32-bit compiler&amp;rdquo; part.&lt;/p>
-&lt;h1 id="dos-and-hardware-constraints">DOS and hardware constraints&lt;/h1>
-&lt;p>As we saw in &lt;a href="/2024/01/from-0-to-1-mb-in-dos.html">a previous article&lt;/a>, Intel PCs based on the 80386 have two main modes of operation: real mode and protected mode. In real mode, the processor behaves like a fast 16-bit 8086, limiting programs to a 1 MB address space and with free reign to access memory and hardware peripherals. In protected mode, programs are 32-bit, have access to a 4 GB address space, and there are protection rules in place to access memory and hardware.&lt;/p>
-&lt;p>DOS was a 16-bit operating system that ran in real mode. Applications that ran on DOS leveraged DOS&amp;rsquo; services for things like disk access, were limited to addressing 1 MB of memory, and had complete control of the computer. Contrary to that, GCC was a 32-bit program that had been designed to run on Unix (oops sorry, &lt;a href="https://www.gnu.org/gnu/about-gnu.html">GNU is Not Unix&lt;/a>) &lt;em>and&lt;/em> produce binaries for Unix, and Unix required virtual memory from the ground up to support multiprocessing. (I know that&amp;rsquo;s &lt;a href="https://unix.stackexchange.com/questions/332699/how-the-original-unix-kernel-adressed-memory">not totally accurate&lt;/a> but it&amp;rsquo;s easier to think about it that way.)&lt;/p>
-&lt;p>Intel-native compilers for DOS, such as the Microsoft C compiler and Turbo C++, targeted the 8086&amp;rsquo;s weird segmented architecture and generated code accordingly. Those compilers had to deal with short, near, and far jumps&amp;mdash;which is to say I have extra research to do and write &lt;em>another&lt;/em> article on ancient DOS memory models. GCC, on the other hand, assumes the full address space is available to programs and generates code making such assumptions.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;p>GCC was not &lt;em>only&lt;/em> a 32-bit program, though: it was also &lt;em>big&lt;/em>. In order to compile itself and other programs, GCC needed more physical memory than PCs had back then. This means that, in order to port GCC to DOS, GCC needed virtual memory. In turn, this means that GCC had to run in protected mode. Yet&amp;hellip; DOS is a real mode operating system, and calling into DOS services to access files and the like requires the processor to be in real mode.&lt;/p>
-&lt;p>To address this conundrum, DJ had to find a way to make GCC &lt;em>and the programs it compiles&lt;/em> integrate with DOS. After all, if you have a C program that opens a file and you compile said program with GCC, you want the program to open the file via the DOS file system for interoperability reasons.&lt;/p>
-&lt;p>Here, witness this. The following silly program, &lt;code>headself.c&lt;/code>, goes out of its way to allocate a buffer above the 2 MB mark and then uses said buffer to read itself into it, printing the very first line of its source code:&lt;/p>
-&lt;div class="src">
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;fcntl.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;inttypes.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;stdio.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;stdlib.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;unistd.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#define BUFMINBASE 2 * 1024 * 1024
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#define BUFSIZE 1 * 1024 * 1024
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kt">int&lt;/span> &lt;span class="nf">main&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">// Allocate a buffer until its base address is past the 2MB boundary.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="kt">char&lt;/span>&lt;span class="o">*&lt;/span> &lt;span class="n">buf&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nb">NULL&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">while&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">buf&lt;/span> &lt;span class="o">&amp;lt;&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">char&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="n">BUFMINBASE&lt;/span>&lt;span class="p">))&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">buf&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">char&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="nf">malloc&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">BUFSIZE&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;Read buffer base is at %zd KB&lt;/span>&lt;span class="se">\n&lt;/span>&lt;span class="s">&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">intptr_t&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">buf&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">/&lt;/span> &lt;span class="mi">1024&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">// Open this source file and print its first line. Really unsafe.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="kt">int&lt;/span> &lt;span class="n">fd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nf">open&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;headself.c&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">O_RDONLY&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">read&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">fd&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">buf&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">BUFSIZE&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="kt">char&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ptr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">buf&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="k">while&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ptr&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="sc">&amp;#39;\n&amp;#39;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="n">ptr&lt;/span>&lt;span class="o">++&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">ptr&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="sc">&amp;#39;\0&amp;#39;&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;%s&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">buf&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="n">EXIT_SUCCESS&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>
-&lt;div class="footer">
-&lt;div class="filename">
-&lt;a href="/src/djgpp/headself.c" type="text/plain">headself.c&lt;/a>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;p>Yes, yes, I know the above code is really unsafe and lacks error handling throughout. But that&amp;rsquo;s not important here. Watch out what happens when we compile and run this program with DJGPP on DOS:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-headself.png"/>
-&lt;/figure>
-&lt;p>Note two things. The first is that the program &lt;em>has to&lt;/em> have run in protected mode because it successfully allocated a buffer above the 1 MB mark and &lt;em>used&lt;/em> it without extraneous API calls. The second is that the program is invoking file operations, and those operations interact with files managed by DOS.&lt;/p>
-&lt;p>And here is where the &lt;em>really cool&lt;/em> stuff begins. On the one hand, we have DOS as a real mode operating system. On the other hand, we have programs that want to interoperate with DOS but they also want to take advantage of protected mode to leverage the larger address space and virtual memory. Unfortunately, protected mode cannot call DOS services because those require real mode.&lt;/p>
-&lt;p>The accepted solution to this issue is the use of a DOS Extender as we already saw &lt;a href="/2024/02/beyond-the-1-mb-barrier-in-dos.html">in the previous article&lt;/a> but such technology was in its infancy. DJ actually went through &lt;em>three&lt;/em> different iterations to fully resolve this problem in DJGPP:&lt;/p>
-&lt;ol>
-&lt;li>The first prototype used Phar Lap&amp;rsquo;s DOS Extender but it didn&amp;rsquo;t get very far because it didn&amp;rsquo;t support virtual memory.&lt;/li>
-&lt;li>Then, the first real version of DJGPP used DJ&amp;rsquo;s own DOS Extender called go32, a big hack that I&amp;rsquo;m not going to talk about here.&lt;/li>
-&lt;li>And then, the second major version of DJGPP&amp;mdash;almost a full rewrite of the first one&amp;mdash;switched to using the DOS Protected Mode Interface (DPMI).&lt;/li>
-&lt;/ol>
-&lt;p>At this point, DJGPP was able to run inside existing DPMI hosts such as Windows or the many memory managers that already existed for DOS and it didn&amp;rsquo;t have to carry the hacks that previously existed in go32 (although the go32 code went on to live inside &lt;a href="https://en.wikipedia.org/wiki/CWSDPMI">&lt;code>CWSDPMI&lt;/code>&lt;/a>). The remainder of this article only talks about the latter of these versions.&lt;/p>
-&lt;h1 id="large-buffers">Large buffers&lt;/h1>
-&lt;p>One thing you may have noticed in the code of the &lt;code>headself.c&lt;/code> example above is that I&amp;rsquo;m using a buffer for the file read that&amp;rsquo;s 1 MB-long. That&amp;rsquo;s not unintentional: for such a large buffer to even exist (no matter our attempts to push it above 2 MBs), the buffer must be allocated in extended memory. But if it is allocated in extended memory, how can the file read operations that we send to DOS actually address such memory? After all, even if we used unreal mode, the DOS APIs wouldn&amp;rsquo;t understand it.&lt;/p>
-&lt;p>The answer is the &lt;em>transfer buffer&lt;/em>. The transfer buffer is a small and static piece of memory that DJGPP-built programs allocate at startup time below the 1 MB mark. With that in mind, and taking a file read as an example, DJGPP&amp;rsquo;s C library does something akin to the following:&lt;/p>
-&lt;ol>
-&lt;li>The protected-mode &lt;code>read&lt;/code> stub starts executing.&lt;/li>
-&lt;li>The stub issues a DPMI read call (which is to say, it executes the DOS read file API but uses the DPMI trampoline) onto the transfer buffer.&lt;/li>
-&lt;li>The DPMI host switches to real mode and calls the DOS read file API.&lt;/li>
-&lt;li>The real-mode DOS read places the data in the transfer buffer.&lt;/li>
-&lt;li>The real-mode DPMI host switches back to protected mode and returns control to the protected-mode stub.&lt;/li>
-&lt;li>The protected-mode &lt;code>read&lt;/code> stub copies the data from the transfer buffer into the user-supplied buffer.&lt;/li>
-&lt;/ol>
-&lt;p>This is all good and dandy but&amp;hellip; take a close look at &lt;a href="https://www.ctyme.com/intr/rb-2783.htm">DOS&amp;rsquo;s file read API&lt;/a>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">Request:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INT 21h
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">AH -&amp;gt; 3Fh
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">BX -&amp;gt; file handle
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">CX -&amp;gt; number of bytes to read
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">DS:DX -&amp;gt; buffer for data
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Return:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">CF -&amp;gt; clear if successful
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">AX -&amp;gt; number of bytes actually read (0 if at EOF before call)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">CF -&amp;gt; set on error
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">AX -&amp;gt; error code (05h,06h) (see #01680 at AH=59h/BX=0000h)
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>That&amp;rsquo;s right: file read and write operations are restricted to 64 KB at a time because the number of bytes to process is specified in the 16-bit &lt;code>CX&lt;/code> register. Which means that, in order to perform large file operations, we need to go through the dance above multiple times in a loop. And that&amp;rsquo;s why DJGPP is slow: if the DPMI host has to switch to real mode and back for every system call, the overhead of each system call is significant.&lt;/p>
-&lt;p>Now is a good time to take a short break and &lt;a href="https://www.delorie.com/bin/cvsweb.cgi/djgpp/src/libc/dos/io/_read.c?rev=1.4">peek into DJGPP&amp;rsquo;s &lt;code>read&lt;/code> implementation&lt;/a>. It&amp;rsquo;s succinct and clearly illustrates what I described just above. And with that done, let&amp;rsquo;s switch gears.&lt;/p>
-&lt;h1 id="globs-without-a-unix-shell">Globs without a Unix shell&lt;/h1>
-&lt;p>Leveraging protected mode and a large memory address space are just two important but small parts of the DJGPP puzzle. The other interesting pieces of DJGPP are those that make Unix programs run semi-seamlessly on DOS, and there are many such pieces. I won&amp;rsquo;t cover them all here because &lt;a href="http://www.delorie.com/djgpp/doc/eli-m17n99.html">Eli Zarateskii&amp;rsquo;s presentation&lt;/a> did an excellent job at that. So want I to do instead is look at a subset of them apart and show them in action.&lt;/p>
-&lt;p>To begin, let&amp;rsquo;s try to answer this question: how do you &lt;em>interact&lt;/em> with a program originally designed for Unix on a DOS system? The Unix shell is &lt;a href="/2020/11/cmdline-args-unix-vs-windows.html">a big part of such interaction&lt;/a> and &lt;code>COMMAND.COM&lt;/code> is no Unix shell. To summarize the linked article: the API to invoke an executable on Unix takes a list of arguments while on DOS and Windows it takes a flat string. Partially because of this, the Unix shell is responsible for expanding globs and dealing with quotation characters, while on DOS and Windows each program is responsible for tokenizing the command line.&lt;/p>
-&lt;p>Leaving aside the fact that the DOS API is&amp;hellip; ehem&amp;hellip; bad, this fundamental difference means that any Unix program ported to DOS has a usability problem: you cannot use globs anymore when invoking it! Something as simple and common as &lt;code>gcc -o program.exe *.c&lt;/code> would just not work. So then&amp;hellip; how can we explain the following output from the &lt;a href="/src/djgpp/showargs.c">&lt;code>showargs.c&lt;/code>&lt;/a> program, a little piece of code that prints &lt;code>argv&lt;/code>?&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-showargs-glob-expansion-gcc.png"/>
-&lt;/figure>
-&lt;p>In the picture above, you can see how I ran the &lt;tt>showargs.c&lt;/tt> program with &lt;tt>*.c&lt;/tt> as its own argument and somehow it worked as you would expect. But if we build it with a standard DOS compiler we get different results:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-showargs-glob-expansion-gcc-tcc.png"/>
-&lt;/figure>
-&lt;p>GCC is actually doing &lt;em>something&lt;/em> to make glob expansion work&amp;mdash;and it &lt;em>has&lt;/em> to, because remember that DJGPP was not just about porting GCC: it was about porting many more GNU developer tools to DOS. Having had to patch them one by one to work with DOS&amp;rsquo; &lt;code>COMMAND.COM&lt;/code> semantics would have been a sad state of affairs.&lt;/p>
-&lt;p>To understand what&amp;rsquo;s happening here, know that all C programs compiled by &lt;em>any&lt;/em> compiler include a prelude: &lt;code>main&lt;/code> is &lt;em>not&lt;/em> the program&amp;rsquo;s true entry point. All compilers wrap &lt;code>main&lt;/code> with some code of their own to set up the process and the C library, and DJGPP is no different. Such code is often known as the &lt;code>crt&lt;/code> (or C Runtime) and it comes in two phases: &lt;code>crt0&lt;/code>, written in assembly for early bootstrapping, and &lt;code>crt1&lt;/code>, written in C.&lt;/p>
-&lt;p>As you can imagine, this is where the magic lives. DJGPP&amp;rsquo;s &lt;code>crt1&lt;/code> is in charge of processing the flat command line that it receives from DOS and transforming it into the &lt;code>argv&lt;/code> that POSIX C programs expect, following common Unix semantics. In a way, this code performs the job of a Unix shell.&lt;/p>
-&lt;p>Once again, take a break to inspect the &lt;a href="https://www.delorie.com/bin/cvsweb.cgi/djgpp/src/libc/crt0/">&lt;code>crt0&lt;/code> sources&lt;/a> and, in particular, the contents of the &lt;a href="https://www.delorie.com/bin/cvsweb.cgi/djgpp/src/libc/crt0/c1args.c?rev=1.11">&lt;code>c1args.c&lt;/code> file&lt;/a>. Pay attention to file reads and the &amp;ldquo;proxy&amp;rdquo; thing, both of which bring us to the next section.&lt;/p>
-&lt;h1 id="long-command-lines">Long command lines&lt;/h1>
-&lt;p>Unix command lines aren&amp;rsquo;t different just because of glob expansion. They are also different because they are usually &lt;em>long&lt;/em>, and they are long in part because of glob expansion and in part because Unix has supported long file names for much longer than DOS.&lt;/p>
-&lt;p>Unfortunately&amp;hellip; DOS restricted command lines to a maximum of 126 characters&amp;mdash;fewer characters than you can fit in a Tweet or an SMS&amp;mdash;and this posed a problem because the build process of most GNU developer tools, if not all, required using long command lines. To resolve these issues, DJGPP provides two features.&lt;/p>
-&lt;p>The first is support for response files. Response files are text files that contain the full command line. These files are then passed to a process with the &lt;code>@file.txt&lt;/code> syntax, which then causes DJGPP&amp;rsquo;s &lt;code>crt1&lt;/code> code to load the response files and construct the long command line in extended memory.&lt;/p>
-&lt;p>Let&amp;rsquo;s take a look. If we reuse our previous &lt;code>showargs.c&lt;/code> program that prints the command line arguments, we can observe how the behavior differs between building this program with a standard DOS compiler and with DJGPP:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-showargs-response-files-gcc-tcc.png"/>
-&lt;/figure>
-&lt;p>Response files are easy to implement and they are sufficient to support long command lines: even if they require special handling on the caller side to write the arguments to disk and then place the response file as an argument, this could all be hidden inside the &lt;code>exec&lt;/code> family of system calls. Unfortunately, using response files is slow because, in order to invoke a program, you need to write the command line to a file&amp;mdash;only to load it immediately afterwards. And disk I/O used to be really slow.&lt;/p>
-&lt;p>For this reason, DJGPP provides a different mechanism to pass long command lines around, and this is via the transfer buffer described earlier. This mechanism involves putting the command line in the transfer buffer and telling the executed command where its command line lives. This mechanism obviously only works when executing a DJGPP program from another DJGPP program, because no matter what, process executions are still routed through DOS and thus are bound by DOS&amp;rsquo; 126 character limit.&lt;/p>
-&lt;p>Let&amp;rsquo;s try this too. For this experiment, we&amp;rsquo;ll play with two programs: one that prints the length of the received command line and another one that produces a long command line and executes the former.&lt;/p>
-&lt;p>The first program is &lt;code>longcmd1.c&lt;/code> and is depicted below. All this program does is allocate a command line longer than DOS&amp;rsquo; maximum length of 126 characters and, once it has built the command line, invokes &lt;code>longcmd2.exe&lt;/code> with said long command line:&lt;/p>
-&lt;div class="src">
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#ifdef __GNUC__
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;unistd.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#else
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;process.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#endif
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;stdio.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;stdlib.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;string.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kt">int&lt;/span> &lt;span class="nf">main&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="n">argc&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">char&lt;/span>&lt;span class="o">**&lt;/span> &lt;span class="n">argv&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="kt">char&lt;/span>&lt;span class="o">**&lt;/span> &lt;span class="n">longcmd&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="kt">int&lt;/span> &lt;span class="n">i&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">// Generate a command line that exceeds DOS&amp;#39; limits.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="n">longcmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">char&lt;/span>&lt;span class="o">**&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="nf">malloc&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">32&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">longcmd&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">argv&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">];&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">i&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">&amp;lt;&lt;/span> &lt;span class="mi">31&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span>&lt;span class="o">++&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">longcmd&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">i&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nf">strdup&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;one-argument&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">longcmd&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">i&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nb">NULL&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1">// Execute the second stage of this demo to print the received
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="c1">// command line.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nf">execv&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;.&lt;/span>&lt;span class="se">\\&lt;/span>&lt;span class="s">longcmd2.exe&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">longcmd&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="o">-&lt;/span>&lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">perror&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;execv failed&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="n">EXIT_FAILURE&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="n">EXIT_SUCCESS&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>
-&lt;div class="footer">
-&lt;div class="filename">
-&lt;a href="/src/djgpp/longcmd1.c" type="text/plain">longcmd1.c&lt;/a>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;p>The second program is &lt;code>longcmd2.c&lt;/code> and is depicted below. This program prints the number of arguments it received and also computes the length of the command line (assuming all arguments were separated by just one space character):&lt;/p>
-&lt;div class="src">
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;stdio.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;stdlib.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;string.h&amp;gt;&lt;/span>&lt;span class="cp">
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="kt">int&lt;/span> &lt;span class="nf">main&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="n">argc&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="kt">char&lt;/span>&lt;span class="o">**&lt;/span> &lt;span class="n">argv&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="kt">int&lt;/span> &lt;span class="n">i&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="kt">int&lt;/span> &lt;span class="n">total&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">total&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">for&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">i&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">&amp;lt;&lt;/span> &lt;span class="n">argc&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span>&lt;span class="o">++&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">i&lt;/span> &lt;span class="o">&amp;gt;&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">total&lt;/span> &lt;span class="o">+=&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="c1">// Assume 1 space between arguments.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">total&lt;/span> &lt;span class="o">+=&lt;/span> &lt;span class="nf">strlen&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="n">argv&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="n">i&lt;/span>&lt;span class="p">]);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;argc after re-exec: %d&lt;/span>&lt;span class="se">\n&lt;/span>&lt;span class="s">&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">argc&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">printf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;textual length: %d&lt;/span>&lt;span class="se">\n&lt;/span>&lt;span class="s">&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="n">total&lt;/span>&lt;span class="p">);&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">return&lt;/span> &lt;span class="n">EXIT_SUCCESS&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>
-&lt;div class="footer">
-&lt;div class="filename">
-&lt;a href="/src/djgpp/longcmd2.c" type="text/plain">longcmd2.c&lt;/a>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;p>Now let&amp;rsquo;s see what happens when we compile these two programs with Turbo C++ and with DJGPP. First, let&amp;rsquo;s build both with Turbo C++ and run the &lt;code>longcmd1.exe&lt;/code> entry point:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-longcmd-both-tcc.png"/>
-&lt;/figure>
-&lt;p>Running &lt;code>longcmd1.exe&lt;/code> fails because the command line is too long and &lt;code>execv&lt;/code> cannot process it. (I&amp;rsquo;m not exactly sure why &lt;code>execv&lt;/code> returns &lt;code>ENOMEM&lt;/code> because the Turbo C++ documentation claims that this function should return &lt;code>E2BIG&lt;/code> on this condition, but alas.)&lt;/p>
-&lt;p>Now, let&amp;rsquo;s build &lt;em>just&lt;/em> &lt;code>longcmd1.c&lt;/code> with DJGPP and run it:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-longcmd-1gcc-2tcc.png"/>
-&lt;/figure>
-&lt;p>We get a bit further now! &lt;code>longcmd1.exe&lt;/code> runs successfully and executes &lt;code>longcmd2.exe&lt;/code>&amp;hellip; but &lt;code>longcmd2.exe&lt;/code> claims that the command line is shorter than we expect. This is because DJGPP&amp;rsquo;s &lt;code>execv&lt;/code> implementation knew that it was running a standard DOS application &lt;em>not&lt;/em> built by DJGPP, so it had to place a truncated command line in the system call issued to DOS. (As a detail also note that this shows 141 and not 126: the reason for this is that DOS does &lt;em>not&lt;/em> place &lt;code>argv[0]&lt;/code> on the command line, but the C runtime has to synthesize this value.)&lt;/p>
-&lt;p>But now look at what happens when we &lt;em>also&lt;/em> compile &lt;code>longcmd2.c&lt;/code> with DJGPP:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-longcmd-both-gcc.png"/>
-&lt;/figure>
-&lt;p>Ta-da! When &lt;code>longcmd2.exe&lt;/code> runs, it now sees the full command line. This is because &lt;code>longcmd1.exe&lt;/code> now knows that &lt;code>longcmd2.exe&lt;/code> understands the transfer buffer arrangement and can send the command line to it this way.&lt;/p>
-&lt;p>You can read more about this in the &lt;a href="https://www.delorie.com/djgpp/doc/libc/libc_736.html">spawn documentation&lt;/a> from DJGPP&amp;rsquo;s libc and peek at the &lt;a href="https://www.delorie.com/bin/cvsweb.cgi/djgpp/src/libc/dos/process/dosexec.c?rev=1.29">&lt;code>dosexec.c&lt;/code> sources&lt;/a>.&lt;/p>
-&lt;h1 id="unix-style-paths">Unix-style paths&lt;/h1>
-&lt;p>Let&amp;rsquo;s move on to one more Unix-y thing that DJGPP has to deal with, which is paths and file names. You see, paths are paths in both DOS and Unix: a sequence of directory names (like &lt;code>/usr/bin/&lt;/code>) followed by an optional file name (like &lt;code>/usr/bin/gcc&lt;/code>). Unfortunately, DOS and Unix paths differ in two aspects.&lt;/p>
-&lt;p>The first is that DOS paths separate directory components with a backslash, not a forward slash. This is a historical artifact of the early CP/M and DOS days, where command-line flags used the forward slash (&lt;code>DIR /P&lt;/code>) instead of Unix&amp;rsquo;s dash (&lt;code>ls -l&lt;/code>). When DOS gained support for directories in its 2.0 release, it had to pick a different character to separate directories, and it picked the backslash. Dealing with this duality in DJGPP-built programs seems easy: just make DJGPP&amp;rsquo;s libc functions allow both and call it a day. And for the most part, this works&amp;mdash;and in fact even PowerShell does this on Windows today.&lt;/p>
-&lt;p>The second is that DOS paths may include an optional drive name such as &lt;code>C:&lt;/code> and&amp;hellip; the drive name has the colon character in it. While Unix uses the colon character to separate multiple components of the search &lt;code>PATH&lt;/code>, DOS could not do that: it had to pick a different character, and it picked the semicolon. Take a look:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">C:\&amp;gt;path
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">PATH=Z:\;C:\DEVEL\BIN;C:\DEVEL\DJGPP\BIN;C:\DEVEL\TC\BIN
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The problem here is that many Unix applications, particularly shell scripts like &lt;code>configure&lt;/code>&amp;mdash;especially &lt;code>configure&lt;/code>&amp;mdash;read the value of the &lt;code>PATH&lt;/code> variable and split it at colon separators or append to it by adding a colon. But if we do these textual manipulations on a DOS-style &lt;code>PATH&lt;/code> like the one shown above&amp;hellip; we&amp;rsquo;ll get the wrong behavior because of the drive names&amp;mdash;and Unix programs don&amp;rsquo;t know they have to split on the semicolon instead and we cannot be expected to fix them all.&lt;/p>
-&lt;p>The way DJGPP deals with this is by faking the &lt;code>/dev/&lt;/code> device tree. While DJGPP provides implementations of things like &lt;code>/dev/null&lt;/code>, it also exposes DOS drives via their corresponding &lt;code>/dev/[a-z]/&lt;/code> virtual &lt;em>directory&lt;/em>. So, if you wanted to run applications that parse or modify the &lt;code>PATH&lt;/code>, you could rewrite the above as this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">PATH=/dev/z:/dev/c/devel/bin:/dev/c/devel/djgpp/bin:/dev/c/devel/tc/bin
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This would allow any application reading the &lt;code>PATH&lt;/code> to continue to work. But note that this value doesn&amp;rsquo;t seem to leave the realm of the current process, which is interesting:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-bash-path.png"/>
-&lt;/figure>
-&lt;p>The picture above shows how bash sees a DOS-style &lt;code>PATH&lt;/code> after it starts. Manually setting it to a Unix path keeps the Unix path in the current process (as shown by the built-in &lt;code>echo&lt;/code> calls), but when we spawn a different one (&lt;code>env&lt;/code> is a separate executable), the value is reset. This makes sense because, if we are running a regular DOS program from within a DJGPP one, we want to export a DOS-compatible environment. Which means the Unix variants probably only stick within shell scripts. You can also see how this works by peeking at &lt;a href="https://www.delorie.com/bin/cvsweb.cgi/djgpp/src/libc/dos/process/dosexec.c">&lt;code>dosexec.c&lt;/code>&lt;/a> again.&lt;/p>
-&lt;p>But wait a minute&amp;hellip; did I just show you bash?! On DOS? Oh yes, yes I did&amp;hellip;&lt;/p>
-&lt;h1 id="trying-it-out-yourself">Trying it out yourself&lt;/h1>
-&lt;p>It&amp;rsquo;s time to get our hands dirty, try this out, and reminisce the old days! Or, actually, not &lt;em>so&lt;/em> old. You should know that DJGPP is &lt;em>still&lt;/em> available in this day and age and that it is quite up to date with GCC 12.3&amp;mdash;released less than a year ago.&lt;/p>
-&lt;p>First off, start by installing DOSBox. You can use the &lt;a href="https://www.dosbox.com/download.php?main=1">standard DOSBox version&lt;/a>, but it&amp;rsquo;s probably better to go the &lt;a href="https://dosbox-x.com/">DOSBox-X route&lt;/a> so that you can get Long File Name (LFN) support by setting the &lt;code>ver=7.1&lt;/code> configuration option. Otherwise, beware that running Bash later on will create &lt;code>.bash_history&lt;/code> under &lt;code>C:\&lt;/code> but the file will be named &lt;code>.BAS&lt;/code> due to some odd truncation, and this will later confuse Bash on a second start and assume that &lt;code>.BAS&lt;/code> is actually &lt;code>.bash_login&lt;/code>.&lt;/p>
-&lt;p>Now, &lt;a href="https://www.delorie.com/djgpp/getting.html">pick a mirror&lt;/a> for your downloads. You&amp;rsquo;ll see various uses of FTP in the list but don&amp;rsquo;t be surprised if clicking on those doesn&amp;rsquo;t work: major browsers have unfortunately dropped their FTP client so you&amp;rsquo;ll have to &amp;ldquo;fall back&amp;rdquo; to an HTTP mirror.&lt;/p>
-&lt;p>From there, you can use the &lt;a href="https://www.delorie.com/djgpp/zip-picker.html">Zip Picker&lt;/a> to help you choose what you need or you can download the same files I did:&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>v2apps/csdpmi7b.zip&lt;/code>: The &lt;code>CWSDPMI&lt;/code> free DPMI host.&lt;/li>
-&lt;li>&lt;code>v2apps/rhid15ab.zip&lt;/code>: The RHIDE &lt;a href="/2023/12/the-ides-we-had-30-years-ago.html">console IDE&lt;/a> akin to Turbo C++.&lt;/li>
-&lt;li>&lt;code>v2/djdev205.zip&lt;/code>: Base DJGPP tools.&lt;/li>
-&lt;li>&lt;code>v2gnu/bnu2351b.zip&lt;/code>: GNU Binutils (tools like &lt;code>gas&lt;/code> and &lt;code>objdump&lt;/code>).&lt;/li>
-&lt;li>&lt;code>v2gnu/bsh4253b.zip&lt;/code>: GNU Bash.&lt;/li>
-&lt;li>&lt;code>v2gnu/em2802b.zip&lt;/code>: GNU Emacs.&lt;/li>
-&lt;li>&lt;code>v2gnu/fil41br3.zip&lt;/code>: GNU coreutils (tools like &lt;code>ls&lt;/code> and &lt;code>cp&lt;/code>).&lt;/li>
-&lt;li>&lt;code>v2gnu/gcc930b.zip&lt;/code>: GCC itself.&lt;/li>
-&lt;li>&lt;code>v2gnu/gdb801b.zip&lt;/code>: GDB because why not.&lt;/li>
-&lt;li>&lt;code>v2gnu/gpp930b.zip&lt;/code>: G++.&lt;/li>
-&lt;li>&lt;code>v2gnu/grep228b.zip&lt;/code>: grep because I find it very handy.&lt;/li>
-&lt;li>&lt;code>v2gnu/mak44b.zip&lt;/code>: GNU Make.&lt;/li>
-&lt;li>&lt;code>v2gnu/shl2011br3.zip&lt;/code>: Various shell utilities (like &lt;code>basename&lt;/code> and &lt;code>dirname&lt;/code>) that you&amp;rsquo;ll almost-certainly need to run shell scripts.&lt;/li>
-&lt;li>&lt;code>v2gnu/txt20br3.zip&lt;/code>: GNU textutils (tools like &lt;code>cat&lt;/code> and &lt;code>cut&lt;/code>).&lt;/li>
-&lt;/ul>
-&lt;p>Once you have those files, create the &amp;ldquo;root&amp;rdquo; directory for what will be the &lt;code>C:&lt;/code> drive in DOSBox. I keep this under &lt;code>~/dos/&lt;/code> and it is much easier to prepare this directory from &lt;em>outside&lt;/em> of DOSBox. Within that location, create a &lt;code>djgpp&lt;/code> subdirectory and unpack &lt;em>all&lt;/em> the zip files you downloaded into it. If there are any file conflicts, just tell unzip to overwrite them.&lt;/p>
-&lt;p>Once the unpacking finishes, go to your DOSBox configuration. If you are on Windows, you should have a start menu entry called &amp;ldquo;DOSBox 0.74-3 Options&amp;rdquo; or similar which opens the configuration file in Notepad. If you are on Linux or any other reasonable OS, you can find the configuration file under &lt;code>~/.dosbox/&lt;/code>. In the configuration, you&amp;rsquo;ll want to set up the &lt;code>C:&lt;/code> drive at the very bottom of the file where the &lt;code>[autoexec]&lt;/code> section is. Here is what I do:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">[autoexec]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">MOUNT C C:\Users\jmmv\dos
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">SET PATH=%PATH%;C:\DJGPP\BIN
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">SET DJGPP=C:\DJGPP\DJGPP.ENV
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">C:
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Launch DOSBox and you are set. Enter full-screen by pressing &lt;code>Alt+Enter&lt;/code> for the full retro experience and then&amp;hellip; launch &lt;code>bash&lt;/code>:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-02-14-dosbox-djgpp.png"/>
-&lt;/figure>
-&lt;p>Pretty neat stuff, huh?&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-02-14-djgpp-cover-image.png" length="253620" type="image/jpeg"/></item></channel></rss>
+&lt;p>So: don&amp;rsquo;t be worried if you don&amp;rsquo;t know C, but also don&amp;rsquo;t be afraid to learn it! Just, please, don&amp;rsquo;t use it to start any new project. Keep C to yourself as a learning exercise, or leverage it as a tool to deal with legacy codebases.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-02-21-to-c-or-not-to-c.png" length="326255" type="image/jpeg"/></item></channel></rss>
