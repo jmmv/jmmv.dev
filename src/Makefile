@@ -3,7 +3,7 @@ all: builder-pattern-for-tests
 all: cmdline-args-unix-vs-windows
 all: djgpp
 all: inline-array-go
-all: netbsd-framebuffer
+all: netbsd-graphics-wo-x11
 all: powershell-cmdlet-params
 all: rest-api-go
 all: rest-api-rust
@@ -13,7 +13,7 @@ clean: clean-builder-pattern-for-tests
 clean: clean-cmdline-args-unix-vs-windows
 clean: clean-djgpp
 clean: clean-inline-array-go
-clean: clean-netbsd-framebuffer
+clean: clean-netbsd-graphics-wo-x11
 clean: clean-powershell-cmdlet-params
 clean: clean-rest-api-go
 clean: clean-rest-api-rust
@@ -45,11 +45,11 @@ inline-array-go:
 clean-inline-array-go:
 	( cd inline-array-go && go clean )
 
-.PHONY: clean-netbsd-framebuffer netbsd-framebuffer
-netbsd-framebuffer:
-	if [ "$$(uname -s)" = NetBSD ]; then ( cd netbsd-framebuffer && make all ); fi
-netbsd-framebufferray-go:
-	( cd netbsd-framebuffer && make clean )
+.PHONY: clean-netbsd-graphics-wo-x11 netbsd-graphics-wo-x11
+netbsd-graphics-wo-x11:
+	if [ "$$(uname -s)" = NetBSD ]; then ( cd netbsd-graphics-wo-x11 && make all ); fi
+netbsd-graphics-wo-x11-go:
+	( cd netbsd-graphics-wo-x11 && make clean )
 
 .PHONY: clean-powershell-cmdlet-params powershell-cmdlet-params
 powershell-cmdlet-params:
