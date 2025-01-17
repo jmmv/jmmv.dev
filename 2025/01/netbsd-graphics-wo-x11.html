@@ -1,0 +1,272 @@
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Hands-on graphics without X11 - Julio Merino (jmmv.dev)</title>
+<meta property="og:title" content="Hands-on graphics without X11 - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Hands-on graphics without X11 - Julio Merino (jmmv.dev)"><meta name=description content="If you have been following the development of EndBASIC, you know its console can display both text and graphics at once. What you may not know is that, now, it can also achieve this feat on the NetBSD console without using X11 at all. This is done by directly rendering to the wsdisplay framebuffer, and this article presents a crash course on direct graphics and keyboard access via NetBSD&rsquo;s wscons framework."><meta property="og:description" content="If you have been following the development of EndBASIC, you know its console can display both text and graphics at once. What you may not know is that, now, it can also achieve this feat on the NetBSD console without using X11 at all. This is done by directly rendering to the wsdisplay framebuffer, and this article presents a crash course on direct graphics and keyboard access via NetBSD&rsquo;s wscons framework."><meta property="twitter:description" content="If you have been following the development of EndBASIC, you know its console can display both text and graphics at once. What you may not know is that, now, it can also achieve this feat on the NetBSD …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.136.5"><meta property="og:url" content="https://jmmv.dev/2025/01/netbsd-graphics-wo-x11.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2025/01/netbsd-graphics-wo-x11.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.cb91349cd93211a37e7d5dc131c35a170fc795721c03373cd05571327eea206b.css><link rel=stylesheet href=/css/chroma.css><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="og:image" content="/images/2025-01-17-cover-image.png"><meta property="twitter:image" content="https://jmmv.dev/images/2025-01-17-cover-image.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><img src="https://hugo-dynamic.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/pages/aHR0cHM6Ly9qbW12LmRldi8yMDI1LzAxL25ldGJzZC1ncmFwaGljcy13by14MTEuaHRtbA==/stamp.gif" style=display:none>
+<script>window.location.replace("https://blogsystem5.substack.com/p/netbsd-graphics-wo-x11")</script><header class=site-header><nav class="navbar navbar-expand-md fixed-top navbar-dark bg-primary"><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+&nbsp;jmmv.dev
+</a><button class=navbar-toggler type=button data-toggle=collapse data-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
+<span class=navbar-toggler-icon></span></button><div class="collapse navbar-collapse" id=navbarSupportedContent><ul class="navbar-nav mr-auto"><li class=nav-item><a class=nav-link href=/about.html>About</a></li><li class=nav-item><a class=nav-link href=/blog.html>Blog</a></li><li class=nav-item><a class=nav-link href=/resume.html>Resume</a></li><li class=nav-item><a class=nav-link href=/software.html>Software</a></li></ul><ul class="navbar-nav mr-4"><li class=nav-item><a class=nav-link href=/archive.html>Archive</a></li><li class=nav-item><a class=nav-link href=/series.html>Series</a></li><li class=nav-item><a class=nav-link href=/tags.html>Tags</a></li></ul><form class=form-inline method=get role=search action=https://www.google.com/search><div class=input-group><input type=search name=query class=form-control placeholder=Search aria-label=Search><div class=input-group-append><button type=submit value=Search class="btn btn-light">
+<img src=/octicons/search.svg></button></div></div><input type=hidden name=sitesearch value=https://jmmv.dev/></form></div></nav></header><div class=page-header><div class=container><h1>Hands-on graphics without X11</h1><p>January 17, 2025 &#183;
+About 13 minutes
+&#183;
+Tags:
+<a href=/tags/blogsystem5>blogsystem5</a>, <a href=/tags/endbasic>endbasic</a>, <a href=/tags/netbsd>netbsd</a></p><p class=post-meta-p>This article was
+<a href=https://blogsystem5.substack.com/p/netbsd-graphics-wo-x11>originally published
+on Substack</a>
+in the <a href=https://blogsystem5.substack.com/>Blog System/5 newsletter</a>
+and is replicated here for archival purposes.</p></div></div><div class="container post-body"><div class=row><div class=col-md-9><div class=row><div class=col><article><p><em>A crash course on direct framebuffer and keyboard access via NetBSD&rsquo;s wscons</em></p><p>Look at these two consoles:</p><figure><img src=/images/2025-01-17-netbsd-vs-endbasic-console.png><figcaption>Side-by-side comparison of the NetBSD console right after boot vs. the EndBASIC console.</figcaption></figure><p>Same font, same colors, same&mldr; everything? Other than for the actual text they display, they look identical, don&rsquo;t they? But the one on the right can do things that the one on the left cannot. Witness this:</p><figure><video width=100% controls>
+<source src=/images/2025-01-17-endbasic-console.mp4 type=video/mp4></video><figcaption>Demonstration of the EndBASIC hybrid console by issuing a couple of graphics primitives.</figcaption></figure><p>A square? OK, meh, we had those in the DOS days with <a href=https://en.wikipedia.org/wiki/Box-drawing_characters>box-drawing characters</a>. But a circle?! That&rsquo;s only possible because the console on the right is a hybrid console that supports mixing the usual textual grid of a terminal with overlapping graphics.</p><p>Now, if you have been following the development of EndBASIC, this is not surprising. The defining characteristic of the EndBASIC console is that it&rsquo;s hybrid as the video shows. What&rsquo;s newsworthy, however, is that the EndBASIC console can now run directly on a framebuffer exposed by the kernel. No X11 nor Wayland in the picture (pun intended).</p><p>But how? The answer lies in NetBSD&rsquo;s flexible wscons framework, and this article dives into what it takes to render graphics on a standard Unix system. I&rsquo;ve found this exercise exciting because, in the old days, graphics were trivial (<a href=https://en.wikipedia.org/wiki/Mode_13h>mode 13h</a>, anyone?) and, for many years now, computers use framebuffer-backed textual consoles. The kernel is obviously rendering &ldquo;graphics&rdquo; by drawing individual letters; so why can&rsquo;t you, a user of the system, do so too?</p><div class="container action-highlight p-4 my-4 d-md-none"><div class="row text-center"><p>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.</p></div><div class=row><div class=col><div class=form-group><form action=https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add method=post><input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center my-1">
+<button type=submit class="btn btn-primary btn-block my-1">Subscribe</button></form></div></div></div><div class="row px-2"><div class="col col-sm-5 text-left"><small><span class=subscriber-count>0</span> subscribers</small></div><div class="col col-sm-7 text-right"><p><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
+</a><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p></div></div></div><h1 id=wscons-overview>wscons overview</h1><p><a href=https://man.netbsd.org/wscons.4>wscons(4)</a>, or Workstation Console in its full form, is NetBSD&rsquo;s framework to access the physical console attached to a computer.</p><p>wscons abstracts the details of the hardware display and input devices so that the kernel and the user-space configuration tools can treat them all uniformly across the tens of platforms that NetBSD supports. If you use <a href=https://man.netbsd.org/wsconsctl.8>wsconsctl(8)</a> on a modern amd64 laptop to control its display, you use wsconsctl on an ancient vax box to control its display too.</p><figure><img src=/images/2025-01-17-wsdisplay-devices.png><figcaption>Layered architecture of wsdisplay and its backing devices.</figcaption></figure><p>The output architecture of wscons is composed of multiple devices, layered like this:</p><ol><li><p><a href=https://man.netbsd.org/wsdisplay.4>wsdisplay(4)</a> sits at the top of the stack and implements the console in hardware-independent terms. The functionality at this level includes handling of VT100-like sequences, cursor positioning logic, text wrapping, scrolling decisions, etc.</p></li><li><p>Under wsdisplay sit the drivers that know how to access specific hardware devices. These include, among others: <a href=https://man.netbsd.org/vga.4>vga(4)</a>, which does not do graphics at all; <a href=https://man.netbsd.org/genfb.4>genfb(4)</a>, which is a generic framebuffer driver that talks to the &ldquo;native&rdquo; framebuffer of the system (e.g. the one configured by the EFI); and <a href=https://man.netbsd.org/radeonfb.4>radeonfb(4)</a>, which implements an accelerated console on AMD cards. These drivers know how to initialize and interact with the hardware.</p></li><li><p>Under the graphical drivers sits <a href=https://man.netbsd.org/vcons.4>vcons(4)</a>, the driver that implements one or more graphical consoles in terms of a grid of pixels. vcons is parameterized on &ldquo;raster operations&rdquo; (rasops), a set of virtual methods to perform low-level operations. An example is the <code>moverows</code> method, which is used by wsdisplay to implement scrolling in the most efficient way provided by the hardware. vcons provides default (inefficient) implementations of these methods, but the upper drivers like radeonfb can provide hardware-accelerated specializations when instantiating vcons. vcons also interacts with <a href=https://man.netbsd.org/wsfont.4>wsfont(4)</a> to render text to the console.</p></li></ol><figure><img src=/images/2025-01-17-wskbd-devices.png><figcaption>Layered architecture of wskbd and its backing devices, including the optional wsmux wrapper.</figcaption></figure><p>The input architecture of wscons is similar in terms of layering of devices, albeit somewhat simpler:</p><ol><li><p><a href=https://man.netbsd.org/wsmux.4>wsmux(4)</a> is an optional component that multiplexes multiple input devices under a single virtual device for event extraction.</p></li><li><p><a href=https://man.netbsd.org/wsbkd.4>wskbd(4)</a> sits at the top of the stack (not accounting for wsmux) and implements generic keyboard handling. The functionality at this level includes translating keycodes to layouts, handling key input repetition, and more. wskbd exposes a stream of wsevents to user-space so that user-space can process state changes (e.g. key presses).</p></li><li><p>Under wskbd sit the device drivers that know how to deal with specific hardware devices. These include, among others: <a href=https://man.netbsd.org/ukbd.4>ukbd(4)</a> for USB keyboard input and <a href=https://man.netbsd.org/pckbd.4>pckbd(4)</a> for PC/AT keyboard input. These drivers wait for hardware input, generate events, and provide a map of keycodes to key symbols to the upper layer so that wskbd can operate in generic terms.</p></li></ol><p>The input architecture can handle other types of devices like mice and touch panels (both via <a href=https://man.netbsd.org/wsmouse.4>wsmouse(4)</a>), but I&rsquo;m not going to cover those here. Just know that they sit under wsmux at the equivalent level of wskbd and produce a set of wsevents in the exact same manner as wskbd.</p><h1 id=querying-framebuffer-properties>Querying framebuffer properties</h1><p>As you can sense from the overview, the whole architecture under wsdisplay is geared towards video devices&mldr; if it wasn&rsquo;t for the vga driver: in the common case, wsdisplay is backed by a graphical framebuffer managed by vcons for text rendering, yet the user only sees a textual console. But if the kernel has direct access to the framebuffer, so should user-space too.</p><p>The details on how to do this click if you read through the operations described in the wsdisplay manual page. In particular, you may notice the <code>WSDISPLAYIO_GET_FBINFO</code> call which retrieves extended information about, you guessed it, a framebuffer display.</p><p>Let&rsquo;s try it: I wrote a trivial program to open the display device (named <code>/dev/ttyE0</code> for reasons that escape me), call this function, and store the results in an <code>fbinfo</code> structure:</p><div class=src><div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain><span class=line><span class=cl>#include &lt;sys/param.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/types.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/ioctl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;dev/wscons/wsconsio.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>#include &lt;err.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;fcntl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;stdlib.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;unistd.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>int main(void) {
+</span></span><span class=line><span class=cl>    // Open the main wsdisplay device.
+</span></span><span class=line><span class=cl>    int fd = open(&#34;/dev/ttyE0&#34;, O_RDWR | O_NONBLOCK | O_EXCL);
+</span></span><span class=line><span class=cl>    if (fd == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;open failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Query information about the framebuffer.
+</span></span><span class=line><span class=cl>    struct wsdisplayio_fbinfo fbinfo;
+</span></span><span class=line><span class=cl>    if (ioctl(fd, WSDISPLAYIO_GET_FBINFO, &amp;fbinfo) == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;ioctl failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    close(fd);
+</span></span><span class=line><span class=cl>    exit(EXIT_SUCCESS);
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></div><div class=footer><div class=filename><a href=/src/netbsd-graphics-wo-x11/wsdisplay-fbinfo.c type=text/plain>wsdisplay-fbinfo.c</a></div></div></div><p>Hmm, but this program does not have any visible output, right? The code just queries the framebuffer information and does nothing with it. The reason is that the content of the <code>wsdisplayio_fbinfo</code> structure is large and I didn&rsquo;t want to pretty-print it myself. I thought it&rsquo;d be fun to show you how to use GDB to inspect large data structures and how to script the process. Here, look:</p><div class=src><div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain><span class=line><span class=cl>gdb -q \
+</span></span><span class=line><span class=cl>    -ex &#39;set print pretty on&#39; \
+</span></span><span class=line><span class=cl>    -ex &#39;break exit&#39; \
+</span></span><span class=line><span class=cl>    -ex &#39;run&#39; \
+</span></span><span class=line><span class=cl>    -ex &#39;frame 1&#39; \
+</span></span><span class=line><span class=cl>    -ex &#39;print fbinfo&#39; \
+</span></span><span class=line><span class=cl>    -ex &#39;cont&#39; \
+</span></span><span class=line><span class=cl>    -ex &#39;quit&#39; \
+</span></span><span class=line><span class=cl>    ./wsdisplay-fbinfo
+</span></span></code></pre></div><div class=footer><div class=filename><a href=/src/netbsd-graphics-wo-x11/wsdisplay-fbinfo.sh type=text/plain>wsdisplay-fbinfo.sh</a></div></div></div><p>This call to GDB starts the sample program shown above and automates various GDB commands to set a breakpoint, step through the program, and pretty-print the <code>fbinfo</code> structure right before exiting. When we execute this command as root (which is important to get access to the <code>/dev/ttyE0</code> device), we get this:</p><figure><img src=/images/2025-01-17-wsdisplay-fbinfo-gdb.png><figcaption>Content of the <tt>fbinfo</tt> structure as grabbed by the sample <tt>wsdisplay-fbinfo</tt> program and printed by GDB.</figcaption></figure><p>Neat. We get sensible stuff from the kernel! <code>fbi_width</code> is 640 and <code>fbi_height</code> is 480, which matches the 640x480 resolution I have configured in my test VM.</p><h1 id=drawing-to-the-framebuffer>Drawing to the framebuffer</h1><p>But note these other fields in the structure printed above:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-c data-lang=c><span class=line><span class=cl><span class=k>struct</span> <span class=n>wsdisplayio_fbinfo</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=kt>uint64_t</span> <span class=n>fbi_fbsize</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=kt>uint64_t</span> <span class=n>fbi_fboffset</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=c1>// ... more fields ...
+</span></span></span><span class=line><span class=cl><span class=c1></span><span class=p>}</span>
+</span></span></code></pre></div><p>The <code>fbi_fbsize</code> and <code>fbi_fboffset</code> fields are <em>begging</em> us to use <code>mmap</code> to memory-map the area of the device starting at <code>fbi_fboffset</code> and spanning <code>fbi_fbsize</code> bytes. Presumably we can write to the framebuffer if we do this, but beforehand, we have to switch the console to &ldquo;framebuffer mode&rdquo; by using the <code>WSDISPLAYIO_SMODE</code> (&ldquo;set mode&rdquo;) call. This call accepts an integer to indicate which mode to set:</p><ul><li><p><code>WSDISPLAYIO_MODE_EMUL</code>: Set the display to emulating (text) mode. This is the default operation mode of wsdisplay and configures the console to &ldquo;emulate&rdquo; a text terminal.</p></li><li><p><code>WSDISPLAYIO_MODE_MAPPED</code>: Set the display to mapped (graphics) mode. This allows access to the framebuffer and allows the <code>mmap</code> operation to succeed.</p></li><li><p><code>WSDISPLAYIO_MODE_DUMBFB</code>: Set the display to mapped (framebuffer) mode. This is similar to <code>WSDISPLAYIO_MODE_MAPPED</code> and, for our purposes in the demo below, works the same. I haven&rsquo;t found a concise description of how these two differ, but from my reading of the code, the &ldquo;mapped&rdquo; mode offers access to the framebuffer as well as device-specific control registers, whereas &ldquo;dumb framebuffer&rdquo; just exposes the framebuffer memory.</p></li></ul><p>In any case. Once we know that we have to switch the console device to a graphical mode before mapping the framebuffer, and having access to the pixel format described in the <code>fbinfo</code> structure&mldr; drawing something fun is just a few byte manipulation operations away:</p><div class=src><div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain><span class=line><span class=cl>#include &lt;sys/param.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/types.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/ioctl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/mman.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;dev/wscons/wsconsio.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>#include &lt;err.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;fcntl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;stdlib.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;unistd.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>int main(void) {
+</span></span><span class=line><span class=cl>    // Open the main wsdisplay device.
+</span></span><span class=line><span class=cl>    int fd = open(&#34;/dev/ttyE0&#34;, O_RDWR | O_NONBLOCK | O_EXCL);
+</span></span><span class=line><span class=cl>    if (fd == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;open failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Query information about the framebuffer.
+</span></span><span class=line><span class=cl>    struct wsdisplayio_fbinfo fbinfo;
+</span></span><span class=line><span class=cl>    if (ioctl(fd, WSDISPLAYIO_GET_FBINFO, &amp;fbinfo) == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;ioctl failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Ensure the framebuffer aligns with the expectations of our demo
+</span></span><span class=line><span class=cl>    // code below.
+</span></span><span class=line><span class=cl>    if (fbinfo.fbi_bitsperpixel != 32)
+</span></span><span class=line><span class=cl>        errx(1, &#34;bitsperpixel not supported by this demo&#34;);
+</span></span><span class=line><span class=cl>    if (fbinfo.fbi_pixeltype != WSFB_RGB)
+</span></span><span class=line><span class=cl>        errx(1, &#34;pixeltype not supported by this demo&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Configure the wsdisplay to enter &#34;dumb framebuffer&#34; mode.
+</span></span><span class=line><span class=cl>    unsigned int mode = WSDISPLAYIO_MODE_DUMBFB;
+</span></span><span class=line><span class=cl>    if (ioctl(fd, WSDISPLAYIO_SMODE, &amp;mode) == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;ioctl failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Map the framebuffer memory.  Must come after the SMODE ioctl.
+</span></span><span class=line><span class=cl>    uint32_t *ptr = (uint32_t*)mmap(
+</span></span><span class=line><span class=cl>        0, fbinfo.fbi_fbsize, PROT_READ | PROT_WRITE, MAP_SHARED,
+</span></span><span class=line><span class=cl>        fd, fbinfo.fbi_fboffset);
+</span></span><span class=line><span class=cl>    if (ptr == MAP_FAILED)
+</span></span><span class=line><span class=cl>        err(1, &#34;mmap failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Fill the screen multiple times with pixels of different
+</span></span><span class=line><span class=cl>    // colors to render a simple animation.
+</span></span><span class=line><span class=cl>    size_t pixels = fbinfo.fbi_fbsize / sizeof(uint32_t);
+</span></span><span class=line><span class=cl>    int off = 0;
+</span></span><span class=line><span class=cl>    for (int i = 0; i &lt; 100; i++) {
+</span></span><span class=line><span class=cl>        int r = off; int g = off; int b = off;
+</span></span><span class=line><span class=cl>        for (size_t i = 0; i &lt; pixels; i++) {
+</span></span><span class=line><span class=cl>            r = (r + 1) % 255; g = (g + 2) % 255; b = (b + 3) % 255;
+</span></span><span class=line><span class=cl>            ptr[i] = 0
+</span></span><span class=line><span class=cl>                | (r &lt;&lt; fbinfo.fbi_subtype.fbi_rgbmasks.red_offset)
+</span></span><span class=line><span class=cl>                | (g &lt;&lt; fbinfo.fbi_subtype.fbi_rgbmasks.green_offset)
+</span></span><span class=line><span class=cl>                | (b &lt;&lt; fbinfo.fbi_subtype.fbi_rgbmasks.blue_offset);
+</span></span><span class=line><span class=cl>        }
+</span></span><span class=line><span class=cl>        off += 10;
+</span></span><span class=line><span class=cl>        usleep(1);
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Configure the wsdisplay to enter &#34;console emulation&#34; mode.
+</span></span><span class=line><span class=cl>    // In other words: return to the console.
+</span></span><span class=line><span class=cl>    mode = WSDISPLAYIO_MODE_EMUL;
+</span></span><span class=line><span class=cl>    if (ioctl(fd, WSDISPLAYIO_SMODE, &amp;mode) == -1) {
+</span></span><span class=line><span class=cl>        err(1, &#34;ioctl failed&#34;);
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    close(fd);
+</span></span><span class=line><span class=cl>    return EXIT_SUCCESS;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></div><div class=footer><div class=filename><a href=/src/netbsd-graphics-wo-x11/wsdisplay-draw.c type=text/plain>wsdisplay-draw.c</a></div></div></div><p>And if we run this:</p><figure><video width=100% controls>
+<source src=/images/2025-01-17-wsdisplay-draw.mp4 type=video/mp4></video><figcaption>The demo <tt>wsdisplay-draw</tt> program running on the NetBSD console immediately after logging in.</figcaption></figure><p>Voila. We&rsquo;ve got graphics without paying the X11 startup tax. Switching from the console to graphics is instantaneous, like in the good old mode 13h days.</p><h1 id=handling-keyboard-input>Handling keyboard input</h1><p>Rendering graphics is just half of the puzzle when writing an interactive application though. The other half is handling input. And, for that, we have to turn to the wskbd device.</p><p>After we switch the console to mapped mode, keystrokes don&rsquo;t go to <code>stdin</code> anymore. We have to write code to explicitly read from an attached keyboard, and we can do this via the <code>/dev/wskbd0</code> device representing the first attached keyboard.</p><p>Once we open the keyboard device for reading, wscons sends us its own representation of events known as wsevents. We can write a trivial program to read one key press:</p><div class=src><div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain><span class=line><span class=cl>#include &lt;sys/param.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/types.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/ioctl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;dev/wscons/wsconsio.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>#include &lt;err.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;fcntl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;stdio.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;stdlib.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;unistd.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>int main(int argc, char** argv) {
+</span></span><span class=line><span class=cl>    // Open the main wskbd device.
+</span></span><span class=line><span class=cl>    int fd = open(&#34;/dev/wskbd0&#34;, O_RDONLY);
+</span></span><span class=line><span class=cl>    if (fd == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;open failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Wait for one key down press only.
+</span></span><span class=line><span class=cl>    for (;;) {
+</span></span><span class=line><span class=cl>        struct wscons_event ev;
+</span></span><span class=line><span class=cl>        int ret = read(fd, &amp;ev, sizeof(ev));
+</span></span><span class=line><span class=cl>        if (ret == -1)
+</span></span><span class=line><span class=cl>            err(1, &#34;read failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>        if (ev.type == WSCONS_EVENT_KEY_DOWN) {
+</span></span><span class=line><span class=cl>            printf(&#34;value: %d, char &#39;%c&#39;\n&#34;, ev.value, (char)ev.value);
+</span></span><span class=line><span class=cl>            break;
+</span></span><span class=line><span class=cl>        }
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    close(fd);
+</span></span><span class=line><span class=cl>    return EXIT_SUCCESS;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></div><div class=footer><div class=filename><a href=/src/netbsd-graphics-wo-x11/wskbd-trivial.c type=text/plain>wskbd-trivial.c</a></div></div></div><p>But&mldr; if we try to run it and press a key, say <code>k</code>, we might get:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain><span class=line><span class=cl># ./wskbd-trivial
+</span></span><span class=line><span class=cl>value: 37, char &#39;%&#39;
+</span></span><span class=line><span class=cl># █
+</span></span></code></pre></div><p>Huh. We pressed <code>k</code> but the character we got is <code>%</code>. Not what we expected! Well, as it turns out, the &ldquo;value&rdquo; that wsevents report for key presses (37 in this case) is the raw keycode of the key. This is hardware-specific and needs to be translated to an actual symbol via a keymap.</p><p>One feature of wskbd is that it exposes the keymap as configured in the kernel so there is a single source of truth for the machine. We can query a portion of it with another program:</p><div class=src><div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain><span class=line><span class=cl>#include &lt;sys/param.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/types.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;sys/ioctl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;dev/wscons/wsconsio.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;dev/wscons/wsksymdef.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>#include &lt;err.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;fcntl.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;stdio.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;stdlib.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;string.h&gt;
+</span></span><span class=line><span class=cl>#include &lt;unistd.h&gt;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>int main(int argc, char** argv) {
+</span></span><span class=line><span class=cl>    // Open the main wskbd device.
+</span></span><span class=line><span class=cl>    int fd = open(&#34;/dev/wskbd0&#34;, O_RDONLY);
+</span></span><span class=line><span class=cl>    if (fd == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;open failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Allocate space for the biggest possible keymap.
+</span></span><span class=line><span class=cl>    struct wscons_keymap map[WSKBDIO_MAXMAPLEN];
+</span></span><span class=line><span class=cl>    memset(map, 0, sizeof(struct wscons_keymap) * WSKBDIO_MAXMAPLEN);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Get the keymap from the device.
+</span></span><span class=line><span class=cl>    struct wskbd_map_data data;
+</span></span><span class=line><span class=cl>    data.maplen = WSKBDIO_MAXMAPLEN;
+</span></span><span class=line><span class=cl>    data.map = map;
+</span></span><span class=line><span class=cl>    if (ioctl(fd, WSKBDIO_GETMAP, &amp;data) == -1)
+</span></span><span class=line><span class=cl>        err(1, &#34;ioctl failed&#34;);
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    // Dump keymap entries.
+</span></span><span class=line><span class=cl>    printf(&#34;Keymap length: %u entries\n&#34;, data.maplen);
+</span></span><span class=line><span class=cl>    for (size_t i = 0; i &lt; data.maplen; i++) {
+</span></span><span class=line><span class=cl>        // Skip printing entries that are not for letters.
+</span></span><span class=line><span class=cl>        if (map[i].command != KS_voidSymbol)
+</span></span><span class=line><span class=cl>            continue;
+</span></span><span class=line><span class=cl>        char normal = map[i].group1[0];
+</span></span><span class=line><span class=cl>        char shifted = map[i].group1[1];
+</span></span><span class=line><span class=cl>        if (normal &lt; &#39;a&#39; || normal &gt; &#39;z&#39;)
+</span></span><span class=line><span class=cl>            continue;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>        printf(&#34;Keycode %zd: &#39;%c&#39;, &#39;%c&#39;\n&#34;, i, normal, shifted);
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    close(fd);
+</span></span><span class=line><span class=cl>    return EXIT_SUCCESS;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></div><div class=footer><div class=filename><a href=/src/netbsd-graphics-wo-x11/wskbd-map.c type=text/plain>wskbd-map.c</a></div></div></div><p>And if we run it, we might get:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-plain data-lang=plain><span class=line><span class=cl># ./wskbd-map
+</span></span><span class=line><span class=cl>Keymap length: 222 entries
+</span></span><span class=line><span class=cl>Keycode 16: &#39;q&#39;, &#39;Q&#39;
+</span></span><span class=line><span class=cl>Keycode 17: &#39;w&#39;, &#39;W&#39;
+</span></span><span class=line><span class=cl>Keycode 18: &#39;e&#39;, &#39;E&#39;
+</span></span><span class=line><span class=cl>Keycode 19: &#39;r&#39;, &#39;R&#39;
+</span></span><span class=line><span class=cl>Keycode 20: &#39;t&#39;, &#39;T&#39;
+</span></span><span class=line><span class=cl>Keycode 21: &#39;y&#39;, &#39;Y&#39;
+</span></span><span class=line><span class=cl>Keycode 22: &#39;u&#39;, &#39;U&#39;
+</span></span><span class=line><span class=cl>Keycode 23: &#39;i&#39;, &#39;I&#39;
+</span></span><span class=line><span class=cl>Keycode 24: &#39;o&#39;, &#39;O&#39;
+</span></span><span class=line><span class=cl>Keycode 25: &#39;p&#39;, &#39;P&#39;
+</span></span><span class=line><span class=cl>Keycode 30: &#39;a&#39;, &#39;A&#39;
+</span></span><span class=line><span class=cl>Keycode 31: &#39;s&#39;, &#39;S&#39;
+</span></span><span class=line><span class=cl>Keycode 32: &#39;d&#39;, &#39;D&#39;
+</span></span><span class=line><span class=cl>Keycode 33: &#39;f&#39;, &#39;F&#39;
+</span></span><span class=line><span class=cl>Keycode 34: &#39;g&#39;, &#39;G&#39;
+</span></span><span class=line><span class=cl>Keycode 35: &#39;h&#39;, &#39;H&#39;
+</span></span><span class=line><span class=cl>Keycode 36: &#39;j&#39;, &#39;J&#39;
+</span></span><span class=line><span class=cl>Keycode 37: &#39;k&#39;, &#39;K&#39;
+</span></span><span class=line><span class=cl>Keycode 38: &#39;l&#39;, &#39;L&#39;
+</span></span><span class=line><span class=cl>Keycode 44: &#39;z&#39;, &#39;Z&#39;
+</span></span><span class=line><span class=cl>Keycode 45: &#39;x&#39;, &#39;X&#39;
+</span></span><span class=line><span class=cl>Keycode 46: &#39;c&#39;, &#39;C&#39;
+</span></span><span class=line><span class=cl>Keycode 47: &#39;v&#39;, &#39;V&#39;
+</span></span><span class=line><span class=cl>Keycode 48: &#39;b&#39;, &#39;B&#39;
+</span></span><span class=line><span class=cl>Keycode 49: &#39;n&#39;, &#39;N&#39;
+</span></span><span class=line><span class=cl>Keycode 50: &#39;m&#39;, &#39;M&#39;
+</span></span><span class=line><span class=cl># █
+</span></span></code></pre></div><p>This dump is telling us how keycodes map to symbols, both in &ldquo;normal&rdquo; and in shifted form. If we look up keycode 37, we indeed find the letter <code>k</code>. With this, it&rsquo;s just an <a href=https://en.wikipedia.org/wiki/Small_matter_of_programming>SMOP</a> to come up with a program that parses the keymap as exposed by wskbd and converts keycodes to something useful.</p><p>This is all good and dandy, but what happens if the keyboard is not connected when you try to open <code>/dev/wskbd0</code>? (Spoiler: the <code>open</code> call fails.) Or what happens if your computer has more than one keyboard attached? (Spoiler: you can only read events from one.) This is where wsmux comes to the rescue&mdash;a device driver that multiplexes multiple input devices into one.</p><p>By default, the system reserves <code>/dev/wsmux0</code> as the multiplexer for all attached mice and <code>/dev/wsmux1</code> as the multiplexer for all attached keyboards. We can define our own too via the <a href=https://man.netbsd.org/wsmuxctl.8>wsmuxctl(8)</a> command line utility.</p><p>wsmux then supports &ldquo;hot plugging&rdquo;. You can then open a <code>/dev/wsmuxN</code> device even when there is no physical hardware attached, and whenever a peripheral is connected, it automatically becomes part of the mux. So, if we modify the program above to open <code>/dev/wsmux1</code> instead of <code>/dev/wskbd0</code>, the program will be resilient to missing keyboards and it&rsquo;ll recognize multiple keyboards. Easy peasy!</p><h1 id=what-will-you-build>What will you build?</h1><p>You are now equipped with the basics to write graphical applications on a NetBSD system (and maybe OpenBSD too) without running X11. I know NetBSD may not be your jam, but it is a good choice for embedded projects due to its console architecture and other features like <a href=/2024/12/netbsd-build-system.html>its build system</a>.</p><p>If the code above still seems mysterious, you can read the source code for the <a href=https://cvsweb.netbsd.org/bsdweb.cgi/xsrc/external/mit/xf86-video-wsfb/>xf86-video-wsfb</a> and <a href=https://cvsweb.netbsd.org/bsdweb.cgi/xsrc/external/mit/xf86-input-ws/>xf86-input-ws</a> drivers for X.org. The code is easy enough to read, although it is longer because it has to support all the bells and whistles of wsdisplay and wskbd. (I took shortcuts above by making various assumptions on pixel formats and the like.)</p><p>And, guess what, I am indeed working on an embedded project! A little dev box that can boot straight into EndBASIC with super-fast boot times and for which I couldn&rsquo;t afford the X11 startup penalty.</p><figure><video width=100% controls>
+<source src=/images/2025-01-17-endbasic-netbsd-boot.mp4 type=video/mp4></video><figcaption></figcaption></figure><p>Stay tuned. In the meantime, what will <em>YOU</em> build? For those of us in the U.S., there is a 3-day weekend ahead and this can be a good distraction. Have fun!</p></article></div></div><div class="container post-links"><div class=row><div class="col mr-auto text-left"><span><a href=https://jmmv.dev/2025/01/make-help.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ml-auto text-right"><span></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn btn-block btn-outline-success" id=thumbs-up-btn>👍
+(<span id=thumbs-up-count>0</span>)</a></div><div class=col><a onclick=voteThumbsDown() class="btn btn-block btn-outline-danger" id=thumbs-down-btn>👎
+(<span id=thumbs-down-count>0</span>)</a></div></div></div><div class="col-lg-8 my-2 d-none d-sm-block"><div class=row><div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Hands-on+graphics+without+X11&amp;url=https%3A%2F%2Fjmmv.dev%2F2025%2F01%2Fnetbsd-graphics-wo-x11.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/reddit.png alt=Reddit width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Hands-on+graphics+without+X11&amp;u=https%3A%2F%2Fjmmv.dev%2F2025%2F01%2Fnetbsd-graphics-wo-x11.html" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/ycombinator.png alt="Hacker News" width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://twitter.com/intent/tweet?status=Hands-on+graphics+without+X11+%E2%80%94+https%3A%2F%2Fjmmv.dev%2F2025%2F01%2Fnetbsd-graphics-wo-x11.html+%E2%80%94+cc+%40jmmv" class="btn btn-block btn-outline-primary">Share on
+<img src=/images/badges/Twitter_Social_Icon_Circle_Color.png alt=Twitter width=24 height=24></a></div></div></div></div><div class="row my-4" id=postCommentRow><div class=col><div class=media><img class=mr-3 src=/octicons/pencil.svg width=32px height=32px><div class="media-body container"><form method=post id=newPost><div class=row><div class="col my-1"><textarea class=form-control rows=1 id=postCommentContent onclick=showPostComment() placeholder="Leave a comment"></textarea></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentAuthor>Your name (optional):</label>
+<input type=text class=form-control id=postCommentAuthor></div></div><div class="row newPostControls" style=display:none><div class="col my-1 form-group"><label for=postCommentEmail>Your email (optional):</label>
+<input type=text class=form-control type=email id=postCommentEmail>
+<small class="form-text text-muted">Invisible to all readers; if provided, you will receive notifications when replied to (not implemented yet)</small></div></div><div class=row id=postCommentError style=display:none><div class="col mt-1 alert-danger"><p></p></div></div><div class="row newPostControls" style=display:none><button class="col-md-3 my-1 btn btn-primary" type=submit id=submitCommentButton>Post</button>
+<small class="col-md-9 my-1 text-muted">Comments are subject to moderation. This feature is experimental and is powered by <a href=/software/endtracker.html>EndTRACKER</a>. If you experience any issues, please <a href=/about.html#contact>contact me off-band</a>.</small></div></form></div></div></div></div><script>function hidePostComment(){var t,e=document.getElementById("postCommentContent");e.rows=1,e.value="",t=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(t,function(e){e.style.display="none"})}function showPostComment(){var e,t=document.getElementById("postCommentContent");t.rows=5,e=document.getElementsByClassName("newPostControls"),Array.prototype.forEach.call(e,function(e){e.style.display=""})}const form=document.querySelector("#newPost");form.onsubmit=function(e){e.preventDefault();let t=document.getElementById("postCommentAuthor").value,n=document.getElementById("postCommentEmail").value,s=document.getElementById("postCommentContent").value;postComment(t,n,s,hidePostComment)}</script></div></div><div class="col-md-3 sidebar d-none d-md-block"><div class=row><div class="col text-center p-2"><p><a href=/about.html class=clear-link><img src=/images/avatars/20181124-snow.jpg class="rounded-circle shadow my-2" style=width:100px><br><b>Julio Merino</b><br>A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.</a></p><div class=row><div class=col><div class=form-group><form action=https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add method=post><input type=text name=email placeholder="Enter your email" class="form-control input-sm text-center my-1">
+<button type=submit class="btn btn-primary btn-block my-1">Subscribe</button></form></div></div></div><div class="row px-2"><div class="col-sm-5 text-left"><small><span class=subscriber-count>0</span> subscribers</small></div><div class="col-sm-7 text-right"><p><a rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=32px height=32px alt="Follow @jmmv on Mastodon">
+</a><a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=32px height=32px alt="Follow @jmmv on Twitter">
+</a><a href=/feed.xml><img src=/images/badges/feed-icon-28x28.png alt="RSS feed"></a></p></div></div></div></div><div class=row><div class=col><h2>Featured software</h2><ul><li class=overflow-ellipsis><a href=https://www.endbasic.dev/ target=_blank>EndBASIC: Online BASIC+DOS env</a></li><li class=overflow-ellipsis><a href=https://endtracker.azurewebsites.net/ target=_blank>EndTRACKER: Services for static sites</a></li></ul></div></div><div class=row><div class=col><h2>Featured posts</h2><ul><li class=overflow-ellipsis><a href=/2023/06/fast-machines-slow-machines.html>Fast machines, slow machines</a></li><li class=overflow-ellipsis><a href=/2022/12/endbasic-0.10.html>EndBASIC 0.10: Core language, evolved</a></li><li class=overflow-ellipsis><a href=/2022/10/bye-microsoft-hi-snowflake.html>Farewell, Microsoft; hello, Snowflake!</a></li><li class=overflow-ellipsis><a href=/2022/05/rust-is-hard-but-does-it-matter.html>Rust is hard, yes, but does it matter?</a></li><li class=overflow-ellipsis><a href=/2022/04/rust-traits-and-dependency-injection.html>Rust traits and dependency injection</a></li><li class=overflow-ellipsis><a href=/2022/03/a-year-on-windows-intro.html>A year on Windows: Introduction</a></li><li class=overflow-ellipsis><a href=/2021/04/always-be-quitting.html>Always be quitting</a></li><li class=overflow-ellipsis><a href=/2021/02/google-monorepos-and-caching.html>How does Google keep build times low?</a></li><li class=overflow-ellipsis><a href=/2020/12/google-no-clean-builds.html>How does Google avoid clean builds?</a></li><li class=overflow-ellipsis><a href=/2020/12/unit-testing-a-console-app.html>Unit-testing a console app (a text editor)</a></li><li class=overflow-ellipsis><a href=/essays.html#featured>More...</a></li></ul></div></div></div></div></div><footer class=container-fluid><div class=row><div class="col-4 order-2 text-right"><p class=float-right><a href=#>Back to top</a></p></div><div class="col-8 order-1 mr-auto"><p>Copyright 2004&ndash;2025
+Julio Merino</p></div></div></footer><script type=module>
+  import { addAnchorsToHeaders, addElementClasses, BatchClient } from "\/js\/main.0de73782e9e0fbcb4184fb5793949b3b0d0ada16455df89320415b4dcc052f88.js";
+
+  var batchClient = new BatchClient(SITE_ID);
+  batchClient.doAll({
+    put_request: true, get_comments: true, get_subscriber_count: true, get_votes: true });
+
+  window.voteThumbsUp = function() { batchClient.voteThumbsUp(); }
+  window.voteThumbsDown = function() { batchClient.voteThumbsDown(); }
+
+  window.postComment = function(...args) {
+    batchClient.postComment(...args);
+  };
+
+  addAnchorsToHeaders();
+  addElementClasses();
+</script></body></html>
