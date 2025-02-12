@@ -3,6 +3,7 @@ all: builder-pattern-for-tests
 all: cmdline-args-unix-vs-windows
 all: djgpp
 all: inline-array-go
+all: ioctls-rust
 all: netbsd-graphics-wo-x11
 all: powershell-cmdlet-params
 all: rest-api-go
@@ -13,6 +14,7 @@ clean: clean-builder-pattern-for-tests
 clean: clean-cmdline-args-unix-vs-windows
 clean: clean-djgpp
 clean: clean-inline-array-go
+clean: clean-ioctls-rust
 clean: clean-netbsd-graphics-wo-x11
 clean: clean-powershell-cmdlet-params
 clean: clean-rest-api-go
@@ -45,10 +47,16 @@ inline-array-go:
 clean-inline-array-go:
 	( cd inline-array-go && go clean )
 
+.PHONY: clean-ioctls-rust ioctls-rust
+ioctls-rust:
+	if [ "$$(uname -s)" = NetBSD ]; then ( cd ioctls-rust && cargo build ); fi
+clean-ioctls-rust:
+	( cd ioctls-rust && cargo clean )
+
 .PHONY: clean-netbsd-graphics-wo-x11 netbsd-graphics-wo-x11
 netbsd-graphics-wo-x11:
 	if [ "$$(uname -s)" = NetBSD ]; then ( cd netbsd-graphics-wo-x11 && make all ); fi
-netbsd-graphics-wo-x11-go:
+clean-netbsd-graphics-wo-x11:
 	( cd netbsd-graphics-wo-x11 && make clean )
 
 .PHONY: clean-powershell-cmdlet-params powershell-cmdlet-params
