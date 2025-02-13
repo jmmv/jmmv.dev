@@ -3,16 +3,6 @@ use std::io;
 use std::mem;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
-/**
- ioccom.h contains definition of _IOR
-
-#include <dev/wscons/wsconsio.h>
-#include <stdio.h>
-
-int main(void) {
-    printf("%x\n", WSDISPLAYIO_GINFO);
-}
- */
 const WSDISPLAYIO_GINFO: u64 = 0x40105741;
 
 #[repr(C)]
