@@ -1599,6 +1599,7 @@ class="form-control input-sm text-center my-1"/>
 &lt;p>You see, Samba is much easier to set up, but because NFS is the native file sharing protocol of Unix systems, I felt compelled to use it instead. However, if you opt for NFSv3 (the &amp;ldquo;easy default&amp;rdquo;), you are left with a system that has zero security: traffic travels unencrypted and unsigned, and the server trusts the client when the client asserts who is who. Madness for today&amp;rsquo;s standards. Yet, when you look around, people say &amp;ldquo;oh, but NFSv3 is fine if you trust the network!&amp;rdquo; But seriously, who trusts the network in this day and age?&lt;/p>
 &lt;p>You have to turn to NFSv4 &lt;em>and&lt;/em> combine it with Kerberos for a secure file sharing option. And let me tell you: the experience of setting these up and getting things to work is horrible, and the documentation out there is terrible. Most documents are operating-system specific so they only tell you what works when a specific server and a specific client talk to each other. Other documents just &lt;em>assume&lt;/em>, and thus omit, various important details of the configuration.&lt;/p>
 &lt;p>So. This article is my recollection of &amp;ldquo;lab notes&amp;rdquo; on how to set this whole thing up along with the necessary background to understand NFSv4 and Kerberos. My specific setup involes the Synology DS923+ as the NFSv4 server; Fedora, Debian, and FreeBSD clients; and the supporting KDC on a pfSense (or FreeBSD) box.&lt;/p>
+&lt;p>&lt;em>Update (June 3rd, 2025):&lt;/em> Following the &lt;a href="https://lobste.rs/s/7klzqj/demystifying_secure_nfs">discussion from Lobste.rs&lt;/a>, I&amp;rsquo;ve updated the text to resolve issues with the kernel/user name mapping.&lt;/p>
 &lt;div class="container action-highlight p-4 my-4 d-md-none">
 &lt;div class="row text-center">
 &lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
@@ -1837,7 +1838,7 @@ class="form-control input-sm text-center my-1"/>
 &lt;/li>
 &lt;li>On Fedora:
 &lt;ul>
-&lt;li>Run &lt;code>dnf install krb5-workstation&lt;/code>.&lt;/li>
+&lt;li>Run &lt;code>dnf install krb5-workstation nfs-utils&lt;/code>.&lt;/li>
 &lt;li>Edit the system-provided &lt;code>/etc/krb5.conf&lt;/code> file to register the realm and its settings. Use the file content shown above for the KDC as the template, or simply replace all placeholders for &lt;code>example.org&lt;/code> and &lt;code>EXAMPLE.ORG&lt;/code> with the name of your DNS domain and realm.&lt;/li>
 &lt;/ul>
 &lt;/li>
@@ -1851,7 +1852,7 @@ class="form-control input-sm text-center my-1"/>
 &lt;p>To do this, modify the SSH server&amp;rsquo;s (aka &lt;code>think&lt;/code>&amp;rsquo;s configuration) &lt;code>/etc/ssh/sshd_config&lt;/code> file and add &lt;code>GSSAPIAuthentication yes&lt;/code> so that it can leverage Kerberos for authentication. Restart the SSH service and give it a go: run &lt;code>kinit&lt;/code> on the client (&lt;code>x1nano&lt;/code>) and then see how &lt;code>ssh think&lt;/code> works without typing a password anymore.&lt;/p>
 &lt;p>But&amp;hellip; &lt;code>GSSAPIAuthentication&lt;/code>? What&amp;rsquo;s up with the cryptic name?&lt;/p>
 &lt;p>GSS-API stands for &lt;em>Generic Security Services API&lt;/em> and is the interface that programs use to communicate with the Kerberos implementation on the machine. GSS-API is not always enabled by default for a service, and the way you enable it is service-dependent. As you saw above, all we had to do for SSH was modify the &lt;code>sshd_config&lt;/code> file&amp;hellip; but for other services, you may need to take extra steps on the server and/or the client.&lt;/p>
-&lt;p>And, guess what, NFSv4 is weird on this topic. Not only we need service-specific principals for NFS, but we also need the &lt;code>gssd&lt;/code> &lt;em>daemon&lt;/em> to be running on the server &lt;em>and&lt;/em> the client machines. This is because NFSv4 is typically implemented inside the kernel, but not Kerberos, so the kernel needs a mechanism to &amp;ldquo;call into&amp;rdquo; Kerberos. And the kernel needs to do this to map kernel-level UIDs (a Unix kernel doesn&amp;rsquo;t know anything about &lt;em>usernames&lt;/em>) to Kerberos principals and vice-versa&amp;mdash;and that&amp;rsquo;s precisely what &lt;code>gssd&lt;/code> offers. So:&lt;/p>
+&lt;p>And, guess what, NFSv4 is weird on this topic. Not only we need service-specific principals for NFS, but we also need the &lt;code>gssd&lt;/code> &lt;em>daemon&lt;/em> to be running on the server &lt;em>and&lt;/em> the client machines. And we &lt;em>also&lt;/em> need a separate daemon to map Unix user names to Kerberos principals (&lt;code>idmapd&lt;/code> on Linux, &lt;code>nfsuserd&lt;/code> on FreeBSD). This is because NFSv4 is typically implemented inside the kernel, but not Kerberos, so the kernel needs a mechanism to &amp;ldquo;call into&amp;rdquo; Kerberos and that&amp;rsquo;s precisely what these daemons do:&lt;/p>
 &lt;ul>
 &lt;li>On the Synology NAS:
 &lt;ul>
@@ -1861,13 +1862,16 @@ class="form-control input-sm text-center my-1"/>
 &lt;li>On Linux:
 &lt;ul>
 &lt;li>You shouldn&amp;rsquo;t have to do anything if you correctly created the prerequisite &lt;code>/etc/krb5.keytab&lt;/code> early enough, but make sure the service is running with &lt;code>systemctl status rpc-gssd.service&lt;/code> (and know that this command only shows useful diagnostic logs when run as root).&lt;/li>
+&lt;li>Run &lt;code>systemctl start nfs-idmapd.service&lt;/code> if the service isn&amp;rsquo;t running.&lt;/li>
 &lt;li>Run &lt;code>systemctl start rpc-gssd.service&lt;/code> if the service isn&amp;rsquo;t running.&lt;/li>
 &lt;/ul>
 &lt;/li>
 &lt;li>On FreeBSD:
 &lt;ul>
-&lt;li>Add &lt;code>gssd_enable=YES&lt;/code> to &lt;code>/etc/rc.conf&lt;/code>.&lt;/li>
+&lt;li>Add &lt;code>gssd_enable=YES&lt;/code>, &lt;code>nfscbd_enable=YES&lt;/code>, and &lt;code>nfsuserd_enable=YES&lt;/code> to &lt;code>/etc/rc.conf&lt;/code>.&lt;/li>
 &lt;li>Run &lt;code>service gssd start&lt;/code>.&lt;/li>
+&lt;li>Run &lt;code>service nfscbd start&lt;/code>.&lt;/li>
+&lt;li>Run &lt;code>service nfsuserd start&lt;/code>.&lt;/li>
 &lt;/ul>
 &lt;/li>
 &lt;/ul>
@@ -1916,16 +1920,22 @@ class="form-control input-sm text-center my-1"/>
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Easy peasy, right? But wait&amp;hellip; why do all directories have &lt;code>777&lt;/code> permissions?&lt;/p>
 &lt;p>This is rather unfortunate and I&amp;rsquo;m not sure why the Synology does this. Logging onto the DS923+ via SSH, I inspected the shared directory and realized that it has various ACLs in place to control access to the directories, but somehow, the traditional Unix permissions are all &lt;code>777&lt;/code> indeed. Not great.&lt;/p>
 &lt;p>I used &lt;code>chmod&lt;/code> to fix the permissions for all directories to &lt;code>755&lt;/code> and things seem to be OK, but that doesn&amp;rsquo;t give me a lot of comfort because I do not know if the DSM will ever undo my changes or if I might have broken something.&lt;/p>
-&lt;p>There might be one more problem though, which I did not encounter on Debian clients but that showed up later in Fedora and FreeBSD clients:&lt;/p>
+&lt;p>There might be one more problem though, which I did not encounter on Debian clients but that showed up later in Fedora clients. The problem looks like this:&lt;/p>
 &lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">x1nano$ ls -l /shared
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">total 0K
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxr-xr-x 1 nobody nogroup 0 Sep 27 21:11 admin
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxr-xr-x 1 nobody nogroup 0 Nov 2 20:41 jmmv
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxr-xr-x 1 nobody nogroup 0 Oct 8 16:59 manager
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note how all entries are owned by &lt;code>nobody:nogroup&lt;/code> which is&amp;hellip; not correct. Yet the right permissions are in effect: accessing the &lt;code>jmmv&lt;/code> directory is only possible by the &lt;code>jmmv&lt;/code> user as expected. Which means that the user mapping between Kerberos principals and local users is working correctly on the server&amp;hellip; but not on the client, where &lt;code>stat&lt;/code> isn&amp;rsquo;t returning the right information.&lt;/p>
-&lt;p>I do not yet know why this issue happens, especially because I see no material differences between my Fedora and Debian configurations.&lt;/p>
-&lt;h1 id="mounting-nfsv4-from-freebsd">Mounting NFSv4 from FreeBSD&lt;/h1>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note how all entries are owned by &lt;code>nobody:nogroup&lt;/code> which is&amp;hellip; not correct. Yet the right access control is in effect: the &lt;code>jmmv&lt;/code> directory is only accessible by the &lt;code>jmmv&lt;/code> user as expected from the earlier listing. Which means that the user mapping between Kerberos principals and local users is working correctly on the server&amp;hellip; but not on the client where &lt;code>stat&lt;/code> is not returning the right information.&lt;/p>
+&lt;p>This can happen for two reasons. The first is that the &lt;code>idmapd&lt;/code> service might not be running, but we already covered starting it up earlier. The second is that the client might not have the right domain name for NFSv4. You can check this with &lt;code>sudo nfsidmap -d&lt;/code>. If the output doesn&amp;rsquo;t match the name of the DNS domain, update the hostname to include a domain name portion:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">x1nano# nfsidmap -d
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">localdomain
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano# hostnamectl set-hostname --static x1nano.meroh.net
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano# nfsidmap -d
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">meroh.net
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano# █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="mounting-nfsv4-from-freebsd">Mounting NFSv4 from FreeBSD&lt;/h1>
 &lt;p>We now have the Linux clients running just fine so it is time to pivot to FreeBSD. If we try a similar &amp;ldquo;trivial&amp;rdquo; mount command, we get an error:&lt;/p>
 &lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">think# mount -t nfs nas:/volume1/homes /shared
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">mount_nfs: nmount: /shared: Permission denied
@@ -1942,11 +1952,12 @@ class="form-control input-sm text-center my-1"/>
 &lt;p>The reason for the failure is that we are trying to mount the share as root but&amp;hellip; we don&amp;rsquo;t have a principal for this user so root cannot obtain an NFSv4 service ticket to contact the NAS. So&amp;hellip; do we need to create a principal for &lt;code>root&lt;/code>? No! We do not need to provide user credentials when mounting an NFSv4 share (unlike what you might be used to with Windows shares).&lt;/p>
 &lt;p>What Kerberized NFSv4 needs during the mount operation is a host ticket: the NFSv4 server checks if the client &lt;em>machine&lt;/em> is allowed to access the server and, if so, exposes the file system to it. This is done using the client&amp;rsquo;s host principal. Once the file system is mounted, however, all operations against the share carry the ticket of the &lt;em>user&lt;/em> requesting the operation.&lt;/p>
 &lt;p>Knowing this, we need to &amp;ldquo;help&amp;rdquo; FreeBSD and tell it that it must use the host&amp;rsquo;s principal when mounting the share. Why this isn&amp;rsquo;t the default, I don&amp;rsquo;t know, particularly because non-root users are not allowed to mount file systems in the default configuration. Anyhow. The &lt;code>gssname=host&lt;/code> option rescues us:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">think# mount -t nfs -o nfsv4,sec=krb5p,gssname=host nas:/volume1/homes /shared
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">think# mount -t nfs -o nfsv4,sec=krb5p,gssname=host,pnfs nas:/volume1/homes /shared
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">think# █
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Which finally allows the mount operation to succeed. We should persist all this knowledge into an &lt;code>/etc/fstab&lt;/code> entry like this one:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">nas:/volume1/homes /shared nfs rw,nfsv4,gssname=host,sec=krb5p 0 0
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="verifying-encryption">Verifying encryption&lt;/h1>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">nas:/volume1/homes /shared nfs rw,nfsv4,gssname=host,sec=krb5p,pnfs 0 0
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Lastly, note that at the time of this writing with FreeBSD 14.2-STABLE, the username to Kerberos principal mapping provided by &lt;code>nfsuserd&lt;/code> may not work correctly and you may end up seeing &lt;code>nobody:nogroup&lt;/code> as the owner of all files on the NFSv4 share. This can be caused by a domain name mismatch as explained in the Linux case&amp;mdash;which you can resolve by setting &lt;code>nfsuserd_flags=&amp;quot;-domain meroh.net&amp;quot;&lt;/code> in &lt;code>/etc/rc.conf&lt;/code>&amp;mdash;or by &lt;a href="https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=282620">an actual kernel bug&lt;/a> I had to diagnose. Which speaks to the sheer complexity of NFSv4&amp;hellip;&lt;/p>
+&lt;h1 id="verifying-encryption">Verifying encryption&lt;/h1>
 &lt;p>Color me skeptical, but everything I described above seems convoluted and fragile, so I did not trust that my setup was sound. Consequently, I wanted to verify that the traffic on the network was actually encrypted.&lt;/p>
 &lt;p>To verify this, I installed Wireshark and ran a traffic capture against the NAS with &lt;code>host nas&lt;/code> as the filter. Then, from the client, I created a text file on the shared folder and then read it. Inspecting the captured packets confirmed that the traffic is indeed flowing in encrypted form. I could not find the raw file content anywhere in the whole trace (but I could when using anything other than &lt;code>krb5p&lt;/code>).&lt;/p>
 &lt;figure>
@@ -1963,9 +1974,6 @@ class="form-control input-sm text-center my-1"/>
 &lt;ul>
 &lt;li>
 &lt;p>Kerberos claims to be an authentication system only, not an authorization system. However, the protocol I described above separates the TGT from the TGS, and this separation makes it sound like Kerberos could also implement authorization policies. Why doesn&amp;rsquo;t it do these?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The fact that Fedora and FreeBSD show &lt;code>nobody&lt;/code> for file ownership even when they seems to do the right thing regarding when talking to the NFSv4 server sound like a bug either in the code or in my configuration. Which is it?&lt;/p>
 &lt;/li>
 &lt;li>
 &lt;p>Having to type &lt;code>kinit&lt;/code> after logging into the machine is annoying. I remember that, back at Google when we used Kerberos and NFS&amp;mdash;those are long gone days&amp;mdash;the right tickets would be granted after logging in or unlocking a workstation. This must have been done with the Kerberos PAM modules&amp;hellip; but I haven&amp;rsquo;t gotten them to do this yet and I&amp;rsquo;m not sure why.&lt;/p>
