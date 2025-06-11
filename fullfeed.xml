@@ -1,4 +1,144 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Wed, 11 Jun 2025 10:00:00 -0400</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Beginning 3D printing</title><link>https://jmmv.dev/2025/05/beginning-3d-printing.html</link><pubDate>Wed, 28 May 2025 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/05/beginning-3d-printing.html</guid><description>&lt;p>Hello readers and sorry for the 2-month radio silence. I&amp;rsquo;ve been pretty busy at work, traveling during school breaks, hacking on EndBASIC when time permitted, and&amp;hellip; as of two weeks ago&amp;hellip; tinkering with 3D printing as a complete beginner. So, today, I&amp;rsquo;d like to walk you through the latter because it has been a really fun and rewarding journey, albeit frustrating at times.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Wed, 11 Jun 2025 10:00:00 -0400</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Whatever happened to sandboxfs?</title><link>https://jmmv.dev/2025/06/whatever-happened-to-sandboxfs.html</link><pubDate>Wed, 11 Jun 2025 10:00:00 -0400</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/06/whatever-happened-to-sandboxfs.html</guid><description>&lt;p>Back in 2017&amp;ndash;2020, while I was on the Blaze team at Google, I took on a 20% project that turned into a bit of an obsession: &lt;a href="https://github.com/bazelbuild/sandboxfs">sandboxfs&lt;/a>. Born out of my work supporting iOS development, it was my attempt to solve a persistent pain point that frustrated both internal teams and external users alike: Bazel&amp;rsquo;s &lt;a href="https://github.com/bazelbuild/bazel/issues/8230">poor sandboxing performance on macOS&lt;/a>.&lt;/p>
+&lt;p>sandboxfs was a user-space file system designed to efficiently create virtual file hierarchies backed by real files&amp;mdash;a faster alternative to the &amp;ldquo;symlink forests&amp;rdquo; that Bazel uses to prepare per-action sandboxes. The idea was simple: if we could lower sandbox creation overhead, we could make Bazel&amp;rsquo;s sandboxing actually usable on macOS.&lt;/p>
+&lt;p>Unfortunately, things didn&amp;rsquo;t play out as I dreamed. Today, sandboxfs is effectively abandoned, and macOS sandboxing performance remains an unsolved problem. In this post, I&amp;rsquo;ll walk you through why I built sandboxfs, what worked, what didn&amp;rsquo;t, and why&amp;mdash;despite its failure&amp;mdash;I still think the core idea holds promise.&lt;/p>
+&lt;h1 id="sandboxing-101">Sandboxing 101&lt;/h1>
+&lt;p>To understand how sandboxfs was intended to help with sandboxed build performance, we need to first dive into how Bazel runs build actions. For those unfamiliar with Bazel&amp;rsquo;s terminology, a &lt;em>build action&lt;/em> or &lt;em>action&lt;/em> is an individual build step, like a single compiler or linker execution.&lt;/p>
+&lt;p>To run actions, Bazel uses &lt;a href="/2019/12/bazel-strategies.html">the strategies abstraction&lt;/a> to decouple action tracking in the build graph from how those actions are actually executed. The default strategy for local builds is the &lt;code>sandboxed&lt;/code> strategy, which isolates the processes that an action runs from the rest of the system. The goal is to make these processes behave in a deterministic manner.&lt;/p>
+&lt;p>The sandboxed strategy achieves action isolation via two different mechanisms:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>The use of kernel-level sandboxing features to restrict what the action can do (limit network access, limit reads and writes to parts of the file system, etc.). One such mechanism is &lt;a href="/2019/11/macos-sandbox-exec.html">sandbox-exec on macOS&lt;/a>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>The creation of an execution root (or &lt;em>execroot&lt;/em>) in which the action runs. The execroot contains the minimum set of files required for the action to run: namely, the toolchain and the action inputs (source files, toolchain dependencies, etc.). One way to do this is via symlink forests.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="symlink-forests">Symlink forests&lt;/h1>
+&lt;p>The default mechanism to create an execroot in Bazel is to leverage &lt;em>symlink forests&lt;/em>: file hierarchies that use symlinks to refer to files that live elsewhere.&lt;/p>
+&lt;p>Creating a symlink forest is an operation that scales linearly with the number of files in it, and each symlink creation requires &lt;em>at least&lt;/em> two system calls: one to create the symlink and another to delete it when the sandbox is torn down. Plus symlink forests typically have complex directory structures, so there are extra &lt;code>mkdir&lt;/code> and &lt;code>rmdir&lt;/code> operations to handle all intermediate path components. Doing thousands of these operations may only take milliseconds, but&amp;hellip; overheads in action execution &lt;a href="/2018/04/bazel-xcode-locations-cache.html">quickly compound&lt;/a> and turn into visible build slowdowns.&lt;/p>
+&lt;p>To illustrate what this means in practice, consider this target:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">cc_library&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;foo&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;foo.c&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This target makes Bazel spawn one action to compile &lt;code>foo.c&lt;/code> into &lt;code>foo.o&lt;/code>. Said action needs to: run the compiler; read the &lt;code>foo.c&lt;/code> file; and access any system includes that &lt;code>foo.c&lt;/code> may reference. Thus, the sandbox used to run this action may look like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">.../sandbox/external/cc/bin/clang -&amp;gt; /usr/bin/clang
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">.../sandbox/external/cc/include/stdio.h -&amp;gt; /usr/include/stdio.h
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">.../sandbox/external/cc/include/stdlib.h -&amp;gt; /usr/include/stdlib.h
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">.../sandbox/libfoo/foo.c -&amp;gt; /home/jmmv/sample/libfoo/foo.c
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Having this symlink forest in place, Bazel would run the equivalent of this command to perform the compilation:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">cd .../sandbox &amp;amp;&amp;amp; ./external/cc/bin/clang -nostdinc -I./external/cc/include -o libfoo/foo.o -c libfoo/foo.c
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>When Bazel runs this, it expects that &lt;code>clang&lt;/code> will only access files in the &lt;code>external/cc/include&lt;/code> directory it previously created inside the sandbox. But because reality may not match expectations, Bazel wraps the command by whatever technology the host OS provides to enforce sandboxing.&lt;/p>
+&lt;h1 id="motivation-for-sandboxfs">Motivation for sandboxfs&lt;/h1>
+&lt;p>Creating symlink forests on an action basis was very expensive on macOS&amp;hellip; or so everyone said. When I arrived to the Blaze team, sandboxing had already been disabled by default on macOS builds and the rationale behind that was that &amp;ldquo;symlinks were too slow&amp;rdquo;.&lt;/p>
+&lt;p>There were some flaws with this claim:&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>It was impossible to prove. I ran many microbenchmarks to exercise symlink creations and deletions in large amounts and could never observe a significant performance degradation compared to Linux.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Building Bazel with itself, with sandboxing enabled, did not show any sort of substantial performance loss. Yet Bazel has relatively large C++ and Java actions in its own build so you would have expected to see &lt;em>something&lt;/em>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>If macOS was truly bad at something as fundamental as &amp;ldquo;symlink management&amp;rdquo;, you&amp;rsquo;d imagine that &lt;em>someone else&lt;/em> would have found the issue and asked about it online (as it often happens with &lt;a href="https://www.youtube.com/watch?v=qbKGw8MQ0i8">misguided NTFS complaints&lt;/a>). But there were none to be found.&lt;/p>
+&lt;/li>
+&lt;/ol>
+&lt;p>Still, I devised the sandboxfs plan right after developing &lt;a href="https://github.com/jmmv/sourcachefs">sourcachefs&lt;/a>&amp;mdash;another short-lived stint in file systems development&amp;mdash;and I charged ahead. I wanted sandboxfs to exist because it did solve an obvious scalability issue (issuing tens of thousands of syscalls per symlink forest creation is &lt;em>not&lt;/em> free) and because I wanted sanboxfs to exist &lt;a href="/2017/02/introducing-pkg_comp-2.0.html">for &lt;code>pkg_comp&lt;/code>&amp;rsquo;s own benefit&lt;/a>.&lt;/p>
+&lt;h1 id="what-does-sandboxfs-do">What does sandboxfs do?&lt;/h1>
+&lt;p>sandboxfs replaces symlink forests with a virtual file hierarchy that can be materialized in constant time. Here is the flow of operations:&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>Bazel generates an in-memory manifest of the execroot structure and which files are backed by which other files.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Bazel sends this manifest to sandboxfs via an RPC (which means we have at least one system call to send a message through a socket and a couple of context switches).&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>sandboxfs updates its in-memory representation of the file system and exposes a new sandbox at its mount point.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Bazel runs the action in the new sandbox.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>sandboxfs catches all I/O in the sandbox and redirects it to the relevant real backing files.&lt;/p>
+&lt;/li>
+&lt;/ol>
+&lt;p>It&amp;rsquo;s this last point that presents the trade off behind sandboxfs, because sandboxfs doesn&amp;rsquo;t make all costs magically go away. Instead of paying the cost of setting up the sandbox upfront via many system calls, we pay a different cost over all reads and writes that go through the virtual file system. The original hypothesis was that this would be worth it, because most (but not all) build actions are &lt;em>not&lt;/em> I/O bound, and most build actions do &lt;em>not&lt;/em> access all the files that are mapped into their sandbox.&lt;/p>
+&lt;p>Going back to the example from before, Bazel would send an RPC like this to sandboxfs:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;CreateSandbox&amp;#34;: {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Path: &amp;#34;/736&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Mappings: {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;external/cc/bin/clang&amp;#34;: &amp;#34;/usr/bin/clang&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;external/cc/include/stdio.h&amp;#34;: &amp;#34;/usr/include/stdio.h&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;external/cc/include/stdlib.h&amp;#34;: &amp;#34;/usr/include/stdlib.h&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;libfoo/foo.c&amp;#34;: &amp;#34;/home/jmmv/sample/libfoo/foo.c&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> },
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> }
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And this would cause the following file hierarchy to be immediately available under the mount point:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">.../sandboxfs/736/external/cc/bin/clang
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">.../sandboxfs/736/external/cc/include/stdio.h
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">.../sandboxfs/736/external/cc/include/stdlib.h
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">.../sandboxfs/736/libfoo/foo.c
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note that I did &lt;em>not&lt;/em> write what these files point to in this snippet because sandboxfs does &lt;em>not&lt;/em> use symlinks. sandboxfs exposes the files as if they were real files, and it does that to prevent tools from resolving symlinks and discovering sibling files they aren&amp;rsquo;t supposed to sees. From the point of view of &lt;code>clang&lt;/code> when it runs, everything it sees under &lt;code>.../sandboxfs/736/external/cc/include/stdio.h&lt;/code> is &lt;em>a copy&lt;/em> of whatever is in &lt;code>/usr/include/stdio.h&lt;/code>.&lt;/p>
+&lt;h1 id="what-went-well">What went well&lt;/h1>
+&lt;p>Overall, sandboxfs was a fun exercise and a great journey to learn more about Rust, FUSE and file systems, and macOS internals:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>I got to learn Rust. I was lucky to find a random coworker at Google that offered to review my code, and his input was an invaluable learning resource for me.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>I got to learn about FUSE in quite a bit of detail. I had already played with it before, but by working on sandboxfs, I had to debug some gnarly problems.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>I got to experience rewriting pre-existing Go code in Rust (because the original sandboxfs implementation was in Go). This was an enlightening exercise because, as I tried to convert the code &amp;ldquo;verbatim&amp;rdquo;, I discovered many subtle concurrency bugs and data races that Rust just didn&amp;rsquo;t let me write.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>The initial performance evaluation of using sandboxfs for real iOS builds &lt;a href="https://blog.bazel.build/2018/04/13/preliminary-sandboxfs-support.html">showed promise&lt;/a>: I observed that a specific iOS app &amp;ldquo;only&amp;rdquo; got a 55% performance penalty when using sandboxfs instead of the 270% penalty it got from symlink forests. A good win, but insufficient to justify enabling sandboxing by default.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="what-went-wrong">What went wrong&lt;/h1>
+&lt;p>Many things really. Let&amp;rsquo;s start with wrong assumptions:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>Symlink forest creation may not have been the biggest problem in sandboxing performance. As I mentioned in the opening, microbenchmarking this area of macOS didn&amp;rsquo;t show obvious slowdowns and building Bazel with itself didn&amp;rsquo;t show major performance differences with and without sandboxing. But iOS builds suffered massively from sandboxing, and the problem was elsewhere: the Objective C and Swift compilers cache persistent state on disk, and sandboxing was preventing such state from actually being persisted.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>The need for sandboxing on interactive builds was questionable. Yes, it&amp;rsquo;d have been neat to have it, but in practice, the benefits are little: if your CI builds are powered by remote execution, which tends to happen when you use Bazel, then the implicit sandboxing of remote execution gives you almost all protections that you&amp;rsquo;d get from using sandboxing.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>There were also implementation problems:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>The original implementation of sandboxfs was written in Go, and I hit performance issues with the way &lt;a href="https://github.com/bazil/fuse">bazil/fuse&lt;/a> dealt with FUSE operations.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>The previous was fixed by rewriting sandboxfs in Rust, but then I hit performance problems with the JSON-based RPC interface that sandboxfs had grown in a rush. Fixing this properly required a deep redesign to use path compression and to bypass JSON altogether. But I didn&amp;rsquo;t get to this because&amp;hellip;&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;a href="/2020/01/osxfuse-hardlinks-dladdr.html">Kernel bugs / limitations&lt;/a> in OSXFUSE erased the possibility of implementing a critical performance optimization.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>And then I also hit unexpected changes in the ecosystem:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>Apple &lt;a href="https://support.apple.com/en-ca/guide/deployment/depa5fb8376f/web">deprecated kernel extensions&lt;/a>, making the use of FUSE really convoluted and its future uncertain. Apple provided alternate APIs to implement file systems in user space, but those were designed for iCloud-style services and were/are not suitable for sandboxfs.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>At around the same time in 2019, &lt;a href="https://colatkinson.site/macos/fuse/2019/09/29/osxfuse/">OSXFUSE went closed source&lt;/a>. This meant that relying on it for any future work was not well-advised. There were still code dumps for older versions, but that was not something I was able to maintain.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Because of the previous two, I would have had to expose the sandboxfs virtual file system over NFSv4 instead of FUSE. &lt;a href="https://github.com/buildbarn/bb-clientd">Buildbarn&amp;rsquo;s bb-clientd&lt;/a> provides a dual FUSE/NFSv4 implementation, which proves that this is technically doable, but adding an NFSv4 frontend to sandboxfs meant having to rewrite it from scratch. Plus I&amp;rsquo;m not sure we&amp;rsquo;d have gotten good-enough performance if we went this route.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>At that point in mid-2019, given the other problems illustrated above&amp;hellip; I had no interest nor time to rewrite sandboxfs &amp;ldquo;correctly&amp;rdquo; (remember, this was a 20% project at first, which unsurprisingly turned into an 120% project). It&amp;rsquo;d have been nice to do though, because &amp;ldquo;now I know how to do it right&amp;rdquo;.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="is-sandboxfs-needed">Is sandboxfs needed?&lt;/h1>
+&lt;p>I still believe that Bazel needs something like sandboxfs for efficient sandboxed builds. As I mentioned earlier, creating symlink forests does not scale for action execution, and with ever-growing toolchain sizes, the problem is getting worse over time. However, the benefits of local sandboxing are unclear if you are already using remote execution.&lt;/p>
+&lt;p>That said, people keep complaining about poor Bazel sandboxing performance on macOS, which means there still is a clear user need to make this better. And I&amp;rsquo;m not convinced the various &amp;ldquo;workarounds&amp;rdquo; that have been tried in this area (like reusing sandboxes) are sound designs nor that they can actually deliver on their promise.&lt;/p>
+&lt;p>In my case&amp;hellip; I don&amp;rsquo;t run Bazel on Mac anymore at work. What&amp;rsquo;s more: I do not even use a Mac for personal reasons these days, which means my ulterior motive to use sandboxfs in &lt;code>pkg_comp&lt;/code> is gone. But! If you wanted to redesign sandboxfs from scratch, let&amp;rsquo;s talk!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-06-11-sandboxfs-cover-concept.png" length="7119929" type="image/jpeg"/></item><item><title>Beginning 3D printing</title><link>https://jmmv.dev/2025/05/beginning-3d-printing.html</link><pubDate>Wed, 28 May 2025 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/05/beginning-3d-printing.html</guid><description>&lt;p>Hello readers and sorry for the 2-month radio silence. I&amp;rsquo;ve been pretty busy at work, traveling during school breaks, hacking on EndBASIC when time permitted, and&amp;hellip; as of two weeks ago&amp;hellip; tinkering with 3D printing as a complete beginner. So, today, I&amp;rsquo;d like to walk you through the latter because it has been a really fun and rewarding journey, albeit frustrating at times.&lt;/p>
 &lt;p>You&amp;rsquo;d think that to use a 3D printer, you&amp;rsquo;d design a 3D model and then&amp;hellip; just&amp;hellip; send it to the printer? That&amp;rsquo;s almost true, but it ignores the realities of producing a physical object from an &amp;ldquo;abstract&amp;rdquo; model: when designing such a model, you need to take into account the limitations of 3D printing and you need to translate your model into something the 3D printer can understand via a process called &lt;em>slicing&lt;/em>.&lt;/p>
 &lt;p>Let&amp;rsquo;s take a brief peek at all of these steps. I&amp;rsquo;ll assume you are a complete beginner like I am. The pictures I&amp;rsquo;ll show are all for a &amp;ldquo;first project&amp;rdquo; I did to remake the bars of a bird cage I have, as the birds had fully destroyed the previous ones.&lt;/p>
 &lt;h1 id="step-1-modeling">Step 1: Modeling&lt;/h1>
@@ -2938,180 +3078,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;li>&lt;a href="https://www.amazon.com/Windows-Internals-Part-architecture-management/dp/0735684189?crid=2F7UR8S48RP6O&amp;amp;dib=eyJ2IjoiMSJ9.p9cBb_-Q8GjuK0z0kDLKG6xoExPM_2QWt_jn0PlqVBSWYNyqRp2Cd7MHXFeQ4EiRACaX_Y_9xzECC0YpECzSl5kCBD3u1KUPduAgmnO732G9aqw1aLdQszw8LIXBOE1cYvOf3KYQmQ5vdFV6i4eFOttVvIa2XerkHVGiPd1OzTk32tEOchCbnUqpzW3QqCG7AjEmmKHFGuo5T2_UQDUERaSVRa26oAZHYuePCzDrwbY.bcHnZQWFYjmL64ZRnMieVsUH5JVx-T-WY88kj8V-uno&amp;amp;dib_tag=se&amp;amp;keywords=windows+internals&amp;amp;qid=1725808358&amp;amp;sprefix=windows+internals%2Caps%2C155&amp;amp;sr=8-1&amp;amp;linkCode=ll1&amp;amp;tag=blogsystem5-20&amp;amp;linkId=08d00ee830fe99b6e648add99e1b64c5&amp;amp;language=en_US&amp;amp;ref_=as_li_ss_tl">Windows Internals, part 1, 7th edition&lt;/a>.&lt;/li>
 &lt;li>&lt;a href="https://www.amazon.com/Windows-Internals-Part-2-7th/dp/0135462401?pd_rd_w=nmV0o&amp;amp;content-id=amzn1.sym.3858a394-39a9-4946-90e6-86a3153d2546&amp;amp;pf_rd_p=3858a394-39a9-4946-90e6-86a3153d2546&amp;amp;pf_rd_r=FHEDS8GZCH0T6TA52GQD&amp;amp;pd_rd_wg=VUb9D&amp;amp;pd_rd_r=9f324aa8-7d91-4b6f-8c48-a8f09f1e8717&amp;amp;pd_rd_i=0135462401&amp;amp;psc=1&amp;amp;linkCode=ll1&amp;amp;tag=blogsystem5-20&amp;amp;linkId=a174f72e73013533f3ee8ca3f2cedd1c&amp;amp;language=en_US&amp;amp;ref_=as_li_ss_tl">Windows Internals, part 2, 7th edition&lt;/a>.&lt;/li>
 &lt;li>&lt;a href="https://www.amazon.com/Design-Implementation-FreeBSD-Operating-System/dp/0321968972?crid=23A95KGH3XOCE&amp;amp;dib=eyJ2IjoiMSJ9.WhRSQ2C6OFnyaT9IERCxYyLspyOoCkFSreJbs2Nia7zcYcNs68qdHuNBiIvERx987eDwl_H7YrMkTIj1575PGQ.orMCRh-1sVoQgFKgV2RtSiAxU3OA5fYRt6oAI3SV-p0&amp;amp;dib_tag=se&amp;amp;keywords=the+design+and+implementation+of+freebsd&amp;amp;qid=1725850081&amp;amp;s=books&amp;amp;sprefix=the+design+and+implementation+of+freebsd%2Cstripbooks%2C136&amp;amp;sr=1-1&amp;amp;linkCode=ll1&amp;amp;tag=blogsystem5-20&amp;amp;linkId=ac0d39d3f598c50cd1d9dc650d2b4dd7&amp;amp;language=en_US&amp;amp;ref_=as_li_ss_tl">The Design and Implementation of the FreeBSD operating system, 2nd edition&lt;/a>.&lt;/li>
-&lt;/ul></description><enclosure url="https://jmmv.dev/images/2024-09-09-windows-nt-vs-unix-design.jpg" length="1049554" type="image/jpeg"/></item><item><title>Picking glibc versions at runtime</title><link>https://jmmv.dev/2024/08/glibc-versions-runtime.html</link><pubDate>Sun, 11 Aug 2024 10:15:00 +0200</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2024/08/glibc-versions-runtime.html</guid><description>&lt;p>In a recent work discussion, I came across an argument that didn&amp;rsquo;t sound quite right. The claim was that we needed to set up containers in our developer machines in order to run tests against a modern glibc. The justifications were that using &lt;code>LD_LIBRARY_PATH&lt;/code> to load a different glibc didn&amp;rsquo;t work and statically linking glibc wasn&amp;rsquo;t possible either.&lt;/p>
-&lt;p>But&amp;hellip; running a program against a version of glibc that&amp;rsquo;s different from the one installed on the system seems like a pretty standard requirement, doesn&amp;rsquo;t it? Consider this: how do the developers of glibc test their changes? glibc has existed for much longer than containers have. And before containers existed, they surely weren&amp;rsquo;t testing glibc changes by installing modified versions of the library over the system-wide one and YOLOing it.&lt;/p>
-&lt;p>So. What options do we really have? To answer this question, we need to look at how dynamic binaries work and what glibc is.&lt;/p>
-&lt;h1 id="static-binaries">Static binaries&lt;/h1>
-&lt;p>Static binaries are binaries whose program code is all contained in one executable. Such binaries can access system services via system calls&amp;mdash;or else their utility would be minimal because they wouldn&amp;rsquo;t be able to interact with the OS&amp;mdash;but their binary code is, in a sense, &amp;ldquo;complete&amp;rdquo;: what you see in the executable is exactly what gets laid out in memory for execution.&lt;/p>
-&lt;p>Here is how a sample static binary looks like. This is for a &amp;ldquo;hello world&amp;rdquo; program written in Go, which was the easiest thing to put together because Go is designed to bypass the C library &lt;a href="https://utcc.utoronto.ca/~cks/space/blog/programming/Go116OpenBSDUsesLibc">almost everywhere&lt;/a>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ file hello_go
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hello_go: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=2H_kXH_UFAOR5K6ibAke/aj_2VBvakhN2KujNxtMN/K5TtKP8HHiX65VdbA19s/KxdoZHQEiOxCEbwRE346, with debug_info, not stripped
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In the above, note that &lt;code>file&lt;/code> claims that our sample &lt;code>hello_go&lt;/code> program is &lt;em>statically linked&lt;/em>.&lt;/p>
-&lt;p>When we ask the shell to run this &lt;code>hello_go&lt;/code> binary, the shell forks a new process and uses the &lt;code>exec(2)&lt;/code> family of system calls to replace the running image of the process with the content of &lt;code>hello_go&lt;/code>. And because &lt;code>hello_go&lt;/code> is statically linked, the text segment of the binary is loaded verbatim into the process.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-08-11-glibc-versions-runtime-static.png" />
-&lt;figcaption>Representation of how a static binary is directly mapped into a process when executed.&lt;/figcaption>
-&lt;/figure>
-&lt;h1 id="dynamic-binaries">Dynamic binaries&lt;/h1>
-&lt;p>Let&amp;rsquo;s compare the above to a dynamically-linked binary by looking at the same &amp;ldquo;hello world&amp;rdquo; program written in C and linked against glibc:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ file hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hello_c: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=feeb95b014ef8151780e23fc7ca15de0599f05df, for GNU/Linux 3.2.0, not stripped
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note that &lt;code>file&lt;/code> now claims that our sample &lt;code>hello_c&lt;/code> program is &lt;em>dynamically linked&lt;/em> and, indeed, if we look at its libraries&amp;mdash;quick reminder: &lt;a href="/2023/07/ldd-untrusted-binaries.html">don&amp;rsquo;t use &lt;code>ldd&lt;/code> on untrusted executables&lt;/a>!&amp;mdash;we see that glibc (&lt;code>libc.so.6&lt;/code>) is there:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ ldd hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> linux-vdso.so.1 (0x00007f54f25aa000)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> libc.so.6 =&amp;gt; /lib64/libc.so.6 (0x00007f54f239b000)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> /lib64/ld-linux-x86-64.so.2 (0x00007f54f25ac000)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>But wait a second. There is more than just &lt;code>libc.so.6&lt;/code> in the output of &lt;code>ldd&lt;/code>. In particular, there is this other &lt;code>/lib64/ld-linux-x86-64.so.2&lt;/code> &amp;ldquo;library&amp;rdquo; and, if you pay close attention to the earlier output of &lt;code>file&lt;/code>, you&amp;rsquo;ll note that it claims that this is an &lt;em>interpreter&lt;/em>. Why is there an &amp;ldquo;interpreter&amp;rdquo; if we are running machine code?! Did they lie to us when they said C was a compiled language?&lt;/p>
-&lt;p>Not so fast, no. &amp;ldquo;Interpreter&amp;rdquo; in this case should be read as &amp;ldquo;loader&amp;rdquo;, but the &amp;ldquo;interpreter&amp;rdquo; word comes from the nomenclature of the ELF headers stored in the program:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ readelf -l hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Elf file type is EXEC (Executable file)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Entry point 0x401040
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">There are 13 program headers, starting at offset 64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Program Headers:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Type Offset VirtAddr PhysAddr
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> FileSiz MemSiz Flags Align
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> INTERP 0x0000000000000318 0x0000000000400318 0x0000000000400318
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 0x000000000000001c 0x000000000000001c R 0x1
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>To understand what this interpreter thing is all about, we need to look at what a dynamically-linked executable is. In essence, the program code in the binary is not &lt;em>complete&lt;/em>: the code contains &amp;ldquo;gaps&amp;rdquo; in it that need to be filled with references to portions of code supplied by other libraries before it can begin executing. We can peek into what these &amp;ldquo;gaps&amp;rdquo; are:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ readelf -r hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Relocation section &amp;#39;.rela.dyn&amp;#39; at offset 0x4c0 contains 2 entries:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Offset Info Type Sym. Value Sym. Name + Addend
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">000000403fd8 000100000006 R_X86_64_GLOB_DAT 0000000000000000 __libc_start_main@GLIBC_2.34 + 0
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">000000403fe0 000300000006 R_X86_64_GLOB_DAT 0000000000000000 __gmon_start__ + 0
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Relocation section &amp;#39;.rela.plt&amp;#39; at offset 0x4f0 contains 1 entry:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Offset Info Type Sym. Value Sym. Name + Addend
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">000000404000 000200000007 R_X86_64_JUMP_SLO 0000000000000000 puts@GLIBC_2.2.5 + 0
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;code>readelf&lt;/code> tells us that the &lt;code>hello_c&lt;/code> binary has three different &amp;ldquo;relocations&amp;rdquo;: in other words, it has three different &amp;ldquo;gaps&amp;rdquo; that need to be patched at runtime with the address of the code that supplies those symbols. The program &lt;em>cannot run&lt;/em> without those being filled in first. So if it cannot begin executing before those references are resolved, how does the program run?&lt;/p>
-&lt;p>You might think that the kernel is somehow responsible for dealing with dynamic libraries, but that&amp;rsquo;s not the case. Dynamic libraries are a user-space concept and this is precisely where the interpreter comes into play.&lt;/p>
-&lt;p>When we ask the kernel to &lt;code>exec(2)&lt;/code> a dynamically-linked ELF binary, the kernel loads the &lt;em>interpreter&lt;/em> into the process image, &lt;em>not&lt;/em> the code of the binary, and passes the path of the binary to the interpreter.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-08-11-glibc-versions-runtime-dynamic.png" />
-&lt;figcaption>Representation of how a dynamic binary is loaded into memory with the help of the dynamic linker, along with glibc and the fixup of a relocation.&lt;/figcaption>
-&lt;/figure>
-&lt;p>The interpreter, &lt;a href="https://man7.org/linux/man-pages/man8/ld.so.8.html">&lt;code>ld-linux.so&lt;/code>&lt;/a> in our case, is then in charge of setting up the remaining of the process by loading all required shared libraries into the process and then resolving relocations (&amp;ldquo;filling the gaps&amp;rdquo;) among them. In particular, the dynamic linker is the one that loads glibc into the process.&lt;/p>
-&lt;p>We can see that this is the case by asking the dynamic linker to print its own file accesses by setting &lt;code>LD_DEBUG=files&lt;/code>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ LD_DEBUG=files /lib64/ld-linux-x86-64.so.2 ./hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: file=./hello_c [0]; generating link map
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: dynamic: 0x0000000000403e08 base: 0x0000000000000000 size: 0x0000000000004010
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: entry: 0x0000000000401040 phdr: 0x0000000000400040 phnum: 13
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: file=libc.so.6 [0]; needed by ./hello_c [0]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: file=libc.so.6 [0]; generating link map
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: dynamic: 0x00007f9aad868960 base: 0x00007f9aad682000 size: 0x00000000001f0b70
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: entry: 0x00007f9aad6ac260 phdr: 0x00007f9aad682040 phnum: 14
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: calling init: /lib64/ld-linux-x86-64.so.2
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: calling init: /lib64/libc.so.6
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: initialize program: ./hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: transferring control: ./hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Hello, world!
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: calling fini: [0]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: calling fini: /lib64/libc.so.6 [0]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369: calling fini: /lib64/ld-linux-x86-64.so.2 [0]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 75369:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>As a final note, see how I chose to invoke the dynamic linker &lt;em>explicitly&lt;/em>&amp;mdash;just as the kernel would do when asked to launch a dynamically-linked binary&amp;mdash;instead of directly running &lt;code>hello_c&lt;/code>.&lt;/p>
-&lt;h1 id="playing-with-glibc">Playing with glibc&lt;/h1>
-&lt;p>OK, now that we know how a dynamically-linked ELF executable is loaded into memory, let&amp;rsquo;s play with glibc.&lt;/p>
-&lt;p>First, we download glibc, build and install it into a temporary directory like &lt;code>/tmp/sysroot/&lt;/code>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ git clone https://sourceware.org/git/glibc.git
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ cd glibc
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">glibc$ git checkout release/2.40/master
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">glibc$ mkdir build
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">glibc/build$ ../configure --prefix=/tmp/sysroot
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">glibc/build$ make -j $(nproc)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">glibc/build$ make -j $(nproc) install
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">glibc/build$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>With that done, we should be able to use the new glibc. But&amp;hellip;&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ LD_LIBRARY_PATH=/tmp/sysroot/lib ./hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Floating point exception (core dumped)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Kaboom.&lt;/p>
-&lt;p>Indeed, as my coworker claimed, it doesn&amp;rsquo;t seem to be possible to load a different glibc at runtime than the one provided by the system. (YMMV. I got this to work on another system.) Looking at the stack trace of the core dump, we see:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">Stack trace of thread 75841:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#0 0x00007f227d93903b n/a (/tmp/sysroot/lib/libc.so.6 + 0x15403b)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#1 0x00007f227d9f19f6 _dl_sysdep_start (ld-linux-x86-64.so.2 + 0x1c9f6)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#2 0x00007f227d9f335e _dl_start_final (ld-linux-x86-64.so.2 + 0x1e35e)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">#3 0x00007f227d9f2048 _start (ld-linux-x86-64.so.2 + 0x1d048)
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Our process is crashing within glibc as soon as it is loaded by &lt;code>ld-linux.so&lt;/code>. The details of the crash are not interesting for our purposes, but can we do anything about them?&lt;/p>
-&lt;h1 id="playing-with-the-dynamic-linker">Playing with the dynamic linker&lt;/h1>
-&lt;p>What&amp;rsquo;s more interesting is to peek into what&amp;rsquo;s shipped by glibc. We can do this by looking under the &lt;code>/tmp/sysroot/&lt;/code> hierarchy that we generated earlier and finding:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ ls /tmp/sysroot/lib/
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ld-linux-x86-64.so.2
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">libc.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">libc.so.6
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>There is &lt;em>a ton&lt;/em> more stuff in there. But what&amp;rsquo;s important to notice is that &lt;em>the dynamic linker ships with glibc&lt;/em>. The two are closely coupled, and using one without the other can lead to the kinds of crashes shown earlier.&lt;/p>
-&lt;p>And remember: as we saw above, it is possible to manually launch the dynamic linker. So if we do the following:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ LD_LIBRARY_PATH=/tmp/sysroot/lib /tmp/sysroot/lib/ld-linux-x86-64.so.2 ./hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Hello, world!
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We don&amp;rsquo;t get a crash anymore. What&amp;rsquo;s even better is that we also &lt;em>seem&lt;/em> to get what we expect without even setting &lt;code>LD_LIBRARY_PATH&lt;/code>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ /tmp/sysroot/lib/ld-linux-x86-64.so.2 ./hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Hello, world!
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We should confirm that the previous invocation of &lt;code>hello_c&lt;/code> is actually using our own glibc version and not the system-supplied one. To do that, we can &lt;code>strace&lt;/code> the dynamic linker; it&amp;rsquo;s just a program after all:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ strace /tmp/sysroot/lib/ld-linux-x86-64.so.2 ./hello_c 2&amp;gt;&amp;amp;1 | grep libc.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">openat(AT_FDCWD, &amp;#34;/tmp/sysroot/lib/libc.so.6&amp;#34;, O_RDONLY|O_CLOEXEC) = 3
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Indeed, &lt;code>hello_c&lt;/code> did use the newly-built glibc by &amp;ldquo;just&amp;rdquo; asking the newly-built dynamic loader to execute the binary.&lt;/p>
-&lt;p>To summarize, glibc ships both the &lt;code>ld-linux.so&lt;/code> dynamic linker and the &lt;code>libc.so.6&lt;/code> shared library. The two are closely coupled. Running a binary against the C library without also using a matching dynamic linker can lead to crashes. But running a binary directly with a specific dynamic linker ensures that the binary picks up the matching C library.&lt;/p>
-&lt;h1 id="putting-this-to-use">Putting this to use&lt;/h1>
-&lt;p>Alright, now that we know that it is actually possible to run a binary against a version of glibc that&amp;rsquo;s &lt;em>not&lt;/em> the one provided by the system, we can try to solve the original problem we faced: running tests against a modern glibc.&lt;/p>
-&lt;p>One possibility is to modify the commands used to run the tests to prefix them by &lt;code>.../lib/ld-linux-x86-64.so.2&lt;/code>. This could work but I posit is difficult to integrate with a test execution environment because we don&amp;rsquo;t necessarily control the commands that end up executing the test binaries.&lt;/p>
-&lt;p>Another possibility is to modify the way the tests programs are being built by supplying additional linker arguments&amp;mdash;say, via the traditional &lt;code>LDFLAGS&lt;/code>&amp;mdash;to point the linker at a different interpreter with the &lt;code>--Wl,--dynamic-linker&lt;/code> flag:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ cc -o hello_c -Wl,--dynamic-linker=/tmp/sysroot/lib/ld-linux-x86-64.so.2 hello.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ strace ./hello_c 2&amp;gt;&amp;amp;1 | grep libc.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">openat(AT_FDCWD, &amp;#34;/tmp/sysroot/lib/libc.so.6&amp;#34;, O_RDONLY|O_CLOEXEC) = 3
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Better. Now the built binary &amp;ldquo;knows&amp;rdquo; which glibc to use without us having to specify it explicitly every time we attempt to launch the program.&lt;/p>
-&lt;p>What if we aren&amp;rsquo;t &lt;em>building&lt;/em> the binaries? What if we are just reusing a binary that already exists? &lt;code>patchelf&lt;/code> to the rescue:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ cc -o hello_c hello.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ strace ./hello_c 2&amp;gt;&amp;amp;1 | grep libc.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">openat(AT_FDCWD, &amp;#34;/lib64/libc.so.6&amp;#34;, O_RDONLY|O_CLOEXEC) = 3
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ patchelf --set-interpreter /tmp/sysroot/lib/ld-linux-x86-64.so.2 ./hello_c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ strace ./hello_c 2&amp;gt;&amp;amp;1 | grep libc.so
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">openat(AT_FDCWD, &amp;#34;/tmp/sysroot/lib/libc.so.6&amp;#34;, O_RDONLY|O_CLOEXEC) = 3
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Voila. We have modified an existing executable to use whichever glibc we desire.&lt;/p>
-&lt;h1 id="versioning-glibc">Versioning glibc&lt;/h1>
-&lt;p>But hold on a second. Can we use &lt;em>whichever&lt;/em> glibc really? Is it actually true that glibc versions are completely interchangeable? Unfortunately not.&lt;/p>
-&lt;p>A binary built against an old version of glibc is guaranteed to run against a newer version of glibc without recompilation. But the counterpart is not true: a binary built against a new glibc may not run against an older glibc.&lt;/p>
-&lt;p>This poses a problem: how can we upgrade glibc across separate production and development environments? If we upgrade production first, binaries built in development environments will continue to work properly but developers may not be able to reproduce bugs found in production. And if we upgrade development environments first, the binaries they produce may be incompatible with production, leading to random crashes later on.&lt;/p>
-&lt;p>Here is an idea I&amp;rsquo;ve seen work in the past: let&amp;rsquo;s extend the sysroot concept presented above and version it!&lt;/p>
-&lt;p>We start with &lt;code>/usr/sysroot/v1/&lt;/code> which contains the first version of the core system libraries we have to support. All binaries that we build for production deployment are explicitly linked against the &lt;code>ld-linux.so&lt;/code> of this directory, so they are always validated against &lt;code>v1&lt;/code> of the sysroot. &lt;code>v1&lt;/code> remains immutable, which means new builds of the binaries will continue to work as tested in the past.&lt;/p>
-&lt;p>Whenever we want to upgrade glibc, we create a &lt;em>new&lt;/em> sysroot, &lt;code>/usr/sysroot/v2/&lt;/code>. This new &lt;code>v2&lt;/code> is deployed to all environments (development and production) that may need to use the new glibc. This deployment step is risk-free because nothing is yet dependent on &lt;code>v2&lt;/code>. After that, we proceed to rebuild all binaries that we want to test and run, this time pointing at the &lt;code>ld-linux.so&lt;/code> within &lt;code>v2&lt;/code>. Deploying these new binaries causes them to use the new version.&lt;/p>
-&lt;p>As long as the &lt;code>/usr/sysroot/&lt;/code> subdirectories remain immutable and synchronized across all environments in which binaries run, we are guaranteed to always get a deterministic version of glibc for a given binary.&lt;/p>
-&lt;p>That&amp;rsquo;s just a design sketch though. It may or it may not work for you. As I mentioned earlier, I&amp;rsquo;ve seen this work well in a large corporate environment before, but it introduces some extra complexity that you need to take care of.&lt;/p>
-&lt;hr>
-&lt;p>What&amp;rsquo;s the moral of the story? Containers are, usually, not the best solution to a systems problem. While they might be coerced to deliver the desired results, they come with a heavy cost. Unix has been around for a long time and there exist alternate solutions to problems that don&amp;rsquo;t require full replicas of a functioning system. A ton of the bloat we face today in development tools and deployments comes from the abuse of heavyweight containers. So, every time you think &amp;ldquo;containers!&amp;rdquo;, pause to explore alternatives&amp;mdash;you may find cheaper, more portable, and simpler solutions.&lt;/p>
-&lt;p>If you want to learn more about this and related topics, I&amp;rsquo;d recommend grabbing a copy of the classic &lt;a href="https://www.amazon.com/Linkers-Kaufmann-Software-Engineering-Programming/dp/1558604960?&amp;amp;linkCode=ll1&amp;amp;tag=blogsystem5-20&amp;amp;linkId=421e6bc20c93925de6766b135a24239a&amp;amp;language=en_US&amp;amp;ref_=as_li_ss_tl">&amp;ldquo;Linkers and Loaders&amp;rdquo; book&lt;/a>. It&amp;rsquo;s old, but it&amp;rsquo;s still very relevant.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-08-11-glibc-versions-runtime-dynamic.png" length="36593" type="image/jpeg"/></item></channel></rss>
+&lt;/ul></description><enclosure url="https://jmmv.dev/images/2024-09-09-windows-nt-vs-unix-design.jpg" length="1049554" type="image/jpeg"/></item></channel></rss>
