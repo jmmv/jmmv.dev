@@ -1,4 +1,273 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Mon, 21 Jul 2025 08:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Lessons along the EndBOX journey</title><link>https://jmmv.dev/2025/06/endbox-journey-lessons.html</link><pubDate>Tue, 17 Jun 2025 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/06/endbox-journey-lessons.html</guid><description>&lt;p>About six months ago, during one of my long runs, I had a wild idea: what if I built an OS disk image that booted straight into EndBASIC, bundled it with a Raspberry Pi, a display, a custom 3D-printed case, and made a tiny, self-contained retro BASIC computer? Fast-forward to today and such an idea exists in the form of &amp;ldquo;the EndBOX prototype&amp;rdquo;!&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Mon, 21 Jul 2025 08:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Bazel and action (non-) determinism</title><link>https://jmmv.dev/2025/07/bazel-action-determinism.html</link><pubDate>Mon, 21 Jul 2025 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/07/bazel-action-determinism.html</guid><description>&lt;p>A key feature of Bazel is its ability to produce fast, reliable builds by caching the output of actions. This system, however, relies on a fundamental principle: build actions must be deterministic. For the most part, Bazel helps ensure that they are, but in the odd cases when they aren&amp;rsquo;t, builds can fail in subtle and frustrating ways, eroding trust in the build system.&lt;/p>
+&lt;p>This article is the first in a series on Bazel&amp;rsquo;s execution model. Having explained these concepts many times, I want to provide a detailed reference before explaining a cool solution to a problem I recently developed at work. We will start with action non-determinism, then cover remote caching and execution, and finally, explore the security implications of these features.&lt;/p>
+&lt;p>This first article explains what non-determinism is, how it manifests, and how you can diagnose and prevent it in your own builds. Let&amp;rsquo;s begin.&lt;/p>
+&lt;h1 id="bazel-execution-basics">Bazel execution basics&lt;/h1>
+&lt;p>Consider the following example build file:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">cc_library&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;bs5-lib&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;lib1.c&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;lib2.c&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">cc_binary&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;bs5-bin&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;main.c&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">deps&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;:bs5-lib&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This build file specifies two &lt;strong>targets&lt;/strong>: the &lt;code>bs5-lib&lt;/code> target, which builds a C library from two source files, and the &lt;code>bs5-bin&lt;/code> target, which builds a C binary from one source file and links it against the &lt;code>bs5-lib&lt;/code> library.&lt;/p>
+&lt;p>These two targets instantiate the &lt;code>cc_library&lt;/code> and &lt;code>cc_binary&lt;/code> &lt;strong>rules&lt;/strong> by binding them to specific &lt;strong>attributes&lt;/strong> (the values of &lt;code>srcs&lt;/code> and &lt;code>deps&lt;/code>).&lt;/p>
+&lt;p>Processing these rules during dependency analysis yields a collection of &lt;strong>actions&lt;/strong>:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>The &lt;code>cc_library&lt;/code> rule used to define the &lt;code>bs5-lib&lt;/code> target generates:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>A &lt;code>CppCompile&lt;/code> action to compile the &lt;code>lib1.c&lt;/code> file into the &lt;code>lib1.o&lt;/code> object file.&lt;/p>
+&lt;p>Its command line may be: &lt;code>cc -o lib1.o lib1.c&lt;/code>&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>A &lt;code>CppCompile&lt;/code> action to compile the &lt;code>lib2.c&lt;/code> file into the &lt;code>lib2.o&lt;/code> object file.&lt;/p>
+&lt;p>Its command line may be: &lt;code>cc -o lib2.o lib2.c&lt;/code>&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>A &lt;code>CppArchive&lt;/code> action to link &lt;code>lib1.o&lt;/code> and &lt;code>lib2.o&lt;/code> together into the &lt;code>bs5-lib.a&lt;/code> archive.&lt;/p>
+&lt;p>Its command line may be: &lt;code>ar rcsD bs5-lib.a lib1.o lib2.o&lt;/code>&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>The &lt;code>cc_binary&lt;/code> rule used to define the &lt;code>bs5-bin&lt;/code> target generates:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>A &lt;code>CppCompile&lt;/code> action to compile the &lt;code>main.c&lt;/code> file into the &lt;code>main.o&lt;/code> object file.&lt;/p>
+&lt;p>Its command line may be: &lt;code>cc -o main.o main.c&lt;/code>&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>A &lt;code>CppLink&lt;/code> action to link &lt;code>main.o&lt;/code> and &lt;code>bs5-lib.a&lt;/code> together into the &lt;code>bs5-bin&lt;/code> executable.&lt;/p>
+&lt;p>Its command line may be: &lt;code>cc -o bs5-bin main.o bs5-lib.a&lt;/code>&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>Note that nowhere in the list above do you see target names. Actions work with &lt;em>file&lt;/em>-level dependencies, not &lt;em>target&lt;/em>-level dependencies. If you need to visualize this, think of the target dependency graph and the action dependency graph as two disjoint entities. (Skyframe tracks them as just one graph but we can ignore that fact here.)&lt;/p>
+&lt;p>It&amp;rsquo;s this, actions, that are the atomic unit of execution in Bazel. Once Bazel is done with its &lt;strong>loading&lt;/strong> and &lt;strong>analysis&lt;/strong> phases, it enters the &lt;strong>execution&lt;/strong> phase. During execution, the &amp;ldquo;only&amp;rdquo; thing that Bazel does is dispatch actions for execution via its &lt;a href="/2019/12/bazel-strategies.html">execution strategies&lt;/a>, trying to maximize parallelism as determined by the constraints of the action dependency graph.&lt;/p>
+&lt;h1 id="build-actions-anatomy">Build actions anatomy&lt;/h1>
+&lt;p>To break down an action into its parts, let&amp;rsquo;s examine what goes into defining the &lt;code>CppLink&lt;/code> action above, and to do that, let&amp;rsquo;s first focus on its simple command line to produce the &lt;code>bs5-bin&lt;/code> binary from the &lt;code>main.o&lt;/code> object file and the &lt;code>bs5-lib.a&lt;/code> static library:&lt;/p>
+&lt;pre tabindex="0">&lt;code>cc -o bs5-bin main.o bs5-lib.a
+&lt;/code>&lt;/pre>&lt;p>Bazel tracks the command line as part of the action, but things are a bit more complex than that. And to explain the &amp;ldquo;complexity&amp;rdquo;, let&amp;rsquo;s try to understand what problems Bazel is trying to solve compared to a more rudimentary build tool like Make.&lt;/p>
+&lt;p>If you have used (or still use) Make, you would have likely expressed the corresponding build rule as:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="nf">bs5-main&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">main&lt;/span>.&lt;span class="n">o&lt;/span> &lt;span class="n">bs&lt;/span>5-&lt;span class="n">lib&lt;/span>.&lt;span class="n">a&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">$(&lt;/span>CC&lt;span class="k">)&lt;/span> &lt;span class="k">$(&lt;/span>LDFLAGS&lt;span class="k">)&lt;/span> -o bs5-main main.o bs5-lib.a
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>which looks&amp;hellip; OK, I guess. But what happens if you do this?&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Build the binary.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">make bs5-main
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Build the binary _again_ in stripped mode.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">make bs5-main &lt;span class="nv">LDFLAGS&lt;/span>&lt;span class="o">=&lt;/span>-s
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>An inconsistent build! The &lt;code>bs5-main&lt;/code> binary is &lt;em>not&lt;/em> stripped as you would expect because the second &lt;code>make&lt;/code> invocation does &lt;em>nothing&lt;/em>! &lt;code>make&lt;/code> has no idea that the &lt;code>LDFLAGS&lt;/code> variable is involved in the target definition so it doesn&amp;rsquo;t know that the target has to be rebuilt to honor the variable change.&lt;/p>
+&lt;p>This type of scenario is what leads to having to run &lt;code>make clean&lt;/code> from time to time in a Make-based build system because the outputs that Make produces get out of sync with environmental changes. And the reason is that the &lt;em>only&lt;/em> thing that &lt;code>make&lt;/code> tracks to determine whether a target needs to be rebuilt are the file timestamps of the inputs that are &lt;em>explicitly listed&lt;/em> in the rule (&lt;code>main.o&lt;/code> and &lt;code>bs5-lib.a&lt;/code> in this example).&lt;/p>
+&lt;p>Now you&amp;rsquo;d say: but you can fix it! &amp;ldquo;Just&amp;rdquo; do:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="c"># An unconditional rule that captures the content of LDFLAGS.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c">&lt;/span>&lt;span class="nf">.PHONY&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">ldflags&lt;/span>.&lt;span class="n">stamp&lt;/span>.2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">ldflags.stamp.2&lt;/span>&lt;span class="o">:&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo &lt;span class="k">$(&lt;/span>LDFLAGS&lt;span class="k">)&lt;/span> &amp;gt;ldflags.stamp.2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c"># A conditional rule that only updates the timestamp of the stamp file if the
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c"># content captured by the unconditional rule changes.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c">&lt;/span>&lt;span class="nf">ldflags.stamp&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">ldflags&lt;/span>.&lt;span class="n">stamp&lt;/span>.2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @cmp -s ldflags.stamp ldflags.stamp.2 &lt;span class="o">||&lt;/span> cp ldflags.stamp.2 ldflags.stamp
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c"># The rule we had before, but with an extra dependency on the stamp file.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c">&lt;/span>&lt;span class="nf">bs5-main&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">main&lt;/span>.&lt;span class="n">o&lt;/span> &lt;span class="n">bs&lt;/span>5-&lt;span class="n">lib&lt;/span>.&lt;span class="n">a&lt;/span> &lt;span class="n">ldflags&lt;/span>.&lt;span class="n">stamp&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">$(&lt;/span>CC&lt;span class="k">)&lt;/span> &lt;span class="k">$(&lt;/span>LDFLAGS&lt;span class="k">)&lt;/span> -o bs5-main main.o bs5-lib.a
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And indeed this ensures that the &lt;code>bs5-main&lt;/code> target gets re-linked if &lt;code>LDFLAGS&lt;/code> changes. But I hope you&amp;rsquo;ll agree that this is &lt;em>awful&lt;/em> and that nobody does it because: one, most folks writing &lt;code>Makefile&lt;/code>s aren&amp;rsquo;t aware of the problem; and, two, even if they are, it&amp;rsquo;s too hard to get it right (see&amp;hellip; we forgot about the value of &lt;code>CC&lt;/code> and whatever other environment variables might influence &lt;code>CC&lt;/code>&amp;rsquo;s behavior like, you know, the &lt;code>PATH&lt;/code>?).&lt;/p>
+&lt;p>I didn&amp;rsquo;t come here to bash against Make. OK, maybe I &lt;em>did&lt;/em> because folks out there often say &amp;ldquo;Make works just fine and it&amp;rsquo;s much simpler than Bazel!&amp;rdquo; when in reality they are oblivious to a bunch of very real problems that later &lt;a href="/2023/08/costs-exposed-monorepo-multirepo.html">waste &lt;em>other people&lt;/em>&amp;rsquo;s time&lt;/a> when their build environment subtly breaks. &amp;lt;/rant&amp;gt;&lt;/p>
+&lt;p>Bazel and other next-generation build systems solve this specific problem and more by being comprehensive about what they track at the action level, and using that information to determine whether an action needs to be rebuilt or not. In particular, a Bazel action is defined by these parts:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>The command line to execute&lt;/strong>, which in this case is &lt;code>cc -o bs5-bin main.o bs5-lib.a&lt;/code>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Hashes of the input files&lt;/strong> required to execute the command. These include &amp;ldquo;obvious&amp;rdquo; inputs like the source files specified in the targets but &lt;em>also&lt;/em> the files required to execute the tools of the action (e.g. the compiler&amp;rsquo;s own files). In this case, the list of input files could look like: &lt;code>main.o&lt;/code>, &lt;code>bs5-lib.a&lt;/code>, &lt;em>and&lt;/em> &lt;code>cc&lt;/code>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>The configuration of the environment&lt;/strong> in which the action runs. This includes environment variables, the host and target platforms, and things like that. In this case, the configuration could include the value of &lt;code>PATH&lt;/code> and whether we are building in debug or optimized mode. Configurations are expressed as a hash, though, because of the many details that go into computing them.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>These three properties define &lt;em>quite&lt;/em> precisely the relation between the context of an action and the outputs it produces, and this is the main technique that Bazel uses to &lt;a href="/2020/12/google-no-clean-builds.html">avoid clean builds&lt;/a> at large scale.&lt;/p>
+&lt;h1 id="hello-non-determinism">Hello non-determinism&lt;/h1>
+&lt;p>But pay attention to the &amp;ldquo;quite&amp;rdquo; word in &amp;ldquo;quite precisely&amp;rdquo; right above. I did not say &amp;ldquo;perfectly&amp;rdquo; because there are still ways for non-deterministic behavior to leak into a Bazel build, meaning that &lt;code>bazel clean&lt;/code> and unexpected rebuilds (e.g. due to cache expiration) could still change the behavior of a build.&lt;/p>
+&lt;p>Consider this innocuous example:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;date&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;date.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;date &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This rule says: stick the output of the &lt;code>date&lt;/code> command, which prints the current date, into the &lt;code>date.txt&lt;/code> file. Obviously, &amp;ldquo;current date&amp;rdquo; varies over time so we should expect the above to give us trouble. And indeed it does: look at this sequence of commands where I&amp;rsquo;ve removed all irrelevant Bazel console noise:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ bazel build //:date
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: 2 processes: 1 internal, 1 linux-sandbox.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ cat bazel-bin/date.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Mon Jul 7 17:59:29 PDT 2025
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ bazel build //:date
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: 1 process: 1 internal.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ cat bazel-bin/date.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Mon Jul 7 17:59:29 PDT 2025
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ bazel clean
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ bazel build //:date
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: 2 processes: 1 internal, 1 linux-sandbox.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ cat bazel-bin/date.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Mon Jul 7 18:02:15 PDT 2025
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The first Bazel build claims to have executed 1 action in the sandbox and the &lt;code>date.txt&lt;/code> file shows us the date when that happened. The second Bazel build does nothing and &lt;code>date.txt&lt;/code> remains unmodified. But if we later follow that by a Bazel clean and a third Bazel build, we see that the content of &lt;code>date.txt&lt;/code> is now different. Non-determinism has leaked into the build, and&amp;hellip; that&amp;rsquo;s problematic.&lt;/p>
+&lt;h1 id="how-bad-is-non-determinism-really">How bad is non-determinism really?&lt;/h1>
+&lt;p>Non-determinism is a problem because it prevents achieving &lt;a href="https://reproducible-builds.org/">reproducible builds&lt;/a>. On the one hand, this voids the security guarantees that come from being able to reproduce builds in different environments: if the output of the build is not bit-for-bit identical to its inputs, you can&amp;rsquo;t verify that a binary that&amp;rsquo;s being used in production actually comes from the sources it claims to have been built from. On the other hand, this leads to situations where developers get different behavior depending on when/where they build the code: you do not want to hear the &amp;ldquo;works on my machine&amp;rdquo; excuse when troubleshooting a bug. So, it &lt;em>is&lt;/em> bad.&lt;/p>
+&lt;p>But one interesting property of Bazel&amp;rsquo;s action model is that a single non-deterministic action does not necessarily poison the whole build. Take a look at this build file that defines a chain of actions:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># date target: Writes a non-deterministic date to its output.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;date&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;date.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;date &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># copy target: Consumes the output of &amp;#34;date&amp;#34; and copies it to&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># its output.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;copy&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;copy.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;cp $&amp;lt; $@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;:date&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># count target: Consumes the output of &amp;#34;copy&amp;#34; and produces an&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># output that does not vary due to the input non-determinism.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;count&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;count.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;wc -l $&amp;lt; &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;:copy&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># copy2 target: Consumes the output of &amp;#34;stop&amp;#34; and copies it to&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># its output.&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;copy2&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;copy2.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;cp $&amp;lt; $@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;:count&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The interesting bit here is in the &lt;code>count&lt;/code> target, which counts the lines in its input and writes the resulting number to its output. While this target consumes a non-deterministic input, its output is deterministic because the number of lines in the input is constant: &lt;code>date&lt;/code> writes a different timestamp each time, but it always produces one line.&lt;/p>
+&lt;p>The fact that the target produces a deterministic output allows Bazel to stop &amp;ldquo;propagating&amp;rdquo; non-determinism across the build. Remember that actions track &lt;em>input hashes&lt;/em>, &lt;strong>not&lt;/strong> &lt;em>input timestamps&lt;/em>. Once &lt;code>count&lt;/code> is re-executed after changes to &lt;code>date&lt;/code>, the output of &lt;code>count&lt;/code> will have the same hash as it did before, and &lt;code>copy2&lt;/code> will conclude that it doesn&amp;rsquo;t need to be rerun.&lt;/p>
+&lt;p>Let&amp;rsquo;s try it:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">$ bazel build //:copy2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: &lt;span class="m">5&lt;/span> processes: &lt;span class="m">1&lt;/span> internal, &lt;span class="m">4&lt;/span> linux-sandbox.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ rm -f bazel-bin/date.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ bazel build //:copy2 --explain log
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">INFO: &lt;span class="m">4&lt;/span> processes: &lt;span class="m">1&lt;/span> action cache hit, &lt;span class="m">1&lt;/span> internal, &lt;span class="m">3&lt;/span> linux-sandbox.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ cat log
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Build options: --explain&lt;span class="o">=&lt;/span>log
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Executing action &lt;span class="s1">&amp;#39;BazelWorkspaceStatusAction stable-status.txt&amp;#39;&lt;/span>: unconditional execution is requested.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Executing action &lt;span class="s1">&amp;#39;Executing genrule //:date&amp;#39;&lt;/span>: One of the files has changed.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Executing action &lt;span class="s1">&amp;#39;Executing genrule //:copy&amp;#39;&lt;/span>: One of the files has changed.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Executing action &lt;span class="s1">&amp;#39;Executing genrule //:count&amp;#39;&lt;/span>: One of the files has changed.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The sequence of commands above proves the point: the first build of the &lt;code>copy2&lt;/code> target tells us that Bazel executed 4 sandboxed actions (one for each target). If we then remove the non-deterministic file from the output tree and ask Bazel to rebuild the &lt;code>copy2&lt;/code> target, we see how it only rebuilt 3 targets and 1 of them scored a cache hit. And by inspecting the log we asked Bazel to produce, we see that it effectively rebuilt &lt;code>date&lt;/code>, &lt;code>copy&lt;/code>, and &lt;code>count&lt;/code>, but it didn&amp;rsquo;t have to rebuild &lt;code>copy2&lt;/code> because the non-determinism didn&amp;rsquo;t propagate further.&lt;/p>
+&lt;p>In a Make world, the above sequence of commands would have invalidated the whole build because Make just checks timestamps, and targets almost-always update the timestamps of their outputs unless we go through great extents to prevent it (like I did earlier on in the stamp file rule with its call to &lt;code>cmp -s&lt;/code>).&lt;/p>
+&lt;h1 id="possible-non-determinism-causes">Possible non-determinism causes&lt;/h1>
+&lt;p>In the previous example, it was rather obvious that a call to &lt;code>date&lt;/code> could be problematic. But this is not the only source of non-determinism, and oftentimes the reason behind the non-determinism isn&amp;rsquo;t as obvious. Here is a more comprehensive list of possible causes:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Date and time.&lt;/strong> You might not be calling &lt;code>date&lt;/code>, but build tools&amp;mdash;especially code generators and archivers like zip&amp;mdash;love injecting timestamps in their output files. These may be obvious, like comments in generated files, or subtle, like values written in binary metadata headers.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>System identifiers.&lt;/strong> Similarly to &amp;ldquo;current date&amp;rdquo;, there are tools that query the current PID, UID, GID, etc. and inject those values in their outputs.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Sort ordering.&lt;/strong> Hash tables are the star data structure in computer science and they are everywhere. Unfortunately, there are tools that leak their internal use of hash tables into output files by, for example, emitting unsorted lists.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Accessing the network.&lt;/strong> Just &lt;em>don&amp;rsquo;t&lt;/em>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Unexpected/unknown dependencies on host tools.&lt;/strong> Calling a tool from the system means introducing hidden dependencies on whatever the tool itself depends on. For example, the tool might read a configuration file that alters its behavior.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>&lt;a href="/2019/12/bazel-dynamic-execution-introduction.html">Dynamic execution&lt;/a>.&lt;/strong> This powerful feature that helps improve incremental build times in interactive scenarios can easily lead to non-determinism if the remote execution environment and the local execution environment aren&amp;rsquo;t equivalent (where equivalent is tricky to define).&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>&lt;a href="https://github.com/bazel-contrib/rules_foreign_cc">Foreign CC rules&lt;/a>.&lt;/strong> Bazel tries to enforce action determinism as we saw earlier, but other build systems make little efforts to do so. If you end up nesting build systems, as is the case when using this ruleset, it&amp;rsquo;s very likely that you are introducing non-determinism.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Randomness.&lt;/strong> Tools can decide to read from &lt;code>/dev/random&lt;/code> and do something with that value, in which case you definitely have non-determinism.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="doesnt-sandboxing-fix-it-all">Doesn&amp;rsquo;t sandboxing fix it all?&lt;/h1>
+&lt;p>The list above is long, and there is this assumption, especially from newcomers to Bazel, that Bazel&amp;rsquo;s sandboxing ensures that build behavior is deterministic.&lt;/p>
+&lt;p>In a theoretical world, that would be true: Bazel would execute each action in a precisely controlled environment to ensure that actions behaved exactly the same from run to run. This would require using a cycle-accurate virtual machine to precisely control instruction scheduling (multithreading can also introduce non-determinism) and entropy sources, but as you can imagine, this would make build execution extremely slow.&lt;/p>
+&lt;p>In a practical world, sandboxing has to grant some concessions in the name of performance: otherwise, people will end up &lt;a href="https://github.com/bazelbuild/bazel/issues/8230">disabling sandboxing&lt;/a>, nullifying all of its benefits.&lt;/p>
+&lt;p>Furthermore, sandboxing isn&amp;rsquo;t something magical you can &amp;ldquo;do&amp;rdquo; from userspace (unless you write a full machine emulator). Sandboxing requires kernel support, and different kernels offer different sandboxing technologies. In turn, this means that what Bazel can sandbox or not depends on the machine that Bazel is running on. For example: Bazel&amp;rsquo;s sandbox on Linux is able to restrict file accesses, offer stable PIDs, and forbid network accesses&amp;mdash;but the macOS sandbox, &lt;a href="/2019/11/macos-sandbox-exec.html">based on the deprecated sandbox-exec&lt;/a>, cannot mangle the PID namespace.&lt;/p>
+&lt;h1 id="diagnosing-non-determinism">Diagnosing non-determinism&lt;/h1>
+&lt;p>So. We know non-deterministic actions can exist in a Bazel build and that sandboxing isn&amp;rsquo;t going to protect us from them. In that case, how can we tell if such actions have leaked into our build? We can use the &amp;ldquo;execution log&amp;rdquo; feature in Bazel to write a detailed log of all the actions that Bazel executes. Then, we can &lt;code>diff&lt;/code> the logs of two separate builds and see if they differ.&lt;/p>
+&lt;p>Looking back to our chain of actions from the last example, we could capture two fresh execution logs by doing this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">$ bazel clean
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ bazel build --noremote_accept_cached --execution_log_json_file&lt;span class="o">=&lt;/span>before //:copy2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ bazel clean
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ bazel build --noremote_accept_cached --execution_log_json_file&lt;span class="o">=&lt;/span>after //:copy2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note: it is important to start from a clean build &lt;em>and&lt;/em> to tell Bazel to not reuse remotely-cached actions. In this way, we force Bazel to reexecute the whole build, which should uncover non-determinism if it exists. Also, make sure to keep &lt;code>--execution_log_sort&lt;/code> enabled (the default).&lt;/p>
+&lt;p>Once we have run the above, we can proceed to diff the logs. I like doing &lt;code>diff -u before after | cdiff&lt;/code>, but you can use whichever file diffing UI you prefer:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-diff" data-lang="diff">&lt;span class="line">&lt;span class="cl">&lt;span class="gd">--- before 2025-07-15 18:02:46.838524511 -0700
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">&lt;/span>&lt;span class="gi">+++ after 2025-07-15 18:02:51.870531304 -0700
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gi">&lt;/span>&lt;span class="gu">@@ -25,7 +25,7 @@
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gu">&lt;/span> &amp;#34;actualOutputs&amp;#34;: [{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;path&amp;#34;: &amp;#34;bazel-out/k8-fastbuild/bin/date.txt&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;digest&amp;#34;: {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">- &amp;#34;hash&amp;#34;: &amp;#34;d6e32f2792db61b80e67707fa24bc3f3704d65267b871809cd9d2969fe80d39d&amp;#34;,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">&lt;/span>&lt;span class="gi">+ &amp;#34;hash&amp;#34;: &amp;#34;c2ae04c2b2ff29fd70372a9e399a8f8d5f18ea7395d45d9a34fdbc9decac854b&amp;#34;,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gi">&lt;/span> &amp;#34;sizeBytes&amp;#34;: &amp;#34;29&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;hashFunctionName&amp;#34;: &amp;#34;SHA-256&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> },
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gu">@@ -63,7 +63,7 @@
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gu">&lt;/span> &amp;#34;inputs&amp;#34;: [{
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;path&amp;#34;: &amp;#34;bazel-out/k8-fastbuild/bin/date.txt&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;digest&amp;#34;: {
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">- &amp;#34;hash&amp;#34;: &amp;#34;d6e32f2792db61b80e67707fa24bc3f3704d65267b871809cd9d2969fe80d39d&amp;#34;,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">&lt;/span>&lt;span class="gi">+ &amp;#34;hash&amp;#34;: &amp;#34;c2ae04c2b2ff29fd70372a9e399a8f8d5f18ea7395d45d9a34fdbc9decac854b&amp;#34;,
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gi">&lt;/span> &amp;#34;sizeBytes&amp;#34;: &amp;#34;29&amp;#34;,
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &amp;#34;hashFunctionName&amp;#34;: &amp;#34;SHA-256&amp;#34;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> },
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Voila. The first chunk of the log tells us that the first non-deterministic action is the one that writes the &lt;code>date.txt&lt;/code> file, and the second chunk of the log tells us that there is another action that consumes said file as an input.&lt;/p>
+&lt;h1 id="keeping-on-top-of-non-determinism">Keeping on top of non-determinism&lt;/h1>
+&lt;p>Let&amp;rsquo;s finish the article by giving you some practical tips to remove non-determinism from the build and to make sure it doesn&amp;rsquo;t come back:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Set up a CI pipeline that identifies new instances of non-determinism&lt;/strong>. Unless you are proactive about it, non-determinism will creep back in because neither the local sandbox not remote execution can fully prevent it.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Keep the local sandbox enabled.&lt;/strong> It may not be perfect but it&amp;rsquo;s much better than nothing. Also, enable &lt;code>--nosandbox_default_allow_network&lt;/code> explicitly because, for historical reasons, the sandbox did &lt;em>not&lt;/em> forbid network access and the default hasn&amp;rsquo;t been flipped yet.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Rely on hermetic toolchains.&lt;/strong> Do not use the system-provided ones because they tend to have dependencies on system-provided files that are invisible to the Bazel action definitions. (E.g. if you use the host-provided &lt;code>gcc&lt;/code>, the compiler will happily embed &lt;code>/usr/lib/gcc/x86_64-linux-gnu/15/crtbegin.o&lt;/code> into the final binary and this will be invisible to Bazel.)&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Force remote execution.&lt;/strong> Sometimes, non-determinism is inevitable or really hard to avoid (e.g. if you use the Foreign CC ruleset). Under these conditions, your best bet is to force the problematic actions to run remotely under a strictly controlled environment and to provision the remote cache so that such actions &amp;ldquo;never&amp;rdquo; fall out. If done correctly, this will &amp;ldquo;hide&amp;rdquo; the non-determinism because, once an action has been built, it will never be rebuilt again until its known inputs actually change.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Sanitize the action&amp;rsquo;s environment.&lt;/strong> Use &lt;code>--action_env&lt;/code> and &lt;code>--host_action_env&lt;/code> to keep settings like the &lt;code>PATH&lt;/code> consistent across machines, and use &lt;code>--strict_action_env&lt;/code> to minimize the environment variables that leak into action execution.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Think about network access.&lt;/strong> If you must, do it from repo rules and &lt;em>always&lt;/em> verify that whatever you downloaded matches known checksums. If you are strict about checksum validation, you&amp;rsquo;ll still have a non-hermetic build, but at least, you&amp;rsquo;ll have a deterministic one. If you have such behavior in a test, don&amp;rsquo;t allow its results to be cached by means of the &lt;code>no-remote-cache&lt;/code> tag.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>And with that, it&amp;rsquo;s time to conclude until the next episode on remote caching.&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-07-21-bazel-action-determinism-cover.jpg" length="520669" type="image/jpeg"/></item><item><title>Lessons along the EndBOX journey</title><link>https://jmmv.dev/2025/06/endbox-journey-lessons.html</link><pubDate>Tue, 17 Jun 2025 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/06/endbox-journey-lessons.html</guid><description>&lt;p>About six months ago, during one of my long runs, I had a wild idea: what if I built an OS disk image that booted straight into EndBASIC, bundled it with a Raspberry Pi, a display, a custom 3D-printed case, and made a tiny, self-contained retro BASIC computer? Fast-forward to today and such an idea exists in the form of &amp;ldquo;the EndBOX prototype&amp;rdquo;!&lt;/p>
 &lt;p>This article isn&amp;rsquo;t the product announcement though&amp;mdash;&lt;a href="https://www.endbasic.dev/2025/06/unveiling-the-endbox.html">that&amp;rsquo;s elsewhere&lt;/a>. What I want to do here is look back at the Blog System/5 articles I&amp;rsquo;ve written over the past months because what might have seemed like scattered topics were actually stepping stones toward the EndBOX.&lt;/p>
 &lt;p>Let&amp;rsquo;s look at what I learned along the way and why, even though developing EndBASIC may sound like a &amp;ldquo;useless waste of time&amp;rdquo;, it&amp;rsquo;s a great playground and the source of inspiration for the articles you&amp;rsquo;ve come to appreciate here.&lt;/p>
 &lt;div class="container action-highlight p-4 my-4 d-md-none">
@@ -3087,86 +3356,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can&amp;rsquo;t run the resulting binary. x32 is an ABI that impacts the kernel interface too, so these binaries cannot be executed on a regular x86-64 kernel. Sadly, and as far as I can tell, x32 is pretty much abandonware today. Gentoo claims to support it but there are no official builds of any distribution I can find that are built in x32 mode.&lt;/p>
 &lt;hr>
-&lt;p>In the end, even though LP64 &lt;a href="https://unix.org/version2/whatsnew/lp64_wp.html">wasn&amp;rsquo;t the obvious choice&lt;/a> for x86-64, it&amp;rsquo;s the compilation mode that won and stuck.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-10-07-x86-64-cover-image.jpg" length="992004" type="image/jpeg"/></item><item><title>Revisiting the DOS memory models</title><link>https://jmmv.dev/2024/09/dos-memory-models.html</link><pubDate>Mon, 30 Sep 2024 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2024/09/dos-memory-models.html</guid><description>&lt;p>At the beginning of the year, I wrote a bunch of articles on the various tricks DOS played to overcome the tight memory limits of x86&amp;rsquo;s real mode. There was one question that came up and remained unanswered: what were the various &amp;ldquo;models&amp;rdquo; that the compilers of the day offered? Take a look at Borland Turbo C++&amp;rsquo;s code generation menu:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-09-30-turbo-cxx-memory-models.png" class="with-border" />
-&lt;figcaption>Borland Turbo C++ showing its Code Generation menu, which displays the list of models we cover in this article.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Tiny, small, medium, compact, large, huge&amp;hellip; What did these options mean? What were their effects? And, more importantly&amp;hellip; is any of that legacy relevant today in the world of 64-bit machines and gigabytes of RAM? To answer those questions, we must start with a brief review of the 8086 architecture and the binary formats supported by DOS.&lt;/p>
-&lt;h1 id="8086-segmentation">8086 segmentation&lt;/h1>
-&lt;p>In the 8086 architecture, which is the architecture that DOS targeted, memory references are composed of two parts: a &lt;strong>2-byte segment&lt;/strong> &amp;ldquo;identifier&amp;rdquo; and a &lt;strong>2-byte offset&lt;/strong> within the segment. These pairs are often expressed as &lt;code>segment:offset&lt;/code>.&lt;/p>
-&lt;p>Segments are contiguous 64KB chunks of memory and are identified by their base address. To be able to address the full 1MB of memory that the 8086 supports, segments are offset from each other by 16 bytes. As you can deduce from this, segments overlap, which means that a specific physical memory position can be referenced by many segment/offset pairs.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-09-30-dos-memory-models-8086-segments.png" />
-&lt;figcaption>Representation of two consecutive 8086 segments and how a single physical memory address can be expressed as different segment/offset pairs.&lt;/figcaption>
-&lt;/figure>
-&lt;p>As an example, the segmented address &lt;code>B800h:0032h&lt;/code> corresponds to the physical address &lt;code>B8032h&lt;/code> computed via &lt;code>B800h * 10h + 0032h&lt;/code>. While this pair is human-readable, that&amp;rsquo;s not how the machine-level instructions encode it. Instead, instructions rely on &lt;strong>segment registers&lt;/strong> to specify the segment to access, and the 8086 supports four of these: CS (code segment), DS (data segment), ES (extra data segment), and SS (stack segment). Knowing this, accessing this sample memory position requires first loading &lt;code>B800h&lt;/code> into &lt;code>DS&lt;/code> and then referencing &lt;code>DS:0032h&lt;/code>.&lt;/p>
-&lt;p>One of the reasons instructions rely on segment registers instead of segment identifiers on every memory access is efficiency: encoding the segment register to use requires only 2 bits (we have 4 segment registers in total) vs. the 2 bytes that would be necessary to store the segment base. More on this later.&lt;/p>
-&lt;h1 id="com-files">COM files&lt;/h1>
-&lt;p>&lt;a href="https://en.wikipedia.org/wiki/COM_file">COM files&lt;/a> are the most trivial executable format you can think of: they contain raw machine code that can be placed at pretty much any memory location and executed without any sort of post-processing. There are no relocations, no shared libraries, no nothing to worry about: you can just blit the binary into memory and run it.&lt;/p>
-&lt;p>The way this works is by leveraging the 8086 segmented architecture: the COM image is loaded into &lt;em>any&lt;/em> segment and always at offset 100h within that segment. All memory addresses within the COM image must be relative to this offset (which explains the &lt;code>ORG 100h&lt;/code> you might have seen in the past), but the image doesn&amp;rsquo;t need to know which segment it is loaded into: the loader (DOS in our case, but COM files come from CP/M actually) sets CS, DS, ES, and SS to the exact same segment and transfers control to &lt;code>CS:100h&lt;/code>.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-09-30-dos-memory-models-com-file.png" />
-&lt;figcaption>At the top, representation of a COM file as it is stored on disk. At the bottom, an explanation of how DOS proceeds to load this COM file into two different segments.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Magic! COM files are essentially PIE (&lt;a href="https://en.wikipedia.org/wiki/Position-independent_code">Position Independent Executables&lt;/a>) without requiring any sort of MMU or fancy memory management by the kernel.&lt;/p>
-&lt;p>Unfortunately, not everything is rosy. The problem with COM files is that they are limited in size: because they are loaded into one segment and segments are 64KB-long at most, the largest a COM file can be is 64KB (minus the 256 bytes reserved for the PSP at the front). This includes code &lt;em>and&lt;/em> data, and 64KB isn&amp;rsquo;t much of either. Obviously, when the COM program is running, it has free reign over the processor and can access any memory outside of its single segment by resetting CS, DS, ES, and/or SS, but all memory management is left to the programmer.&lt;/p>
-&lt;h1 id="exe-files">EXE files&lt;/h1>
-&lt;p>To resolve the limitations of COM files in DOS, Microsoft came up with a different executable format for DOS: the &lt;a href="https://en.wikipedia.org/wiki/DOS_MZ_executable">EXE file&lt;/a>, also known as an MZ executable.&lt;/p>
-&lt;p>Compared to COM files, EXE files have some internal structure and are not bound by the 64KB limit: they can contain larger code and data blocks in them. But&amp;hellip; how is that possible given that 8086 segments are still 64KB-long at most? The answer is simple: EXE files contain &lt;em>multiple&lt;/em> segments and spread code and data over them.&lt;/p>
-&lt;p>To support multiple segments at runtime, EXE files contain relocation information in their header. Conceptually, relocations tell the loader which positions in the binary image contain &amp;ldquo;incomplete&amp;rdquo; pointers that need to be fixed up with the segment base addresses of the segments after they are loaded in memory. DOS, acting as the loader, is responsible for doing this patching.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-09-30-dos-memory-models-exe-file.png" />
-&lt;figcaption>Representation of an EXE file and the content of one of its code segments. Within the code, we can see a near pointer and two far pointers that will require patching at runtime to point to the other segments in the binary.&lt;/figcaption>
-&lt;/figure>
-&lt;p>How many segments go into the EXE though? Well, it depends, because not all programs have the same needs. Some programs are tiny overall and could fit in a COM file. Other programs contain large portions of data but little code. Another set of programs contain a lot of code and data. Etc.&lt;/p>
-&lt;p>So then the question becomes: how can the one-size-fits-all EXE format support these options in an efficient manner? This is where memory models become important, but to talk about those, we must do another detour through pointer types.&lt;/p>
-&lt;h1 id="pointer-types">Pointer types&lt;/h1>
-&lt;p>&lt;a href="https://en.wikipedia.org/wiki/Locality_of_reference">The locality principle&lt;/a> says that &amp;ldquo;a processor tends to access the same set of memory locations repetitively over a short period of time&amp;rdquo;. This is easy to reason about: code normally runs almost-sequentially and data is often packed in consecutive chunks of memory like arrays or structs.&lt;/p>
-&lt;p>Because of this, expressing &lt;em>all&lt;/em> memory addresses as 4-byte &lt;code>segment:offset&lt;/code> pairs would be wasteful, and this is where 8086&amp;rsquo;s segmentation plays in our favor again. We can first load a segment register with the base address of &amp;ldquo;all of our data&amp;rdquo; and then all we need to do is record addresses as offsets within that segment. The fewer times we have to reload segment registers, the better because the less information we have to carry around in every instruction and in every memory reference.&lt;/p>
-&lt;p>But we can&amp;rsquo;t just always use offsets within a single segment because we may be dealing with more than one segment. And offsets come in various sizes so using a unique size for them all would be wasteful too. Which means memory addresses, or &lt;em>pointers&lt;/em>, need to have different shapes and forms, each best suited for a specific use case.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-09-30-dos-memory-models-short-pointer.png" />
-&lt;figcaption>Representation of two short pointers: one addressing a higher memory address (possibly a forward jump to skip a conditional branch) and one addressing a lower memory address (probably a backwards jump to return to the beginning of a loop).&lt;/figcaption>
-&lt;/figure>
-&lt;p>&lt;strong>Short pointers&lt;/strong> take just 1 byte and express a &lt;em>relative&lt;/em> address from the instruction being executed. These are specially useful in jump instructions to keep their binary representation compact: jumps appear in every conditional or loop, and in many cases, conditional branches and loop bodies are so short that minimizing the amount of code required to express these branch points is worthwhile.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-09-30-dos-memory-models-near-pointer.png" />
-&lt;figcaption>Representation of a near pointer.&lt;/figcaption>
-&lt;/figure>
-&lt;p>&lt;strong>Near pointers&lt;/strong> can reference addresses within the 64KB segment implied &amp;ldquo;by context&amp;rdquo; and are 2-byte long. For example, an instruction like &lt;code>JMP 12829h&lt;/code> does not usually need to carry information about the segment this address references because code jumps are almost-always within the same CS of the code issuing the jump. Similarly, an instruction like &lt;code>MOV AX, [5610h]&lt;/code> assumes that the given address references the currently-selected DS so that it doesn&amp;rsquo;t have to express the segment every time. The offset encoded by the near pointer can be relative or absolute.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-09-30-dos-memory-models-far-pointer.png" />
-&lt;figcaption>Representation of a far pointer referencing an address in another segment.&lt;/figcaption>
-&lt;/figure>
-&lt;p>&lt;strong>Far pointers&lt;/strong> can reference any memory address by encoding a segment and an offset. They are 4-byte long. When used in pointer arithmetic, the segment stays fixed and only the offset varies. This is relevant, for example, when iterating over arrays as we can load the base address into DS or ES just once and then manipulate the offset within the segment. However, this means that such iteration has a maximum range of 64KB.&lt;/p>
-&lt;p>&lt;strong>Huge pointers&lt;/strong> are like far pointers in that they are also 4-byte long and can reference any memory address, but they eliminate the 64KB limitations around pointer arithmetic. They do so by recomputing the segment and offset portions on every memory access (remember that segments are overlapping so we can come up with multiple segment/offset pairs for any physical address). As you can imagine, this requires extra code on every memory access and thus huge pointers impose a noticeable tax on run time.&lt;/p>
-&lt;h1 id="memory-models">Memory models&lt;/h1>
-&lt;p>And now that we know about 8086 segmentation, EXE files, and pointer types&amp;hellip; we can finally tie all of these concepts together to demystify the memory models we used to see in old compilers for DOS.&lt;/p>
-&lt;p>Here is the breakdown:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Tiny&lt;/strong>: This is the memory model of COM images. The whole program fits in one 64KB segment and all segment registers are set to this one segment at startup. This means that all pointers within the program are short or near because they always reference this same 64KB segment.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Small&lt;/strong>: Uses near pointers everywhere, but the data and stack segments are different from the code segment. This means that these programs have 64KB for code and 64KB for data.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Compact&lt;/strong>: Uses short pointers for the code but far pointers for the data. This means that these programs can use the full 1 MB memory space for data and, as such, it was particularly useful for games where the code would be as tight as possible while being able to load and reference all assets in memory.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Medium&lt;/strong>: The opposite from compact. Uses far pointers for code and short pointers for data. This model is weird because, if you had a program with a lot of code, it was probably the kind of program that handled a lot of data too.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Large&lt;/strong>: Uses far pointers everywhere so both code and data can reference the full 1 MB address space. However, because of what far pointers are, all memory &lt;em>offsets&lt;/em> are 64 KB at most which means data structures and arrays are limited in size.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Huge&lt;/strong>: Uses huge pointers everywhere. This overcomes the limitations of the large model by emitting code to compute the absolute addresses of every memory access and allows structs and arrays that span over 64 KB of memory. Obviously, this comes at a cost: the program code is now larger and the runtime cost is much bigger.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>And that&amp;rsquo;s it!&lt;/p>
-&lt;p>It is worth highlighting that these models were all &lt;em>conventions&lt;/em> that a vintage C compiler used to emit code. If you were writing assembly by hand, you could mix-and-match pointer types to do whatever you wanted given that these concepts had no special meaning to the OS.&lt;/p>
-&lt;h1 id="evolving-to-todays-world">Evolving to today&amp;rsquo;s world&lt;/h1>
-&lt;p>Everything I have told you about until now is legacy stuff that you could easily dismiss as useless knowledge. Or could you?&lt;/p>
-&lt;p>One thing I did &lt;em>not&lt;/em> touch upon is the concept of &lt;strong>code density&lt;/strong> and how it relates to performance. The way we choose to express pointers in the code has a direct impact on code density, so when we evolve computing from 16-bit machines like the 8086 to contemporary 64-bit machines, pointer representations grow by &lt;em>a lot&lt;/em> and we face some hard choices.&lt;/p>
-&lt;p>But to explain all of this and answer the performance questions, you&amp;rsquo;ll have to wait for the next article. So subscribe now to not miss out on that one!&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-09-30-turbo-cxx-memory-models.png" length="140059" type="image/jpeg"/></item></channel></rss>
+&lt;p>In the end, even though LP64 &lt;a href="https://unix.org/version2/whatsnew/lp64_wp.html">wasn&amp;rsquo;t the obvious choice&lt;/a> for x86-64, it&amp;rsquo;s the compilation mode that won and stuck.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-10-07-x86-64-cover-image.jpg" length="992004" type="image/jpeg"/></item></channel></rss>
