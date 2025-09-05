@@ -1,4 +1,125 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Fri, 05 Sep 2025 08:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Bazel and action (non-) determinism</title><link>https://jmmv.dev/2025/07/bazel-action-determinism.html</link><pubDate>Mon, 21 Jul 2025 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/07/bazel-action-determinism.html</guid><description>&lt;p>A key feature of Bazel is its ability to produce fast, reliable builds by caching the output of actions. This system, however, relies on a fundamental principle: build actions must be deterministic. For the most part, Bazel helps ensure that they are, but in the odd cases when they aren&amp;rsquo;t, builds can fail in subtle and frustrating ways, eroding trust in the build system.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Fri, 05 Sep 2025 08:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Understanding Bazel remote caching</title><link>https://jmmv.dev/2025/09/bazel-remote-caching.html</link><pubDate>Fri, 05 Sep 2025 08:30:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/bazel-remote-caching.html</guid><description>&lt;p>The previous article on &lt;a href="/2025/07/bazel-action-determinism.html">Bazel action non-determinism&lt;/a> provided an introduction to actions: what they are, how they are defined, and how they act as the fundamental unit of execution in Bazel. What the article did not mention is that actions are &lt;em>also&lt;/em> the fundamental unit of caching during execution to avoid doing already-done work.&lt;/p>
+&lt;p>In this second part of the series, I want to revisit the very basics of how Bazel runs actions and how remote caching (&lt;em>not&lt;/em> remote execution, because that&amp;rsquo;ll come later) works. The goal here is to introduce the &lt;strong>Action Cache (AC)&lt;/strong>, the &lt;strong>Content Addressable Storage (CAS)&lt;/strong>, how they play together, and then have some fun in describing the many ways in which it&amp;rsquo;s possible to poison such a cache in an accidental or malicious manner.&lt;/p>
+&lt;h1 id="the-action-cache-ac">The Action Cache (AC)&lt;/h1>
+&lt;p>Picture this build file with two targets that generate one action each:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;foo&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;foo.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;sleep 5; echo foo &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;bar&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;bar.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;:foo&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;sleep 5; { cat $&amp;lt; ; echo bar; } &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And now this sequence of commands:&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;code>bazel build //:bar&lt;/code>: This first command causes Bazel to build &lt;code>//:bar&lt;/code>, possibly from scratch. This takes at least 10 seconds due to the &lt;code>sleep&lt;/code> calls we introduced in the commands. As a side-effect of this operation, Bazel populates its in-memory graph with the actions that it executed and the outputs they produced.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;code>bazel build //:bar&lt;/code>: This second command asks Bazel to do the same build as the first command and, because we &lt;em>just&lt;/em> built &lt;code>//:bar&lt;/code> and Bazel&amp;rsquo;s in-memory state is untouched, we expect Bazel to do absolutely nothing. In fact, this command completes (or should complete) in just a few milliseconds due to Bazel&amp;rsquo;s design.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;code>bazel shutdown&lt;/code>: This third command shuts the background local Bazel server process down. All in-memory state populated by the first command is lost.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;code>bazel build //:bar&lt;/code>: This fourth command asks Bazel to do the same build as the first and second commands. We didn&amp;rsquo;t run a &lt;code>bazel clean&lt;/code> so all on-disk state is still present, so we should expect Bazel to &lt;em>not&lt;/em> rebuild &lt;code>//:foo&lt;/code> nor &lt;code>//:bar&lt;/code>. And indeed they are not rebuilt: Bazel also &amp;ldquo;does nothing&amp;rdquo; like in that second command (the &lt;code>sleep&lt;/code>s don&amp;rsquo;t run), but the build is visibly slower in this case.&lt;/p>
+&lt;/li>
+&lt;/ol>
+&lt;p>The problem or, rather, question is&amp;hellip; how does Bazel &lt;em>know&lt;/em> that there is nothing to do on that fourth command? A system like Make would discover that all output files are &amp;ldquo;up to date&amp;rdquo; by comparing their timestamps against those of their inputs, but remember that Bazel tracks output staleness by inspecting the content &lt;em>digests&lt;/em> of the inputs and ensuring they haven&amp;rsquo;t changed.&lt;/p>
+&lt;p>Enter the &lt;strong>Action Cache (AC)&lt;/strong>: an on-disk persistent cache that helps Bazel determine whether the outputs of an action are already present on disk and whether they already have the expected (up-to-date) content. The AC lives under &lt;code>~/.cache/bazel/_bazel_${USER?}/${WORKSPACE_HASH?}/action_cache/&lt;/code> and is stored in a special binary format that you can dump with &lt;code>bazel dump --action_cache&lt;/code>.&lt;/p>
+&lt;p>Conceptually, the AC maps the &lt;code>ActionKey&lt;/code>s that we saw in the previous article to their corresponding &lt;code>ActionResult&lt;/code>s. In practice, the AC keys are a more succinct representation of the on-disk state of the inputs to the action: up until Bazel 9, the keys were known as &amp;ldquo;digest keys&amp;rdquo; but things have &lt;a href="https://github.com/bazelbuild/bazel/commit/ec10da4e3fada5fdf80d809d44b32e331e2b322b">changed recently&lt;/a> to allow Bazel to better explain why certain actions are rebuilt; the details are uninteresting in this article though.&lt;/p>
+&lt;p>But what is an &lt;code>ActionResult&lt;/code>? The &amp;ldquo;action result&amp;rdquo; records, well, the side-effects of the action. Among other things, the &lt;code>ActionResult&lt;/code> contains:&lt;/p>
+&lt;ul>
+&lt;li>The exit code of the process executed by the action.&lt;/li>
+&lt;li>A mapping of output &lt;em>names&lt;/em> to output &lt;em>digests&lt;/em>.&lt;/li>
+&lt;/ul>
+&lt;p>The mapping of output names to digests is the piece of information I want to focus on because this is what allows the fourth Bazel invocation above to discover that it has &amp;ldquo;nothing to do&amp;rdquo;. When Bazel has lost its in-memory state of an action, Bazel queries the AC to determine the names of its outputs. If those files exist on disk, then Bazel can compute their digests and compare those against the digests recorded in the &lt;code>ActionResult&lt;/code>. If they match, Bazel can conclude that the action does not have to be re-executed.&lt;/p>
+&lt;p>And this explains why the fourth Bazel invocation is visibly slower than the second invocation, even if both are &amp;ldquo;fully cached&amp;rdquo;: when the in-memory state of an action is lost, Bazel has to re-digest all input and output files that are on disk, and these are slow operations, typically I/O-bound. If you have seen annoying pauses with the &lt;code>checking cached actions&lt;/code> message, you now know what they are about.&lt;/p>
+&lt;h1 id="introducing-remote-caching">Introducing remote caching&lt;/h1>
+&lt;p>The AC is, maybe surprisingly, a concept that exists even if Bazel is &lt;em>not&lt;/em> talking to a remote cache or execution system. But what happens when we introduce a remote cache into the mix?&lt;/p>
+&lt;p>First of all, the remote cache needs to be able to answer the same questions as the local AC: &amp;ldquo;given an action key, is the action result already known?&amp;rdquo; But let&amp;rsquo;s think through what goes into the result of such a query. Does the remote AC capture the same information that goes into a local &lt;code>ActionResult&lt;/code>, or does it do something different?&lt;/p>
+&lt;p>Given that we are talking about a remote cache, it&amp;rsquo;s tempting to say that the value of the cache entry should embed the &lt;em>content&lt;/em> of the output files: after all, if Bazel scores a remote AC hit, Bazel will need to retrieve the resulting output files to use them for subsequent actions, right? Not so fast:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>What if Bazel &lt;em>already&lt;/em> has the output files on disk but is just querying the remote AC because the local in-memory state was lost? In this case, you want the response from the cache to be as small and quick as possible: you do not want to fetch the output contents again because they may be very large.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>What if you (the user) &lt;em>don&amp;rsquo;t care&lt;/em> about the output&amp;rsquo;s content? Take a look at the actions in the example above: if &lt;em>all&lt;/em> of them are cached, when I ask Bazel to build &lt;code>//:bar&lt;/code> I &lt;em>probably&lt;/em> only want to download &lt;code>bar.txt&lt;/code> from the remote cache. I may not care about the intermediate &lt;code>foo.txt&lt;/code>, so why should I be forced to fetch it when I query the cache just to know if &lt;code>//:foo&lt;/code> is known?&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>What if I&amp;rsquo;m using remote execution and I&amp;rsquo;m building and running a test? The test runs remotely, so the local machine does not need to download &lt;em>any&lt;/em> file at all!&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>This is why the &lt;code>ActionResult&lt;/code>, even for the remote AC, does &lt;em>not&lt;/em> contain the content of the outputs.&lt;/p>
+&lt;p>But then&amp;hellip; how is the remote cache ever useful across users or machines, or even in a simple sequence like this?&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">bazel build //:bar
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bazel clean
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">bazel build //:bar
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The &lt;code>bazel clean&lt;/code> in between these two builds causes all disk state (the local AC and the local output tree) to be lost. In this situation, Bazel will leverage the remote AC to know the names of the output files and their digests for each action&amp;hellip; but if those outputs are not present on the local disk anymore, then what? Do we just rebuild the action? That&amp;rsquo;d&amp;hellip; work, but it&amp;rsquo;d defeat the whole purpose of remote caching.&lt;/p>
+&lt;p>Enter the &lt;strong>Content Addressable Storage (CAS)&lt;/strong>, another cache provided by the remote caching system to solve this problem. The CAS maps file digests (&lt;em>not&lt;/em> names!) to their &lt;em>contents&lt;/em>. Nothing more, nothing less. By leveraging both the AC and the CAS, Bazel can recreate its on-disk view of an already-built target by first checking with the AC what files should exist and then leveraging the CAS to fetch those files.&lt;/p>
+&lt;p>Let&amp;rsquo;s visualize everything explained above via sequence diagrams.&lt;/p>
+&lt;p>This first diagram represents the initial &lt;code>bazel build //:bar&lt;/code> invocation, assuming that &lt;code>//:bar&lt;/code> has not been built at all by anyone beforehand. This means that Bazel will not be able to score any local nor remote AC hits and therefore will have to execute all actions:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-09-05-bazel-remote-caching-uncached-build.png" width="100%" />
+&lt;/figure>
+&lt;p>This second diagram represents the second &lt;code>bazel build //:bar&lt;/code> invocation executed after &lt;code>bazel clean&lt;/code>. In this case, all local state has been lost, but Bazel is able to score remote cache hits and recreate the local disk state by downloading entries from the remote AC and CAS. The dashed lines against the CAS represent optional operations, controlled by the use (or not) of the &amp;ldquo;Build Without The Bytes&amp;rdquo; feature.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-09-05-bazel-remote-caching-cached-build.png" width="100%" />
+&lt;/figure>
+&lt;p>Before moving on to the fun stuff, a little subtlety: whenever the AC and CAS use digests, they don&amp;rsquo;t just use a hash. Instead, they use hash/size pairs. This adds extra protection against &lt;a href="https://en.wikipedia.org/wiki/Length_extension_attack">length extension attacks&lt;/a> and allows both Bazel and the remote cache to cheaply detect data inconsistencies should they ever happen.&lt;/p>
+&lt;h1 id="lets-poison-the-cache">Let&amp;rsquo;s poison the cache&lt;/h1>
+&lt;p>With any remote caching system, we must fear the possibility of invalid cached entries. We have two main types of &amp;ldquo;invalid entries&amp;rdquo; to worry about:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Actions that point to results that, when reused, lead to inconsistent or broken builds.&lt;/strong> This can happen if the cache keys fail to capture some detail of the execution environment. For example: if we have different glibc versions on the machines that store action results into the remote cache, we can end up with object files that are incompatible across machines because the glibc version is &lt;em>not&lt;/em> part of the cache key.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Actions that point to malicious results injected by a malicious actor.&lt;/strong> The attack vector looks like this: a malicious actor makes a &lt;code>CppCompile&lt;/code> action point to a poisoned object file that steals credentials and uploads them to a remote server. This object file is later pulled by other machines when building tools that engineers run or when building binaries that end up in production, leading to the compromised code spreading to those binaries.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Scary stuff. But can this attack vector happen? Let&amp;rsquo;s see how an attacker might try to compromise the remote cache.&lt;/p>
+&lt;p>If the attacker can inject a malicious blob into the CAS, we now have a new entry indexed by its digest that points to some dangerous file. But&amp;hellip; how can we access such file? To access such file, we must first know its digest. Bazel uses the digests stored in the AC to determine which files to download from the CAS so, as long as there is no entry in the AC pointing to the bad blob, the bad blob is invisible to users and is not used. We have no problem here.&lt;/p>
+&lt;p>The real danger comes from an attacker having write access to the AC. If the attacker can write arbitrary entries to the AC, they can pretty much point any action to compromised results. Therefore, the content of the AC is precious.&lt;/p>
+&lt;h1 id="protecting-the-remote-cache">Protecting the remote cache&lt;/h1>
+&lt;p>In order to offer a secure and reliable remote cache system, we must restrict who can write to the cache. And because we can&amp;rsquo;t control what users do on their machines (intentionally or not), the only option we have is to restrict writes to the AC to builds that run on CI. After all, CI is a trusted environment so we can assume attackers cannot compromise it.&lt;/p>
+&lt;p>But that&amp;rsquo;s not enough! Attackers can &lt;em>still&lt;/em> leverage a naive CI system to inject malicious outputs into the cache. Consider this: an attacker creates a PR that modifies the scripts executed by CI. This change leverages the credentials of the CI system to write a poisoned entry into the AC. This poisoned entry targets an action that almost-never changes (something at the bottom of the build graph) to prevent it from being evicted soon after. The attacker runs the PR through CI and then deletes the PR to erase traces of their actions. From there on, the poisoned artifact remains in the cache and can be reused by other users.&lt;/p>
+&lt;p>Yikes. How do we protect against this? The reality is that we just cannot, at least not in a very satisfactory way. If the CI system runs untrusted code as submitted in a PR, the CI system can be compromised. We can mitigate the threat by doing these:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>For CI runs against PRs (code not yet reviewed and merged):&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>Disallow running the CI workflows if the changes modify the CI infrastructure in any way (CI configurations, scripts run by CI, the Bazel configuration files, etc.)&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Configure Bazel with &lt;code>--noremote_upload_local_results&lt;/code> so that &lt;code>genrule&lt;/code>s or other actions that could produce tampered outputs cannot propagate those to other users.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>For CI runs against merged code:&lt;/p>
+&lt;ul>
+&lt;li>Configure Bazel with &lt;code>--remote_upload_local_results&lt;/code> so that they are the only ones that can populate the remote cache. If there is any malicious activity happening at this stage, which could still happen via sloppy code reviews or smart deceit, at least you will be able to collect audit logs and have the possibility of tracing back the bad changes to a person.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>This configuration should provide a reasonably secure system at the expense of slightly lower cache hit rates: users will not be able to benefit from cached artifacts until their code has been merged and later built by CI. But&amp;hellip; doing otherwise would be reckless.&lt;/p>
+&lt;p>Before concluding: what about the CAS? Is it truly safe to allow users to freely write to the CAS? As we have seen before, it is really difficult for a malicious entry in the CAS to become problematic unless it is referenced by the AC. But still, we have a couple of scenarios to worry about:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>DoS attacks:&lt;/strong> Malicious users could bring the remote cache &amp;ldquo;down&amp;rdquo; (making it less effective) by flooding the CAS with noise, pushing valid artifacts out of it, or by exhausting all available network bandwidth. This is not a big concern in a corporate environment where you&amp;rsquo;d be able to trace abusive load to a user, but you might still run into this due to accidental situations.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Information disclosure:&lt;/strong> If a malicious user can somehow guess the digest of a sensitive file (e.g. a file with secrets), they could fetch such file. So&amp;hellip; how much do you trust cryptography?&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h1 id="next-steps">Next steps&lt;/h1>
+&lt;p>As presented in this article, deploying an effective remote cache for Bazel in a manner that&amp;rsquo;s secure is not trivial. And if you try to make the setup secure, the effectiveness of the remote cache is lower that desirable because users can only leverage remote caching for builds executed on CI: any builds they run locally, possibly with configurations that CI doesn&amp;rsquo;t plan for, won&amp;rsquo;t be cached.&lt;/p>
+&lt;p>The only way to offer a truly secure remote caching system is by &lt;em>also&lt;/em> leveraging remote execution. We&amp;rsquo;ll see how and why in the next episode.&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-09-05-bazel-remote-caching-cover-image.jpg" length="969844" type="image/jpeg"/></item><item><title>Bazel and action (non-) determinism</title><link>https://jmmv.dev/2025/07/bazel-action-determinism.html</link><pubDate>Mon, 21 Jul 2025 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/07/bazel-action-determinism.html</guid><description>&lt;p>A key feature of Bazel is its ability to produce fast, reliable builds by caching the output of actions. This system, however, relies on a fundamental principle: build actions must be deterministic. For the most part, Bazel helps ensure that they are, but in the odd cases when they aren&amp;rsquo;t, builds can fail in subtle and frustrating ways, eroding trust in the build system.&lt;/p>
 &lt;p>This article is the first in a series on Bazel&amp;rsquo;s execution model. Having explained these concepts many times, I want to provide a detailed reference before explaining a cool solution to a problem I recently developed at work. We will start with action non-determinism, then cover remote caching and execution, and finally, explore the security implications of these features.&lt;/p>
 &lt;p>This first article explains what non-determinism is, how it manifests, and how you can diagnose and prevent it in your own builds. Let&amp;rsquo;s begin.&lt;/p>
 &lt;h1 id="bazel-execution-basics">Bazel execution basics&lt;/h1>
@@ -3129,231 +3250,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;p>&lt;strong>My talk about Snowflake:&lt;/strong> I gave a 15-minute &amp;ldquo;migration&amp;rdquo; talk about what we are doing with Bazel at Snowflake. Because of what I said just above, I skipped over all of the migration topics and instead focused on explaining 5 different technical challenges that we faced and how we fixed them. I was met with lots of questions after the talk, which was really nice, but which means that we owe a full migration post when we are done (very soon now!).&lt;/p>
 &lt;/li>
 &lt;/ul>
-&lt;p>I hear you want the raw notes? Are you sure? I really don&amp;rsquo;t recommend that you look&amp;hellip; but if you must, here they are: &lt;a href="/notes/2024-10-14-bazelcon.md">BazelCon day 1 notes&lt;/a>, &lt;a href="/notes/2024-10-15-bazelcon.md">BazelCon day 2 notes&lt;/a>, and the &lt;a href="/notes/2024-10-16-build-meetup.md">Build Meetup&amp;rsquo;s notes&lt;/a>.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-10-22-bazelcon.jpg" length="362903" type="image/jpeg"/></item><item><title>The costs of the i386 to x86-64 upgrade</title><link>https://jmmv.dev/2024/10/x86-64-programming-models.html</link><pubDate>Mon, 07 Oct 2024 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2024/10/x86-64-programming-models.html</guid><description>&lt;p>If you read my previous article on &lt;a href="/2024/09/dos-memory-models.html">DOS memory models&lt;/a>, you may have dismissed everything I wrote as &amp;ldquo;legacy cruft from the 1990s that nobody cares about any longer&amp;rdquo;. After all, computers have evolved from sporting 8-bit processors to 64-bit processors and, on the way, the amount of memory that these computers can leverage has grown orders of magnitude: the 8086, a 16-bit machine with a 20-bit address space, could only use 1MB of memory while today&amp;rsquo;s 64-bit machines can theoretically access 16EB.&lt;/p>
-&lt;p>All of this growth has been in service of ever-growing programs. But&amp;hellip; even if programs are now more sophisticated than they were before, do they all &lt;em>really&lt;/em> require access to a 64-bit address space? Has the growth from 8 to 64 bits been a net positive in performance terms?&lt;/p>
-&lt;p>Let&amp;rsquo;s try to answer those questions to find some very surprising answers. But first, some theory.&lt;/p>
-&lt;h1 id="code-density">Code density&lt;/h1>
-&lt;p>An often overlooked property of machine code is &lt;em>code density&lt;/em>, a loose metric that quantifies how many instructions are required to execute a given &amp;ldquo;action&amp;rdquo;. I double-quote action because an &amp;ldquo;action&amp;rdquo; in this context is a subjective operation that captures a programmer-defined outcome.&lt;/p>
-&lt;p>Suppose, for example, that you want to increment the value of a variable that resides in main memory, like so:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">int&lt;/span> &lt;span class="n">a&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">// ...
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="n">a&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">a&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>On a processor with an ISA that provides complex instructions and addressing modes, you can potentially do so in just one machine instruction:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="c1">; Take the 32-bit quantity at the address indicated by the
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">; 00001234h immediate, increment it by one, and store it in the
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">; same memory location.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">add&lt;/span> &lt;span class="no">dword&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="mi">1234&lt;/span>&lt;span class="no">h&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="mi">1&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In contrast, on a processor with an ISA that strictly separates memory accesses from other operations, you&amp;rsquo;d need more steps:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl">&lt;span class="nf">li&lt;/span> &lt;span class="no">r8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1234&lt;/span>&lt;span class="no">h&lt;/span> &lt;span class="c1">; Load the address of the variable into r8.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">lm&lt;/span> &lt;span class="no">r1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r8&lt;/span> &lt;span class="c1">; Load the content of the address into r1.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">li&lt;/span> &lt;span class="no">r2&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span> &lt;span class="c1">; Load the immediate value 1 into r2.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">add&lt;/span> &lt;span class="no">r3&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r1&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r2&lt;/span> &lt;span class="c1">; r3 = r1 + r2
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nf">sm&lt;/span> &lt;span class="no">r8&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="no">r3&lt;/span> &lt;span class="c1">; Store the result in r3 into the address in r8.
-&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Which ISA is better, you ask? Well, as usual, there are pros and cons to each approach:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>The former type of ISA offers a denser representation of the operation so it can fit more instructions in less memory. But, because of the semantic complexity of each individual instruction, the processor has to do more work to execute them (possibly requiring more transistors and drawing more power). This type of ISA is usually known as &lt;a href="https://en.wikipedia.org/wiki/Complex_instruction_set_computer">CISC&lt;/a>.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The latter type of ISA offers a much more verbose representation of the operation but the instructions that the processor executes are simpler and can likely be executed faster. This type of ISA is usually known as &lt;a href="https://en.wikipedia.org/wiki/Reduced_instruction_set_computer">RISC&lt;/a>.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>This is the eternal debate between CISC and RISC but note that the distinction between the two is not crystal clear: some RISC architectures support &lt;em>more&lt;/em> instructions that CISC architectures, and contemporary Intel processors translate their CISC-style instructions into internal RISC-style &lt;a href="https://en.wikipedia.org/wiki/Intel_microcode">micro-operations&lt;/a> immediately after decoding the former.&lt;/p>
-&lt;h1 id="its-the-bytes-that-matter">It&amp;rsquo;s the bytes that matter&lt;/h1>
-&lt;p>Code density is not about instruction &lt;em>count&lt;/em> though. Code density is about the &lt;em>aggregate size&lt;/em>, in bytes, of the instructions required to accomplish a specific outcome.&lt;/p>
-&lt;p>In the example I presented above, the single CISC-style &lt;code>mov&lt;/code> x86 instruction is encoded using anywhere from 2 to 8 bytes depending on its arguments, whereas the fictitious RISC-style instructions typically take 4 bytes each. Therefore, the CISC-style snippet would take 8 bytes total whereas the RISC-style snippet would take 20 bytes total, while achieving the same conceptual result.&lt;/p>
-&lt;p>Is that increase in encoded bytes bad? Not necessarily because &amp;ldquo;bad&amp;rdquo; is subjective and we are talking about trade-offs here, but it&amp;rsquo;s definitely an important consideration due to its impact in various dimensions:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Memory usage&lt;/strong>: Larger programs take more memory. You might say that memory is plentiful these days, and that&amp;rsquo;s true, but it wasn&amp;rsquo;t always the case: when computers could only address 1 MB of RAM or less, the size of a program&amp;rsquo;s binary mattered a lot. Furthermore, even today, memory &lt;em>bandwidth&lt;/em> is limited, and this is an often-overlooked property of a system.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Disk space&lt;/strong>: Larger programs take more disk space. You might say that disk space is plentiful these days too and that program code takes a tiny proportion of the overall disk: most space goes towards storing media anyway. And that&amp;rsquo;s true, but I/O bandwidth is not as unlimited as disk space, and loading these programs from disk isn&amp;rsquo;t cheap. Have you noticed how utterly slow is it to open an Electron-based app?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>L1 thrashing&lt;/strong>: Larger or more instructions mean that you can fit fewer of them in the L1 instruction cache. Proper utilization of this cache is critical to achieve reasonable levels of computing performance, and even though main memory size can now be measured in terabytes, the L1 cache is still measured in kilobytes.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>We could beat the dead horse over CISC vs. RISC further but that&amp;rsquo;s not what I want to focus on. What I want to focus on is one very specific dimension of the instruction encoding that affects code density in all cases. And that&amp;rsquo;s the &lt;em>size of the addresses&lt;/em> (pointers) required to reference program code or data.&lt;/p>
-&lt;p>Simply put, the larger the size of the addresses in the program&amp;rsquo;s code, the lower the code density. The lower the code density, the more memory and disk space we need. And the more memory code takes, the more L1 thrashing we will see.&lt;/p>
-&lt;p>So, for good performance, we probably want to optimize the way we represent addresses in the code and take advantage of surrounding context. For example: if we have a tight loop like this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-c" data-lang="c">&lt;span class="line">&lt;span class="cl">&lt;span class="k">static&lt;/span> &lt;span class="kt">int&lt;/span> &lt;span class="n">a&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">...&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">for&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span> &lt;span class="o">&amp;lt;&lt;/span> &lt;span class="mi">100&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="n">i&lt;/span>&lt;span class="o">++&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">a&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">a&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">}&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The corresponding assembly code may be similar to this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-asm" data-lang="asm">&lt;span class="line">&lt;span class="cl"> &lt;span class="nf">mov&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">0&lt;/span> &lt;span class="c1">; i = 0.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nl">repeat:&lt;/span> &lt;span class="nf">cmp&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">100&lt;/span> &lt;span class="c1">; i &amp;lt; 100?
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">je&lt;/span> &lt;span class="no">out&lt;/span> &lt;span class="c1">; If i == 100, jump to out.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">add&lt;/span> &lt;span class="no">dword&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="mi">01234&lt;/span>&lt;span class="no">h&lt;/span>&lt;span class="p">],&lt;/span> &lt;span class="mi">1&lt;/span> &lt;span class="c1">; Increment a.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">add&lt;/span> &lt;span class="no">ecx&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">1&lt;/span> &lt;span class="c1">; i++.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span> &lt;span class="nf">jmp&lt;/span> &lt;span class="no">repeat&lt;/span> &lt;span class="c1">; Jump back to repeat.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1">&lt;/span>&lt;span class="nl">out:&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now the questions are:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>Given that &lt;code>repeat&lt;/code> and &lt;code>out&lt;/code> are labels for memory addresses, how do we encode the &lt;code>je&lt;/code> (jump if equal) and &lt;code>jmp&lt;/code> (unconditional jump) instructions as bytes? On a 32-bit machine, do we encode the full 32-bit addresses (4 bytes each) in each instruction, or do we use 1-byte relative short pointers because the jump targets are within a 127-byte distance on either side of the jump instruction?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>How do we represent the address of the &lt;code>a&lt;/code> variable? Do we express it as an absolute address or as a relative one? Do we store &lt;code>1234h&lt;/code> as a 32-bit quantity or do we use fewer bytes because this specific number is small?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>How big should &lt;code>int&lt;/code> be? The &lt;code>dword&lt;/code> above implies 32 bits but&amp;hellip; that&amp;rsquo;s just an assumption I made when writing the snippet. &lt;code>int&lt;/code> could have been 16 bits, or 64 bits, or anything else you can imagine (which is a design mistake in C, if you ask me).&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>The answers to the questions above are &lt;em>choices&lt;/em>: we can decide whichever encoding we want for code and data addresses, and these choices have consequences on code density. This was true many years ago during the DOS days, which is why we had short, near, and far pointer types, and &lt;a href="https://web.eece.maine.edu/~vweaver/papers/iccd09/iccd09_density.pdf">is still true today&lt;/a> as we shall see.&lt;/p>
-&lt;h1 id="the-switch-to-32-bits">The switch to 32 bits&lt;/h1>
-&lt;p>It is no secret that programming 16-bit machines was limiting, and we can identify at least two reasons to back this claim.&lt;/p>
-&lt;p>First, 16-bit machines usually had limited address spaces. It&amp;rsquo;s important to understand that a processor&amp;rsquo;s native register size has no direct connection to the size of the addresses the processor can reference. In theory, these machines could have leveraged larger chunks of memory and, in fact, the 16-bit 8086 proved this to be true with its 20-bit address space. But the point is that, &lt;em>in the era&lt;/em> of 16-bit machines, 1 MB of RAM was considered &amp;ldquo;a lot&amp;rdquo; and so machines didn&amp;rsquo;t have much memory.&lt;/p>
-&lt;p>Second, 16-bit machines can only operate on 16-bit quantities at a time, and 16 bits only allow representing integers with limited ranges: a signed number between -32K and +32K isn&amp;rsquo;t&amp;hellip; particularly large. Like before, it&amp;rsquo;s important to clarify that the processor&amp;rsquo;s native register size does not impose restrictions on the size of the numbers the processor can manipulate, but it does add limitations on how &lt;em>fast&lt;/em> it can do so: operating 32-bit numbers on 16-bit machines requires at least twice the number of instructions for each operation.&lt;/p>
-&lt;p>So, when 32-bit processors entered the scene, it was pretty much a no-brainer that programs had to become 32-bit by default: all memory addresses and default integer types grew to 32 bits. This allowed programmers to not worry about memory limits for a while: 32 bits can address 4GB of memory, which was a huge amount back then and should &lt;em>still&lt;/em> be huge if it wasn&amp;rsquo;t due to bloated software. Also, this upgrade allowed programmers to efficiently manipulate integers with large-enough ranges for most operations.&lt;/p>
-&lt;p>In technical mumbo-jumbo, what happened here was that C adopted the ILP32 programming model: integers (I), longs (L), and pointers (P) all became 32 bits, whereas chars and shorts remained 8-bit and 16-bit respectively.&lt;/p>
-&lt;p>It didn&amp;rsquo;t have to be this way though: if we look at the model for 16-bit programming, shorts and integers were 16-bit whereas longs were 32-bit, so why did integers change size but longs remained the same as integers? I do not have an answer for this, but if longs had become 64 bits back then, maybe we wouldn&amp;rsquo;t be in the situation today where &lt;a href="https://en.wikipedia.org/wiki/Year_2038_problem">2038 will bring mayhem to Unix systems&lt;/a>.&lt;/p>
-&lt;h1 id="evolving-towards-x86-64">Evolving towards x86-64&lt;/h1>
-&lt;p>4GB of RAM were a lot when 32-bit processors launched but slowly became insufficient as software kept growing. To support those needs, there were crutches like &lt;a href="https://en.wikipedia.org/wiki/Physical_Address_Extension">Intel&amp;rsquo;s PAE&lt;/a>, which allowed manipulating up to 64GB of RAM on 32-bit machines without changing the programming model, but they were just that: hacks.&lt;/p>
-&lt;p>The thing is: it&amp;rsquo;s not only software that grew. It&amp;rsquo;s the &lt;em>kinds of things&lt;/em> that people wanted to do with software that changed: people wanted to edit high-resolution photos and video as well as play more-realistic games, and writing code to achieve those goals on a limited 4GB address space was possible but not &lt;em>convenient&lt;/em>. With 64-bit processors, &lt;code>mmap&lt;/code>ing huge files made those programs easier to write, and using native 64-bit integers made them faster too. So 64-bit machines became mainstream sometime around the introduction of the Athlon 64 processor and the Power Mac G5, both in 2003.&lt;/p>
-&lt;p>So what happened to the programming model? ILP32 was a no-brainer for 32-bit machines, but were LP64 or ILP64 no-brainers for 64-bit machines? These 64-bit models were definitely tempting because they allowed the programmer to leverage the machine&amp;rsquo;s resources freely. Larger pointers allowed addressing &amp;ldquo;unlimited&amp;rdquo; memory transparently, and a larger long type naturally bumped file offsets (&lt;code>ino_t&lt;/code>), timestamps (&lt;code>time_t&lt;/code>), array lengths (&lt;code>size_t&lt;/code>), and more to 64 bits as well. Without a lot of work from programmers, programs could &amp;ldquo;just do more&amp;rdquo; by simply recompiling them.&lt;/p>
-&lt;p>But there was a downside to that choice. According to the theory I presented earlier, LP64 would make programs bigger and would decrease code density when compared to ILP32. And lower code density could lead to L1 instruction cache thrashing, which is an important consideration to this day because a modern Intel Core i7-14700K from 2023 has just 80 KB of L1 cache and an Apple Silicon M3 from 2023 has less than 200KB. (These numbers are&amp;hellip; &lt;em>not big&lt;/em> when you stack them up against the multi-GB binaries that comprise modern programs, are they?)&lt;/p>
-&lt;p>We now know that LP64 was the preferred choice and that it became the default programming model for 64-bit operating systems, which means we can compare its impact against ILP32. So what are the consequences? Let&amp;rsquo;s take a look.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-10-07-x86-64-iso-images.png" class="with-border" alt="Comparison of ISO image sizes for various operating systems" />
-&lt;/figure>
-&lt;p>Wait, what? The FreeBSD x86-64 installation image is definitely larger than the i386 one&amp;hellip; but all other images are &lt;em>smaller&lt;/em>? What&amp;rsquo;s going on here? This contradicts everything I said above!&lt;/p>
-&lt;h1 id="down-the-rabbit-hole">Down the rabbit hole&lt;/h1>
-&lt;p>I was genuinely surprised by this and I had to dig a bit. Cracking open the FreeBSD bootonly image revealed some differences in the kernel (slightly bigger binaries, but different sets of modules) which made it difficult to compare the two. But looking into the Debian netinst images, I did find that almost all i386 binaries were larger than their x86-64 counterparts.&lt;/p>
-&lt;p>To try to understand why that was, the first thing I did was compile a simple hello-world program on my x86-64 Debian VM, targeting both 64-bit and 32-bit binaries:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ gcc-14 -o hello64 hello.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ i686-linux-gnu-gcc-14 -o hello32 hello.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ file hello32 hello64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hello32: ELF 32-bit LSB pie executable, Intel 80386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2, for GNU/Linux 3.2.0, not stripped
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hello64: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=f1bf851d7f1d56ae5d50eb136793066f67607e06, for GNU/Linux 3.2.0, not stripped
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ls -l hello32 hello64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rwxrwxr-x 1 jmmv jmmv 15040 Oct 4 17:45 hello32
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rwxrwxr-x 1 jmmv jmmv 15952 Oct 4 17:45 hello64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Based on this, it &lt;em>looks&lt;/em> as if 32-bit binaries are indeed smaller than 64-bit binaries. But a &amp;ldquo;hello world&amp;rdquo; program is trivial and not worth 15kb of code: those 15kb shown above are definitely &lt;em>not&lt;/em> code. They are probably mostly ELF overhead. Indeed, if we look at just the text portion of the binaries:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ objdump -h hello32 | grep text
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 14 .text 00000169 00001060 00001060 00001060 2**4
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump -h hello64 | grep text
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 14 .text 00000103 0000000000001050 0000000000001050 00001050 2**4
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&amp;hellip; we find that &lt;code>hello32&lt;/code>&amp;rsquo;s text is 169h bytes whereas &lt;code>hello64&lt;/code>&amp;rsquo;s text is 103h bytes. And if we disassemble the two:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hello32
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">00001189 &amp;lt;main&amp;gt;:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1189: 8d 4c 24 04 lea 0x4(%esp),%ecx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 118d: 83 e4 f0 and $0xfffffff0,%esp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1190: ff 71 fc push -0x4(%ecx)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1193: 55 push %ebp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1194: 89 e5 mov %esp,%ebp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1196: 53 push %ebx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1197: 51 push %ecx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1198: e8 28 00 00 00 call 11c5 &amp;lt;__x86.get_pc_thunk.ax&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 119d: 05 57 2e 00 00 add $0x2e57,%eax
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11a2: 83 ec 0c sub $0xc,%esp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11a5: 8d 90 14 e0 ff ff lea -0x1fec(%eax),%edx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11ab: 52 push %edx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11ac: 89 c3 mov %eax,%ebx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11ae: e8 8d fe ff ff call 1040 &amp;lt;puts@plt&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11b3: 83 c4 10 add $0x10,%esp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11b6: b8 00 00 00 00 mov $0x0,%eax
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11bb: 8d 65 f8 lea -0x8(%ebp),%esp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11be: 59 pop %ecx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11bf: 5b pop %ebx
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11c0: 5d pop %ebp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11c1: 8d 61 fc lea -0x4(%ecx),%esp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 11c4: c3 ret
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hello64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0000000000001139 &amp;lt;main&amp;gt;:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1139: 55 push %rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113a: 48 89 e5 mov %rsp,%rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113d: 48 8d 05 c0 0e 00 00 lea 0xec0(%rip),%rax # 2004 &amp;lt;_IO_stdin_used+0x4&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1144: 48 89 c7 mov %rax,%rdi
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1147: e8 e4 fe ff ff call 1030 &amp;lt;puts@plt&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 114c: b8 00 00 00 00 mov $0x0,%eax
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1151: 5d pop %rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1152: c3 ret
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We observe massive differences in the machine code generated for the trivial &lt;code>main&lt;/code> function. The 64-bit code is definitely &lt;em>smaller&lt;/em> than the 32-bit code, contrary to my expectations. But the code is also &lt;em>very&lt;/em> different; so different, in fact, that ILP32 vs. LP64 doesn&amp;rsquo;t explain it.&lt;/p>
-&lt;p>The first difference we can observe is around calling conventions. The i386 architecture has a limited number of registers, favors passing arguments via the stack, and only 3 registers can be clobbered within a function. x86-64, on the other hand, prefers passing arguments through registers as much as possible and defines 7 registers as volatile.&lt;/p>
-&lt;p>The second difference is that we don&amp;rsquo;t see 64-bit addresses anywhere in the code above. Jump addresses are encoded using near pointers, and data addresses are specified as offsets over a 64-bit base previously stored in a register. I found it smart that those addresses are relative to the program counter (the RIP register).&lt;/p>
-&lt;p>There may be more differences, but these two alone seem to be the reason why 64-bit binaries end up being more compact than 32-bit ones. &lt;em>On Intel x86&lt;/em>, that is. You see: Intel x86&amp;rsquo;s instruction set is so versatile that the compiler and the ABI can play tricks to hide the cost of 64-bit pointers.&lt;/p>
-&lt;p>Is that true of more RISC-y 64-bit architectures though? I installed the PowerPC 32-bit and 64-bit toolchains and ran the same test. And guess what? The PowerPC 64-bit binary was indeed larger than the 32-bit one, so &lt;em>maybe&lt;/em> it&amp;rsquo;s true. Unfortunately, running a broader comparison than this is difficult: there is no full operating system I can find that ships both builds any longer, and ARM images can&amp;rsquo;t easily be compared.&lt;/p>
-&lt;h1 id="its-all-about-the-data">It&amp;rsquo;s all about the data&lt;/h1>
-&lt;p>OK, fine, we&amp;rsquo;ve settled that 64-bit &lt;em>code&lt;/em> isn&amp;rsquo;t necessarily larger than 32-bit code, at least on Intel, and thus any adverse impact on the L1 instruction cache is probably negligible. But&amp;hellip; what about &lt;em>data density&lt;/em>?&lt;/p>
-&lt;p>Pointers don&amp;rsquo;t only exist in instructions or as jump targets. They also exist within the most modest of data types: lists, trees, graphs&amp;hellip; all contain pointers in them. And in those, unless the programmer explicitly plays complex &lt;a href="https://v8.dev/blog/pointer-compression">tricks to compress pointers&lt;/a>, we&amp;rsquo;ll usually end up with larger data structures by simply jumping to LP64. The same applies to the innocent-looking &lt;code>long&lt;/code> type by the way, which appears throughout codebases and also grows with this model.&lt;/p>
-&lt;p>And &lt;em>this&lt;/em>&amp;mdash;a decrease in data density&amp;mdash;is where the real performance penalty comes from: it&amp;rsquo;s not so much about the code size but about the data size.&lt;/p>
-&lt;p>Let&amp;rsquo;s take a look. I wrote a simple program that creates a linked list of integers with 10 million nodes and then iterates over them in sequence. Each node is 8 bytes in 32-bit mode (4 bytes for the &lt;code>int&lt;/code> and 4 bytes for the &lt;code>next&lt;/code> pointer), whereas it is 16 bytes in 64-bit mode (4 bytes for the &lt;code>int&lt;/code>, &lt;em>4 bytes of padding&lt;/em>, and 8 bytes for the &lt;code>next&lt;/code> pointer). I then compiled that program in 32-bit and 64-bit mode, measured it, and ran it:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ gcc -o list64 list.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ i686-linux-gnu-gcc-14 -o list32 list.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump -h list32 | grep text
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 13 .text 000001f6 00001070 00001070 00001070 2**4
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump -h list64 | grep text
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 14 .text 000001b0 0000000000001060 0000000000001060 00001060 2**4
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ hyperfine --warmup 1 ./list32 ./list64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Benchmark 1: ./list32
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Time (mean ± σ): 394.2 ms ± 2.1 ms [User: 311.4 ms, System: 83.1 ms]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Range (min … max): 392.1 ms … 398.2 ms 10 runs
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Benchmark 2: ./list64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Time (mean ± σ): 502.4 ms ± 4.5 ms [User: 334.9 ms, System: 167.8 ms]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Range (min … max): 494.9 ms … 509.5 ms 10 runs
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Summary
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> ./list32 ran
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1.27 ± 0.01 times faster than ./list64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>As before with the hello-world comparison, this simple microbenchmark&amp;rsquo;s 32-bit code continues to be slightly larger than its 64-bit counterpart (1F6h bytes vs 1B0h). However, its runtime is &lt;em>27% faster&lt;/em>, and it is no wonder because the doubling of the linked list node size implies doubling the memory usage and thus the halving of cache hits. We can confirm the impact of this using the &lt;code>perf&lt;/code> tool:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ perf stat -B -e cache-misses ./list32 2&amp;gt;&amp;amp;1 | grep cpu_core
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 2,400,339 cpu_core/cache-misses:u/ (99.33%)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ perf stat -B -e cache-misses ./list64 2&amp;gt;&amp;amp;1 | grep cpu_core
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 4,687,156 cpu_core/cache-misses:u/ (99.34%)
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The 64-bit build of this microbenchmark incurs almost double the cache misses than the 32-bit build.&lt;/p>
-&lt;p>Of course, this is just a microbenchmark, and tweaking it slightly will make it show very different results and make it say whatever we want. I tried to add jitter to the memory allocations so that the nodes didn&amp;rsquo;t end up as consecutive in memory, and then the 64-bit version executed faster. I suspect this is due to the memory allocator having a harder time handling memory when the address space is limited.&lt;/p>
-&lt;p>The impact on real world applications is harder to quantify. It is difficult to find the same program built in 32-bit and 64-bit mode and to run it on the same kernel. It is even more difficult to find one such program where the difference matters. But at the end of the day, the differences exist, and I bet they are more meaningful than we might think in terms of bloat&amp;mdash;but I did not intend to write a research paper here, so I&amp;rsquo;ll leave that investigation to someone else&amp;hellip; or another day.&lt;/p>
-&lt;h1 id="the-x32-abi">The x32 ABI&lt;/h1>
-&lt;p>There is one last thing to discuss before we depart. While we find ourselves using the LP64 programming model on x86-64 processors, remember that this was a choice and there were and are other options on the table.&lt;/p>
-&lt;p>Consider this: we could have made the operating system kernel leverage 64 bits to gain access to a humongous address space, but we could have kept the user-space programming model as it was before&amp;mdash;that is, we could have kept ILP32. And we could have gone even further and optimized the calling conventions to reduce the binary code size by leveraging the additional general-purpose registers that x86-64 provides.&lt;/p>
-&lt;p>And in fact, this exists and is known as &lt;a href="https://en.wikipedia.org/wiki/X32_ABI">x32&lt;/a>.&lt;/p>
-&lt;p>We can install the x32 toolchain and see that it effectively works as we&amp;rsquo;d imagine:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ gcc -o hello64 hello.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ x86_64-linux-gnux32-gcc-14 -o hellox32 hello.c
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hello64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">0000000000001139 &amp;lt;main&amp;gt;:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1139: 55 push %rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113a: 48 89 e5 mov %rsp,%rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 113d: 48 8d 05 c0 0e 00 00 lea 0xec0(%rip),%rax # 2004 &amp;lt;_IO_stdin_used+0x4&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1144: 48 89 c7 mov %rax,%rdi
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1147: e8 e4 fe ff ff call 1030 &amp;lt;puts@plt&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 114c: b8 00 00 00 00 mov $0x0,%eax
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1151: 5d pop %rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 1152: c3 ret
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ objdump --disassemble=main hellox32
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">00401126 &amp;lt;main&amp;gt;:
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401126: 55 push %rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401127: 89 e5 mov %esp,%ebp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401129: b8 04 20 40 00 mov $0x402004,%eax
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 40112e: 89 c0 mov %eax,%eax
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401130: 48 89 c7 mov %rax,%rdi
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401133: e8 f8 fe ff ff call 401030 &amp;lt;puts@plt&amp;gt;
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 401138: b8 00 00 00 00 mov $0x0,%eax
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 40113d: 5d pop %rbp
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 40113e: c3 ret
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now, the &lt;code>main&lt;/code> method of our hello-world program is really similar between the 64-bit and 32-bit builds, but pay close attention to the x32 version: it uses the same calling conventions as x86-64, but it contains a mixture of 32-bit and 64-bit registers, delivering a more compact binary size.&lt;/p>
-&lt;p>Unfortunately:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ ./hellox32
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">zsh: exec format error: ./hellox32
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can&amp;rsquo;t run the resulting binary. x32 is an ABI that impacts the kernel interface too, so these binaries cannot be executed on a regular x86-64 kernel. Sadly, and as far as I can tell, x32 is pretty much abandonware today. Gentoo claims to support it but there are no official builds of any distribution I can find that are built in x32 mode.&lt;/p>
-&lt;hr>
-&lt;p>In the end, even though LP64 &lt;a href="https://unix.org/version2/whatsnew/lp64_wp.html">wasn&amp;rsquo;t the obvious choice&lt;/a> for x86-64, it&amp;rsquo;s the compilation mode that won and stuck.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-10-07-x86-64-cover-image.jpg" length="992004" type="image/jpeg"/></item></channel></rss>
+&lt;p>I hear you want the raw notes? Are you sure? I really don&amp;rsquo;t recommend that you look&amp;hellip; but if you must, here they are: &lt;a href="/notes/2024-10-14-bazelcon.md">BazelCon day 1 notes&lt;/a>, &lt;a href="/notes/2024-10-15-bazelcon.md">BazelCon day 2 notes&lt;/a>, and the &lt;a href="/notes/2024-10-16-build-meetup.md">Build Meetup&amp;rsquo;s notes&lt;/a>.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-10-22-bazelcon.jpg" length="362903" type="image/jpeg"/></item></channel></rss>
