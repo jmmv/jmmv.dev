@@ -1,4 +1,123 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Fri, 05 Sep 2025 08:30:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Understanding Bazel remote caching</title><link>https://jmmv.dev/2025/09/bazel-remote-caching.html</link><pubDate>Fri, 05 Sep 2025 08:30:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/bazel-remote-caching.html</guid><description>&lt;p>The previous article on &lt;a href="/2025/07/bazel-action-determinism.html">Bazel action non-determinism&lt;/a> provided an introduction to actions: what they are, how they are defined, and how they act as the fundamental unit of execution in Bazel. What the article did not mention is that actions are &lt;em>also&lt;/em> the fundamental unit of caching during execution to avoid doing already-done work.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Fri, 12 Sep 2025 08:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Trusting builds with Bazel remote execution</title><link>https://jmmv.dev/2025/09/bazel-remote-execution.html</link><pubDate>Fri, 12 Sep 2025 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/bazel-remote-execution.html</guid><description>&lt;p>The previous article on &lt;a href="/2025/09/bazel-remote-caching.html">Bazel remote caching&lt;/a> concluded that using &lt;em>just&lt;/em> a remote cache for Bazel builds was suboptimal due to limitations in what can and cannot be cached for security reasons. The reason behind the restrictions was that it is impossible to safely reuse a cache across users. Or is it?&lt;/p>
+&lt;p>In this article, we&amp;rsquo;ll see how leveraging remote execution in conjunction with a remote cache opens the door to safely sharing the cache across users. The reason is that remote execution provides a trusted execution environment for actions, and this opens the door to cross-user result sharing. Let&amp;rsquo;s see why and how.&lt;/p>
+&lt;h1 id="remote-execution-basics">Remote execution basics&lt;/h1>
+&lt;p>As we saw in &lt;a href="/2025/07/bazel-action-determinism.html">the article about action determinism&lt;/a>, Bazel&amp;rsquo;s fundamental unit of execution is &lt;em>the action&lt;/em>. Consequently, a remote execution system is going to concern itself with efficiently running individual actions, not builds, and caching the results of those. This distinction is critical because there are systems out there that work differently, such as &lt;a href="https://www.microsoft.com/en-us/research/publication/cloudbuild-microsofts-distributed-and-caching-build-service/">Microsoft&amp;rsquo;s CloudBuild&lt;/a>, &lt;a href="https://www.buildbuddy.io/docs/remote-bazel/">Buildbuddy&amp;rsquo;s Remote Bazel&lt;/a>, or even &lt;a href="/2025/03/bazel-next-generation.html">the shiny and new Bonanza&lt;/a>.&lt;/p>
+&lt;p>When we configure remote execution via the &lt;code>--remote_executor&lt;/code> flag, Bazel enables the &lt;code>remote&lt;/code> action &lt;a href="/2019/12/bazel-strategies.html">execution strategy&lt;/a> by default for all actions, just as if we had done &lt;code>--strategy=remote&lt;/code>. But this is only a default and users can mix-and-match remote and local strategies by leveraging the various &lt;code>--strategy*&lt;/code> selection flags or by specifying execution requirements in individual actions.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-09-12-bazel-remote-execution-strategies.png" width="100%" />
+&lt;/figure>
+&lt;p>A remote execution system is complicated as it is typically implemented by many services:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Multiple frontends.&lt;/strong> These are responsible for accepting user requests and tracking results. These might include implement a second-level CAS to fan out traffic to clients.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>A scheduler.&lt;/strong> This is responsible for enqueuing action requests and distributing them to workers. Whether the scheduler uses a pull or push model to distribute work is implementation dependent.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Multiple workers.&lt;/strong> These are responsible for action execution and are organized in pools of distinct types (workers for x86, workers for arm64, etc.) Internally, a worker is divided into two conceptual parts: the &lt;strong>worker&lt;/strong> itself, which is the privileged service that monitors action execution, and the &lt;strong>runner&lt;/strong>, which is a containerized process that actually runs the untrusted action code.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>The components of a remote cache (a CAS and an AC).&lt;/strong> The CAS is essential for communication between Bazel and the workers. The AC, which is optional, is necessary for action caching. The architecture of the cache varies from service to service.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>For the purposes of this article, I want to focus primarily on the workers and their interactions with the AC and the CAS. I&amp;rsquo;m not going to talk about frontends nor schedulers except for showing how they help isolate remote action execution from the Bazel process.&lt;/p>
+&lt;h1 id="worker-and-accas-interactions">Worker and AC/CAS interactions&lt;/h1>
+&lt;p>Let&amp;rsquo;s look at the interaction between these components in more detail. To set the stage, take a look at the &lt;code>combine&lt;/code> action from this sample build file:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;generate&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;gen.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;echo generated &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;combine&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;combined.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;:src.txt&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;:gen.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;cat $(location :src.txt) $(location :gen.txt) &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The &lt;code>combine&lt;/code> action has two types of inputs: a checked-in source file, &lt;code>src.txt&lt;/code>, and a file generated during the build, &lt;code>gen.txt&lt;/code>. This distinction is interesting because the way these files end up in the CAS is different: Bazel is the one responsible for uploading &lt;code>src.txt&lt;/code> into the CAS, but &lt;code>gen.txt&lt;/code> is uploaded by the worker upon action completion.&lt;/p>
+&lt;p>When we ask Bazel to build &lt;code>//:combine&lt;/code> remotely, and assuming &lt;code>//:generate&lt;/code> has already been built and cached at some point in the past, we&amp;rsquo;ll experience something like this:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-09-12-bazel-remote-execution-execution.png" width="100%" />
+&lt;/figure>
+&lt;p>That&amp;rsquo;s a lot of interactions, right?! Yes; yes they are. A remote execution system is not simple and it&amp;rsquo;s not always an obvious win: coordinating all of these networked components is costly. The overheads become tangible when dealing with short-lived actions&amp;mdash;a better fit for persistent workers&amp;mdash;or when you have a sequential chain of actions&amp;mdash;a good fit for &lt;a href="/2019/12/bazel-dynamic-execution-strategy.html">the dynamic execution strategy&lt;/a>.&lt;/p>
+&lt;p>What I want you to notice here, because it&amp;rsquo;s critical for our analysis, is the shaded area. Note how all interactions within this area are driven by the remote execution service, &lt;em>not&lt;/em> Bazel. Once an action enters the remote execution system, neither Bazel &lt;em>nor the machine running Bazel&lt;/em> have any way of tampering with the execution of the remote action. They cannot influence the action&amp;rsquo;s behavior, and they cannot interfere with the way it saves its outputs into the AC and the CAS.&lt;/p>
+&lt;p>And this decoupling, my friend, is the key insight that allows Bazel to safely share the results of actions across users no matter who initiated them. However, the devil lies in the implementation details.&lt;/p>
+&lt;h1 id="securing-the-worker">Securing the worker&lt;/h1>
+&lt;p>Given the above, we now know that remote workers are a trusted environment: the actions that go into a worker are fully specified by their action key and, therefore, whatever they produce and is stored into the AC and the CAS will match that action key. So if we trust the inputs to the action, we can trust its outputs, and we can do this retroactively&amp;hellip; right?&lt;/p>
+&lt;p>Well, not so fast. For this to be true, actions must be deterministic, and they aren&amp;rsquo;t always &lt;a href="/2025/07/bazel-action-determinism.html">as we already saw&lt;/a>. Some sources of non-determinism are &amp;ldquo;OK&amp;rdquo; in this context though, like timestamps, because these come from within the worker and cannot be tampered with. Other sources of non-determinism are problematic though, like this one:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;generate&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;gen.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;curl -L https://secure.example.com/payload.txt &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>An attacker could compromise the network request to modify the content of the downloaded file, but only for long enough to poison the remote cache with a malicious artifact. Once poisoned, they could restore the remote file to its original content and it would be very difficult to notice that the entry in the remote cache did not match the intent of this rule.&lt;/p>
+&lt;p>It is tempting to say: &amp;ldquo;ah, the above should be fixed by ensuring the checksum of the download is valid&amp;rdquo;, like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;generate&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;gen.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;&amp;#34;&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> curl -L https://secure.example.com/payload.txt &amp;gt;$@
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> [ &amp;#34;$$(sha256sum $@ | awk &amp;#39;{print $1}&amp;#39;)&amp;#34; = &amp;#34;known checksum&amp;#34; ]
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> &amp;#34;&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And I&amp;rsquo;d say, yes, you absolutely need to do checksum validation because there are legitimate cases where you&amp;rsquo;ll find yourself writing code like this&amp;hellip; in repo rules. Unfortunately, such checks are still insufficient for safe remote execution because, remember: actions can run from unreviewed code, or the code that runs them can be merged into the tree after a careless review (which is more common than you think). Consequently, the only thing you can and must do here is to &lt;strong>disable network access&lt;/strong> in the remote worker.&lt;/p>
+&lt;p>That said, &lt;em>just&lt;/em> disabling network access may still be &amp;ldquo;not good enough&amp;rdquo; to have confidence in the safety of remote execution. A remote execution system is trying to run untrusted code within a safe production environment: code that could try to attack the worker to escape whatever sandbox/container you have deployed, code that could try to influence other actions running on the same machine, or code that could exfiltrate secrets present in the environment. Securing these is going to come down to standard practices for untrusted code execution, none of which are specific to Bazel, so I&amp;rsquo;m not going to cover them. Needless to say, it&amp;rsquo;s a difficult problem.&lt;/p>
+&lt;h1 id="securing-the-build">Securing the build&lt;/h1>
+&lt;p>If we have done all of the above, we now have a remote execution system that we can trust to run actions in a secure manner and to store their results in &lt;em>both&lt;/em> the AC and the CAS. But&amp;hellip; this, on its own, is still insufficient to secure builds end-to-end, and we would like to have trusted end-to-end builds to establish a chain of trust between sources and production artifacts, right?&lt;/p>
+&lt;p>To secure a build, we must protect the AC and restrict writes to it to happen exclusively from the remote workers. Only them, who we have determined cannot be interfered with, know that the results of an action correspond to its declared inputs&amp;mdash;and therefore, only them can establish the critical links between an AC entry and one or more files in the CAS. You&amp;rsquo;d imagine that simply setting &lt;code>--noremote_upload_local_results&lt;/code> would be enough, but it isn&amp;rsquo;t. A malicious user could still tamper with this flag in transient CI runs or&amp;hellip; well, in their local workstation. And it&amp;rsquo;s because of this latter scenario that the only possible way to close this gap is via network level ACLs: the AC should only be writable from within the remote execution cluster.&lt;/p>
+&lt;p>But&amp;hellip; you guessed it: that&amp;rsquo;s &lt;em>still&lt;/em> insufficient. Even if we disallow Bazel clients from writing to the AC, an attacker can still make Bazel run malicious actions &lt;em>outside&lt;/em> of the remote execution cluster&amp;mdash;that is, on the CI machine locally, which does have network access. Such action wouldn&amp;rsquo;t record its result in the AC, but the &lt;em>output&lt;/em> of the action would go into the CAS, and this problematic action could then be consumed by a subsequent action as an input.&lt;/p>
+&lt;p>The problem here stems from users being able to bypass remote execution by tweaking &lt;code>--strategy*&lt;/code> flags. One option to protect against this situation is the same as we saw before: disallow CI runs of PRs that modify Bazel flags so that users cannot &amp;ldquo;escape&amp;rdquo; remote execution. Unfortunately, this doesn&amp;rsquo;t have great ergonomics because users often need to change the &lt;code>.bazelrc&lt;/code> file as part of routine operation.&lt;/p>
+&lt;p>Bazel&amp;rsquo;s answer to this problem is the widely-unknown &lt;strong>invocation policy&lt;/strong> feature. I say unknown because I do not see it documented in the output of &lt;code>bazel help&lt;/code> and I cannot find any details about it whatsoever online&amp;mdash;yet I know of its existence from my time at Google and I see its implementation in the Bazel code base, so we can reverse-engineer how it works.&lt;/p>
+&lt;h1 id="invocation-policies">Invocation policies&lt;/h1>
+&lt;p>As the name implies, an &lt;strong>invocation policy&lt;/strong> is a mechanism to enforce specific command-line flag settings during a build or test with the goal of ensuring that conventions and security policies are consistently applied. The policy does so by defining rules to set, override, or restrict the values of flags, such as &lt;code>--strategy&lt;/code>.&lt;/p>
+&lt;p>The policy is defined using the &lt;code>InvocationPolicy&lt;/code> protobuf message defined in &lt;a href="https://cs.opensource.google/bazel/bazel/+/master:src/main/protobuf/invocation_policy.proto;drc=04aec051070d5bb0455b8ed0aea9a869b4078af4">&lt;code>src/main/protobuf/invocation_policy.proto&lt;/code>&lt;/a>. This message contains a list of &lt;code>FlagPolicy&lt;/code> messages, each of which defines a rule for a specific flag. The possible rules, which can be applied conditionally on the Bazel command being executed, are:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>SetValue&lt;/code>: Sets a flag to a specific value. You can control whether the user can override this value. This is useful for enforcing best practices or build-time configurations.&lt;/li>
+&lt;li>&lt;code>UseDefault&lt;/code>: Forces a flag to its default value, effectively preventing the user from setting it.&lt;/li>
+&lt;li>&lt;code>DisallowValues&lt;/code>: Prohibits the use of certain values for a flag. If a user attempts to use a disallowed value, Bazel will produce an error. You can also specify a replacement value to be used instead of the disallowed one.&lt;/li>
+&lt;li>&lt;code>AllowValues&lt;/code>: Restricts a flag to a specific set of allowed values. Any other value will be rejected.&lt;/li>
+&lt;/ul>
+&lt;p>To use an invocation policy, you have to define the policy as an instance of the &lt;code>InvocationPolicy&lt;/code> message in text or base64-encoded binary protobuf format and pass the payload to Bazel using the &lt;code>--invocation_policy&lt;/code> flag in a way that users cannot influence (e.g. directly from your CI infrastructure, not from workflow scripts checked into the repo).&lt;/p>
+&lt;p>Let&amp;rsquo;s say you want to enforce a policy where the &lt;code>--genrule_strategy&lt;/code> flag is always set to &lt;code>remote&lt;/code> when running the &lt;code>bazel test&lt;/code> command, and you want to prevent users from overriding this setting. We define the following policy in a &lt;code>policy.txt&lt;/code> file:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-proto" data-lang="proto">&lt;span class="line">&lt;span class="cl">&lt;span class="n">flag_policies&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span> &lt;span class="n">flag_name&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="s">&amp;#34;genrule_strategy&amp;#34;&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span> &lt;span class="n">commands&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="s">&amp;#34;build&amp;#34;&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span> &lt;span class="n">set_value&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span> &lt;span class="n">flag_value&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="s">&amp;#34;remote&amp;#34;&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span> &lt;span class="n">behavior&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">FINAL_VALUE_THROW_ON_OVERRIDE&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span> &lt;span class="p">}&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="err">&lt;/span>&lt;span class="p">}&lt;/span>&lt;span class="err">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And then we invoke Bazel like this (again, remember: this flag should be passed by CI in a way that users cannot influence):&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">bazel --invocation_policy&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="k">$(&lt;/span>cat policy.txt&lt;span class="k">)&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span> build ...
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>If you now try to play with the &lt;code>--genrule_strategy&lt;/code> flag, you&amp;rsquo;ll notice that any overrides you provide don&amp;rsquo;t work. (Bazel 9 will offer a new &lt;code>FINAL_VALUE_THROW_ON_OVERRIDE&lt;/code> flag behavior to error out instead of silently ignoring overrides which will make the experience nicer in this case.)&lt;/p>
+&lt;h1 id="case-study-remote-local-fallback-poisoning">Case study: remote local fallback poisoning&lt;/h1>
+&lt;p>Before concluding, I&amp;rsquo;d like to show you an interesting outage we faced due to Bazel being allowed to write AC entries from a trusted CI environment. The problem we saw was that, at some point, users started reporting that their builds were completely broken: somehow, the build of our custom singlejar helper tool, a C++ binary that&amp;rsquo;s commonly used in Java builds, started failing due to the inability of the C++ compiler to find some header files.&lt;/p>
+&lt;p>This didn&amp;rsquo;t make any sense. If we built the tree at a previous point in time, the problem didn&amp;rsquo;t surface. And as we discovered later, if we disabled remote caching on a current commit the problem didn&amp;rsquo;t appear either. Through a series of steps, we found that singlejar&amp;rsquo;s build from scratch would fail if we tried to build it locally &lt;em>without&lt;/em> the sandbox. But&amp;hellip; that&amp;rsquo;s not something we do routinely, so how did this kind of breakage leak into the AC?&lt;/p>
+&lt;p>The problem stemmed from our use of &lt;code>--remote_local_fallback&lt;/code>, a flag we had enabled long ago to mitigate flakiness when leveraging remote execution. Because of this flag, we had hit this problematic path:&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>An build started on CI. This build used a remote-only configuration, forcing all actions to run on the remote cluster.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Bazel ran actions remotely for a while, but at some point, encountered problems while building singlejar.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Because of &lt;code>--remote_local_fallback&lt;/code>, Bazel decided to build singlejar on the CI machine, not on the remote worker, and it used the &lt;code>standalone&lt;/code> strategy, &lt;em>not&lt;/em> the &lt;code>sanboxed&lt;/code> strategy, to do so. This produced an action result that was later incompatible with sandboxed / remote actions.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Because of &lt;code>--remote_upload_local_results&lt;/code>, the &amp;ldquo;bad&amp;rdquo; action result was injected into the AC.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>From here on, any remote build that picked the bad action result would fail.&lt;/p>
+&lt;/li>
+&lt;/ol>
+&lt;p>The mitigation to this problem was to flush the problematic artifact from the remote cache, and the immediate solution was to set &lt;code>--remote_local_fallback_strategy=sandboxed&lt;/code> which&amp;hellip; Bazel claims is deprecated and a no-op, but in reality this works and I haven&amp;rsquo;t been able to find an alternative (at least not in Bazel 7) via any of the other strategy flags.&lt;/p>
+&lt;p>The real solution, however, is to ensure that remote execution doesn&amp;rsquo;t require the local fallback option for reliability reasons, and to prevent Bazel from injecting AC entries for actions that do not run in the remote workers.&lt;/p>
+&lt;h1 id="parting-words">Parting words&lt;/h1>
+&lt;p>With that, this series to revisit Bazel&amp;rsquo;s action execution fundamentals, remote caching, and remote execution is complete. Which means I can &lt;em>finally&lt;/em> tell you the thing that started this whole endeavor: the very specific, cool, and technical solution I implemented to work around a hole in the action keys that can lead to very problematic non-determinism.&lt;/p>
+&lt;p>But, to read on that topic, you&amp;rsquo;ll have to wait for the next episode!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-09-12-bazel-remote-execution-cover-image.jpg" length="147776" type="image/jpeg"/></item><item><title>Understanding Bazel remote caching</title><link>https://jmmv.dev/2025/09/bazel-remote-caching.html</link><pubDate>Fri, 05 Sep 2025 08:30:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/bazel-remote-caching.html</guid><description>&lt;p>The previous article on &lt;a href="/2025/07/bazel-action-determinism.html">Bazel action non-determinism&lt;/a> provided an introduction to actions: what they are, how they are defined, and how they act as the fundamental unit of execution in Bazel. What the article did not mention is that actions are &lt;em>also&lt;/em> the fundamental unit of caching during execution to avoid doing already-done work.&lt;/p>
 &lt;p>In this second part of the series, I want to revisit the very basics of how Bazel runs actions and how remote caching (&lt;em>not&lt;/em> remote execution, because that&amp;rsquo;ll come later) works. The goal here is to introduce the &lt;strong>Action Cache (AC)&lt;/strong>, the &lt;strong>Content Addressable Storage (CAS)&lt;/strong>, how they play together, and then have some fun in describing the many ways in which it&amp;rsquo;s possible to poison such a cache in an accidental or malicious manner.&lt;/p>
 &lt;h1 id="the-action-cache-ac">The Action Cache (AC)&lt;/h1>
 &lt;p>Picture this build file with two targets that generate one action each:&lt;/p>
@@ -2738,516 +2857,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;/li>
 &lt;/ul>
 &lt;p>If you happen to have answers to any of the above or have further thoughts, please drop a note in the comments section. And if you want to see how the DS923+ compares to my home-built FreeBSD NAS with ZFS, subscribe for a future post on that!&lt;/p>
-&lt;p>Credit and disclaimers: the &lt;a href="https://sy.to/hekgh">DS923+&lt;/a> and &lt;a href="https://sy.to/drkom">the 3 drives&lt;/a> it contains that I used throughout this article were provided to me for free by Synology for evaluation purposes in exchange for blogging about the NAS. The content in this article is &lt;em>not&lt;/em> endorsed has &lt;em>not&lt;/em> been reviewed by them.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-11-03-synology-ds923plus-nas.jpg" length="232646" type="image/jpeg"/></item><item><title>BazelCon 2024 recap</title><link>https://jmmv.dev/2024/10/bazelcon-2024-recap.html</link><pubDate>Tue, 22 Oct 2024 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2024/10/bazelcon-2024-recap.html</guid><description>&lt;p>Just like that, BazelCon 2024 came and went. And just like that, Blog System/5 is about to turn 1 year old as the very first post of this newsletter was the &lt;a href="/2023/10/bazelcon-2023-et-al-trip-report.html">recap of BazelCon 2023&lt;/a>. Since then, this newsletter has amassed 1200+ subscribers and I have surpassed &lt;a href="/2024/06/20-years-of-blogging.html">20 years of blogging&lt;/a>&amp;mdash;so, thank you for your support, everyone!&lt;/p>
-&lt;p>To celebrate this milestone, it&amp;rsquo;s obviously time to summarize the two events of last week: BazelCon 2024 and the adjacent Build Meetup. There is &lt;em>A LOT&lt;/em> of ground to cover. I could probably write a separate article for each of the sections below, but folks coming for a summary of the conference will want to see everything in one place&amp;hellip; so you get this massive piece instead.&lt;/p>
-&lt;p>Overall, this is a 40-minute read&amp;hellip; but let&amp;rsquo;s face it: getting 3 days worth of content in less than an hour sounds like a good deal, doesn&amp;rsquo;t it? Feel free to pick and choose sections though; each stands on its own and each paragraph represents a thought I captured from some presentation or discussion.&lt;/p>
-&lt;p>By the way: no LLMs were involved in this work, thus you can only imagine how much effort it went into putting this together. So, subscribe to support this and future posts and&amp;hellip; enjoy!&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="schedule-and-logistics">Schedule and logistics&lt;/h1>
-&lt;p>BazelCon 2024 was hosted at the Computer History Museum in Mountain View, CA, on October 14th and 15h. The conference had a &lt;a href="https://bazelcon2024.sched.com/">single track of talks&lt;/a> and an overlapping track of BoF sessions. I attended most of the talks but just one BoF&amp;mdash;the IDE one. The conference was followed by evening socials hosted by BuildBuddy and JetBrains/EngFlow.&lt;/p>
-&lt;p>The Build Meetup followed BazelCon 2024 on October 16th, and this time around it was cohosted by Meta and EngFlow in Menlo Park, CA. The meetup had three tracks: one for Bazel, one for Buck 2, and one for remote execution. I helped facilitate the Bazel track, including taking notes for the afternoon unconference (notes at the very end), and gave a 15-minute talk on Bazel at Snowflake. Facilitating the track was fun, but unfortunately this made me miss the Buck track and I&amp;rsquo;m still wanting to learn more about it.&lt;/p>
-&lt;p>The notes I gathered from the talks and discussions are grouped in the following topics:&lt;/p>
-&lt;nav id="TableOfContents">
-&lt;ul>
-&lt;li>&lt;a href="#schedule-and-logistics">Schedule and logistics&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#community-and-adoption">Community and adoption&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#remote-execution">Remote Execution&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#ide-support">IDE support&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#inner-loop-development">Inner loop development&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#toolchains">Toolchains&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#sandboxing">Sandboxing&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#monorepo-issues">Monorepo issues&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#blzmod-and-external-dependencies">blzmod and external dependencies&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#secure-and-auditable-builds">Secure and auditable builds&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#symbolic-macros">Symbolic macros&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#queries">Queries&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#linting">Linting&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#testing">Testing&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#missing-tooling-around-bazel">Missing tooling around Bazel&lt;/a>&lt;/li>
-&lt;li>&lt;a href="#the-end">The end&lt;/a>&lt;/li>
-&lt;/ul>
-&lt;/nav>
-&lt;h1 id="community-and-adoption">Community and adoption&lt;/h1>
-&lt;p>The conference opened with the usual briefing and SOTU, which included information on the conference itself and the latest news in the Bazel project. These were followed by talks that touched upon the community and current adoption trends, and these are the thoughts I gathered:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Conference ownership:&lt;/strong> This was the first BazelCon &lt;em>not&lt;/em> run by Google. The conference is now owned by the Linux Foundation and Google was a sponsor at the same level of BuildBuddy and EngFlow. The Linux Foundation has run the conference excellently thanks to the dedicated team of professionals that they have for the task.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Conference history:&lt;/strong> Looking back, you should know that the Bazel team was (and still is) distributed across two sites: Google NYC and Google Munich. To mitigate the difficulties that arise from geographical distribution, the team held internal-only summits every 6 months. It wasn&amp;rsquo;t until 2017 that this internal conference became BazelCon and, after that, the team alternated between an internal event and an external event. Last year, BazelCon had 250 attendees with a waitlist that contained 200 extra folks, and this is the second year that the program committee contains non-Google folks (myself included).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Google&amp;rsquo;s investment in Bazel:&lt;/strong> Does this shift to the Linux Foundation change &lt;a href="https://bazel.build/contribute/policy">Bazel&amp;rsquo;s governance&lt;/a> to make it more community-driven? Not yet, but it&amp;rsquo;s a step in that direction! Google still owns Bazel and continues to invest in it because they can leverage contributions from strong non-Google engineers and because Google maintains a bunch of open-source projects that rely on Bazel. But Google also wants to have a more open community to guarantee that Bazel continues to thrive even if company-internal priorities change.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>The &lt;a href="https://github.com/bazel-contrib">&lt;code>bazel-contrib&lt;/code> organization&lt;/a>:&lt;/strong> To support these changes, a few folks have created a new GitHub organization and have gotten Google to donate many repos to this new org. The organization creators have a desire to start a new foundation to support and direct these projects and are looking for about 5 companies to join.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Bazel adoption stickiness:&lt;/strong> The REBELs research group at the &lt;a href="https://rebels.cs.uwaterloo.ca/">Univesity of Waterloo&lt;/a> conducted a study over &lt;a href="https://is.gd/WorldOfCode/">35,000 significant GitHub projects&lt;/a> to see why, from the 1.5% of projects that adopted Bazel, 11% of those abandoned the migration at roughly the 2-year mark.&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Abandonment reasons:&lt;/strong> The reasons cited for abandoning Bazel were varied, but can be summarized as encountering technical challenges, issues with team coordination and onboarding, and seeing community trends (like Kubernetes deciding to move off of Bazel).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>If not Bazel, then what?:&lt;/strong> These projects primarily decided to move to language-specific tools, especially for languages with strong native tooling like Go and Swift. However, a significant proportion also decided to move back to &amp;ldquo;inferior&amp;rdquo; tools like CMake or even GNU Make. These projects acknowledged that these tools are less feature rich and don&amp;rsquo;t support integration with other languages, but they are conventional and easier to understand by the community.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>If Bazel, then why?:&lt;/strong> On the plus side, for the cases where Bazel stuck, we can find the reasons we expect: dependency management, faster builds, and even the influence of other projects shine as reasons for making Bazel a good choice.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Adoption suggestions:&lt;/strong> The CTO of Ergatta spoke on how his small company has been able to successfully leverage Bazel without massive investments in infrastructure. His suggestions were to keep things simple (e.g. by using the GCS-backed cache despite its flaws, or by doing the trivial &lt;code>bazel test ...&lt;/code> on CI); to expedite solutions even if not perfect (e.g. by wrapping foreign builds in Bazel); to look for champions and leverage them for adoption; to focus on &amp;ldquo;good enough&amp;rdquo; results; to write documentation for your successors; and, surprisingly, to do frequent and incremental changes to workflows instead of big-bang &amp;ldquo;improvements&amp;rdquo;.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="remote-execution">Remote Execution&lt;/h1>
-&lt;p>As you know, remote execution is Bazel&amp;rsquo;s raison d&amp;rsquo;etre. Consequently, the SOTU covered various updates on this topic and many talks included related thoughts:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>SOTU updates:&lt;/strong> The remote output service is now available and bb-clientd offers an implementation. The execution log is now 100x smaller than before and only has a 3% runtime overhead, which is useful to debug cache hits. Upcoming changes include concurrent uploads to the cache in the background without blocking action completion, GCing of local caches (disk cache, install cache, etc.), and BwoB improvements to decrease incremental build times when Skymeld is in use.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Remote persistent workers:&lt;/strong> AirBnB observed 2x slower builds when not using remote persistent workers. They use dedicated pools for Java and Kotlin and route all actions into these pools, and reminded us that tagging targets comes with pitfalls because targets can spawn multiple actions and just one of them needs the worker.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Queuing control:&lt;/strong> Remote execution environments typically have different worker pools to support different build environments or to optimize cost. But note: the goal shouldn&amp;rsquo;t always be to tolerate all possible load all the time: it is reasonable to put limits on the worker pools like AirBnB does so that you can dedicate a pool for interactive builds and prioritize low latency, but also create a separate pool for CI builds where you put hard caps and tolerate queuing.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Target size matters:&lt;/strong> Dealing with tons of individual small files is costly. In some cases, you may be better off tarring them up and declaring a single input to an action and making the action unpack the tar during execution. This came up during the talk on high performance builds for web monorepos, and I found this interesting because this goes in the opposite direction of tree artifacts which have often been problematic.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Action deduplication:&lt;/strong> Any remote execution service worth its money can coalesce in-flight actions to save on cost. This shines in CI with builds that have long-running actions, and Canva reports that they see 500k dedups per day on about 3 webpack builds. One consideration is that flaky test passes/failures are amplified by action coalescing: without this feature, flakes will show up as random failures over time, whereas with this feature, failures will be clustered. Extracting a signal around flakiness becomes harder.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Determinism checks:&lt;/strong> While not necessarily an issue with remote execution, having remote execution exacerbates the problem of non-deterministic actions in a build. Spend the time to set up a CI job to &lt;a href="https://www.youtube.com/watch?v=XItY0LmdiFA">look for non-determinism&lt;/a> and alert on it. Specific problems that often arise are timestamps in JARs (&lt;code>rules_antrl&lt;/code> is impacted), absolute paths (&lt;code>rules_kotlin&lt;/code> is impacted), or diagnostics information (Scala &lt;code>sdeps&lt;/code> file is problematic).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Postmortems and learnings:&lt;/strong> Ulf Adams gave a talk reflecting on four different incidents that EngFlow&amp;rsquo;s remote execution service suffered. Personally, seeing companies introspect their failures makes &lt;em>me&lt;/em> trust them &lt;em>more&lt;/em> than not, but YMMV. In any case, I do not necessarily want to go over the incidents per se, but I do want to go over the recommendations:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Avoid RPC cycles and set timeouts:&lt;/strong> The call graph between services must not have cycles, which is hard to enforce because these may show up organically over time. Also make sure to have timeouts on all RPCs, although the RE protocol makes this difficult because it has long-running RPCs.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Make sure &lt;a href="https://grpc.io/docs/guides/flow-control/">flow control&lt;/a> is configured:&lt;/strong> This is a feature of gRPC that allows a server to keep memory consumption in check and is achieved by &amp;ldquo;slowing down&amp;rdquo; incoming traffic (thus &amp;ldquo;controlling the flow&amp;rdquo;). When proxying traffic in a server, special care must be taken to connect the flow control logic of the input and output streams of the proxy. Otherwise, a slow client can have ripple effects through the system and cause OOMs.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Auto-scaling is tricky to get right:&lt;/strong> From a cost-savings perspective, you want to downsize servers as quickly as possible and increase them slowly. But if you do this and there is queuing, it&amp;rsquo;s possible that auto-scaling will make queuing worse.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Guardrails build trust:&lt;/strong> You might say that user-induced problems are not service problems: after all, if, for example, they cause compile actions to time out after 20 minutes, it&amp;rsquo;s &amp;ldquo;their fault&amp;rdquo; for doing the wrong thing. However, if this happens, there obviously is something wrong&amp;mdash;and it&amp;rsquo;d be nice for the service provider to notice and have prevention features in place just like your water provider can detect leaks. (And yet&amp;hellip; AWS &lt;em>still&lt;/em> doesn&amp;rsquo;t have a way to put a limit on spend.)&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="ide-support">IDE support&lt;/h1>
-&lt;p>If you have had to support any developers converting from &amp;ldquo;legacy&amp;rdquo; build systems to Bazel, you may have realized that&amp;hellip; the IDE features they are used to don&amp;rsquo;t quite work after the migration. Things have gotten better in the IDE space for Bazel but aren&amp;rsquo;t great yet. Fortunately, there are a few news that give hope:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>&lt;a href="https://jb.gg/new-bazel-plugin">New JetBrains plugin for IntelliJ&lt;/a>:&lt;/strong> Released to the marketplace during the conference, this new plugin provides tighter integration between IntelliJ and Bazel through the BSP abstraction layer. This new plugin can represent the Bazel build graph in the IDE, offers syntax highlighting for &lt;code>bazelrc&lt;/code> files (and, feature request: could offer docs on hover), supports inserting breakpoints in Starlark evaluation, implements &amp;ldquo;fast build&amp;rdquo; correctly, and optimizes the sync process. There are some gaps compared to the old plugin, but I&amp;rsquo;m super-excited by what&amp;rsquo;s coming because the old Google-owned plugin is&amp;hellip; underwhelming. See the &lt;a href="https://jb.gg/new-bazel-feature">feature list&lt;/a> and the &lt;a href="https://jb.gg/new-bazel-roadmap">roadmap&lt;/a> for more details.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Build Server Protocol (BSP):&lt;/strong> The BSP is a new protocol that aims to achieve the same thing that the Language Server Protocol (LSP) did: namely, solve the M:N problem between IDEs and build systems. The idea is to have an intermediate abstraction for the build system so that M IDEs can talk to N build systems by means of an intermediary process that converts the BSP to build actions. The BSP is still young though and, right now, it&amp;rsquo;s pretty rigid because it has deep knowledge of the languages it supports. In particular, there is no support for custom rules yet, so get involved if you want to see this happen.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Old plugin for JetBrains:&lt;/strong> The old plugin will be fully supported until mid-2025 (although I predict they&amp;rsquo;ll have to backpedal on this and extend this date). This plugin has many shortcomings because it originates from Android Studio and contains assumptions about Android and about Google&amp;rsquo;s own infrastructure. That said, there is a new feature called &amp;ldquo;query sync&amp;rdquo; that optimizes the sync process massively&amp;hellip; at the expense of having to manually &amp;ldquo;enable analyze&amp;rdquo; for any files where deep IDE integration is desired. The problem is: you &lt;em>have&lt;/em> to enable analysis to get insights on generated files, and generated files tend to be everywhere thanks to protobuf, so&amp;hellip; you&amp;rsquo;ll likely find yourself &amp;ldquo;enabling analyze&amp;rdquo; all the time. Shrug.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Good IDE support is critical:&lt;/strong> Having a good IDE experience is crucial for developers, but the irony is that the people that often work on build migrations or the IDE are &lt;em>experts&lt;/em> and know how to tolerate imperfect IDE support. This is not the case for most developers, particularly those that must get up to speed&amp;hellip; so keep that in mind. Running user interviews, surveys, etc. is a necessity to understand what people truly perceive as problems.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Compilation database:&lt;/strong> JetBrains is not the only contender in the IDE space. There are many more (wink, wink, Emacs) and BSP will make offering a Bazel experience within them possible. Until that&amp;rsquo;s ready, though, you may need to manually deal with a &amp;ldquo;compilation database&amp;rdquo;, especially if you want to integrate with VSCode. A compilation database is, simply put, a JSON file that contains the commands to compile each and every translation unit in a project. There are various options to generate one of these with Bazel, all with different trade-offs:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Intercept builds:&lt;/strong> Use &lt;code>bear&lt;/code> as a wrapper to run the full clean build. This works with some build systems, but unfortunately, Bazel&amp;rsquo;s client/server model doesn&amp;rsquo;t allow &lt;code>bear&lt;/code> to intercept the actions it spawns.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Extra actions:&lt;/strong> Add a &amp;ldquo;listener&amp;rdquo; extra action that listens for &lt;code>CppCompile&lt;/code>. This also requires a full clean build and is deprecated by aspects, but is the approach that &lt;code>kythe&lt;/code> uses.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Action graph query:&lt;/strong> Does not require a full build, just a warmed up analysis cache. However, this does not support tree artifacts. Examples: &lt;code>bazel-compile-commands-extractor&lt;/code>, &lt;code>bazel-compile-commands&lt;/code> (two forks).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Aspect:&lt;/strong> Does not require a full build, but the generated commands may not be identical to the ones that are actually used. For example: if you have a code generator that produces a tree artifact and then is fed as an input to a &lt;code>cc_library&lt;/code>, then the tree artifact is represented as a &lt;code>CppCompileActionTemplate&lt;/code> that is only expanded to a specific command line at runtime.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Non-blocking queries:&lt;/strong> The Bazel server has a global lock that prevents it from running more than one command at a time. This is a problem because the IDE needs to issue Bazel queries all the time, but those queries conflict with other user actions like builds and tests. There are various solutions to this problem, which we discussed in the unconference:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Separate output bases:&lt;/strong> This &lt;em>works&lt;/em> but it&amp;rsquo;s heavy-handed because you end up with two full separate builds and two separate Bazel server processes.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Simpler tools:&lt;/strong> Many operations on build files do not require the full weight of Bazel. Google has implemented simpler tools that operate on those precisely to bypass the overhead of calling ito Bazel. These tools include &lt;code>buildifier&lt;/code>, &lt;code>buildozer&lt;/code>, or the &amp;ldquo;fast builds&amp;rdquo; feature of the IntelliJ plugin.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Parallel Skyframe evaluation:&lt;/strong> Skyframe&amp;rsquo;s inherent design is to be purely functional, so in principle it should be possible to perform multiple operations on the graph in parallel. Unfortunately, there is a lot of mutable state outside of Skyframe in Bazel and, while theoretically possible, fixing this is &lt;em>a lot&lt;/em> of work.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Implementing a depserver:&lt;/strong> Instead of running a separate Bazel on the same machine to answer queries, you could push this responsibility to an external service. Such a service is easy to build (you can imagine running &lt;code>bazel query ...&lt;/code> on each commit) but the problem arises when you want to issue queries against this service from modified source trees.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="inner-loop-development">Inner loop development&lt;/h1>
-&lt;p>Bazel is &lt;em>the&lt;/em> tool that glues together the &lt;em>inner loop&lt;/em> of the development process. As a reminder, the inner loop refers to the the edit, build, and test cycle, and Bazel has tentacles on these three stages. Various talks gave thoughts on this topic:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Avoid Bazel in the inner loop:&lt;/strong> AirBnB reported that they noticed significant overhead and lack of incrementality in certain operations when trying to hook up Bazel into the IDE. They have the equivalent of &amp;ldquo;fast builds&amp;rdquo; in their own IDE plugin and have reduced incremental builds from 30 seconds to 1 second. This is a &lt;em>big deal&lt;/em> for interactive builds. Personally, I think that having to side-step Bazel is ridiculous: Bazel is designed to be optimal and has perfect knowledge of the state of the world, yet it&amp;rsquo;s too slow for quick operations.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Integrate with native tooling:&lt;/strong> Bazel works across many ecosystems, but as such, it&amp;rsquo;s friend to none. For example: Go developers want to work with the (super-fast) Go tooling so, if it&amp;rsquo;s feasible, it&amp;rsquo;s interesting to allow using such tooling directly. The folks at LinkedIn created a rule that generates an &lt;code>.envrc&lt;/code> file to expose the native Go tools and relies on &lt;a href="https://direnv.net/">&lt;code>direnv&lt;/code>&lt;/a> to make this work transparently for users.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>macOS as a client is common:&lt;/strong> Even for shops where all software runs on Linux, developers tend to have Macs and want to work locally. You may or may not agree, but if you &lt;em>have&lt;/em> to support inner-loop development on the Mac, there are various things to consider. One is that cross-platform caching for machine-independent actions like Java may not work, doubling cache requirements; for this, you may consider using &amp;ldquo;universal binaries&amp;rdquo; (aka shell scripts that wrap multiple binaries and choose the right one at runtime). And you should really set up non-determinism checks.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>No build files:&lt;/strong> To my dismay, tons of people seem to really want to &lt;em>not&lt;/em> have build files. This makes me sad because manually-curated build files serve as &lt;em>documentation&lt;/em> for the &lt;em>conceptual architecture&lt;/em> of a project and allow, at PR review time, to see changes to the interactions between components. You might say that &lt;code>#include&lt;/code>s or package &lt;code>import&lt;/code>s in the source are sufficient for this&amp;mdash;but they really aren&amp;rsquo;t: they are too fine-grained and &amp;ldquo;innocent-looking&amp;rdquo;. I think I&amp;rsquo;ll need to write a follow-up article on this point.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="toolchains">Toolchains&lt;/h1>
-&lt;p>Bazel supports targeting multiple architectures and systems, and at the core of this support lie toolchains. There were various talks that touched on them:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Toolchains 101:&lt;/strong> In Bazel, rules convert providers to action templates, and toolchains help convert those templates to actions by replacing two things in the templates: the paths to the tools required by the action, and the arguments to pass to those tools. Simple, right? But defining toolchains has always been a black art.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Simplified toolchains:&lt;/strong> Google brings a new way to define toolchains that&amp;rsquo;s much easier than the original one. The new mechanism relies on build rules: a toolchain rule declares a toolchain, and the toolchain depends on a &amp;ldquo;tool map&amp;rdquo; rule, which is a flat map of tool names (strategically specified as labels for typo- and type-checking, not flat strings) to binaries (also specified as labels). These tools are also connected to argument rules that define the sequence of arguments to apply to each tool. The support for &amp;ldquo;features&amp;rdquo; in core Bazel can potentially be removed in favor of this.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Default toolchain no more:&lt;/strong> Following on the previous, Google said that there is a desire to remove the concept of a default C++ toolchain in favor of explicitly defining a hermetic toolchain like almost all other rules do. This was met with cheering from the audience.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Debugging:&lt;/strong> It&amp;rsquo;s funny how, despite the complexity of toolchains and how we should make things easier for users&amp;hellip; &lt;code>--toolchain_resolution_debug&lt;/code>&amp;rsquo;s help claims that the flag is only for experts. &lt;a href="https://github.com/bazelbuild/bazel/pull/19926">PR 19926&lt;/a> made the debugging messages much clearer, but you should still understand the toolchain resolution algorithm to make sense of issues, and the talk on &amp;ldquo;Creating C++ toolchains easily&amp;rdquo; explained that.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Universal binaries:&lt;/strong> Bazel doesn&amp;rsquo;t like sharing artifacts across different architectures. This is generally the right thing to do but, for platform-agnostic languages like Java, this has the potential of doubling remote execution and caching costs. There is an &lt;a href="https://github.com/bazelbuild/bazel/discussions/18378">ongoing discussion upstream&lt;/a> on what to do with this issue and various partial implementations in the code (like the &lt;code>--experimental_platform_in_output_dir&lt;/code> flag), but no great solution yet. In the meantime, the alternative is to implement &amp;ldquo;universal binaries&amp;rdquo;. The idea is to create a shell script that wraps a binary tool built for various systems and selects, at runtime, which one to run.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>C++ shows up everywhere:&lt;/strong> Even if your build doesn&amp;rsquo;t seem to require C++ anywhere, the requirement to have this toolchain installed shows up pretty much everywhere because of&amp;hellip; protobuf. bzlmod has the potential to fix this because the protobuf bzlmod packages ship with prebuilt binaries.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="sandboxing">Sandboxing&lt;/h1>
-&lt;p>In order to offer reproducible builds, Bazel offers sandboxing features at the action level to ensure that actions can only do what they are supposed to do. I used to work in this space while on the Bazel team, so all talks on this topic were really interesting. Here are the notes:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>macOS sandboxing is slow:&lt;/strong> Ah, the issue that never dies and that came up again in the unconference. While it might be true that macOS handles symlinks poorly, I&amp;rsquo;m still not convinced that there is anything that makes macOS sandboxing inherently slow. Yes, it will be less sandbox-y than what you get on Linux, but performance-wise it should be OK. All of my testing years ago didn&amp;rsquo;t show &lt;code>sandbox-exec&lt;/code> as a performance bottleneck, and the sandbox doesn&amp;rsquo;t kill Bazel&amp;rsquo;s own build performance so&amp;hellip; something &lt;em>else&lt;/em> is at play here. Which brings us to the next point.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Persistent state:&lt;/strong> Some compilers like Objective C&amp;rsquo;s build a module cache as they run. This cache is intended to be shared across invocations of the compiler. However, when the sandbox is in effect, sharing of this cache becomes impossible, which in turn makes builds incredibly slow. It may &lt;em>seem&lt;/em> as if the sandbox itself is slow, but the real problem here is the lack of state sharing across actions and I suspect this is why people remain convinced that macOS sandboxing is slow. And, by the way, this impacts more than just Objective C.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Sandboxing scenarios:&lt;/strong> Is it really necessary to sandbox &lt;em>all&lt;/em> rules? &lt;code>genrule&lt;/code>s, sure, but if we can reason about the behavior of specific rules, we can probably disable sandboxing for them and remain correct, which would decrease build-time overheads. (Remember that the sandbox was never about security.)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>File monitoring:&lt;/strong> An alternative to sandboxing is to monitor the activity of build actions and validate, post-build, that they didn&amp;rsquo;t access things they were not supposed to. This is much faster than sandboxing as it avoids the need to construct on-disk sandboxes&amp;hellip; but fails when tools decide to read directories. So&amp;hellip; this approach isn&amp;rsquo;t really feasible. JavaScript tooling loves to expand globs.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Hermetic sandboxing:&lt;/strong> The traditional Bazel sandbox does not restrict reading system-wide paths so it cannot guarantee that an action doesn&amp;rsquo;t access certain system headers or arbitrary tools in &lt;code>/bin&lt;/code>. There is a &amp;ldquo;new&amp;rdquo; hermetic sandbox for Linux that fixes these issues&amp;mdash;but, obviously, is hard to put in practice. See &lt;code>--experimental_use_hermetic_linux_sandbox&lt;/code>.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Base POSIX system:&lt;/strong> With a hermetic sandbox, it becomes very tempting to model the host system&amp;rsquo;s base libraries and tools (bash and the like) as a toolchain. &lt;a href="https://github.com/tweag/rules_sh">&lt;code>rules_sh&lt;/code>&lt;/a> from Tweag can help here.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Local remote execution:&lt;/strong> A different mechanism to achieve sandboxing would be to use remote execution against a local service. This service could run on a VM or similar and offer a mechanism to cross-compile against weird architectures. This wouldn&amp;rsquo;t be quite the same as the Docker strategy.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Separation of responsibilities:&lt;/strong> Somebody mentioned that it&amp;rsquo;d be neat to separate the sandboxing logic into its own thing that isn&amp;rsquo;t in Bazel&amp;rsquo;s core. I agree. The &lt;code>linux-sandbox&lt;/code> binary that Bazel contains is somewhat akin to this, and I previously implemented something similar in &lt;a href="https://github.com/jmmv/sandboxctl">&lt;code>sandboxctl&lt;/code>&lt;/a> (for very different reasons). In any case, this would need to be multi-platform and written in a decent, safe language (&lt;em>cough&lt;/em> Rust &lt;em>cough&lt;/em>).&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="monorepo-issues">Monorepo issues&lt;/h1>
-&lt;p>With scale come problems, and large monorepos tend to exacerbate issues that have always existed in small repos but that go unnoticed otherwise. Here are some of the issues that talks mentioned:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Glob handling:&lt;/strong> Globs are expensive to handle in Bazel, especially when running on networked file systems. Globs are parsed and then expressed as a DAG of functions within Skyframe. Right now, due to limitations in Java&amp;rsquo;s concurrency model, globs are evaluated twice, but Java 21&amp;rsquo;s green threads may alleviate this. Related, I was chatting about this with one of the Buck 2 authors and he said that they take a very different approach and don&amp;rsquo;t find the issues that Google described: basically, they traverse the file system once and then apply the glob as an in-memory only operation.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Monolithic targets:&lt;/strong> Any large piece of code that has grown without a build system that enforces boundaries across components will grow at least one component that has thousands of source files in it with cyclic dependencies among them. These are harmful to the organization as they tend to reflect the &amp;ldquo;broken windows&amp;rdquo; culture of the team. Tinder explained how they tackle this problem, with basically boils down to: ensuring there are tests, ensuring that leadership is onboard with the cleanup, creating automation to extract files from the monolith (most of the work is repetitive), and then creating visualization tools to graph the problem and identify subsets of files that can be easily extracted.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Gradual rollout of library updates:&lt;/strong> During the unconference, we discussed how to deal with version upgrades of a single library in a world that favors the &amp;ldquo;One version policy&amp;rdquo;.&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Prerequisites:&lt;/strong> We agreed that, to succeed at upgrading a library, it&amp;rsquo;s critical to have tests in place and leverage tooling like &lt;code>buildifier&lt;/code> to perform the upgrades automatically where possible.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Big bang upgrade:&lt;/strong> One approach to the problem is to do the version upgrade in one go. This is sometimes really hard to do, and can also be risky because any problem anywhere in the repo would imply a rollback for everyone.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Treat it as an exception:&lt;/strong> Another approach is to get an exception from the &amp;ldquo;One version policy&amp;rdquo; and temporarily allow two versions of the library in the repo. You can leverage the &lt;code>alias&lt;/code> rule to introduce an indirection to the version in use, and then slowly migrate packages. This can work but diamond conflicting dependencies can be a real problem.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Parallel build:&lt;/strong> Yet another approach is to create a parallel build and test infrastructure for the new version. Maybe use a build flag to select the version to use; maybe duplicate the targets and rename them. The goal with this approach is to keep the &amp;ldquo;new version&amp;rdquo; on the side until it all works, and then submit a trivial &amp;ldquo;3-line PR&amp;rdquo; that flips the default. For this scenario, &amp;ldquo;project files&amp;rdquo; would be useful to group the new set of targets and automatically set the right configuration for them; Buck 2 has something similar in its &lt;code>PACKAGE&lt;/code> construct.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Different package names:&lt;/strong> And another approach is to do what Java tends to do, which is to &lt;em>rename&lt;/em> the libraries on major version upgrades so that they do not conflict at all. This is something that the upstream library maintainers have to do, not you. The problem with this approach is that semantic version is not always accurate and upstream maintainers tend to do breaking changes during minor version upgrades without realizing it.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>git pain:&lt;/strong> Bazel and large monorepos go hand in hand, but Git&amp;mdash;the most popular version control system&amp;mdash;doesn&amp;rsquo;t like large repos very much: some operations scale with the size of the history (&lt;code>git clone&lt;/code>) while others scale with the size of the repo (&lt;code>git status&lt;/code>) instead of scaling with the size of the change.&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Mitigation tools:&lt;/strong> There are various options that can mitigate the problem, including the &lt;a href="https://git-scm.com/docs/git-fsmonitor--daemon">FSMonitor&lt;/a>, the &amp;ldquo;untracked cache&amp;rdquo;, keeping &lt;code>.gitignore&lt;/code> small, and using sparse checkouts.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Materializing a portion of the tree:&lt;/strong> Uber previously tried using a Bazel query to find all files required for a build and then using the result of the query to just check those files out from Git. While this can work, it led to confusing error messages when there were missing files. And also, this poses the question: where do you run the query given that the query needs access to the full repo?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>git archives:&lt;/strong> Git is a very chatty protocol. Mark Zeren from Broadcom reports that, while Perforce can easily saturate the network, Git can rarely do so on a similar repo. The slowdown is even visible when using the loopback network interface. Prebuilding &lt;code>git-archive&lt;/code>s periodically and using those to build the initial state of a Git clone can significantly improve performance. He mentioned that it&amp;rsquo;d be good to build a service to automate this, and offered help in doing so.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Delegating file accesses:&lt;/strong> There is an open feature request in &lt;a href="https://github.com/bazelbuild/bazel/issues/16380">#16380&lt;/a> asking for a way to delegate file accesses to another tool. This, to me, sounds like FUSE. Someone brought up that FUSE doesn&amp;rsquo;t work well on macOS anymore and that NFS can be used as an alternative, and Meta&amp;rsquo;s EdenFS or Buildbarn&amp;rsquo;s bb-clientd&amp;rsquo;s do that just fine. Another option is to implement a custom VFS instance within Bazel to directly talk to a remote file system.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Resource consumption:&lt;/strong> Bazel&amp;rsquo;s memory usage is&amp;hellip; troublesome. First, because Bazel uses a lot of memory, and second because of the JVM&amp;rsquo;s heap limits. Newer Bazel versions were able to reduce &lt;em>retained&lt;/em> heap memory by 95% after a build and 25-30% overall during a build&amp;hellip; but that&amp;rsquo;s not very useful because &lt;em>peak&lt;/em> memory consumption is what matters in many cases. The team is looking at various alternate solutions to tackle this problem:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Skyfocus:&lt;/strong> Bazel 8 contains a new feature called Skyfocus, in experimental state. The idea is to perform GC based on a user-defined working set. This is useful in large monorepos where users want to only work on a small portion of the tree, but there are questions about the usability aspects and UX of this solution.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Skeletal analysis:&lt;/strong> The goal of this work is to try to change the evaluation model to reduce peak memory by 20%. The idea is to trade memory usage for wall time, which means this will be useful for CI but could be harmful for interactive builds.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>(Remote) Analysis caching:&lt;/strong> The loss of the Bazel analysis cache across reconfigurations or server restarts has always been a problem and a major usability annoyance, so this is finally being looked at. The goal is to be able to cache configured targets, aspects, action execution results, and other Bazel-internal state, possibly storing this information in the &amp;ldquo;standard&amp;rdquo; remote cache by using a special key. This could also help with a ~70% heap and runtime reduction for analysis phases from cold start, and it could be used to prune entire subgraphs during the execution phase. This would be a massive improvement for IDE interactions, as IDEs primarily rely on analysis-time operations only.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Distributed analysis:&lt;/strong> The idea is to shard analysis across Bazel workers. This sounds&amp;hellip; OK for gigantic monorepos like Google&amp;rsquo;s but I&amp;rsquo;m not sure I see the use case outside of that environment. Still in very early stages of discussion.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="blzmod-and-external-dependencies">blzmod and external dependencies&lt;/h1>
-&lt;p>The &lt;code>WORKSPACE&lt;/code> in Bazel has always been a wart: Google did &lt;em>not&lt;/em> have this feature in Blaze but the need to support out-of-tree third-party dependencies became glaringly obvious when they open-sourced Bazel. The &lt;code>WORKSPACE&lt;/code> was then bolted on and we have been suffering from its deficiencies for years. bzlmod promises to fix them all, and of course there were talks (and a BoF) on it:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>SOTU dependency updates:&lt;/strong> bzlmod now provides a vendor mode to download all dependencies of a target or all targets, which is very useful for CI/CD offline builds (e.g. to exercise disaster recovery). &lt;code>MODULE.bazel&lt;/code> now has include support and &lt;code>use_repo_rule&lt;/code> for easier migration. The lock file format has been revamped to minimize merge conflicts. The &lt;code>WORKSPACE&lt;/code> is disabled by default in Bazel 8 and won&amp;rsquo;t be available in Bazel 9. As for future plans, the repo cache will be shared across workspaces and will include the results of evaluation, not just downloads.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>SOTU rule updates:&lt;/strong> The Python, Android, Java, and shell rules have all moved to Starlark. Protobuf and Android support have moved as well, and this comes with new things like &amp;ldquo;mobile install v3&amp;rdquo;. The goal for next year is to complete the Starlarkification effort (with possible new extension points to call into Bazel from the Build API).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>SOTU Starlark and the Build API:&lt;/strong> All struct providers are gone; aspects can propagate to target toolchains; and there are now dormant dependencies for tests. As for upcoming changes: symbolic macros in Bazel 8 (more later); rule finalizers; and types for Starlark (which are compatible with Python 3 but &lt;em>not&lt;/em> with Buck).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Handling internal artifacts:&lt;/strong> It is common for vendors to provide binary blobs that don&amp;rsquo;t integrate with Bazel. Azul&amp;rsquo;s JDK is an example. For these, it is interesting to consume them into the build via a workspace repository, but the question then becomes how to do this with bzlmod. The answer is to &amp;ldquo;layer multiple registries&amp;rdquo;: you&amp;rsquo;d have a company-internal registry that exposes these binaries, and then fall back to the BCR for everything else.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Disabling the BCR:&lt;/strong> For companies that want to have tight control on what they access during the build, it&amp;rsquo;s perfectly possible to bypass the BCR, either by pointing Bazel to an internal registry or by vendoring sources. The &lt;code>bazel vendor&lt;/code> subcommand, which I didn&amp;rsquo;t know about, can come in handy.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Missing packages:&lt;/strong> There are some glaring omissions from the BCR right now, which include googleapis, gRPC, and &lt;code>rules_scala&lt;/code>. The maintainers of the former are not very cooperative, but progress is being made. As for gRPC, there is a desire to avoid pulling in support for all languages all the time, which makes this technically harder.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="secure-and-auditable-builds">Secure and auditable builds&lt;/h1>
-&lt;p>Maintaining the integrity of the software provenance chain is difficult and &amp;ldquo;recent&amp;rdquo; events like the &lt;a href="https://en.wikipedia.org/wiki/XZ_Utils_backdoor">XZ Utils Backdoor&lt;/a> have shown the criticality of, at least, having an audit trail of what goes into software builds. This is where SBOM and other techniques come into play, and Bazel-based builds are perfectly positioned to provide these assurances:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>SBOMs:&lt;/strong> There are many different formats to produce a &lt;a href="https://www.ntia.gov/page/software-bill-materials">Software bill of materials (SBOM)&lt;/a>, and a few of them like CycloneDX and SPDX are standardized. It&amp;rsquo;s important that these files are &amp;ldquo;merge-able&amp;rdquo; so that, when you import a third-party dependency, you can assemble their own SBOM.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Types of targets:&lt;/strong> It&amp;rsquo;s tricky to generate the SBOM, and not all rules to generate one did or do the right thing. For example: do all deps belong in the SBOM? What about deps that say &lt;code>neverlink=1&lt;/code>? What about build-time only deps like compilers?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Rules:&lt;/strong> Bazel has had a &lt;code>licenses&lt;/code> package-level function for a long time, but it is insufficient to generate an SBOM. The newer &lt;a href="https://github.com/bazelbuild/rules_license">&lt;code>rules_license&lt;/code>&lt;/a> offers a much more complete solution to tracking licenses and generating SBOMs.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Build assurance:&lt;/strong> Other than declaring licenses, it&amp;rsquo;s important to be able to verify &lt;em>where&lt;/em> builds came from. &lt;a href="https://slsa.dev/">SLSA&lt;/a> defines various levels that capture different requirements. At the very least, you should target SLSA 2, which requires builds to be produced from trusted environments and to prevent arbitrary users from tampering with those builds (e.g. only allowing uploads to the Action Cache by CI). SLSA 3 is even more strict but RE doesn&amp;rsquo;t yet provide a mechanism to implement it; there are some talks to support it in V3 and maybe backport it to V2, but no concrete plans yet.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="symbolic-macros">Symbolic macros&lt;/h1>
-&lt;p>Macros are problematic: they tend to cause targets to require public visibility; they tend to pollute the list of available targets in a package (the output of &lt;code>bazel query&lt;/code> is unusable); and they have the potential of bloating the build graph massively. There was a full talk from Google on a new feature that&amp;rsquo;ll make these less of an issue:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>New feature:&lt;/strong> Bazel 8 ships with &lt;em>symbolic macros&lt;/em>, which are first-class citizens of the build graph. Symbolic macros are declared similarly to rules: instead of specifying &lt;code>rule()&lt;/code>, you specify &lt;code>macro()&lt;/code> and provide a set of attributes and an implementation function. The names of the targets and outputs that these macros produce are constrained to a set of well-defined patterns.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Limitations:&lt;/strong> One known deficiency is that &lt;code>**kwargs&lt;/code> doesn&amp;rsquo;t work as it used to because there is no way to specify this in an attribute list. The way to mitigate this and make it easier to wrap rules will be attribute inheritance. Similarly, while symbolic macros can lead to lazy expansion, this is not yet implemented. Both of these limitations will be addressed later in the 8.x series.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Epilogs:&lt;/strong> Legacy macros used to call &lt;code>native.existing_rules()&lt;/code> and lead to the &amp;ldquo;epilog macro&amp;rdquo; idiom that can be found in large monorepos. These macros are expected to appear at the end of a build file&amp;hellip; but there is no way to enforce this. With symbolic macros, this idiom is now a supported feature via the &lt;code>finalizer=True&lt;/code> attribute, which then makes these macros be expanded &lt;em>after&lt;/em> the full build file has been processed irrespective of any other targets.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Downsides:&lt;/strong> Symbolic macros were well-received by conference attendees but have received some pushback inside of Google. The reason is that, because these macros will allow lazy evaluation, it&amp;rsquo;s possible that they&amp;rsquo;ll encourage even larger packages that only become problematic in some (critical) scenarios.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Legacy macros:&lt;/strong> There are no plans to remove legacy macros right now&amp;mdash;and even if there were, it&amp;rsquo;d take years to eliminate them due to the need to remain backwards-compatible for multiple releases.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="queries">Queries&lt;/h1>
-&lt;p>For people coming from other build systems, the ability to query a build graph may sound like an alien concept. But Bazel has first-class features to do just this, and they can come in handy when writing automation to modify the source tree or to select tests for execution.&lt;/p>
-&lt;p>There was a full 30-minute talk dedicated to queries. I do not intend to repeat everything that was said because everything is in &lt;a href="https://bazel.build/query/language">the query documentation&lt;/a>&amp;hellip; but I did learn a bunch of stuff:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Target provenance:&lt;/strong> &lt;code>bazel query --output=build ...&lt;/code> shows &amp;ldquo;fictitious&amp;rdquo; attributes like &lt;code>generator_{name,function,location}&lt;/code> which indicate what produced a target. Useful to understand what macros and globs are doing. These attributes can also be used in filters.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Variables:&lt;/strong> Queries can have variables in them to avoid repeating complex parts. For example: &lt;code>let v = foo/... in allpaths($v, //common) intersect $v&lt;/code>.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Removing implicit dependencies:&lt;/strong> These often pollute query results with noise and can be removed with &lt;code>--noimplicit_deps&lt;/code>. Arguably, this flag should be the default.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Graphing:&lt;/strong> It is possible to generate a Graphviz file by using &lt;code>--output=graph&lt;/code> and then graphing it with &lt;code>dot -Tsvg -o graph.svg&lt;/code>. It is important to filter the query or otherwise the resulting graph is overwhelming&amp;mdash;aka useless.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Running code on the graph:&lt;/strong> The &lt;code>cquery&lt;/code> command supports &lt;code>--output=starlark --starlark:expr=...&lt;/code> which allows running a piece of Starlark code on every target selected by the query. The current target is bound to the &lt;code>target&lt;/code> variable. This is useful to, for example, query transitive runtime JARs. And because Starlark is almost Python, you can explore the API by using the &lt;code>dir&lt;/code> function with expressions like &lt;code>dir(target)&lt;/code> or &lt;code>dir(target.actions)&lt;/code>.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Action queries:&lt;/strong> The &lt;code>aquery&lt;/code> command is a different beast from the other queries and allows inspecting the action graph. Something like &lt;code>bazel aquery 'mnemonic(CppCompiler, //...)'&lt;/code> shows all inputs, outputs, and command lines for every action. This can be particularly useful to understand toolchain configuration changes.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Filtering by file:&lt;/strong> The &lt;code>outputs&lt;/code> and &lt;code>inputs&lt;/code> filters can be used to filter actions by paths: e.g. you can find actions that produce a particular file with &lt;code>outputs(&amp;quot;.*path/to/h&amp;quot;, deps(//...)))&lt;/code>. (Beware that the path filter is an anchored regexp.)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Performance:&lt;/strong> Running many queries in a loop doesn&amp;rsquo;t scale. Consider building a bigger query if possible and then do post-processing (the opposite advice of when talking to a database server), or using an aspect to dump all info in a single run.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="linting">Linting&lt;/h1>
-&lt;p>Back at Google, Jin and I hosted an intern circa 2017 to work on &amp;ldquo;autolint&amp;rdquo;: an innovative tool that was supposed to automate running arbitrary lint checks on arbitrary codebases. The project never materialized&amp;hellip; but Aspect.dev just announced &lt;a href="https://github.com/aspect-build/rules_lint">&lt;code>rules_lint&lt;/code>&lt;/a> which basically does the same thing and integrates with Bazel neatly.&lt;/p>
-&lt;p>To summarize the talk, &lt;code>rules_lint&lt;/code> provides two disjoint features in one:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Formatting:&lt;/strong> The goal of formatting is to change a codebase to adhere to predefined standards and stop the bitchering about white space. A quote from the talk I liked was &amp;ldquo;because while your code might be art&amp;hellip; it isn&amp;rsquo;t ASCII art&amp;rdquo;.&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Broad support:&lt;/strong> Supporting formatters is easy, and there are formatters for almost all languages, so a goal here is to try to support as many as possible.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Speed:&lt;/strong> Formatting must be deterministic and fast so that it can be hooked into the IDE and/or in pre-commit hooks.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Not part of the build graph:&lt;/strong> It&amp;rsquo;s tempting to try to hook formatting as an action, but formatting requires unconstrained access to the workspace to modify source files, and many source files that you&amp;rsquo;d like to lint don&amp;rsquo;t necessarily have build rules (e.g. Markdown documentation).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Implementation:&lt;/strong> Formatting relies on &lt;code>rules_multitool&lt;/code> which automates the process of downloading a bunch of tools and &lt;code>rules_multirun&lt;/code> which allows running multiple tools in parallel.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Git blame:&lt;/strong> When applying formatting changes, don&amp;rsquo;t forget to register the commits that did so in &lt;code>.git-blame-ignore-revs&lt;/code>. This will prevent your name from showing up in &lt;code>git blame&lt;/code> operations as the author of all files.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Linting:&lt;/strong> The goal of linting is to detect potential problems in the code, but the constraints are different: the problems aren&amp;rsquo;t always conclusive, the solutions aren&amp;rsquo;t always unique nor safe to apply automatically, and analyzing a file may require analyzing more than one at once.&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Speed:&lt;/strong> Linting is slow because it often requires using tools akin to compilers. As such, it should never be added to pre-commit hooks and should instead be plumbed through in CI.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Implementation:&lt;/strong> The desire is to have a uniform interface for linting all languages and don&amp;rsquo;t want to have extra rules nor modify build files. The obvious answer to this is to use an aspect which then augments existing rules with reports and patches to fix up the source tree. Validation actions were not an option because using them requires modifying the rulesets, and a premise of this work was to &lt;em>not&lt;/em> do that.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Interface:&lt;/strong> Invoking an aspect and handling the resulting patch files is complicated, so Aspect.dev has augmented the Bazel client (the CLI) with an additional &lt;code>lint&lt;/code> subcommand that automates this process. Interesting, and I suppose this could be turned into a pluggable mechanism by making Bazel look for &lt;code>bazel-&amp;lt;command&amp;gt;&lt;/code> binaries at a well-known location (like the &lt;code>git&lt;/code> dispatcher does). This reminded me of Twitter&amp;rsquo;s &lt;a href="https://v1.pantsbuild.org/">Pants&lt;/a> build system, which is much more than just for building.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="testing">Testing&lt;/h1>
-&lt;p>Bazel is often sold as a &amp;ldquo;build tool&amp;rdquo; but its secret sauce is that it really is a &amp;ldquo;test tool&amp;rdquo;. The true benefits of using Bazel come from realizing that not all tests have to run all the time, and that their results can be safely cached. Various talks touched upon how to do testing effectively:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Profiling data:&lt;/strong> Collecting profiling details of tests &lt;em>by default&lt;/em>, and exposing these details as test outputs, is very useful because developers can then use this information to understand how to optimize long tests on their own. AirBnB reported that they do this.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Test granularity:&lt;/strong> We like to think that each test deserves its own test target&amp;hellip; but that&amp;rsquo;s not necessarily how users think or how they interact with tests. Many times, developers end up running certain groups of tests in unison, and if they always do that, combining those tests under a single target will save build and execution time at the expense of a less &amp;ldquo;pure&amp;rdquo; dependency graph.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Tests in the build:&lt;/strong> In certain scenarios, users would like to depend on test outputs as part of the build process. One example that Luminar Technologies provided was the need to generate a detailed report of test results and code coverage for industry compliance reasons. The report generation should be an action that depends on the test outputs, but that&amp;rsquo;s not doable. As a compromise, they made the tests run as part of the build by replacing &lt;code>cc_test&lt;/code> with a macro that spawns a non-test action with a custom runner (but only on CI).&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Smoke tests:&lt;/strong> Related to the previous and during the unconference, Luminar Technologies also brought up the desire to gate parts of the build and test process on &amp;ldquo;smoke tests&amp;rdquo;. In other words: once issuing the build/test operation, if we detect that a simple test fails, we shouldn&amp;rsquo;t continue the build or run any of the more expensive tests. The audience seemed to agree that this belonged into a separate tool. Ulf reminded us that there should still be a flag called &lt;code>--test_keep_going&lt;/code>, which can be set to false to stop execution as soon as one test fails.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Test selection:&lt;/strong> When folks adopt Bazel, their initial approach to CI is to simply do &lt;code>bazel test ...&lt;/code> in a job. This works well&amp;hellip; until it doesn&amp;rsquo;t, because even in the presence of test caching, processing the whole monorepo becomes expensive. Uber explains how even an &lt;code>rdeps&lt;/code> query becomes expensive and they&amp;rsquo;ve had to find other solutions. A key insight is that 71% of changes to their monorepo only change source files and only 15% change at least one build file. This means that the majority of changes do not modify the build graph structure significantly, so there is room for reusing state from previous builds (e.g. keeping the Bazel server alive) to compute newly-affected targets.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Flaky test granularity:&lt;/strong> Bazel detects flakes at the test target level&amp;hellip; but a test target can contain tens or hundreds of individual test cases. Which means that if a single test case is flaky and we conclude that its target is flaky, subsequent builds could skip lots of valid test cases. By implementing custom flaky test case detection via &lt;code>junit.xml&lt;/code> report files, Uber was able to surface 3500 additional tests that would have been skipped by the naive target-based approach and could re-add those to the build.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Profile-guided test execution:&lt;/strong> In large test invocations, it&amp;rsquo;s common for one test to be the long pole. If by lack of luck this test ends up running last, it ends dragging the critical path of the test run and lengthening the p99 of test executions. It&amp;rsquo;d be nice if Bazel supported &amp;ldquo;profile-guided execution&amp;rdquo; so that such long poles could be scheduled earlier. Jin reported that this has been looked at but one problem is that there hasn&amp;rsquo;t been a good place to store this information across invocations. Ulf mentioned that when we have async action execution (which Java 21 makes possible), we should be able to improve action scheduling and implement this.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Actions per test:&lt;/strong> One interesting detail that Ulf shared is that test targets generate three actions, possibly more: one to execute the test itself, another to generate the &lt;code>junit.xml&lt;/code> file if the test failed to do so, and another to perform coverage post-processing. If retries, sharding, or &lt;code>--runs_per_test&lt;/code> are involved, there can be even more actions. So, if it becomes necessary, there is precedent to add more actions to perform other types of post-processing.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>CI runners:&lt;/strong> A topic that came up during the unconference was that starting Bazel on CI runners is very painful because of the need to download repos, repopulate the local disk cache, and rebuild the analysis graph. The general advice is to prevent discarding CI runners across builds, but that&amp;rsquo;s not always possible (e.g. security might not like to share runners across different jobs). For Kubernetes, stateful sets provide a mechanism to preserve the disk cache even during auto-scaling.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="missing-tooling-around-bazel">Missing tooling around Bazel&lt;/h1>
-&lt;p>A fun topic that arose in the unconference was: &amp;ldquo;what support tools do you wish Google had open sourced when they published Bazel, or that the community had built?&amp;rdquo; There were many ideas from the audience:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Scripting language for use in genrules:&lt;/strong> Writing genrules that work across systems is difficult because they invoke the shell, and the tools that are often called do not always support the same syntax (&lt;a href="/2021/08/useless-use-of-gnu.html">thanks GNU&lt;/a>). It&amp;rsquo;d be nice to have a language that allowed writing genrules in a platform-agnostic way. WASM was brought up as well as having a Starlark interpreter with file system access.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Affected target determination:&lt;/strong> The goal of this tool would be to answer the question of which targets are impacted by a change to the source tree. &lt;a href="https://github.com/Tinder/bazel-diff">&lt;code>bazel-diff&lt;/code>&lt;/a> more or less does this. An &lt;code>rdeps&lt;/code> query sounds like the right solution, but in practice it is tricky because changes to a toolchain aren&amp;rsquo;t visible in a query; they do show up in &lt;code>cquery&lt;/code> though, but then you have to be aware of all possible configurations to do the determination correctly.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Build queuing:&lt;/strong> The goal here is to have a service that can queue entire builds and not just actions. This might exist in some CI systems already.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Unifying bazelisk with bazel:&lt;/strong> Users are confused with the fact that &lt;code>sudo apt install bazel&lt;/code> is available but generally does the wrong thing, and that it&amp;rsquo;d be good if &lt;code>bazelisk&lt;/code>&amp;rsquo;s features existed within Bazel. I explained that we built something similar to &lt;code>bazelisk&lt;/code> at Snowflake but for arbitrary tools as a way to hijack command line executions and redirect them to checked-in tools; maybe we should open-source it.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>buildozer for bzl files:&lt;/strong> Automating edits to &lt;code>bzl&lt;/code> files would be handy, although this is a hard problem. Maybe it could be scoped down to e.g. automatically clean up old repository rules that aren&amp;rsquo;t referenced.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Java library to programmatically edit build and &lt;code>bzl&lt;/code> files:&lt;/strong>. The current Starlark library isn&amp;rsquo;t useful because it&amp;rsquo;s not standalone and it doesn&amp;rsquo;t preserve the original file structure. A workaround is to extract the AST from Python because these files remain syntactically valid from Python&amp;rsquo;s perspective.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Documentation website for all the rules:&lt;/strong> The BCR could fulfill this, but it currently does not have links to documentation.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="the-end">The end&lt;/h1>
-&lt;p>And finally, here are the few leftover toughts that I did not know how to fit in any of the sections above:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Nix:&lt;/strong> There were many talks about Nix on the original submissions, but only a couple made it to the final schedule. The folks at Modus Crate described how they use &lt;code>rules_nixpkgs&lt;/code> to build external dependencies and how they stage those in an NFS-shared &lt;code>/nix/store/&lt;/code> tree. Because Bazel invokes Nix and stages the dependencies during its external repository phase, the execution phase and the remote workers can assume that the Nix packages are in the right locations and things just work.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>RPM integration:&lt;/strong> In a similar spirit to using Nix to install packages and/or build containers, we also have &lt;a href="https://github.com/rmohr/bazeldnf">bazeldnf&lt;/a>. This ruleset provides the &lt;code>rpm&lt;/code> repository rule to import RPM packages and the &lt;code>rpmtree&lt;/code> build rule to combine one or more RPM into a tarball that can later be fed to other rules like &lt;code>container_layer&lt;/code>. In this context, you might also be interested in the &lt;a href="https://github.com/NixOS/patchelf">&lt;code>patchelf&lt;/code>&lt;/a> ruleset.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Migrations:&lt;/strong> Migration talks are getting old, but there were some good insights from MongoDB&amp;rsquo;s talk. One such insight was that, as in any software rewrite, the &amp;ldquo;old&amp;rdquo; build system doesn&amp;rsquo;t stay still during a migration, and the set of features to migrate grows over time. Another such insight was that, if you can couple the new build system to the old one (by making one rely on the other for increasing portions of the code), you can minimize the time in which new features get added to the old build and not the new one. The downside is that you&amp;rsquo;ll be building throwaway work, but overall it will pay off.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>My talk about Snowflake:&lt;/strong> I gave a 15-minute &amp;ldquo;migration&amp;rdquo; talk about what we are doing with Bazel at Snowflake. Because of what I said just above, I skipped over all of the migration topics and instead focused on explaining 5 different technical challenges that we faced and how we fixed them. I was met with lots of questions after the talk, which was really nice, but which means that we owe a full migration post when we are done (very soon now!).&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>I hear you want the raw notes? Are you sure? I really don&amp;rsquo;t recommend that you look&amp;hellip; but if you must, here they are: &lt;a href="/notes/2024-10-14-bazelcon.md">BazelCon day 1 notes&lt;/a>, &lt;a href="/notes/2024-10-15-bazelcon.md">BazelCon day 2 notes&lt;/a>, and the &lt;a href="/notes/2024-10-16-build-meetup.md">Build Meetup&amp;rsquo;s notes&lt;/a>.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-10-22-bazelcon.jpg" length="362903" type="image/jpeg"/></item></channel></rss>
+&lt;p>Credit and disclaimers: the &lt;a href="https://sy.to/hekgh">DS923+&lt;/a> and &lt;a href="https://sy.to/drkom">the 3 drives&lt;/a> it contains that I used throughout this article were provided to me for free by Synology for evaluation purposes in exchange for blogging about the NAS. The content in this article is &lt;em>not&lt;/em> endorsed has &lt;em>not&lt;/em> been reviewed by them.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-11-03-synology-ds923plus-nas.jpg" length="232646" type="image/jpeg"/></item></channel></rss>
