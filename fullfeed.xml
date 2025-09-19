@@ -1,4 +1,174 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Fri, 12 Sep 2025 08:00:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Trusting builds with Bazel remote execution</title><link>https://jmmv.dev/2025/09/bazel-remote-execution.html</link><pubDate>Fri, 12 Sep 2025 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/bazel-remote-execution.html</guid><description>&lt;p>The previous article on &lt;a href="/2025/09/bazel-remote-caching.html">Bazel remote caching&lt;/a> concluded that using &lt;em>just&lt;/em> a remote cache for Bazel builds was suboptimal due to limitations in what can and cannot be cached for security reasons. The reason behind the restrictions was that it is impossible to safely reuse a cache across users. Or is it?&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Fri, 19 Sep 2025 00:08:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Bazel and glibc versions</title><link>https://jmmv.dev/2025/09/glibc-versions-bazel.html</link><pubDate>Fri, 19 Sep 2025 00:08:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/glibc-versions-bazel.html</guid><description>&lt;p>Imagine this scenario: your team uses Bazel for fast, distributed C++ builds. A developer builds a change on their workstation, all tests pass, and the change is merged. The CI system picks it up, gets a cache hit from the developer&amp;rsquo;s build, and produces a release artifact. Everything looks green. But when you deploy to production, the service crashes with a mysterious error: &lt;code>version 'GLIBC_2.28' not found&lt;/code>. What went wrong?&lt;/p>
+&lt;p>The answer lies in the subtle but dangerous interaction between Bazel&amp;rsquo;s caching, remote execution, and differing glibc versions across your fleet. In previous posts in this series, I&amp;rsquo;ve covered the fundamentals of &lt;a href="/2025/07/bazel-action-determinism.html">action non-determinism&lt;/a>, &lt;a href="/2025/09/bazel-remote-caching.html">remote caching&lt;/a>, and &lt;a href="/2025/09/bazel-remote-execution.html">execution execution&lt;/a>. Now, finally, we&amp;rsquo;ll build on those to tackle this specific problem.&lt;/p>
+&lt;p>This article dives deep into how glibc versions can break build reproducibility and presents several ways to fix it&amp;mdash;from an interesting hack (which spawned this whole series) to the ultimate, most robust solution.&lt;/p>
+&lt;h1 id="the-scenario">The scenario&lt;/h1>
+&lt;p>Suppose you have a pretty standard (corporate?) development environment like the following:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Developer workstations (WS).&lt;/strong> This is where Bazel runs during daily development, and Bazel can execute build actions both locally and remotely.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>A CI system.&lt;/strong> This is a distributed cluster of machines that run jobs, including PR merge validation and production release builds. These jobs execute Bazel too, who in turn executes build actions both locally and remotely.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>The remote execution (RE) system.&lt;/strong> This is a distributed cluster of worker machines that execute individual Bazel build actions remotely. The key components we want to focus on today are the AC, the CAS, and the workers&amp;mdash;all of which I covered in detail in the previous two articles.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>The production environment (PROD).&lt;/strong> This is where you deploy binary artifacts to serve your users. No build actions run here.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;figure>
+&lt;img src="/images/2025-09-19-glibc-versions-bazel-environment.png" width="100%" />
+&lt;/figure>
+&lt;p>All of the systems above run some version of Linux, and it is tempting to wish to keep such version in sync across them all. The reasons would include keeping operations simpler and ensuring that build actions can run consistently no matter where they are executed.&lt;/p>
+&lt;p>However, this wish is misguided and plain impossible. It is misguided because you may not want to run the same Linux distribution on all three environments: after all, the desktop distribution you run on WS may not be the best choice for RE workers, CI nodes, nor production. And it is plain impossible because, even if you aligned versions to the dot, you would need to take upgrades at some point: distributed upgrades must be rolled out over a period of time (weeks or even months) for reliability, so you&amp;rsquo;d have to deal with version skew anyway.&lt;/p>
+&lt;p>To make matters more complicated, the remote AC is writable from all of WS, CI, and RE to maximize Bazel cache hits and optimize build times. This goes against best security practices (so there are mitigations in place to protect PROD), but it&amp;rsquo;s a necessity to support an ongoing onboarding into Bazel and RE.&lt;/p>
+&lt;h1 id="the-problem">The problem&lt;/h1>
+&lt;p>The question becomes: can the Linux version skew among all machines involved cause problems with remote caching?&lt;/p>
+&lt;p>It sure can because C and C++ build actions tend to pick up system-level dependencies in a way that Bazel is unaware of (by default), and those influence the output the actions produce. Here, look at this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ nm prod-binary | grep GLIBC_2.28
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> U mtx_init@@GLIBC_2.28
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>The version of glibc leaks into binaries&lt;/strong> and &lt;strong>this is invisible to Bazel&amp;rsquo;s C/C++ action keys&lt;/strong>. glibc versions its symbols to provide runtime backwards compatibility when their internal details change, and this means that binaries built against newer glibc versions may not run on systems with older glibc versions.&lt;/p>
+&lt;p>How is this a problem though? Let&amp;rsquo;s take a look by making the problem specific. Consider the following environment:&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>Environment&lt;/th>
+&lt;th>Purpose&lt;/th>
+&lt;th>glibc version&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>WS&lt;/td>
+&lt;td>Developer workstations&lt;/td>
+&lt;td>2.28&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>CI-1&lt;/td>
+&lt;td>CI production environment&lt;/td>
+&lt;td>2.17&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>CI-2&lt;/td>
+&lt;td>CI staging environment&lt;/td>
+&lt;td>2.28&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>RE&lt;/td>
+&lt;td>Shared RE cluster&lt;/td>
+&lt;td>2.17&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>PROD&lt;/td>
+&lt;td>Production deployments&lt;/td>
+&lt;td>2.17&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;p>In this environment, developers run Bazel in WS for their day-to-day work, and CI-1 runs Bazel to support development flows (PR merge-time checks) and to produce binaries for PROD. CI-2 sometimes runs builds too. All of these systems can write to the AC that lives in RE.&lt;/p>
+&lt;p>As it so happens, one of the C++ actions involved in the build of &lt;code>prod-binary&lt;/code>, say &lt;code>//base:my_lib&lt;/code>, has a &lt;code>local&lt;/code> tag which forces the action to bypass remote execution. This can lead to the following sequence of events:&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>A developer runs a build on a WS. &lt;code>//base:my_lib&lt;/code> has changed so it is rebuilt on the WS. The action uses the C++ compiler, so the object files it produces pick up the dependency on glibc 2.28. The result of the action is injected into the remote cache.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>CI-1 schedules a job to build &lt;code>prod-binary&lt;/code> for release. This job runs Bazel on a machine with glibc 2.17 and leverages the RE cluster which also contain glibc 2.17. Many C++ actions get rebuilt &lt;em>but&lt;/em> &lt;code>//base:my_lib&lt;/code> is reused from the cache. The production artifact now has a dependency on symbols from glibc 2.28.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Release engineering picks the output of CI-1, deploys the production binary to PROD, and&amp;hellip; boom, PROD explodes:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">./prod-binary: /lib64/libc.so.6: version `GLIBC_2.28&amp;#39; not found (required by ./prod-binary)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;/li>
+&lt;/ol>
+&lt;p>The fact that the developer WS could write to the AC is very problematic on its own, but we could encounter this same scenario if we first ran the production build on CI-2 for testing purposes and then reran it on CI-1 to generate the final artifact.&lt;/p>
+&lt;p>So, what do we do now? In a default Bazel configuration, C and C++ action keys are underspecified and can lead us to non-deterministic behavior when we have a mixture of host systems compiling them.&lt;/p>
+&lt;h1 id="solution-a-manually-partition-the-ac">Solution A: manually partition the AC&lt;/h1>
+&lt;p>Let&amp;rsquo;s start with the case where you aren&amp;rsquo;t yet ready to strictly restrict writes to the AC from RE workers, yet you want to prevent obvious mistakes that lead to production breaks.&lt;/p>
+&lt;p>The idea here is to capture the glibc version that is used in the local and remote environments, pick the higher of the two, and make that version number an input to the C/C++ toolchain. This causes the version to become part of the cache keys and should prevent the majority of the mistakes we may see.&lt;/p>
+&lt;p>WARNING: This is The Hack I recently implemented and that drove me to writing this article series! Prefer the options presented later, but know that you have this one up your sleeve if you must mitigate problems quickly.&lt;/p>
+&lt;p>To implement this hack, the first thing we have to do is capture the local glibc version. We can do this with:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;glibc-local-version&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;glibc-local-version.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;grep GNU_LIBC_VERSION bazel-out/stable-status.txt &lt;/span>&lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span>&lt;span class="s2"> | cut -d &amp;#39; &amp;#39; -f 2- &amp;gt;$@&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">stamp&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="kc">True&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">tags&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;sandboxed&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>One important tidbit here is the use of the &lt;code>stable-status.txt&lt;/code> file, indirectly via the requirement of stamping. This is necessary to force this action to rerun on every build because we don&amp;rsquo;t want to hit the case of using an old &lt;code>bazel-out&lt;/code> tree against an upgraded system. As a consequence, we need to modify the script pointed at by &lt;code>--workspace_status_command&lt;/code> script (you have one, right?) to emit the glibc version:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> &lt;span class="s2">&amp;#34;STABLE_GNU_LIBC_VERSION &lt;/span>&lt;span class="k">$(&lt;/span>getconf GNU_LIBC_VERSION&lt;span class="k">)&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The second thing we have to do is capture the remote glibc version. This is&amp;hellip; trickier because there is no tag to force Bazel to run an action remotely. Even if we assume remote execution, features like the dynamic spawn strategy or the remote local fallback could cause the action to run locally at random. To prevent problems, we have to detect whether the action is running within RE workers or not, and the way to do that will depend on your environment:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;glibc-remote-version&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;glibc-remote-version.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;&amp;#34;&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> if [ ! -e /etc/remote-worker.cookie ]; then
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # Trick dynamic scheduling (when it is enabled) into
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # preferring to run the action remotely.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> #
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # You have two choices here: fail hard, which makes
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # this correct, or accept that this is a heuristic by
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # making the failure unlikely with a sleep. You might
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # want the sleep if you don&amp;#39;t want build breakages
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # when there is significant action queuing, for
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> # example.
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> exit 1
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> #sleep 60
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> fi
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> getconf GNU_LIBC_VERSION &amp;gt;$@
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> &amp;#34;&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The third part of the puzzle is to select the highest glibc version between the two that we collected. We can do this with the following &lt;code>genrule&lt;/code>, leveraging &lt;code>sort&lt;/code>&amp;rsquo;s &lt;code>-V&lt;/code> flag to compare versions. This flag is a GNU extension&amp;hellip; but we are talking about glibc anyway here so I&amp;rsquo;m not going to be &lt;a href="/2021/08/useless-use-of-gnu.html">bothered by it&lt;/a>:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">genrule&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;glibc-max-version&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;:glibc-local-version&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;:glibc-remote-version&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">outs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>&lt;span class="s2">&amp;#34;glibc-max-version.txt&amp;#34;&lt;/span>&lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">cmd&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;&amp;#34;&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> local=&amp;#34;$$(cat $(location :glibc-local-version)
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> | cut -d &amp;#39; &amp;#39; -f 2)&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> remote=&amp;#34;$$(cat $(location :glibc-remote-version)
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> | cut -d &amp;#39; &amp;#39; -f 2)&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> echo &amp;#34;Local glibc version: $$&lt;/span>&lt;span class="si">{local}&lt;/span>&lt;span class="s2">&amp;#34; 1&amp;gt;&amp;amp;2
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> echo &amp;#34;Remote glibc version: $$&lt;/span>&lt;span class="si">{remote}&lt;/span>&lt;span class="s2">&amp;#34; 1&amp;gt;&amp;amp;2
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> chosen=&amp;#34;$$(printf &amp;#34;$$local&lt;/span>&lt;span class="se">\n&lt;/span>&lt;span class="s2">$$remote&lt;/span>&lt;span class="se">\n&lt;/span>&lt;span class="s2">&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> | sort -rV | head -1)&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> echo &amp;#34;$$&lt;/span>&lt;span class="si">{chosen}&lt;/span>&lt;span class="s2">&amp;#34; &amp;gt;$@
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> &amp;#34;&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And, finally, we can go to our C++ toolchain definition and modify it to depend on the &lt;code>glibc-max-version&lt;/code> produced by the previous action:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-python" data-lang="python">&lt;span class="line">&lt;span class="cl">&lt;span class="n">filegroup&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;toolchain_files&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">srcs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1"># ...&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="s2">&amp;#34;:glibc-max-version&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1"># ...&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">],&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="n">cc_toolchain&lt;/span>&lt;span class="p">(&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">name&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;glibc_safe_toolchain&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="n">all_files&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">toolchain_files&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="c1"># ...&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="p">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Ta-da! All of our C/C++ actions now encode the highest possible glibc version that the outputs they produce may depend on. And, while not perfect, this is an easy workaround to guard against most mistakes.&lt;/p>
+&lt;p>But can we do better? Of course.&lt;/p>
+&lt;h1 id="solution-b-restrict-ac-writes-to-re-only">Solution B: restrict AC writes to RE only&lt;/h1>
+&lt;p>Based on the previous articles, what we should think about is plugging the AC hole and forcing build actions to &lt;em>always&lt;/em> run on the RE workers. In this way, we would precisely control the environment that generates action outputs and we should be good to go.&lt;/p>
+&lt;p>Unfortunately, we can still encounter problems! Remember how I said that, at some point, you will have to upgrade glibc versions? What happens when you are in the middle of a rolling upgrade to your RE workers? The worker pool will end up with different &amp;ldquo;partitions&amp;rdquo;, each with a different glibc version, and you will still run into this issue.&lt;/p>
+&lt;p>To handle this case, you would need to have &lt;em>different&lt;/em> worker pools, one with the old glibc version and one with the new version, and then make the worker pool name be part of the action keys. You would then have to migrate from one pool to the other in a controlled manner. This would work well at the expense of reducing cache effectiveness, causing a a big toll on operations, and making the rollout risky because the switch from one pool to another is a all-or-nothing proposition.&lt;/p>
+&lt;h1 id="solution-c-sysroots">Solution C: sysroots&lt;/h1>
+&lt;p>The real solution comes in the form of sysroots. The idea is to install multiple parallel versions of glibc in &lt;em>all&lt;/em> environments and then modify the Bazel C/C++ toolchain to explicitly use a specific one. In this way, the glibc version becomes part of the cache key and all build outputs are pinned to a deterministic glibc version. This allows us to roll out a new version slowly with a code change, pinning the version switch to a specific code commit that can be rolled back if necessary, and keeping the property of &lt;a href="https://reproducible-builds.org/">reproducible builds&lt;/a> for older commits.&lt;/p>
+&lt;p>This is the solution outlined at the end of &lt;a href="/2024/08/glibc-versions-runtime.html">Picking glibc versions at runtime&lt;/a> and is the only solution that can provide you 100% safety against the problem presented in this article. It is difficult to implement, though, because convincing GCC and clang to not use system-provided libraries is tricky and because this solution will sound alien to most of your peers.&lt;/p>
+&lt;h1 id="what-will-you-do">What will you do?&lt;/h1>
+&lt;p>The problem presented in this article is far from theoretical, but it&amp;rsquo;s often forgotten about because typical build environments don&amp;rsquo;t present significant skew across Linux versions. This means that facing new glibc symbols is unlikely, so the chances of ending up with binary-incompatible artifacts are low. But they can still happen, and they can happen at the worst possible moment.&lt;/p>
+&lt;p>Therefore, you need to take action. I&amp;rsquo;d strongly recommend that you go towards the sysroot solution because it&amp;rsquo;s the only one that&amp;rsquo;ll give you a stable path for years to come, but I also understand that it&amp;rsquo;s hard to implement. Therefore, take the solutions in the order I gave them to you: start with the hack to mitigate obvious problems, follow that up with securing the AC, and finally go down the sysroot rabbit hole.&lt;/p>
+&lt;p>As for the glibc 2.17 mentioned en-passing above, well, it is ancient by today standards at 13 years of age, but it is what triggered this article in the first place. glibc 2.17 was kept alive for many years by the CentOS 7 distribution&amp;mdash;an LTS system used as a core building block by companies and that reached EOL a year ago, causing headaches throughout the industry. Personally, I believe that relying on LTS distributions is a mistake that ends up costing more money/time than tracking a rolling release, but I&amp;rsquo;ll leave that controversial topic for a future opinion post.&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-09-19-glibc-versions-bazel-cover-image.jpg" length="182393" type="image/jpeg"/></item><item><title>Trusting builds with Bazel remote execution</title><link>https://jmmv.dev/2025/09/bazel-remote-execution.html</link><pubDate>Fri, 12 Sep 2025 08:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/bazel-remote-execution.html</guid><description>&lt;p>The previous article on &lt;a href="/2025/09/bazel-remote-caching.html">Bazel remote caching&lt;/a> concluded that using &lt;em>just&lt;/em> a remote cache for Bazel builds was suboptimal due to limitations in what can and cannot be cached for security reasons. The reason behind the restrictions was that it is impossible to safely reuse a cache across users. Or is it?&lt;/p>
 &lt;p>In this article, we&amp;rsquo;ll see how leveraging remote execution in conjunction with a remote cache opens the door to safely sharing the cache across users. The reason is that remote execution provides a trusted execution environment for actions, and this opens the door to cross-user result sharing. Let&amp;rsquo;s see why and how.&lt;/p>
 &lt;h1 id="remote-execution-basics">Remote execution basics&lt;/h1>
 &lt;p>As we saw in &lt;a href="/2025/07/bazel-action-determinism.html">the article about action determinism&lt;/a>, Bazel&amp;rsquo;s fundamental unit of execution is &lt;em>the action&lt;/em>. Consequently, a remote execution system is going to concern itself with efficiently running individual actions, not builds, and caching the results of those. This distinction is critical because there are systems out there that work differently, such as &lt;a href="https://www.microsoft.com/en-us/research/publication/cloudbuild-microsofts-distributed-and-caching-build-service/">Microsoft&amp;rsquo;s CloudBuild&lt;/a>, &lt;a href="https://www.buildbuddy.io/docs/remote-bazel/">Buildbuddy&amp;rsquo;s Remote Bazel&lt;/a>, or even &lt;a href="/2025/03/bazel-next-generation.html">the shiny and new Bonanza&lt;/a>.&lt;/p>
@@ -2466,395 +2636,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;p>There is more though. Synology offers a variety of products for remote and physical backup. The one that does interest me the most is &lt;a href="https://www.synology.com/en-global/dsm/feature/snapshot_replication">Snapshot Replication&lt;/a>, which provides something similar to what I was doing with &lt;code>zfs send&lt;/code> and &lt;code>zfs receive&lt;/code>, but unfortunately requires a second Synology system offsite that I don&amp;rsquo;t have. The other solutions are &lt;a href="https://sy.to/hf5yf">Active Backup for Business&lt;/a> and &lt;a href="https://sy.to/tntsi">Hyper Backup&lt;/a>, which I still would like to evaluate but haven&amp;rsquo;t had a chance to look into.&lt;/p>
 &lt;h1 id="future">Future&lt;/h1>
 &lt;p>To conclude this brief review and comparison, let me say that I&amp;rsquo;m happy with the DS923+ experience so far. I don&amp;rsquo;t think I &lt;em>need&lt;/em> it because my FreeBSD solution worked well enough, but considering that I like to use the ThinkStation as the host for my VMs and as my primary development machine&amp;mdash;aka, a fun toy&amp;mdash;I feel more at peace with a dedicated appliance that stores my precious data.&lt;/p>
-&lt;p>For more details, you can visit Synology&amp;rsquo;s product pages for the &lt;a href="https://sy.to/hekgh">DS923+&lt;/a> and the &lt;a href="https://sy.to/drkom">Plus Series HDDs&lt;/a>. And if you want to roll your own FreeBSD-based solution, &lt;a href="https://docs.freebsd.org/en/books/handbook/zfs/">Chapter 22 of the FreeBSD handbook on ZFS&lt;/a> is a good place to start.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-12-13-ds923-and-thinkstation.jpg" length="329916" type="image/jpeg"/></item><item><title>Demystifying secure NFS</title><link>https://jmmv.dev/2024/11/demystifying-secure-nfs.html</link><pubDate>Sun, 03 Nov 2024 16:00:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2024/11/demystifying-secure-nfs.html</guid><description>&lt;p>I recently got a &lt;a href="https://sy.to/hekgh">Synology DS923+&lt;/a> for evaluation purposes which led me to setting up NFSv4 with Kerberos. I had done this about a year ago with FreeBSD as the host, and going through this process once again reminded me of how painful it is to secure an NFS connection.&lt;/p>
-&lt;p>You see, Samba is much easier to set up, but because NFS is the native file sharing protocol of Unix systems, I felt compelled to use it instead. However, if you opt for NFSv3 (the &amp;ldquo;easy default&amp;rdquo;), you are left with a system that has zero security: traffic travels unencrypted and unsigned, and the server trusts the client when the client asserts who is who. Madness for today&amp;rsquo;s standards. Yet, when you look around, people say &amp;ldquo;oh, but NFSv3 is fine if you trust the network!&amp;rdquo; But seriously, who trusts the network in this day and age?&lt;/p>
-&lt;p>You have to turn to NFSv4 &lt;em>and&lt;/em> combine it with Kerberos for a secure file sharing option. And let me tell you: the experience of setting these up and getting things to work is horrible, and the documentation out there is terrible. Most documents are operating-system specific so they only tell you what works when a specific server and a specific client talk to each other. Other documents just &lt;em>assume&lt;/em>, and thus omit, various important details of the configuration.&lt;/p>
-&lt;p>So. This article is my recollection of &amp;ldquo;lab notes&amp;rdquo; on how to set this whole thing up along with the necessary background to understand NFSv4 and Kerberos. My specific setup involes the Synology DS923+ as the NFSv4 server; Fedora, Debian, and FreeBSD clients; and the supporting KDC on a pfSense (or FreeBSD) box.&lt;/p>
-&lt;p>&lt;em>Update (June 3rd, 2025):&lt;/em> Following the &lt;a href="https://lobste.rs/s/7klzqj/demystifying_secure_nfs">discussion from Lobste.rs&lt;/a>, I&amp;rsquo;ve updated the text to resolve issues with the kernel/user name mapping.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="nfsv3s-insecurity">NFSv3&amp;rsquo;s insecurity&lt;/h1>
-&lt;p>NFSv3, or usually just NFS, is a protocol from the 1980s&amp;mdash;and it shows. In broad terms, NFSv3 exposes the &lt;em>inodes&lt;/em> of the underlying file system to the network. This became clear to me when I implemented &lt;a href="/software/tmpfs.html">tmpfs for NetBSD&lt;/a> in 2005 and realized that a subset of the APIs I had to support were in service of NFS. This was&amp;hellip; a mind-blowing realization. &lt;em>&amp;ldquo;Why would tmpfs, a memory file system, need NFS-specific glue?&amp;rdquo;&lt;/em>, I thought, and then I learned the bad stuff.&lt;/p>
-&lt;p>Anyhow. Now that you know that NFSv3 exposes inodes, you may understand why sharing a directory over NFSv3 is an all-or-nothing option for &lt;em>the whole file system&lt;/em>. Even if you can configure &lt;code>mountd&lt;/code> to export a single directory via &lt;code>/etc/exports&lt;/code>, malicious clients can craft NFS RPCs that reference inodes outside of the shared directory. Which means&amp;hellip; they get free access to the whole file system and explains why system administrators used to put NFS-exported shares in separate partitions, mounted under &lt;code>/export/&lt;/code>, in an attempt to isolate access to subsets of data.&lt;/p>
-&lt;p>To make things worse, NFSv3 has no concept of security. A client can simply assert that a request comes from UID 1000 and the server will &lt;em>trust&lt;/em> that the client is really operating on behalf of the server&amp;rsquo;s UID 1000. Which means: a malicious client can pretend to be &lt;em>any&lt;/em> user that exists on the server and gain access to &lt;em>any&lt;/em> file in the exported file system. Which then explains why the &lt;code>maproot&lt;/code> option exists as an attempt to avoid impersonating root&amp;hellip; but only root. Crazy talk.&lt;/p>
-&lt;p>All in all, NFSv3 may still be OK if you really trust the network, if you compartmentalize the exported file system, and if you are sharing inconsequential stuff. But can &lt;em>you&lt;/em> trust the network? Maybe you can if you are using a P2P link, but otherwise&amp;hellip; it is really, really risky and I do not want to do that.&lt;/p>
-&lt;h1 id="how-is-nfsv4-better">How is NFSv4 better?&lt;/h1>
-&lt;p>NFSv4, despite having the same NFS name as NFSv3, is a completely different protocol. Here are two main differences:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>NFSv4 operates on the basis of usernames, not UIDs.&lt;/strong> Each request to the server contains a username and the server is responsible for translating that username to a local UID while verifying access permissions.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>NFSv4 operates at the path level, not the inode level.&lt;/strong> Each request to the server contains the path of the file to operate on and thus the server can apply access control based on those.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>Take these two differences together and NFSv4 can implement secure access to file systems. Because the server sees usernames and paths, the server can first verify that a user is who they claim to be. And because the server can authenticate users, it can then authorize accesses at the path level.&lt;/p>
-&lt;p>That said, if all you have is NFSv4, you only get the &lt;code>AUTH_SYS&lt;/code> security level, which is&amp;hellip; the same as having no security at all. In this mode, the server trusts the client and assumes that user X on the client maps exactly to user X on the server, which is almost the same as NFSv3 did.&lt;/p>
-&lt;p>The real security features of NFSv4 come into play when it&amp;rsquo;s paired with Kerberos. When Kerberos is in the picture, you get to choose from the following security levels for each network share:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;code>krb5&lt;/code>: Requires requests to be authenticated by Kerberos, which is good to ensure only trusted users access what they should but offers zero &amp;ldquo;on-the-wire&amp;rdquo; security. Traffic flows unsigned and unencrypted, so an attacker could tamper with the data and slurp it before it reaches the client.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;code>krb5i&lt;/code>: Builds on &lt;code>krb5&lt;/code> to offer integrity checks on all data. Basically, all packets on the network are signed but not encrypted. This prevents spoofing packets but does not secure the data against prying eyes.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;code>krb5p&lt;/code>: Builds on &lt;code>krb5&lt;/code> to offer encrypted data on the wire. This prevents tampering with the network traffic and also avoids anyone from seeing what&amp;rsquo;s being transferred.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>Sounds good? Yeah, but unfortunately, Kerberos and its ecosystem are&amp;hellip; complicated.&lt;/p>
-&lt;h1 id="kerberos-101">Kerberos 101&lt;/h1>
-&lt;p>Kerberos is an authentication broker. Its goal is to detach authentication decisions between a client machine and a service running on a second machine, and move that responsibility to a third machine&amp;mdash;the Kerberos Domain Controller (KDC). Consequently, the KDC is a trusted entity between the two machines that try to communicate with each other.&lt;/p>
-&lt;p>All the machines that interact with the KDC form a &lt;em>realm&lt;/em> (AKA a &lt;em>domain&lt;/em>, but not a DNS domain). Each machine needs an &lt;code>/etc/krb5.conf&lt;/code> file that describes which realms the machine belongs to and who the KDC for each realm is.&lt;/p>
-&lt;p>The actors that exist within the realm are the &lt;em>principals&lt;/em>. The KDC maintains the authoritative list of principals and their authentication keys (passwords). These principals represent:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>Users&lt;/strong>, which have names of the form &lt;code>&amp;lt;username&amp;gt;@REALM&lt;/code>. There has to be one of these principals for every person (or role) that interacts with the system.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Machines&lt;/strong>, which have names of the form &lt;code>host/&amp;lt;machine&amp;gt;.&amp;lt;domain&amp;gt;@REALM&lt;/code>. There has to be one of these principals for every server, and, depending on the service, the clients may need one too as is the case for NFSv4.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Services&lt;/strong>, which have names of the form &lt;code>&amp;lt;service&amp;gt;/&amp;lt;machine&amp;gt;.&amp;lt;domain&amp;gt;@REALM&lt;/code>. Some services like NFSv4 require one of these, in which case &lt;code>&amp;lt;service&amp;gt;&lt;/code> is &lt;code>nfs&lt;/code>, but others like SSH do not.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>Let&amp;rsquo;s say Alice wants to log into the Kerberos-protected SSH service running on SshServer from a client called LinuxLaptop, all within the &lt;code>EXAMPLE.ORG&lt;/code> Kerberos realm.&lt;/p>
-&lt;p>&lt;em>(Beware that the description below is not 100% accurate. My goal is for you to understand the main concepts so that you can operate a Kerberos realm.)&lt;/em>&lt;/p>
-&lt;p>First, Alice needs to obtain a Ticket-Granting-Ticket (TGT) if she doesn&amp;rsquo;t have a valid one yet. This ticket is issued by the KDC after authenticating Alice with her password, and allows Alice to later obtain service-specific tickets without having to provide her password again. For this flow:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-11-03-demystifying-secure-nfs-kerberos-tgt-exchange.png" class="with-border" />
-&lt;figcaption>Steps involved in obtaining a TGT from the KDC for a user on a client machine.&lt;/figcaption>
-&lt;/figure>
-&lt;ol>
-&lt;li>
-&lt;p>Alice issues a login request to the KDC from the client LinuxLaptop by typing &lt;code>kinit&lt;/code> (or using other tools such as a PAM module). This request carries Alice&amp;rsquo;s password.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The KDC validates Alice&amp;rsquo;s authenticity by checking her password against the KDC&amp;rsquo;s database and issues a TGT. The TGT is encrypted with the KDC&amp;rsquo;s key and includes an assertion of who Alice is and how long the ticket is valid for.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The client LinuxLaptop stores the TGT on disk. Alice can issue &lt;code>klist&lt;/code> to see the ticket:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">linux-laptop$ klist
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Credentials cache: FILE:/tmp/krb5cc_1001
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Principal: alice@EXAMPLE.ORG
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Issued Expires Principal
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Oct 26 09:04:57 2024 Oct 26 19:05:01 2024 krbtgt/EXAMPLE.ORG@EXAMPLE.ORG
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">linux-laptop$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;/li>
-&lt;/ol>
-&lt;p>The TGT, however, is not sufficient to access a service. When Alice wants to access the Kerberos-protected SSH service running on the SshServer machine, Alice needs a ticket that&amp;rsquo;s specific to that service. For this flow:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-11-03-demystifying-secure-nfs-kerberos-tgs-exchange.png" class="with-border" />
-&lt;figcaption>Steps involved in obtaining a service-specific ticket from the KDC for a user on a client machine.&lt;/figcaption>
-&lt;/figure>
-&lt;ol>
-&lt;li>
-&lt;p>Alice sends a request to the Ticket-Granting-Service (KDS) and asks for a ticket to SshServer. This request carries the TGT.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The TGS (which lives in the KDC) verifies who the TGT belongs to and verifies that it&amp;rsquo;s still valid. If so, the TGS generates a ticket for the service. This ticket is encrypted with the service&amp;rsquo;s secret key and includes details on who Alice is and how long the ticket is valid for.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The client LinuxLaptop stores the service ticket on disk. As before, Alice can issue &lt;code>klist&lt;/code> to see the ticket:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">linux-laptop$ klist
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Credentials cache: FILE:/tmp/krb5cc_1001
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Principal: alice@EXAMPLE.ORG
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Issued Expires Principal
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Oct 26 09:04:57 2024 Oct 26 19:05:01 2024 krbtgt/EXAMPLE.ORG@EXAMPLE.ORG
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Oct 26 09:05:11 2024 Oct 26 19:05:01 2024 host/ssh-server.example.org@EXAMPLE.ORG
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">linux-laptop$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;/li>
-&lt;/ol>
-&lt;p>At this point, all prerequisite Kerberos flows have taken place. Alice can now initiate the connection to the SSH service:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-11-03-demystifying-secure-nfs-kerberos-ssh-access.png" class="with-border" />
-&lt;figcaption>Accessing a remote SSH server using a Kerberos ticket without password authentication.&lt;/figcaption>
-&lt;/figure>
-&lt;ol>
-&lt;li>
-&lt;p>Alice sends the login request from the LinuxLaptop client to the SshServer server and presents the service/host-specific ticket that was granted to her earlier on.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The SshServer server decrypts the ticket with its own key, extracts details of who the request is from, and verifies that they are correct. This happens &lt;em>without talking to the KDC&lt;/em> and is only possible because SshServer trusts the KDC via a pre-shared key.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The SSH service on SshServer decides if Alice has SSH access as requested and, if so, grants such access.&lt;/p>
-&lt;/li>
-&lt;/ol>
-&lt;p>Note these very important details:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>&lt;strong>The KDC is only involved in the ticket issuance process.&lt;/strong> Once the client has a service ticket, all interactions between the client and the server happen &lt;em>without&lt;/em> talking to the KDC. This is essential to not make the KDC a bottleneck in the communication.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Each host/service and the KDC have unique shared keys that are known by both the host/service and the KDC.&lt;/strong> These shared keys are created when registering the host or service principals and are copied to the corresponding machines as part of their initial setup. These keys live in machine-specific &lt;code>/etc/krb5.keytab&lt;/code> files.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Kerberos does authentication only, not authorization.&lt;/strong> The decision to grant Alice access to the SSH service in Think is made by the service itself, not Kerberos, after asserting that Alice is truly Alice.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>As you can imagine, the KDC must be protected with the utmost security measures. If an attacker can compromise the KDC&amp;rsquo;s locally-stored database, they will get access to all shared keys so they can impersonate any user against any Kerberos-protected service in the network. That&amp;rsquo;s why attackers try to breach into an Active Directory (AD) service as soon as they infiltrate a Microsoft network because&amp;hellip; AD &lt;em>is&lt;/em> a KDC.&lt;/p>
-&lt;h1 id="setting-up-the-kdc">Setting up the KDC&lt;/h1>
-&lt;p>Enough theory. Let&amp;rsquo;s get our hands dirty and follow the necessary steps to set up a KDC.&lt;/p>
-&lt;p>The KDC&amp;rsquo;s needs are really modest. Per the discussion above, the KDC isn&amp;rsquo;t in the hot data path of any service so the number of requests it receives are limited. Those requests are not particularly complex to serve either: at most, there is some CPU time to process cryptographic material but no I/O involved, so for a small network, any machine will do.&lt;/p>
-&lt;p>In my particular case, I set up the KDC in my little pfSense box as it is guaranteed to be almost-always online. This is probably not the best of ideas security-wise, but&amp;hellip; it&amp;rsquo;s sufficient for my paranoia levels. Note that most of the steps below will work similarly on a FreeBSD box, but if you are attempting that, please go read &lt;a href="https://docs.freebsd.org/en/books/handbook/security/#kerberos5">FreeBSD&amp;rsquo;s official docs on the topic&lt;/a> instead. Those docs are one of the few decent guides on Kerberos out there.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-11-03-pfsense-router.jpg" />
-&lt;figcaption>The pfSense little box that I run the KDC on.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Here are the actors that will appear throughout the rest of this article. I&amp;rsquo;m using the real names of my setup here because, once again, these are my lab notes:&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>MEROH.NET&lt;/code>: The name of the Kerberos realm.&lt;/li>
-&lt;li>&lt;code>jmmv&lt;/code>: The user on the client machine wanting access to the NFSv4 share. The UID is irrelevant.&lt;/li>
-&lt;li>&lt;code>router.meroh.net&lt;/code>: The pfSense box running the KDC.&lt;/li>
-&lt;li>&lt;code>nas.meroh.net&lt;/code>: The Synology DS923+ NAS acting as the NFSv4 server.&lt;/li>
-&lt;li>&lt;code>think.meroh.net&lt;/code>: A FreeBSD machine that will act as a Kerberized SSH server for testing purposes and an NFSv4 client. (It&amp;rsquo;s a ThinkStation, hence its name.)&lt;/li>
-&lt;li>&lt;code>x1nano.meroh.net&lt;/code>: A Linux machine that will act as an NFSv4 client. While in reality this is running Fedora, I&amp;rsquo;ll use this hostname interchangeably for Fedora and Debian.&lt;/li>
-&lt;/ul>
-&lt;p>Knowing all actors, we can set up the KDC. The first step is to create the &lt;code>krb5.conf&lt;/code> for the KDC which tells the system which realm the machine belongs to. You&amp;rsquo;ll have to open up SSH access to the machine via the web interface to perform these steps.&lt;/p>
-&lt;p>Here is the minimum content you need:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">[libdefaults]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> default_realm = MEROH.NET
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[realms]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">MEROH.NET = {
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> kdc = router.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> admin_server = router.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">}
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[domain_realm]
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> .meroh.net = MEROH.NET
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>With that, you should be able to start the &lt;code>kdc&lt;/code> service, which is responsible for the KDC. All documentation you find out there will tell you to also start &lt;code>kadmind&lt;/code>, but if you don&amp;rsquo;t plan to do administer the KDC from another machine (why would you?), then you don&amp;rsquo;t need this service.&lt;/p>
-&lt;p>pfSense&amp;rsquo;s configuration is weird because of the read-only nature of its root partition, so to do this, you have to edit the &lt;code>/cf/conf/config.xml&lt;/code> file stored in NVRAM and add this line right before the closing &lt;code>&amp;lt;/system&amp;gt;&lt;/code> tag:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-xml" data-lang="xml">&lt;span class="line">&lt;span class="cl">&lt;span class="nt">&amp;lt;shellcmd&amp;gt;&lt;/span>service kdc start&lt;span class="nt">&amp;lt;/shellcmd&amp;gt;&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>If you were to set this up on a FreeBSD host instead of pfSense, you would modify &lt;code>/etc/rc.conf&lt;/code> instead and add:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">kdc_enable&lt;/span>&lt;span class="o">=&lt;/span>YES
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Then, from the root shell on either case:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">kdc# service kdc start
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kdc# █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>It is now a good time to ensure that every machine involved in the realm has a DNS record and that reverse DNS lookups work. Failure to do this will cause problems later on when attempting to mount the NFSv4 shares, and clearing those errors won&amp;rsquo;t be trivial because of caching at various levels.&lt;/p>
-&lt;h1 id="creating-principals">Creating principals&lt;/h1>
-&lt;p>Once the KDC is running, we must create principals for the hosts, the NFSv4 service, and the users that will be part of the realm. The client host and service principals aren&amp;rsquo;t always necessary though: SSH doesn&amp;rsquo;t require them, but NFSv4 does.&lt;/p>
-&lt;p>To create the principals, we need access the KDC&amp;rsquo;s administrative console. Given that the KDC isn&amp;rsquo;t configured yet, we can only gain such access by running &lt;code>kadmin -l&lt;/code> on the KDC machine directly (the pfSense shell), which bypasses the networked &lt;code>kadmind&lt;/code> service that we did not start.&lt;/p>
-&lt;p>Start &lt;code>kadmin -l&lt;/code> and initialize the realm:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">kdc# kadmin -l
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; init MEROH.NET
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... answer questions with defaults ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Next, create principals for the &lt;em>users&lt;/em> that will be part of the realm:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; add jmmv
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... answer questions with defaults ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... but enter the desired user password ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Then, create principals for the &lt;em>hosts&lt;/em> (server and clients, but not the KDC) and the NFSv4 &lt;em>service&lt;/em>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; add --random-key host/think.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... answer questions with defaults ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; add --random-key host/x1nano.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... answer questions with defaults ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; add --random-key host/nas.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... answer questions with defaults ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; add --random-key nfs/nas.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... answer questions with defaults ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And finally, extract the host and service credentials into the machine-specific keytab files. Note that, for the servers, we extract both the host and any service principals they need, but for the client, we just extract the host principal. We do not export any user principals:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; ext_keytab --keytab=think.keytab host/think.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; ext_keytab --keytab=x1nano.keytab host/x1nano.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; ext_keytab --keytab=nas.keytab host/nas.meroh.net nfs/nas.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kadmin&amp;gt; █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>You now need to copy each extracted keytab file to the corresponding machine and name it &lt;code>/etc/krb5.keytab&lt;/code>. (We&amp;rsquo;ll do this later on the Synology NAS via its web interface.) This file is what contains the shared key between the KDC and the host and is what allows the host to verify the authenticity of KDC tickets without having to contact the KDC. Make sure to protect it with &lt;code>chmod 400 /etc/krb5.keytab&lt;/code> so that nobody other than root can read it.&lt;/p>
-&lt;p>If &lt;code>scp&lt;/code> is unsuitable or hard to use from the KDC to the client machines (as is my case because I restrict SSH access to the KDC to one specific machine), you can use the &lt;code>base64&lt;/code> command to print out a textual representation of the keytab and use the local clipboard to carry it to a shell session on the destination machine.&lt;/p>
-&lt;h1 id="initial-client-setup">Initial client setup&lt;/h1>
-&lt;p>At this point, the realm should be functional but we need to make the clients become part of the realm. We also need to install all necessary tools, like &lt;code>kinit&lt;/code>, which aren&amp;rsquo;t present by default on some systems:&lt;/p>
-&lt;ul>
-&lt;li>On Debian:
-&lt;ul>
-&lt;li>Run &lt;code>apt install krb5-user nfs-common&lt;/code>.&lt;/li>
-&lt;li>Follow the prompts that the &lt;code>krb5-user&lt;/code> installer shows to configure the realm and the address of the KDC. This will auto-create &lt;code>/etc/krb5.conf&lt;/code> with the right contents so you don&amp;rsquo;t have to do anything else.&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>On Fedora:
-&lt;ul>
-&lt;li>Run &lt;code>dnf install krb5-workstation nfs-utils&lt;/code>.&lt;/li>
-&lt;li>Edit the system-provided &lt;code>/etc/krb5.conf&lt;/code> file to register the realm and its settings. Use the file content shown above for the KDC as the template, or simply replace all placeholders for &lt;code>example.org&lt;/code> and &lt;code>EXAMPLE.ORG&lt;/code> with the name of your DNS domain and realm.&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>On FreeBSD:
-&lt;ul>
-&lt;li>Create the &lt;code>/etc/krb5.conf&lt;/code> file from scratch in the same way we did for the KDC.&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;p>All set! But&amp;hellip; do you trust that you did the right thing everywhere? We could go straight into NFSv4, but due to the many pitfalls in its setup, I&amp;rsquo;d suggest you verify your configuration using a simpler service like SSH.&lt;/p>
-&lt;p>To do this, modify the SSH server&amp;rsquo;s (aka &lt;code>think&lt;/code>&amp;rsquo;s configuration) &lt;code>/etc/ssh/sshd_config&lt;/code> file and add &lt;code>GSSAPIAuthentication yes&lt;/code> so that it can leverage Kerberos for authentication. Restart the SSH service and give it a go: run &lt;code>kinit&lt;/code> on the client (&lt;code>x1nano&lt;/code>) and then see how &lt;code>ssh think&lt;/code> works without typing a password anymore.&lt;/p>
-&lt;p>But&amp;hellip; &lt;code>GSSAPIAuthentication&lt;/code>? What&amp;rsquo;s up with the cryptic name?&lt;/p>
-&lt;p>GSS-API stands for &lt;em>Generic Security Services API&lt;/em> and is the interface that programs use to communicate with the Kerberos implementation on the machine. GSS-API is not always enabled by default for a service, and the way you enable it is service-dependent. As you saw above, all we had to do for SSH was modify the &lt;code>sshd_config&lt;/code> file&amp;hellip; but for other services, you may need to take extra steps on the server and/or the client.&lt;/p>
-&lt;p>And, guess what, NFSv4 is weird on this topic. Not only we need service-specific principals for NFS, but we also need the &lt;code>gssd&lt;/code> &lt;em>daemon&lt;/em> to be running on the server &lt;em>and&lt;/em> the client machines. And we &lt;em>also&lt;/em> need a separate daemon to map Unix user names to Kerberos principals (&lt;code>idmapd&lt;/code> on Linux, &lt;code>nfsuserd&lt;/code> on FreeBSD). This is because NFSv4 is typically implemented inside the kernel, but not Kerberos, so the kernel needs a mechanism to &amp;ldquo;call into&amp;rdquo; Kerberos and that&amp;rsquo;s precisely what these daemons do:&lt;/p>
-&lt;ul>
-&lt;li>On the Synology NAS:
-&lt;ul>
-&lt;li>Do nothing. The system handles &lt;code>gssd&lt;/code> by itself.&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>On Linux:
-&lt;ul>
-&lt;li>You shouldn&amp;rsquo;t have to do anything if you correctly created the prerequisite &lt;code>/etc/krb5.keytab&lt;/code> early enough, but make sure the service is running with &lt;code>systemctl status rpc-gssd.service&lt;/code> (and know that this command only shows useful diagnostic logs when run as root).&lt;/li>
-&lt;li>Run &lt;code>systemctl start nfs-idmapd.service&lt;/code> if the service isn&amp;rsquo;t running.&lt;/li>
-&lt;li>Run &lt;code>systemctl start rpc-gssd.service&lt;/code> if the service isn&amp;rsquo;t running.&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;li>On FreeBSD:
-&lt;ul>
-&lt;li>Add &lt;code>gssd_enable=YES&lt;/code>, &lt;code>nfscbd_enable=YES&lt;/code>, and &lt;code>nfsuserd_enable=YES&lt;/code> to &lt;code>/etc/rc.conf&lt;/code>.&lt;/li>
-&lt;li>Run &lt;code>service gssd start&lt;/code>.&lt;/li>
-&lt;li>Run &lt;code>service nfscbd start&lt;/code>.&lt;/li>
-&lt;li>Run &lt;code>service nfsuserd start&lt;/code>.&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h1 id="exporting-nfsv4-services">Exporting NFSv4 services&lt;/h1>
-&lt;p>It&amp;rsquo;s time to deal with NFSv4, so let&amp;rsquo;s start by configuring the server on the NAS.&lt;/p>
-&lt;p>The Synology Disk Station Manager (DSM) interface&amp;mdash;the web UI for the NAS&amp;mdash;is&amp;hellip; interesting. As you might expect, it is a web-based interface but&amp;hellip; it pretends to be a desktop environment in the browser, which I find overkill and unnecessary. But it&amp;rsquo;s rather cool in its own way.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-11-03-synology-dsm-nfs-file-services.png" class="with-border" />
-&lt;figcaption>Navigating the Synology DSM menus to configure the NFS file service with Kerberos.&lt;/figcaption>
-&lt;/figure>
-&lt;p>The first step is to enable the NFS service. Roughly follow these steps, which are illustrated in the picture just above:&lt;/p>
-&lt;ul>
-&lt;li>Open the &lt;strong>File Services&lt;/strong> tab of the &lt;strong>Control Panel&lt;/strong>.&lt;/li>
-&lt;li>In the &lt;strong>NFS&lt;/strong> tab, set NFSv4 as the &lt;strong>Minimum NFS protocol&lt;/strong>.&lt;/li>
-&lt;li>Click on &lt;strong>Advanced Settings&lt;/strong> and, in the panel that opens, enter the Kerberos realm under the &lt;strong>NFSv4 domain&lt;/strong> option.&lt;/li>
-&lt;li>Click on &lt;strong>Kerberos Settings&lt;/strong> and, in the panel that opens, select &lt;strong>Import&lt;/strong> and then upload the keytab file that we generated earlier on for the NAS. This should populate the &lt;code>host&lt;/code> and &lt;code>nfs&lt;/code> principals in the list.&lt;/li>
-&lt;li>Finish and save all settings.&lt;/li>
-&lt;/ul>
-&lt;p>That should be all to enable NFSv4 file serving.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-11-03-synology-dsm-nfs-shared-folder.png" class="with-border" />
-&lt;figcaption>Navigating the Synology DSM menus to configure the properties of a single shared folder over NFS.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Then, we need to expose shared folders over NFSv4, and we have to do this for every folder we want to share. Assuming you want to share the &lt;code>homes&lt;/code> folder as shown in the picture just above:&lt;/p>
-&lt;ul>
-&lt;li>Open the &lt;strong>Shared Folder&lt;/strong> tab of the &lt;strong>Control Panel&lt;/strong>.&lt;/li>
-&lt;li>Select the folder you want to share (in our case, &lt;code>homes&lt;/code>), and click &lt;strong>Edit&lt;/strong>.&lt;/li>
-&lt;li>In the &lt;strong>NFS Permissions&lt;/strong> tab, click either &lt;strong>Create&lt;/strong> or &lt;strong>Edit&lt;/strong> to enter the permissions for every host client that should have access to the share.&lt;/li>
-&lt;li>Fill the NFS rule details. In particular, enter the hostname of the client machine, enable the &lt;strong>Allow connections from non-privileged ports&lt;/strong> option, and select the &lt;strong>Security&lt;/strong> level you desire.&lt;/li>
-&lt;/ul>
-&lt;p>In my case, I want &lt;code>krb5p&lt;/code> and &lt;code>krb5p&lt;/code> only so that&amp;rsquo;s the only option I enable. But your risk profile and performance needs may be different, so experiment and see what works best for you.&lt;/p>
-&lt;h1 id="mounting-nfsv4-from-linux">Mounting NFSv4 from Linux&lt;/h1>
-&lt;p>Now that the server is ready and we have dealt with the GSS-API prerequisites, we can start mounting NFSv4 on the clients.&lt;/p>
-&lt;p>On Linux, things are pretty simple. We can mount the file system with:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">x1nano# sudo mount nas:/volume1/homes /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano# █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Or persist the entry in &lt;code>/etc/fstab&lt;/code> if we want to:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">nas:/volume1/homes /shared nfs sec=krb5p 0 0
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And then we should be able to list its contents &lt;em>assuming we&amp;rsquo;ve got a valid TGT for the current user&lt;/em> (run &lt;code>kinit&lt;/code> if it doesn&amp;rsquo;t work):&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">x1nano$ ls -l /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">total 0K
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxrwxrwx 1 nobody users 0 Sep 27 21:11 admin
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxrwxrwx 1 jmmv users 0 Nov 2 20:41 jmmv
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxrwxrwx 1 nobody users 0 Oct 8 16:59 manager
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Easy peasy, right? But wait&amp;hellip; why do all directories have &lt;code>777&lt;/code> permissions?&lt;/p>
-&lt;p>This is rather unfortunate and I&amp;rsquo;m not sure why the Synology does this. Logging onto the DS923+ via SSH, I inspected the shared directory and realized that it has various ACLs in place to control access to the directories, but somehow, the traditional Unix permissions are all &lt;code>777&lt;/code> indeed. Not great.&lt;/p>
-&lt;p>I used &lt;code>chmod&lt;/code> to fix the permissions for all directories to &lt;code>755&lt;/code> and things seem to be OK, but that doesn&amp;rsquo;t give me a lot of comfort because I do not know if the DSM will ever undo my changes or if I might have broken something.&lt;/p>
-&lt;p>There might be one more problem though, which I did not encounter on Debian clients but that showed up later in Fedora clients. The problem looks like this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">x1nano$ ls -l /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">total 0K
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxr-xr-x 1 nobody nogroup 0 Sep 27 21:11 admin
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxr-xr-x 1 nobody nogroup 0 Nov 2 20:41 jmmv
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">drwxr-xr-x 1 nobody nogroup 0 Oct 8 16:59 manager
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Note how all entries are owned by &lt;code>nobody:nogroup&lt;/code> which is&amp;hellip; not correct. Yet the right access control is in effect: the &lt;code>jmmv&lt;/code> directory is only accessible by the &lt;code>jmmv&lt;/code> user as expected from the earlier listing. Which means that the user mapping between Kerberos principals and local users is working correctly on the server&amp;hellip; but not on the client where &lt;code>stat&lt;/code> is not returning the right information.&lt;/p>
-&lt;p>This can happen for two reasons. The first is that the &lt;code>idmapd&lt;/code> service might not be running, but we already covered starting it up earlier. The second is that the client might not have the right domain name for NFSv4. You can check this with &lt;code>sudo nfsidmap -d&lt;/code>. If the output doesn&amp;rsquo;t match the name of the DNS domain, update the hostname to include a domain name portion:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">x1nano# nfsidmap -d
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">localdomain
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano# hostnamectl set-hostname --static x1nano.meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano# nfsidmap -d
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">meroh.net
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">x1nano# █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="mounting-nfsv4-from-freebsd">Mounting NFSv4 from FreeBSD&lt;/h1>
-&lt;p>We now have the Linux clients running just fine so it is time to pivot to FreeBSD. If we try a similar &amp;ldquo;trivial&amp;rdquo; mount command, we get an error:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">think# mount -t nfs nas:/volume1/homes /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">mount_nfs: nmount: /shared: Permission denied
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">think# █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The error is pretty&amp;hellip; unspecific. It took me quite a bit of trial and error to realize that I &lt;em>had&lt;/em> to specify &lt;code>-t nfsv4&lt;/code> for it to attempt a NFSv4 connection and not NFSv3 (unlike Linux, whose &lt;code>mount&lt;/code> command attempts the highest possible version first and then falls back to older versions):&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">think# mount -t nfs -o nfsv4 nas:/volume1/homes /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">mount_nfs: nmount: /shared, wrong security flavor
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">think# █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>OK, progress. Now this complains that the security flavor we request is wrong. Maybe we just need to be explicit and also pass &lt;code>sec=krb5p&lt;/code> as an argument:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">think# mount -t nfs -o nfsv4,sec=krb5p nas:/volume1/homes /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">mount_nfs: nmount: /shared, wrong security flavor
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">think# █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Wait, what? The mount operation still fails? This was more puzzling and also took a fair bit of research to figure out because logs on the client and on the server were just insufficient to see the problem.&lt;/p>
-&lt;p>The reason for the failure is that we are trying to mount the share as root but&amp;hellip; we don&amp;rsquo;t have a principal for this user so root cannot obtain an NFSv4 service ticket to contact the NAS. So&amp;hellip; do we need to create a principal for &lt;code>root&lt;/code>? No! We do not need to provide user credentials when mounting an NFSv4 share (unlike what you might be used to with Windows shares).&lt;/p>
-&lt;p>What Kerberized NFSv4 needs during the mount operation is a host ticket: the NFSv4 server checks if the client &lt;em>machine&lt;/em> is allowed to access the server and, if so, exposes the file system to it. This is done using the client&amp;rsquo;s host principal. Once the file system is mounted, however, all operations against the share carry the ticket of the &lt;em>user&lt;/em> requesting the operation.&lt;/p>
-&lt;p>Knowing this, we need to &amp;ldquo;help&amp;rdquo; FreeBSD and tell it that it must use the host&amp;rsquo;s principal when mounting the share. Why this isn&amp;rsquo;t the default, I don&amp;rsquo;t know, particularly because non-root users are not allowed to mount file systems in the default configuration. Anyhow. The &lt;code>gssname=host&lt;/code> option rescues us:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">think# mount -t nfs -o nfsv4,sec=krb5p,gssname=host,pnfs nas:/volume1/homes /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">think# █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Which finally allows the mount operation to succeed. We should persist all this knowledge into an &lt;code>/etc/fstab&lt;/code> entry like this one:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">nas:/volume1/homes /shared nfs rw,nfsv4,gssname=host,sec=krb5p,pnfs 0 0
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Lastly, note that at the time of this writing with FreeBSD 14.2-STABLE, the username to Kerberos principal mapping provided by &lt;code>nfsuserd&lt;/code> may not work correctly and you may end up seeing &lt;code>nobody:nogroup&lt;/code> as the owner of all files on the NFSv4 share. This can be caused by a domain name mismatch as explained in the Linux case&amp;mdash;which you can resolve by setting &lt;code>nfsuserd_flags=&amp;quot;-domain meroh.net&amp;quot;&lt;/code> in &lt;code>/etc/rc.conf&lt;/code>&amp;mdash;or by &lt;a href="https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=282620">an actual kernel bug&lt;/a> I had to diagnose. Which speaks to the sheer complexity of NFSv4&amp;hellip;&lt;/p>
-&lt;h1 id="verifying-encryption">Verifying encryption&lt;/h1>
-&lt;p>Color me skeptical, but everything I described above seems convoluted and fragile, so I did not trust that my setup was sound. Consequently, I wanted to verify that the traffic on the network was actually encrypted.&lt;/p>
-&lt;p>To verify this, I installed Wireshark and ran a traffic capture against the NAS with &lt;code>host nas&lt;/code> as the filter. Then, from the client, I created a text file on the shared folder and then read it. Inspecting the captured packets confirmed that the traffic is indeed flowing in encrypted form. I could not find the raw file content anywhere in the whole trace (but I could when using anything other than &lt;code>krb5p&lt;/code>).&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-11-03-kerberized-nfs-wireshark.png" class="with-border" />
-&lt;figcaption>Content of an NFS reply packet with Kerberos-based encryption. The packet contents are not plain text.&lt;/figcaption>
-&lt;/figure>
-&lt;p>And, as a final test, I tried to mount the network share &lt;em>without&lt;/em> &lt;code>krb5p&lt;/code> and confirmed that this was not possible:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl"># mount -t nfs -o nfsv4,gssname=host,sec=krb5i nas:/volume1/homes /shared
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">mount_nfs: nmount: /shared, wrong security flavor
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"># █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>All good! I think&amp;hellip;&lt;/p>
-&lt;h1 id="open-questions">Open questions&lt;/h1>
-&lt;p>That&amp;rsquo;s about it. But I still have a bunch of unanswered questions from this setup:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>Kerberos claims to be an authentication system only, not an authorization system. However, the protocol I described above separates the TGT from the TGS, and this separation makes it sound like Kerberos could also implement authorization policies. Why doesn&amp;rsquo;t it do these?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Having to type &lt;code>kinit&lt;/code> after logging into the machine is annoying. I remember that, back at Google when we used Kerberos and NFS&amp;mdash;those are long gone days&amp;mdash;the right tickets would be granted after logging in or unlocking a workstation. This must have been done with the Kerberos PAM modules&amp;hellip; but I haven&amp;rsquo;t gotten them to do this yet and I&amp;rsquo;m not sure why.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>The fact that the shared directories created by the Synology NAS have 777 permissions seems wrong. Why is it doing that? And does anything break if you manually tighten these permissions?&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>And the most important question of all: &lt;strong>is this all worth it?&lt;/strong> I&amp;rsquo;m tempted to just use password-protected Samba shares and call it a day. I still don&amp;rsquo;t trust that the setup is correct, and I still encounter occasional problems here and there.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>If you happen to have answers to any of the above or have further thoughts, please drop a note in the comments section. And if you want to see how the DS923+ compares to my home-built FreeBSD NAS with ZFS, subscribe for a future post on that!&lt;/p>
-&lt;p>Credit and disclaimers: the &lt;a href="https://sy.to/hekgh">DS923+&lt;/a> and &lt;a href="https://sy.to/drkom">the 3 drives&lt;/a> it contains that I used throughout this article were provided to me for free by Synology for evaluation purposes in exchange for blogging about the NAS. The content in this article is &lt;em>not&lt;/em> endorsed has &lt;em>not&lt;/em> been reviewed by them.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-11-03-synology-ds923plus-nas.jpg" length="232646" type="image/jpeg"/></item></channel></rss>
+&lt;p>For more details, you can visit Synology&amp;rsquo;s product pages for the &lt;a href="https://sy.to/hekgh">DS923+&lt;/a> and the &lt;a href="https://sy.to/drkom">Plus Series HDDs&lt;/a>. And if you want to roll your own FreeBSD-based solution, &lt;a href="https://docs.freebsd.org/en/books/handbook/zfs/">Chapter 22 of the FreeBSD handbook on ZFS&lt;/a> is a good place to start.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-12-13-ds923-and-thinkstation.jpg" length="329916" type="image/jpeg"/></item></channel></rss>
