@@ -1,4 +1,306 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Sun, 23 Nov 2025 17:00:00 -0800</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>You are holding BUILD files wrong</title><link>https://jmmv.dev/2025/09/you-are-holding-build-files-wrong.html</link><pubDate>Fri, 26 Sep 2025 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/you-are-holding-build-files-wrong.html</guid><description>&lt;p>I&amp;rsquo;ve heard it from people new to Bazel but also from people very familiar with the Bazel ecosystem: BUILD files must go away. And they must go away because they are redundant: they just repeat the dependency information that&amp;rsquo;s already encoded in the in-code import/use statements.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Sun, 23 Nov 2025 17:00:00 -0800</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>BazelCon 2025 recap</title><link>https://jmmv.dev/2025/11/bazelcon-2025-recap.html</link><pubDate>Sun, 23 Nov 2025 17:00:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/11/bazelcon-2025-recap.html</guid><description>&lt;p>It has been just over two years since I started Blog System/5, and that means it&amp;rsquo;s time for the now-usual(?) BazelCon 2025 trip report!&lt;/p>
+&lt;p>The conference, arranged by the Linux Foundation, took place in Atlanta, GA, USA over three days: one for tutorials and two for the main talks. An extra hackathon day, organized by Aspect Build, followed. Unfortunately, a canceled flight meant I missed the tutorials, but I attended the rest of the events. As usual, it was a super-fun time to connect with old acquaintances and an energizing event that left me with plenty of new topics to research.&lt;/p>
+&lt;p>What follows is not a complete summary of the conference, as there were many talks I did not attend and conversations I missed. If you want the full firehose of videos, see the &lt;a href="https://www.youtube.com/playlist?list=PLak8-7eFSpowmNiR2lhvJEomLA140yban">Bazel Con 2025 YouTube playlist&lt;/a>. And if you want a TL;DR&amp;hellip; I&amp;rsquo;d pick the following highlights:&lt;/p>
+&lt;ul>
+&lt;li>The ecosystem is maturing with &lt;code>bzlmod&lt;/code> becoming mandatory and the BUILD Foundation being a reality in the near horizon.&lt;/li>
+&lt;li>Performance remains a key focus of the Bazel core team and the community, with innovative approaches like Skycache for client-side speed, sophisticated RE improvements for backend efficiency, and new rulesets like &lt;code>rules_img&lt;/code> that focus on build speed.&lt;/li>
+&lt;li>Community tooling is expanding Bazel&amp;rsquo;s scope, with projects like Aspect&amp;rsquo;s task runner aiming to solve long-standing workflow gaps.&lt;/li>
+&lt;/ul>
+&lt;p>But the above is just tiny peek into the conference. So, strap your seat belts and let&amp;rsquo;s dive into the conference.&lt;/p>
+&lt;h1 id="opening-words">Opening words&lt;/h1>
+&lt;p>Google opened by emphasizing their commitment to Bazel, highlighting its growing internal adoption. Their reasoning is that Bazel improves security and hermeticity, in addition to the usual benefits of faster builds and easier open-sourcing of code. This statement seems to be a response to last year&amp;rsquo;s proposal to create a non-Google Bazel Foundation, which would act as a &amp;ldquo;backup plan&amp;rdquo; should Google ever withdraw from the project.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/N4e5TsiFqzQ?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>Google provided two examples of its growing Bazel adoption. The first is &lt;a href="https://quantumai.google/">Quantum AI&lt;/a>, primarily written in Python and Rust, which saw an 80% reduction in CI time after a migration to Bazel that was driven by just one SWE. The second is their &lt;a href="https://cloud.google.com/distributed-cloud">Google Distributed Cloud (GDC)&lt;/a>, a version of their cloud product that can run on-premise and in air-gapped instances. The GDC codebase weighs 2.6 GB, is developed by 1,300 engineers, and produces 600 GB of release artifacts. I have to question if the latter is a number to be proud of: when does this madness in bloat stop?&lt;/p>
+&lt;p>The introduction concluded with a few statistics: Bazel&amp;rsquo;s &lt;code>#general&lt;/code> Slack channel has grown by 18% from the previous year to 8,500 users; there are about 10,800 repos on GitHub with &lt;code>MODULE.bazel&lt;/code> files; and there are about 120,000 &lt;code>bzl&lt;/code> files on GitHub.&lt;/p>
+&lt;h1 id="community-updates">Community updates&lt;/h1>
+&lt;p>The next session was the customary round of community updates, presented by Jay Conrod from EngFlow and Alex Eagle from Aspect Build.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/Zpfl82MU4U0?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>Here are the highlights:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Training day:&lt;/strong> There were six different sessions on the Sunday before the conference, and EngFlow is leading training efforts worldwide.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Gazelle:&lt;/strong> C++ support is on the way for this tool. Version 2.0 will simplify the extensions interface and improve performance.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>BCR Mirror:&lt;/strong> Cloudflare is now hosting a mirror for the Bazel Central Registry (BCR). You can use it with Bazel 8.4+ by adding &lt;code>common --module_mirrors=https://bcr.cloudflaremirrors.com/&lt;/code> to your configuration&amp;mdash;and this will become a default in a future release.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Documentation:&lt;/strong> The most common complaint in community surveys remains the documentation and the steep learning curve. To address this, &lt;a href="https://registry.bazel.build/">the BCR website&lt;/a> now features icons for sponsorship requests, deprecation notices, and provenance attestations. Furthermore, the Starlark documentation has been published and is now easier to read. In a move to empower the community, the documentation has been migrated out of Google&amp;rsquo;s internal infrastructure and is available at &lt;a href="https://preview.bazel.build/">https://preview.bazel.build/&lt;/a>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>BUILD Foundation:&lt;/strong> The foundation currently has three founding members (Spotify, Uber, and Canva) and is looking for four more. The initial meeting is scheduled for December 4th. More on this in its own section.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Bzlmod was also a significant topic in this talk, but since it was covered at length in other presentations as well, I have dedicated a separate section to it below.&lt;/p>
+&lt;h1 id="state-of-the-union">State of the union&lt;/h1>
+&lt;p>As is tradition, the next session was the State of the Union talk, led by John Field and Tobias Werth from Google.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/FwruvTfClwk%20?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>Here are some of the highlights from the update:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Local remote repo caching:&lt;/strong> This &lt;a href="https://docs.google.com/document/d/1ZScqiIQi9l7_8eikbsGI-rjupdbCI7wgm1RYD76FJfM/edit">new feature&lt;/a> is intended to allow the caching of repository rules across different workspaces.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Experimental WASM support:&lt;/strong> There is &lt;a href="https://github.com/bazelbuild/bazel/discussions/25537">experimental support for WASM tools in repo rules&lt;/a> to enable platform-independent tooling, but its future is still uncertain.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Performance improvements:&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Changes to &lt;code>NestedSets&lt;/code> can save up to 20% of memory.&lt;/li>
+&lt;li>Optimizations in Merkle tree handling can reduce wall time by up to 30%.&lt;/li>
+&lt;li>Analysis phase caching is coming soon (see the &amp;ldquo;Skycache&amp;rdquo; section below for more details).&lt;/li>
+&lt;li>There are ongoing efforts to cap disk usage.&lt;/li>
+&lt;li>Path stripping, a feature announced last year, is now more mature and integrated with more rule sets, offering up to an 84% reduction in build time.&lt;/li>
+&lt;li>Analysis time on flag changes has been reduced.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Java improvements:&lt;/strong> Caching has been improved, and method signature changes no longer affect downstream header builds.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Starlark flags:&lt;/strong> A new scoping API is available for Starlark flags.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>&lt;code>PROJECT.scl&lt;/code>:&lt;/strong> A &lt;a href="https://github.com/bazelbuild/bazel/issues/24839">new file&lt;/a> is being introduced to provide a canonical place for project owners to map targets to flags. More details on its own section.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Starlarkification:&lt;/strong> This effort is almost complete. All rules are now decoupled, with the exception of a few integration points for C++. As of Bazel 9, autoloading of rules is disabled, which means users must now explicitly &lt;code>@load&lt;/code> all the rules they use.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Starlark type system:&lt;/strong> &lt;a href="https://github.com/bazelbuild/starlark/issues/106">Type annotations and type-checking&lt;/a> are coming to Starlark. The syntax will be supported in Bazel 9, with type-checking planned for Bazel 10. The syntax aims for compatibility with Python 3 types, which introduces some limitations on what can be expressed.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>JetBrains Bazel plugin:&lt;/strong> The &lt;a href="https://plugins.jetbrains.com/plugin/22977-bazel">JetBrains-owned Bazel plugin&lt;/a> has reached general availability, making the Google-owned plugin a legacy tool. This new plugin promises a much-improved user experience, as it is faster and better integrates the Bazel build graph with IntelliJ&amp;rsquo;s native understanding of the project structure, avoiding expensive &amp;ldquo;sync&amp;rdquo; steps.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Internal APIs:&lt;/strong> There is ongoing work to separate core logic from service interactions (such as remote builds and file system operations), which sounds very similar to how Buck 2 was designed from the start.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Much like the community updates talk, this one also opened with bzlmod. Let&amp;rsquo;s dive into that topic next.&lt;/p>
+&lt;h1 id="bzlmod">bzlmod&lt;/h1>
+&lt;p>The workspace is dead; long live bzlmod! With Bazel 9, support for old-style workspaces has been removed, and given that the vast majority of rulesets now support bzlmod, it&amp;rsquo;s time for everyone to complete their migration. This is a positive development because bzlmod, through the &lt;a href="https://registry.bazel.build/">Bazel Central Registry (BCR)&lt;/a>, simplifies rule discovery, project dependencies, and version conflict resolution. Interestingly, but not surprisingly, bzlmod and the BCR have effectively become a package manager for C++.&lt;/p>
+&lt;p>But it&amp;rsquo;s not all roses. The bzlmod migration has been a significant source of friction for the community due to the intrusive and difficult nature of the change. If you haven&amp;rsquo;t completed the transition, you can no longer upgrade to newer Bazel versions. The official documentation has also been subpar (which is not surprising), although a great set of &lt;a href="https://blog.engflow.com/2024/06/27/migrating-to-bazel-modules-aka-bzlmod---the-easy-parts/">articles from EngFlow&lt;/a> is now available to clarify the migration process in great detail.&lt;/p>
+&lt;p>To assist with the migration, an &lt;a href="https://bazel.build/external/migration_tool">automated migration tool&lt;/a> is now available, and various people have reported success using AI tools to help with the transition. In a related development, there is now a Maintainer Community Program (MCP) for the BCR.&lt;/p>
+&lt;p>One major pain point I have faced, and one that seems to affect many others, is the tendency of the Bazel ecosystem to couple rule versions with library versions. For example, if you are using an old version of &lt;code>protobuf&lt;/code> with an equally old version of &lt;code>rules_proto&lt;/code> that is not compatible with bzlmod, you must upgrade &lt;code>rules_proto&lt;/code> to migrate. However, this in turn forces you to upgrade &lt;code>protobuf&lt;/code> itself. Updating a library can introduce API incompatibilities and behavioral changes, making the upgrade to bzlmod and subsequent major Bazel releases much more difficult than it needs to be.&lt;/p>
+&lt;h1 id="re-action-routing">RE action routing&lt;/h1>
+&lt;p>Before we dive into remote execution, let me clarify some terminology. Remote Execution is abbreviated as RE, not RBE. RBE was Google&amp;rsquo;s now-discontinued cloud product for RE. While the terms are often used interchangeably today (even on Bazel&amp;rsquo;s own website), it&amp;rsquo;s a good idea to stick to RE. Similarly, avoid using the term &amp;ldquo;build farm&amp;rdquo; as there is a specific RE implementation named &lt;a href="https://github.com/buildfarm/buildfarm">Buildfarm&lt;/a>.&lt;/p>
+&lt;p>Remote execution is always a hot topic at BazelCon, and for good reason. One of Bazel&amp;rsquo;s biggest selling points is the performance boost from distributing builds across multiple machines, and nearly every Bazel-related startup offers some form of remote execution solution.&lt;/p>
+&lt;p>In the first RE-focused talk, Son Luong Ngoc from BuildBuddy explained how their product routes actions to maximize performance and minimize execution latency.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/iQqLtuBzkKE?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The talk began with a clear premise: remote builds are spiky and hard to binpack, so how can they be scheduled efficiently for both performance and cost? Here are some of the key features of their RE implementation:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Executor types:&lt;/strong> BuildBuddy provides both managed (OCI, Firecracker, macOS) and self-hosted (Docker, Windows, GPU, and more) executors, each with different performance, isolation, and cost characteristics.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Multiple action queues:&lt;/strong> Executors are organized into pools, and actions can specify which pool they should run on. When an action is received, the scheduler enqueues it in up to three different executors to minimize tail latency, based on the &lt;a href="https://dl.acm.org/doi/10.1145/2517349.2522716">Sparrow scheduler research paper&lt;/a>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Work stealing:&lt;/strong> Dynamic scaling of executor pools is critical for handling spiky build workloads while keeping costs down. To make this more efficient, BuildBuddy allows new executors to steal work from existing ones, which helps redistribute the load.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Action merging:&lt;/strong> This feature coalesces multiple execution requests for the same action into a single execution. As we learned, this can be problematic if a misbehaving executor stalls multiple clients (e.g., several CI jobs). To address this, BuildBuddy speculatively re-executes a running action on a different executor after a certain threshold has passed.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Action cancellation:&lt;/strong> When a user presses Ctrl+C, they are likely to modify code and restart the build, so continuing to run in-flight actions is wasteful. For greater efficiency, BuildBuddy catches the finished event &lt;em>from the BEP&lt;/em> and attempts to cancel all remotely-queued actions.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Binpacking:&lt;/strong> Different actions have different resource requirements, and it can be difficult to manually assign them to the right pool and executor. BuildBuddy automatically profiles executed actions (for metrics like peak memory and CPU consumption) and stores this information in the &lt;code>auxiliary_metadata&lt;/code> field of the action result, which is then stored on the server. The scheduler uses these details to route actions more effectively.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Cold starts:&lt;/strong> Executing remote actions is similar to running lambda functions: a worker must be started, a container image fetched, and the action executed. To optimize this, BuildBuddy uses affinity routing, where a key is computed based on the primary output name (which is unique for each action) to extract platform, target, and output details. This allows similar actions to be routed to similar executors.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Recycled runners:&lt;/strong> Some customers need to maintain heavyweight processes on the remote worker, such as test databases or the Docker daemon. While not hermetic, this is often desirable for high-performance scenarios. The use of these features is customized through execution properties.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Custom resources:&lt;/strong> Some actions may require access to specialized resources like GPUs, FPGAs, or simulators. For better binpacking, customers can define the &amp;ldquo;size&amp;rdquo; of different executor types and annotate actions with the resources they consume.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Fair scheduling:&lt;/strong> With multi-tenancy, users can set a &amp;ldquo;priority&amp;rdquo; for the actions of a build using the &lt;code>--remote_execution_priority&lt;/code> flag. A common use case is to define three priority bands: interactive builds, CI, and cron jobs. The BuildBuddy scheduler takes this property into account.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>After detailing these existing features, the talk concluded with a glimpse into the future: extending the RE protocol with a remote &lt;em>build graph&lt;/em> API. The current protocol is very chatty, making it difficult to colocate actions (such as a compile-link-test chain). A protocol that understands action relationships could significantly improve this.&lt;/p>
+&lt;p>This talk left me wondering which of these features are also offered by other major RE vendors and open-source implementations. I briefly chatted with the EngFlow folks at the conference and they told me they have most of these too; it&amp;rsquo;d be nice to have a comparison chart among vendors and free solutions.&lt;/p>
+&lt;h1 id="re-cost-savings-vs-reliability">RE cost savings vs. reliability&lt;/h1>
+&lt;p>The next major topic for RE was cost savings and reliability, which was covered in at least two talks.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/Otjbpn2rB3w?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The first talk, presented by Rahul Roy from Glean, focused on how their adoption of Buildbarn for scalability unexpectedly doubled their CI costs. The primary causes for this increase were an up-to-20% per-action overhead in the Buildbarn worker and a lack of Bazel client caching in their GitHub Actions runners.&lt;/p>
+&lt;p>To solve these issues, they chose to adopt &lt;a href="https://aws.amazon.com/ec2/spot/">spot instances&lt;/a> in their deployment of Buildbarn on GCP&amp;rsquo;s Kubernetes offering, but this is not as easy as it seems:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>The default Kubernetes autoscaler relies on CPU and memory utilization for its decisions, but these metrics are poor predictors of CI traffic patterns. Action queue length is a much better indicator of developer activity, so a custom autoscaler is needed to achieve reasonable behavior.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Fair scaling can disrupt ongoing builds because GCP only provides a 90-second shutdown notice before preempting instances, which is not enough time to terminate running actions gracefully.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Cold runners are significantly slower than hot ones because they start with empty local caches. To mitigate this, they implemented a solution to reuse runner disks, but only for disks that had been used for builds covering more than 50% of the build graph. This strategy reduced startup times from eight minutes to less than one.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/NO028kW_VDc?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The second talk, given by Gabriel Russo from Databricks and Yuval Kaplan from EngFlow, focused on building at scale and how a naive move to remote execution can actually make CI slower.&lt;/p>
+&lt;p>They investigated the specific problem of using Docker in actions. The default behavior for remote actions is to bring up a fresh worker for each execution and tear it down afterward, wiping all state. However, Docker is stateful, which meant that actions were performing a great deal of redundant work. To solve this, they moved the snapshotter (a part of &lt;code>containerd&lt;/code>) out of the action sandbox and into the execution container, allowing it to be shared across all actions on a given machine.&lt;/p>
+&lt;p>The takeaway is that you must be careful with RE. Your intuition for how local processes interact, especially with local state, does not always apply, and you can inadvertently make builds much slower and more expensive. But how do you develop such intuition? That question provides a perfect segue to the next talk.&lt;/p>
+&lt;h1 id="understanding-build-behavior">Understanding build behavior&lt;/h1>
+&lt;p>Bazel is a complex piece of software, and its interactions with other systems are not always straightforward. When things go wrong, can the data tell us what happened? Users are often frustrated by unexpected cache misses, frequently rebuilt targets, non-hermetic actions, and flaky tests. This was the topic of a talk co-presented by Eloise Pozzi from Canva and Helen Altshuler from EngFlow.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/NdZIeAbS32Q?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The answer to the question above is obviously yes, the data can tell us. But it&amp;rsquo;s not easy because there is &lt;em>a lot&lt;/em> of data to comb through. Bazel produces the following datasets:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Build Event Protocol (BEP):&lt;/strong> A stream of events that Bazel sends to a remote server to publish build metadata and report progress. The metadata is the closest thing you will get to &amp;ldquo;usage telemetry&amp;rdquo; from Bazel as it captures all builds that were executed (who ran them and with which flags, what was executed, etc.) My pet peeve is that the BEP is incredibly complex and really difficult to manipulate post-facto, but I encourage you to generate one locally (via &lt;code>--build_event_json_file&lt;/code>) and to spend &amp;ldquo;a few&amp;rdquo; minutes understanding what&amp;rsquo;s in there.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Exec log:&lt;/strong> This log captures everything that happened for actions, regardless of where they ran (the BEP only contains minimal details on local-only actions). It is not captured by default due to its verbosity. The &lt;code>--execution_log_compact_file&lt;/code> flag, available since Bazel 7.1, makes it possible to capture this log unconditionally. Note that you need a parser to convert this binary log into something that can be read and compared across versions, and you need to manually build this parser out of Bazel&amp;rsquo;s source tree; yikes.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Exec graph log:&lt;/strong> This log captures how actions depend on each other. It can help quantify drag on the critical path, determine if the critical path is unique, or identify if there are competing ones. Use it to identify actions to prioritize for end-to-end build optimization.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Query commands:&lt;/strong> See &lt;a href="https://bazel.build/query/language">the reference&lt;/a> for &lt;code>bazel query&lt;/code>, &lt;code>bazel cquery&lt;/code>, and &lt;code>bazel aquery&lt;/code>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>JSON profile:&lt;/strong> Also known as the &lt;a href="https://bazel.build/advanced/performance/json-trace-profile">performance profile&lt;/a>, this captures a timeline of all actions executed by Bazel and can help understand build bottlenecks and tune parallelization.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>RE profile:&lt;/strong> Similar to the JSON profile but this is captured server-side by some RE implementations. EngFlow generates one of these with specific details on how the workers executed actions (e.g. which pool ran an action, which is not something that&amp;rsquo;s visible to Bazel).&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Returning to the BEP, it&amp;rsquo;s worth noting that one of the last messages it emits is &lt;code>buildToolLogs&lt;/code>, which contains links to some of the other logs mentioned above. If you are using remote caching, these links will point to remote cache entries, allowing you to fetch them after the fact for any user build you need to investigate.&lt;/p>
+&lt;p>The talk also included a description of how to debug cache misses between CI and interactive developer builds, and I felt it was an almost-literal rehearsal of &lt;a href="/2025/07/bazel-action-determinism.html">the article I wrote months ago&lt;/a> on the same topic.&lt;/p>
+&lt;h1 id="ide-support-for-monorepos">IDE support for monorepos&lt;/h1>
+&lt;p>The next talk I attended, which hits close to my heart, was on exposing developer tools to the &lt;code>PATH&lt;/code>. I believe that &lt;code>bazel run&lt;/code> provides a terrible user experience, so I was keen to hear about alternatives. The talk was given by Florian Berchtold from Zipline.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/g_5jyXsCELk?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>One possible solution to this dilemma is to use &lt;a href="https://direnv.net/">direnv&lt;/a>, a long-standing tool that hooks into the shell&amp;rsquo;s before-prompt command to run arbitrary code when entering specific directories. Scary? Yes. Useful? Also yes. The idea is to leverage direnv to bring project-specific tools into the &lt;code>PATH&lt;/code>.&lt;/p>
+&lt;p>But where do these tools come from? While some people use package managers like &lt;a href="https://github.com/NixOS/nixpkgs">nixpkgs&lt;/a>, this can lead to duplication and inconsistencies in a Bazel-native world. For example, it&amp;rsquo;s common to pull in &lt;code>buildifier&lt;/code> via bzlmod, but you might also want to expose it in the &lt;code>PATH&lt;/code>. This is where &lt;a href="https://github.com/buildbuddy-io/bazel_env.bzl">&lt;code>bazel_env&lt;/code>&lt;/a> comes in: a hook for direnv that fetches tools using Bazel.&lt;/p>
+&lt;p>The talk explained how to use &lt;code>bazel_env&lt;/code> with dev containers to install &lt;code>bazelisk&lt;/code>, &lt;code>direnv&lt;/code>, IDE extensions, and even &lt;a href="https://github.com/withered-magic/starpls">starpls&lt;/a> (the LSP for Starlark). It was also mentioned that for C++, &lt;a href="https://github.com/hedronvision/bazel-compile-commands-extractor">bazel-compile-commands-extractor&lt;/a> with &lt;code>clangd&lt;/code> works reasonably well for VSCode but struggles with large repositories. For those, &lt;a href="https://github.com/luminartech/dev-tools?tab=readme-ov-file#configure-vs-code-for-bazel">configure-vscode-for-bazel&lt;/a> is recommended for a better experience.&lt;/p>
+&lt;p>The speaker also prepared a sample repository to demonstrate Bazel integration in the IDE for various languages, which you can find at &lt;a href="https://github.com/hofbi/bazel-ide">hofbi/bazel-ide&lt;/a>.&lt;/p>
+&lt;h1 id="skycache">Skycache&lt;/h1>
+&lt;p>A few months ago, we hosted &lt;a href="https://www.linkedin.com/feed/update/urn:li:activity:7295871444343734272/">a Buildbarn mini-conference&lt;/a> at Snowflake where, in my opinion, the most exciting talk was Ed Schouten&amp;rsquo;s presentation on Bonanza. Shortly after, I published an article imagining &lt;a href="/2025/03/bazel-next-generation.html">the next generation of Bazel builds&lt;/a>, because Bazel&amp;rsquo;s fat client model is problematic in many scenarios.&lt;/p>
+&lt;p>At BazelCon, we now heard Google&amp;rsquo;s approach to solving slow cold builds and Bazel client scalability in a talk on Skycache by Shahan Yang.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/1A8LMZ21t6Y?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The core idea of Skycache is to serialize and remotely cache &lt;a href="https://bazel.build/reference/skyframe">Skyframe&lt;/a>, Bazel&amp;rsquo;s internal tracking system for build state (also known as the &amp;ldquo;build graph&amp;rdquo;). In his talk, Shahan outlined three major considerations for making this solution viable:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Top-down pruning:&lt;/strong> When you get a cache hit for a node in the graph, you don&amp;rsquo;t have to worry about anything below that node anymore. You can throw away everything underneath to keep memory usage constrained.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Invalidation computation:&lt;/strong> To determine what needs to be re-fetched from the cache, Skycache assumes &amp;ldquo;the same baseline&amp;rdquo; and then looks for file changes between the local system and the cache to find &amp;ldquo;what&amp;rsquo;s missing&amp;rdquo;. I know, this sounds fuzzy; refer back to the talk for the specifics.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Efficiency:&lt;/strong> For some nodes, it&amp;rsquo;s cheaper to recompute them than to fetch them from the cache, and this was true for many nodes before applying two optimizations. One was in the nested sets data structure, because the original approach to serializing them caused a 10x space blowup. The other was around serializing individual node values, because most of the time, those values share internals across nodes.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>Internal dogfooding of Skycache showed that some builds dropped from 46 to 13 seconds, with similar reductions observed for analyzed targets, loaded packages, and more.&lt;/p>
+&lt;p>On the server side, this solution is RAM-intensive (similar to Bazel&amp;rsquo;s in-memory representations) and is complicated by the fact that users want to build at older versions and with a high version cadence. To be effective, Skycache needs to maintain &amp;ldquo;thousands of base images&amp;rdquo;.&lt;/p>
+&lt;p>A specific insight toward the end of the talk was that, for Google as a whole, 2.5% of targets account for 90% of all targets built. This suggests a potential optimization where only those targets are cached, but this has not yet been implemented.&lt;/p>
+&lt;p>There is no open-source implementation of Skycache, but the talk provided hints about which classes would need to be implemented to make it work. It seems that it shouldn&amp;rsquo;t be too difficult: the serialization code is already in place, so all that&amp;rsquo;s required is integration with a key-value store and Git.&lt;/p>
+&lt;p>While this talk was fascinating, I can&amp;rsquo;t help but feel that Google&amp;rsquo;s solution is a bit strange. They are opting to maintain a fat Bazel client instead of moving it entirely to the cloud, as Bonanza is attempting to do, and this feels weird to me knowing how the rest of their infrastructure works (or used to work a few years back).&lt;/p>
+&lt;h1 id="dynamic-actions-and-buck-2">Dynamic actions and Buck 2&lt;/h1>
+&lt;p>Yes, this was BazelCon, but given Buck&amp;rsquo;s spiritual heritage, it was no surprise to see some Buck 2 content. Andreas Herrmann from Tweag took the stage to compare Bazel and Buck 2&amp;rsquo;s approaches to the efficient compilation of Haskell, highlighting the key role of dynamic actions in Buck 2.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/eA-3Gfr4epU?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The core of the issue lies in how Haskell modules and libraries are compiled and exposed in the Haskell rules. The summary is as follows:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>Modules are individual &lt;code>.hs&lt;/code> source files. These act as the compilation unit.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Libraries are collections of modules, and is what&amp;rsquo;s often modeled in the build via &lt;code>haskell_library&lt;/code> rules. Therefore, library targets tend to group various modules.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Compiling an &lt;code>.hs&lt;/code> file produces an &lt;code>.o&lt;/code> object file but also a &lt;code>.hi&lt;/code> interface file. Think of the latter as a precompiled header or an interface JAR.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>To compile a module, we need the &lt;code>.hi&lt;/code> files of its dependencies, &lt;em>not&lt;/em> their &lt;code>.o&lt;/code> files. This is the key difference between compiling a &lt;code>cc_library&lt;/code> vs. a &lt;code>haskell_library&lt;/code>, because in the C/C++ case, all individual sources can be compiled in any order, but in the Haskell case, they cannot.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>With this in mind, the central question is: how can we parallelize the compilation of modules &lt;em>within a library&lt;/em> when they must be compiled in dependency order?&lt;/p>
+&lt;p>In Bazel, the solution is to model the internal library modules as separate &lt;code>haskell_module&lt;/code> rules, each with a static representation of its cross-module dependencies. However, this approach can be incredibly noisy. While Gazelle can help mitigate the issue, it is still not an ideal user experience.&lt;/p>
+&lt;p>Buck 2, on the other hand, provides dynamic dependencies, which make it possible to infer the module-level dependency graph &lt;em>at build time&lt;/em>. The idea is to have an action that runs &lt;code>ghc -m&lt;/code> to emit the cross-module dependency &amp;ldquo;mini-graph&amp;rdquo; for a set of modules, and then use a dynamic action to generate module-level compilation actions with the correct dependencies.&lt;/p>
+&lt;h1 id="task-execution-via-starlark">Task execution via Starlark&lt;/h1>
+&lt;p>One of my &lt;a href="/2015/04/on-bazel-and-open-source.html">original critiques of Bazel in 2015&lt;/a> was that while Bazel is excellent at &lt;em>building&lt;/em>, it is not well-suited for other workflows. The specific example I gave was that developers want to &lt;em>install&lt;/em> the software they have just built (the equivalent of &lt;code>make install&lt;/code>), which is not easy to model in Bazel.&lt;/p>
+&lt;p>Well, fear no more. Aspect Build is developing a solution to this problem with Starlark-defined tasks and a custom CLI to run them. I found this to be very exciting, and it was a &amp;ldquo;hot topic&amp;rdquo; at the hackathon that followed the conference.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/j7-IMZ2q5W4?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The premise of the talk was that, even with Bazel, developers still often rely on auxiliary scripts to install tools, Makefiles to drive workflows like setting up test servers or linting code, and YAML files to define complex CI tasks. While all of this should ideally be expressed in Bazel, there is currently no good way to do so.&lt;/p>
+&lt;p>In essence, Bazel is missing a &amp;ldquo;task runner&amp;rdquo;, and this is where &lt;a href="https://aspect.build/axl">Aspect&amp;rsquo;s newly-announced Extension Language (AXL)&lt;/a> comes in. It&amp;rsquo;s a Starlark dialect for running tasks, which requires the &lt;a href="https://github.com/aspect-build/aspect-cli">Aspect CLI&lt;/a> to execute. The CLI is a companion tool to Bazel that once &amp;ldquo;replaced&amp;rdquo; Bazel but no longer does.&lt;/p>
+&lt;p>With the new AXL language, you can define tasks in a way that is very similar to defining rules: you create a Starlark function, receive a context, and can then perform &amp;ldquo;stuff&amp;rdquo;. The key difference between tasks and rules is that tasks can trivially execute a build with &lt;code>ctx.bazel.build&lt;/code>. Even more exciting is the ability to iterate over the BEP events that the build emits and interact with them!&lt;/p>
+&lt;p>The talk also demonstrated the use of WASM binaries for things like buildozer to write platform-agnostic AXL scripts that help with migrations and the like. But the sky is the limit here, and the new &lt;a href="https://github.com/aspect-extensions/">aspect-extensions&lt;/a> GitHub organization is meant to collect all user-contributed tasks.&lt;/p>
+&lt;h1 id="build-foundation">BUILD Foundation&lt;/h1>
+&lt;p>The desire to create a Bazel foundation to protect the project and ecosystem, should Google ever &amp;ldquo;pull the plug&amp;rdquo;, was announced a year ago, but not much has seemed to happen since. In reality, a lot has been going on behind the scenes, but nothing has yet materialized for the average user.&lt;/p>
+&lt;p>As part of the unconference, we voted to have a BoF on the foundation to discuss its future.&lt;/p>
+&lt;p>The main question we tried to answer during the session was, &amp;ldquo;What could the foundation &lt;em>do&lt;/em>?&amp;rdquo; Many ideas were brainstormed, including funding a technical writer, improving the quality of pull requests, maintaining important rulesets, and tackling tricky IDE integrations. However, the most popular idea was for the foundation to act as an intermediary between the community and Google, helping to prioritize the projects that the community needs most.&lt;/p>
+&lt;p>I think there is an AI transcript of the session somewhere but there is no recording. You&amp;rsquo;ll have to stay tuned for the news, or you can get involved via Slack. Reach out to Alex Eagle or Helen Altshuler.&lt;/p>
+&lt;h1 id="flagsets">Flagsets&lt;/h1>
+&lt;p>When you have a small repository with a single project, you can easily record project settings (such as compilation targets and debug flags) in the top-level &lt;code>.bazelrc&lt;/code> file. But what do you do when you start combining multiple projects into one repository? The build settings for a backend service might be different from those required for a frontend application.&lt;/p>
+&lt;p>&lt;code>PROJECT.scl&lt;/code> files are here to help, and Susan Steinman and Greg Estren from Google were on hand to explain them.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/kqMOwABJguc?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The key problem being addressed is that while everyone intuitively understands what a &amp;ldquo;project&amp;rdquo; is, Bazel lacks a first-class representation of this concept. By introducing such a concept, the goal is to make &lt;code>bazel build //foo&lt;/code> work consistently everywhere, without the need to specify any flags. This is the opposite of the current situation, where it is common for developers to create auxiliary scripts to run Bazel with different flags for different targets.&lt;/p>
+&lt;p>As for the format of &lt;code>PROJECT.scl&lt;/code>, the presenters reminded us that &lt;code>.bazelrc&lt;/code> is an ad-hoc language and one of the few places where Bazel does not use Starlark, despite the community&amp;rsquo;s desire for consistency. As a result, these new project files are written in the language we have all come to appreciate.&lt;/p>
+&lt;p>More specifically, &lt;code>PROJECT.scl&lt;/code> files can appear multiple times in the directory tree, just like &lt;code>BUILD&lt;/code> files. The first one found when walking up the tree from a given build target is the one that is used. The file contains a project definition, which in turn contains buildable units. These units can enforce different policies for flags, such as setting default flag values for a target or preventing users from modifying certain flags. Finally, it is also possible to define multiple configurations for a unit (e.g., release vs. development) and to switch between them using &lt;code>--scl_config=NAME&lt;/code>.&lt;/p>
+&lt;h1 id="target-aware-workflows-with-bazel-diff">Target-aware workflows with bazel-diff&lt;/h1>
+&lt;p>One mistake that &lt;em>everyone&lt;/em> makes when moving to a monorepo is retaining operations that scale with the &lt;em>size of the monorepo&lt;/em> instead of the &lt;em>size of the change&lt;/em>. In particular, it is extremely common to see CI workflows that run &lt;code>bazel test //...&lt;/code>, either executing all tests from scratch or hoping that remote caching will prevent the re-running of unmodified tests. This is a bad practice. The overhead is significant, and the end-user experience is often terrible, especially when flaky tests are present.&lt;/p>
+&lt;p>&lt;a href="https://github.com/Tinder/bazel-diff/">bazel-diff&lt;/a> is a tool that helps determine the targets affected by a given code change, allowing Bazel to build and test &lt;em>only&lt;/em> those targets. Maxwell Elliott and Connor Wybranowsky were on hand to share the impact that developing this tool at Tinder has had on the company&amp;rsquo;s developer workflows.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/rCFc3tFcVVE?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The initial results of deploying &lt;code>bazel-diff&lt;/code> were a 40% reduction in CI times at the 90th percentile, and up to a 76% reduction in the worst case. These kinds of improvements were transformative for users. In particular, because CI flows became much faster and more accurate, developers began to take ownership of test breakages and flakiness.&lt;/p>
+&lt;p>Unfortunately, as is often the case with &amp;ldquo;transformative performance improvements&amp;rdquo; (remember SSDs or the M1 chip?), the codebase continued to grow and eventually consumed all the gains from &lt;code>bazel-diff&lt;/code>.&lt;/p>
+&lt;p>To improve on the original deployment, the new approach is to integrate &lt;code>bazel-diff&lt;/code> more deeply with CI. The idea is to dynamically generate pipelines based on the changes in a pull request and select which ones to run at review time. For example, if any of the modified files have automated formatters, only the formatter pipelines will be triggered.&lt;/p>
+&lt;p>To recap, the presenters mentioned that the end-to-end adoption of &lt;code>bazel-diff&lt;/code> has helped them save up to 93% of their time in CI. While the extra gains beyond the initial 76% did not lead to the same kinds of cultural changes that were originally observed, developers always appreciate faster workflows.&lt;/p>
+&lt;h1 id="supply-chain-security">Supply chain security&lt;/h1>
+&lt;p>If you have attended previous BazelCons, you will know that supply chain security is a recurring topic. This year was no different, with Mark Zeren from Broadcom and Tony Aiuto from Datadog presenting the latest news in this area.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/Q4p-I9TsUnA?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>The reason this topic is relevant to the conference is that Bazel is a key tool for producing reliable SBOMs, thanks to its hermeticity, sandboxing features, and fine-grained build graph entries. However, it&amp;rsquo;s not quite there yet.&lt;/p>
+&lt;p>From the beginning, Bazel included &lt;code>rules_license&lt;/code> as a way to define per-package licensing details. However, this ruleset was &amp;ldquo;thrown over the wall&amp;rdquo; by Google when Bazel was first open-sourced and has not been fit for purpose.&lt;/p>
+&lt;p>Today, there is a new ruleset called &lt;a href="https://github.com/bazel-contrib/supply-chain">&lt;code>supply-chain&lt;/code>&lt;/a>, with only one person from Google on the eight-person team. This new ruleset focuses on two things: metadata rules that code authors can apply to their &lt;code>BUILD&lt;/code> files, and tools to generate provenance information and produce SBOMs. These two components are separate because the metadata rules are designed to be stable over time, while the tools are expected to change frequently.&lt;/p>
+&lt;p>What is missing from the new ruleset is licensing: the ability to generate copyright notices, validate linkage, and so on.&lt;/p>
+&lt;h1 id="faster-container-builds-with-rules_img">Faster container builds with rules_img&lt;/h1>
+&lt;p>As I mentioned earlier, your intuition about what works well for local actions may not apply to remote actions, and container image building is a prime example of this.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/biYXmAv4Ppk?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>In this talk, Malte Poll from Tweag took the stage to introduce &lt;a href="https://github.com/bazel-contrib/rules_img">&lt;code>rules_img&lt;/code>&lt;/a>, a new ruleset that replaces &lt;code>rules_oci&lt;/code> and &lt;code>rules_docker&lt;/code>. It is designed to minimize large blob transfers, resulting in significantly more efficient container builds.&lt;/p>
+&lt;p>I do not have written notes on this talk because I was too focused absorbing the many, many details given during the talk, so I strongly encourage you to watch it.&lt;/p>
+&lt;h1 id="my-talk-on-java-test-slowness">My talk on Java test slowness&lt;/h1>
+&lt;p>To conclude this long recap, I will leave you with my own lightning talk on how our Java integration tests at Snowflake became significantly slower after we migrated from Maven to Bazel.&lt;/p>
+&lt;div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+&lt;iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen="allowfullscreen" loading="eager" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube.com/embed/-1qrpqFsqQ0?autoplay=0&amp;amp;controls=1&amp;amp;end=0&amp;amp;loop=0&amp;amp;mute=0&amp;amp;start=0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" title="YouTube video">&lt;/iframe>
+&lt;/div>
+&lt;p>It&amp;rsquo;s only eight minutes long, but if you want the summary: Maven and Bazel compile Java code differently. Maven writes class files to a few directories on disk, while Bazel creates intermediate JAR files for every Java library. With Bazel&amp;rsquo;s more-detailed build graph, this causes an explosion in the &lt;code>CLASSPATH&lt;/code> size and means that class files must be read from compressed JAR (ZIP) files instead of from disk.&lt;/p>
+&lt;p>I spent some time analyzing the problem and ruled out obvious factors like sandboxing and ZIP compression. I concluded that reading from JAR files is indeed slower than reading individual files from disk. (Why? I&amp;rsquo;m not sure, but I suspect there is an optimization that could be made in the class loader to fix this.)&lt;/p>
+&lt;p>To mitigate the problem, I created a new rule that uses the &lt;code>singlejar&lt;/code> tool to merge all intermediate JARs into one. But this was easier said than done. The resulting combined JAR was huge and could not be reused across tests, so I had to develop a complex dependency-pruning rule to generate a combined JAR that could be reused across all tests without introducing class duplicates—all while remaining remote-execution-friendly.&lt;/p>
+&lt;p>With this new rule in place, we saw test runtimes drop by about 10 seconds per test, which brought them back to pre-Bazel levels. And with the improvements that Bazel brings to the build, an end-to-end reduction in test times.&lt;/p>
+&lt;hr>
+&lt;p>And that&amp;rsquo;s a wrap! This has been more of a detailed summary than a brief recap, but my goal was to clean up and share all the notes I took during the conference. Apologies for the many talks I could not cover in this recap. Once again, head to the &lt;a href="https://www.youtube.com/playlist?list=PLak8-7eFSpowmNiR2lhvJEomLA140yban">BazelCon 2025 YouTube playlist&lt;/a> for all recordings.&lt;/p>
+&lt;p>If you are involved with Bazel at all or have any interest in build systems, I strongly encourage you to plan to attend next year. You&amp;rsquo;ll learn a lot from the talks of course, but what&amp;rsquo;s more, you&amp;rsquo;ll get to meet key people from tens of companies&amp;mdash;people that hold the keys to how modern build tools and scalable development processes are being developed worldwide.&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-11-23-bazelcon.jpg" length="570766" type="image/jpeg"/></item><item><title>You are holding BUILD files wrong</title><link>https://jmmv.dev/2025/09/you-are-holding-build-files-wrong.html</link><pubDate>Fri, 26 Sep 2025 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/09/you-are-holding-build-files-wrong.html</guid><description>&lt;p>I&amp;rsquo;ve heard it from people new to Bazel but also from people very familiar with the Bazel ecosystem: BUILD files must go away. And they must go away because they are redundant: they just repeat the dependency information that&amp;rsquo;s already encoded in the in-code import/use statements.&lt;/p>
 &lt;p>Hearing this from newcomers to Bazel isn&amp;rsquo;t surprising: after all, most newcomers are used to build tools that provide zero facilities to express dependencies across the sources of your own project. Hearing it from old-timers, however, is disappointing because it misses the point of what BUILD files can truly offer.&lt;/p>
 &lt;p>In my opinion: if that&amp;rsquo;s how you are writing BUILD files, you are holding them wrong. There is much more to BUILD files than mindlessly repeating import statement dependencies. Let&amp;rsquo;s see why.&lt;/p>
 &lt;h1 id="the-problem">The problem&lt;/h1>
@@ -2414,156 +2716,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo
 &lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @sed -e&lt;span class="s1">&amp;#39;s/^\([^: ]\+\):.*#\(.*\)$$/\1 \2/p;d&amp;#39;&lt;/span> Makefile &lt;span class="p">|&lt;/span> column -t -l &lt;span class="m">2&lt;/span> &lt;span class="p">|&lt;/span> sort
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>If you copy/paste this text, beware that there are embedded tabs in it. The ones at the beginning of the line are obvious, but the ones in the &lt;code>[ ]&lt;/code> character classes are not. The latter are supposed to be &lt;code>[ &amp;lt;tab&amp;gt;]&lt;/code>.&lt;/p>
-&lt;p>Now, have fun with this, but please don&amp;rsquo;t use Make for new projects if you can avoid it!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-01-10-make-help.png" length="110230" type="image/jpeg"/></item><item><title>Revisiting the NetBSD build system</title><link>https://jmmv.dev/2024/12/netbsd-build-system.html</link><pubDate>Sat, 28 Dec 2024 08:50:00 +0100</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2024/12/netbsd-build-system.html</guid><description>&lt;p>I recently picked up an embedded project in which I needed to build a highly customized full system image with minimal boot times. As I explored my options, I came to the conclusion that NetBSD, the often-forgotten BSD variant, was the best viable choice for my project.&lt;/p>
-&lt;p>One reason for this choice is NetBSD&amp;rsquo;s build system. Once you look and get past the fact that it feels frozen in time since 2002, you realize it is still one of the most advanced build systems you can find for an OS. And it shows: the NetBSD build system allows you to build the full OS from scratch, on pretty much any host POSIX platform, while targeting any hardware architecture supported by NetBSD. All without root privileges.&lt;/p>
-&lt;p>Another reason for this choice is that NetBSD was my daily workhorse for many years and I&amp;rsquo;m quite familiar with its internals, which is useful knowledge to quickly achieve the goals I have in mind. In fact, I was a NetBSD Developer with capital D: I had commit access to the project from about 2002 through 2012 or so, and I have just revived my account in service of this project. &lt;code>jmmv@&lt;/code> is back!&lt;/p>
-&lt;p>So, strap onto your seats and let&amp;rsquo;s see how today&amp;rsquo;s NetBSD build system looks like and what makes it special. I&amp;rsquo;ll add my own critique at the end, because it ain&amp;rsquo;t perfect, but overall it continues to deliver on its design goals set in the late 1990s.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.azurewebsites.net/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="the-basics">The basics&lt;/h1>
-&lt;p>The NetBSD build system is powerful and featureful, but it&amp;rsquo;s also arcane as it&amp;rsquo;s based on a combination of the BSD variant of make and shell scripts. Just peek through the files under &lt;a href="https://cvsweb.netbsd.org/bsdweb.cgi/src/share/mk/">&lt;code>src/share/mk/&lt;/code>&lt;/a>, the directory that contains the bulk of the infrastructure, to see what I mean.&lt;/p>
-&lt;p>As a user of the build system, however, you rarely interact with make directly. Instead, you use the &lt;code>build.sh&lt;/code> script located at the top of the source tree. This script provides a user-friendly interface to most operations you may want to do, and abstracts away the intricacies of the targets that coordinate the build of the system and the configuration that controls it.&lt;/p>
-&lt;p>The structure of the command is to pass high-level &amp;ldquo;goals&amp;rdquo; to &lt;code>build.sh&lt;/code> as arguments, which indicate the operations to perform. In its most simple form, all you need to do to build a full system distribution targeting the architecture of the host is:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh tools release
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>But hey, I promised you can trivially cross-build too, right? Sure, let&amp;rsquo;s compile the system for a Raspberry Pi with a 64-bit chip, produce the USB image that we can write to an SD card, and do everything as an unprivileged user:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -U -a aarch64 -m evbarm tools release disk-image
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>That&amp;rsquo;s it, really. That&amp;rsquo;s all it takes.&lt;/p>
-&lt;p>We must dig deeper though, so let&amp;rsquo;s look at some of those &amp;ldquo;goals&amp;rdquo; to see what &lt;code>tools&lt;/code> means and understand how a release is put together without root privileges.&lt;/p>
-&lt;h1 id="the-toolchain">The toolchain&lt;/h1>
-&lt;p>The very first step of any &lt;code>build.sh&lt;/code> invocation is to generate the toolchain used to build the rest of the system. This is true of any build, including those that target the host machine, because this ensures that the build is independent of the host&amp;rsquo;s state. In particular, this avoids the situation where you might have to upgrade certain components before building, which was/is common in other BSDs.&lt;/p>
-&lt;p>And you have seen this prerequisite step in the previous section, by the way: all sample &lt;code>build.sh&lt;/code> invocations I showed you included &lt;code>tools&lt;/code> as the first goal. Now, you don&amp;rsquo;t &lt;em>have&lt;/em> to provide &lt;code>tools&lt;/code> to &lt;em>every&lt;/em> invocation of the script: as soon as you have built a toolchain, you can reuse it in subsequent invocations.&lt;/p>
-&lt;p>Building a toolchain with &lt;code>build.sh&lt;/code> is incredibly handy on its own, as you can produce cross-build toolchains and use them for other purposes outside of building NetBSD itself. Zig&amp;rsquo;s build system has often been praised for this reason, but NetBSD&amp;rsquo;s has nothing to envy. For example, if we do this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -a aarch64 -m evbarm -T ~/tools tools
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We end up with a cross-build C and C++ toolchain under &lt;code>~/tools/&lt;/code> that targets NetBSD running on ARM 64 bits. And what goes into the toolchain, you ask?&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-12-28-netbsd-tools.png" />
-&lt;figcaption>Directory listing of &lt;tt>tools&lt;/tt> as produced by the command above and its &lt;tt>bin&lt;/tt> subdirectory.&lt;/figcaption>
-&lt;/figure>
-&lt;p>In this listing, you can see a bunch of binaries prefixed with &lt;code>aarch64--netbsd-&lt;/code>. These are all part of the C and C++ toolchain. The rest of the tools, prefixed with &lt;code>nb&lt;/code>, are NetBSD-specific tools required during the build. These are programs that are part of a normal NetBSD installation and would be available without the &lt;code>nb&lt;/code> prefix if we were building on a NetBSD host, but remember, the build system supports &lt;em>any&lt;/em> POSIX host OS. Take &lt;code>nbsed&lt;/code> as an example: yes, all POSIX hosts provide a &lt;code>sed&lt;/code> tool, but its syntax varies among systems so the NetBSD build system isolates itself from those differences by compiling &lt;code>sed&lt;/code> as a host tool and using that throughout.&lt;/p>
-&lt;p>One special tool from this listing is &lt;code>nbmake-evbarm&lt;/code>. This is not the binary for make (which is itself stored as &lt;code>nbmake&lt;/code>). This is a shell script that captures all settings provided to &lt;code>build.sh&lt;/code> and then invokes &lt;code>nbmake&lt;/code> with those, and this script is useful when you want to manually rebuild portions of the tree. Not something you would want to use as an &amp;ldquo;end user&amp;rdquo; of the build, but something you definitely will want to use as a NetBSD developer.&lt;/p>
-&lt;h1 id="build-structure">Build structure&lt;/h1>
-&lt;p>Let&amp;rsquo;s explore the source tree a bit, which is the prime example of a monorepo in an open source project:&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-12-28-netbsd-src-bin-ls.png" />
-&lt;figcaption>Directory listing of the source tree, its &lt;tt>bin&lt;/tt> and &lt;tt>bin/ls&lt;/tt> subdirectories, and the content of &lt;tt>bin/ls/Makefile&lt;/tt>.&lt;/figcaption>
-&lt;/figure>
-&lt;p>In this picture, you can see first the content of the top-level directory of the source tree. It all looks pretty simple: there are various subdirectories, such as &lt;code>bin&lt;/code>, &lt;code>lib&lt;/code>, or &lt;code>usr.bin&lt;/code>, that roughly track the structure of the installed system; there is the &lt;code>build.sh&lt;/code> script that I previously described; and there is a &lt;code>Makefile&lt;/code> as well. Looking into one subdirectory, like &lt;code>bin&lt;/code>, we see another &lt;code>Makefile&lt;/code> and many more subdirectories, one per tool installed onto &lt;code>/bin/&lt;/code>.&lt;/p>
-&lt;p>Knowing this directory-based structure, we can use the &lt;code>nbmake-evbarm&lt;/code> wrapper script I mentioned earlier to operate on just a portion of the monorepo. Focusing on the &lt;code>ls&lt;/code> example shown in the screenshot, we could build and upgrade this piece of the system on its own by doing:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ cd ~/src/bin/ls
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ~/tools/bin/nbmake-evbarm all
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... console noise ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ sudo ~/tools/bin/nbmake-evbarm install
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">... console noise ...
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Another extra detail to highlight from the screenshot is that NetBSD&amp;rsquo;s &lt;code>Makefile&lt;/code>s are mostly declarative. Each &lt;code>Makefile&lt;/code> defines a bunch of variables to specify what is being built and, at the end, includes one of the many &lt;code>bsd.*.mk&lt;/code> files that pull in the build logic. Among these, we have &lt;code>bsd.prog.mk&lt;/code> to build one program, &lt;code>bsd.lib.mk&lt;/code> to build one static/shared library, and &lt;code>bsd.subdir.mk&lt;/code> to recurse into subdirectories. Importantly, the general design is to build just &lt;em>one&lt;/em> item per directory&amp;mdash;although I myself broke this rule when I added &lt;code>bsd.tests.mk&lt;/code> to build tests because splitting them into subdirectories would have added too much noise to the tree.&lt;/p>
-&lt;p>This declarative design is interesting because it maps well to the foundations of modern build systems like Bazel. In fact, the design of the NetBSD build system is what fueled my interest in build systems, influenced the design of &lt;a href="/2022/05/remembering-buildtool.html">my own Buildtool&lt;/a>, and made me like &lt;del>Bazel&lt;/del> Blaze as soon as I first saw it in 2008.&lt;/p>
-&lt;h1 id="the-destdir">The destdir&lt;/h1>
-&lt;p>In order to produce the structure of the final installation, the build system uses the &amp;ldquo;destdir&amp;rdquo; concept. A destdir is a staging location where built files are installed, but paths to this staging location are &lt;em>not&lt;/em> used within the artifacts produced by the build. This idea &lt;a href="https://www.gnu.org/software/automake/manual/html_node/DESTDIR.html">exists in other build systems such as GNU Automake&lt;/a> and is pretty much a necessity to build multiple pieces of software together before installing them or to package software without root privileges.&lt;/p>
-&lt;p>Imagine that you want to build a library, say &lt;code>libm&lt;/code> (the math library), and a tool that uses it, say &lt;code>bc&lt;/code> (the calculator). &lt;code>libm&lt;/code> typically goes into &lt;code>/lib/&lt;/code> so we cannot just build and install it in place: for one, we may &amp;ldquo;break&amp;rdquo; the existing system if the new version happens to be backwards-incompatible; for another, we may be targeting a different architecture so we cannot just replace &lt;code>/lib/libm.so&lt;/code> with an incompatible version.&lt;/p>
-&lt;p>The destdir comes to the rescue. We first build &lt;code>libm&lt;/code> as if it would be installed into &lt;code>/lib/&lt;/code>. However, during &lt;em>installation&lt;/em>, we prefix all file copy operations with the destdir. In this way, we build a separate &amp;ldquo;system root&amp;rdquo;, say &lt;code>/tmp/destdir/lib/&lt;/code>, that contains the newly-built &lt;code>libm.so&lt;/code>. After that, we build &lt;code>bc&lt;/code> and point it to the &lt;code>libm&lt;/code> that&amp;rsquo;s in &lt;code>/tmp/destdir/lib/&lt;/code>, but&amp;hellip; we have a problem: we can&amp;rsquo;t allow the &lt;code>/tmp/destdir/&lt;/code> path to appear anywhere inside the &lt;code>bc&lt;/code> binary because this directory is transient. To fix this, we must separate build paths from runtime paths during the build: when we build &lt;code>bc&lt;/code>, we tell the linker to look for libraries under &lt;code>/tmp/destdir/lib/&lt;/code> via the &lt;code>-L&lt;/code> flag, and we also tell the linker that, at &lt;em>runtime&lt;/em>, libraries will be available in &lt;code>/lib/&lt;/code> via the &lt;code>--rpath&lt;/code> flag (which stands for runtime path).&lt;/p>
-&lt;p>As you can imagine, the NetBSD build system heavily relies on this idea and, after a &lt;code>distribution&lt;/code> build (implied by the &lt;code>release&lt;/code> goal I showed earlier):&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -D /tmp/testdir/ distribution
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>we end up with a destdir that contains all system files laid out exactly as they need to be installed.&lt;/p>
-&lt;p>In fact, if you run the build as root and target the host system (where the host is NetBSD), the destdir can serve as the target of a chroot. So, if you do:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">chroot /tmp/destdir
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>you essentially can enter the freshly-built system. This may or may not work, however: the newly-built binaries might require new kernel features, which is likely true if you are building a more modern NetBSD release from an older release or if you are tracking NetBSD-current. And this obviously won&amp;rsquo;t work if you are cross-building.&lt;/p>
-&lt;h1 id="distribution-media">Distribution media&lt;/h1>
-&lt;p>The destdir serves as a staging area but it does not represent the final artifacts of the build. To put the destdir to use, we either have to &amp;ldquo;copy&amp;rdquo; the staging area onto the host to perform an in-place upgrade, or we need to build distribution media.&lt;/p>
-&lt;p>The former case of an in-place upgrade is tricky because it requires issuing manual post-installation steps, so I&amp;rsquo;m not going to describe it here. But the latter case of producing distribution media is trivial. For example, we can do:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh release
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>to produce the release &amp;ldquo;sets&amp;rdquo; for the system from the contents of the destdir, or we can do:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh iso-image install-image live-image
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>to create various types of installation media (a bootable CD, a bootable USB image, a live system image&amp;hellip;) from the contents of the destdir as well.&lt;/p>
-&lt;p>The release sets are an interesting thing to discuss because they form the core of a NetBSD distribution. You see: NetBSD ships as a collection of tarballs, and installing NetBSD amounts to simply unpacking those tarballs onto a file system and performing a few post-installation configuration steps.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2024-12-28-netbsd-amd64-binary-sets.png" class="with-border" />
-&lt;figcaption>Content of the &lt;tt>binary/sets&lt;/tt> directory of the NetBSD/amd64 distribution.&lt;/figcaption>
-&lt;/figure>
-&lt;p>Now, the way these tarballs are produced from the destdir is by leveraging &lt;code>mtree&lt;/code>, a really cool tool that is not known in Linux land. The purpose of this tool is to compare a textual &amp;ldquo;golden&amp;rdquo; representation of a directory against the actual contents of the directory, and highlight where they might differ.&lt;/p>
-&lt;p>BSD systems use &lt;code>mtree&lt;/code> to describe how the installed system looks like and, as you can imagine, NetBSD is no exception. The NetBSD build system uses &lt;code>mtree&lt;/code> files to ensure the destdir contents match expectations, and also uses the &lt;code>mtree&lt;/code> &amp;ldquo;manifests&amp;rdquo; to &amp;ldquo;bucketize&amp;rdquo; the files from the destdir into the individual release sets. You can find these golden manifests in the &lt;a href="https://cvsweb.netbsd.org/bsdweb.cgi/src/distrib/sets/lists/">&lt;code>src/distrib/sets/lists/&lt;/code>&lt;/a> directory.&lt;/p>
-&lt;h1 id="unprivileged-builds">Unprivileged builds&lt;/h1>
-&lt;p>These &lt;code>mtree&lt;/code> files are also critical for another very important feature: namely, the ability to build the whole NetBSD system as an unprivileged user. This, to me, is one of the most impressive features of this build system: you can produce the full build, including disk images, without ever running &lt;code>sudo&lt;/code> or using weird intercept tools like Debian&amp;rsquo;s &lt;code>fakeroot&lt;/code>.&lt;/p>
-&lt;p>Here is how this works. When building in unprivileged mode (enabled via the &lt;code>-U&lt;/code> flag to &lt;code>build.sh&lt;/code>), the build system produces a &lt;code>METALOG&lt;/code> file under the destdir. This file looks like this:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">$ grep &amp;#39;^\./sbin&amp;#39; ~/destdir/METALOG | head -n 5
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin type=dir uname=root gname=wheel mode=0755
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/amrctl type=file uname=root gname=wheel mode=0555 size=72120 time=1735119460.0 sha256=d6f474441dc98648a4e8ec633dd76fc3349c85a0af9830ce8eb6566e94291fdb
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/apmlabel type=file uname=root gname=wheel mode=0555 size=72360 time=1735119460.0 sha256=731cf433328bd14c6d3f322ef60fa92eb9eaa2725baa0cb52253b50743d9d324
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/atactl type=file uname=root gname=wheel mode=0555 size=73512 time=1735119461.0 sha256=74a15335c8715513ac50f615a8e906319df79f76dad601bc688ae214b3e41673
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">./sbin/badsect type=file uname=root gname=wheel mode=0555 size=72328 time=1735119461.0 sha256=76e34649bf100fe490befb2a4ec58455a7710a665dd59bcbbd8c672a6086bde8
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Every line of this file maps a file system entry (a directory, a file, a device&amp;hellip;) stored in the destdir to its properties, including ownership information and permissions. These entries are generated from metadata encoded in the &lt;code>Makefile&lt;/code>s whenever the build system places a new file under the destdir via the &lt;code>install&lt;/code> command (another nice tool often unknown to Linux users). The &lt;code>METALOG&lt;/code> is the key that allows building media images without root privileges.&lt;/p>
-&lt;p>If you think about it, media images are simply files with an internal structure that represents disk partitions, file systems, and metadata. Because they are simply files, there is no need to have root access nor to make the host&amp;rsquo;s &lt;code>passwd&lt;/code> file contain all users represented by entries in these file systems. Traditionally, OS builds have needed root because it&amp;rsquo;s easier to leverage the kernel&amp;rsquo;s virtual devices and file system implementations, but there is not inherent reason for that to be the only choice. All the work can be done in user space, and that&amp;rsquo;s precisely what NetBSD does.&lt;/p>
-&lt;p>Now, go back and revisit the screenshot above that showed the toolchain contents. You&amp;rsquo;ll notice tools like &lt;code>nbmakefs&lt;/code> (the tool to format a file system) and &lt;code>nbgpt&lt;/code> (the tool to create a GPT partitioning scheme). These tools are part of the toolchain because they are needed to generate installation media, and these tools know how to read the &lt;code>METALOG&lt;/code> in order to embed the right permissions and special file modes into the built images. All without ever becoming root.&lt;/p>
-&lt;h1 id="sysbuild">sysbuild&lt;/h1>
-&lt;p>Now, as simple and powerful as &lt;code>build.sh&lt;/code> might be, I find it cumbersome for day to day use if you want to customize any of its default settings. It is not uncommon to end up running &lt;code>build.sh&lt;/code> with invocations like:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">./build.sh -O ../obj -T ../tools -U -u -V &lt;span class="nv">MKDEBUG&lt;/span>&lt;span class="o">=&lt;/span>no -V &lt;span class="nv">MKGCC&lt;/span>&lt;span class="o">=&lt;/span>no distribution
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>which the official documentation describes as &amp;ldquo;golden invocations&amp;rdquo; and I have no desire to type or even remember.&lt;/p>
-&lt;p>This is what drove me to &lt;a href="/software/sysbuild.html">write sysbuild&lt;/a>: a layer of abstraction over &lt;code>build.sh&lt;/code> &lt;em>and&lt;/em> &lt;code>cvs&lt;/code> that coordinates updating the source tree and building it. The tool even integrates with &lt;code>cron&lt;/code> trivially, providing a mechanism to keep NetBSD-current installations up-to-date.&lt;/p>
-&lt;p>sysbuild is driven by configuration &amp;ldquo;profiles&amp;rdquo; which allow you to customize the paths and settings of a build in just one place and then puts them to use with a trivial command. For example, with a configuration file like the following stored in &lt;code>~/.sysbuild/rpi.conf&lt;/code>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BUILD_ROOT&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">HOME&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/netbsd&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BUILD_TARGETS&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;tools sets disk-image&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">CVSROOT&lt;/span>&lt;span class="o">=&lt;/span>:ext:anoncvs@cvs.NetBSD.org:/cvsroot
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">MACHINES&lt;/span>&lt;span class="o">=&lt;/span>amd64
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">RELEASEDIR&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BUILD_ROOT&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/release&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">SRCDIR&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BUILD_ROOT&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/src&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">UPDATE_SOURCES&lt;/span>&lt;span class="o">=&lt;/span>no
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can simply run:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">sysbuild -c rpi build
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>to update the NetBSD source tree to the latest version, ensure that the tools are up-to-date, and produce the USB disk images for a Raspberry Pi.&lt;/p>
-&lt;h1 id="deficiencies">Deficiencies&lt;/h1>
-&lt;p>Not everything about the NetBSD build system is rosy though.&lt;/p>
-&lt;p>&lt;em>The&lt;/em> thing that differentiates a good build system from a &amp;ldquo;meh&amp;rdquo; one for me personally is the behavior of incremental builds and, in particular, two aspects of these:&lt;/p>
-&lt;ul>
-&lt;li>
-&lt;p>First, incremental builds need to do minimal work, especially when there is &amp;ldquo;nothing to do&amp;rdquo;. The NetBSD build system is a recursive make one (which comes with its own &lt;a href="https://accu.org/journals/overload/14/71/miller_2004/">set of problems&lt;/a>), so it does &lt;em>not&lt;/em> do minimal work. On my 72-core machine, it takes about 3 minutes to run through a &lt;code>build.sh release&lt;/code> invocation that does nothing. This is OK for end users looking to upgrade their running machine, but it is painful because it makes iterating on system changes difficult. As a developer, you end up needing to know how to surgically rebuild individual subdirectories using the &lt;code>nbmake-&amp;lt;arch&amp;gt;&lt;/code> wrappers I described earlier, and manually track dependencies across those.&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Second, incremental builds must &lt;a href="/2020/12/google-no-clean-builds.html">always deliver correct results&lt;/a> &lt;em>without&lt;/em> having to do a &lt;code>make clean&lt;/code> in between. But that&amp;rsquo;s generally not true for make-based build systems&amp;mdash;and NetBSD&amp;rsquo;s is no exception. Generally, an incremental build after a &lt;code>git pull&lt;/code> (sorry, a &lt;code>cvs update&lt;/code>) will work fine, but sometimes it won&amp;rsquo;t. And if you start playing with build-time switches (things like &lt;code>MKDEBUG&lt;/code>), then you are out of luck and must resort to a &lt;code>make clean&lt;/code> to &amp;ldquo;switch configurations&amp;rdquo;.&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;p>And there are other problems. Running a parallel build on a system with many cores sometimes leads to spurious build failures because the interdependencies between components are not always precisely specified (it&amp;rsquo;s &lt;em>really&lt;/em> difficult to be correct with make). And the build is inefficient: of those 3 minutes I mentioned earlier, you can see that &lt;em>most of the time&lt;/em> is wasted by make recursing through directories and discovering there is nothing to do, whereas other times, make &amp;ldquo;chokes&amp;rdquo; on way too many C++ compiles at once that lead to out of memory situations.&lt;/p>
-&lt;p>It has been &lt;a href="/2015/04/on-bazel-and-open-source.html">my dream since the publication of Bazel&lt;/a> as open source to have a Bazel-based build of NetBSD. I think Bazel is the perfect build system for such a project because it&amp;rsquo;d deliver correct and efficient incremental builds to NetBSD&amp;rsquo;s monorepo, and it would save tons of resources when running on many-core machines. Except for the fact that it&amp;rsquo;s written in Java, so it&amp;rsquo;d be a really odd choice for such project. Maybe Buck 2 would be suitable. Anyway, one can only dream&amp;hellip;&lt;/p>
-&lt;h1 id="but-why">But why?&lt;/h1>
-&lt;p>Why I&amp;rsquo;m looking at this at all again, after years of not touching NetBSD? I said it in the opening: I&amp;rsquo;m working on a new embedded project for which NetBSD is the greatest fit. I could tell you what it is about but it&amp;rsquo;s easier to just show you:&lt;/p>
-&lt;figure>
-&lt;video width="100%" controls>
-&lt;source src="/images/2024-12-28-endbasic-rpi-boot.mp4" type="video/mp4">
-&lt;/video>
-&lt;figcaption>Second iteration of the "boot to EndBASIC" prototype.&lt;/figcaption>
-&lt;/figure>
-&lt;p>OK, fine, in words: I am building a minimal system that boots straight into EndBASIC with quick build times and low overhead. You&amp;rsquo;ll have to wait a bit more to get your hands on this though, as I&amp;rsquo;m still ironing out various details and want to end up providing a pre-built &amp;ldquo;box&amp;rdquo; with the right hardware and software combination.&lt;/p>
-&lt;p>I&amp;rsquo;m also becoming &lt;em>super&lt;/em> tempted to migrate NetBSD&amp;rsquo;s build to Bazel to make my own life easier in this journey. This is a monumental task&amp;hellip; but I&amp;rsquo;m not sure that it&amp;rsquo;d be crazy to tackle the minimum subset of NetBSD that I need for this minimal disk image and port only those portions to Bazel. The results might impress some and then want to help the effort. Right?&lt;/p>
-&lt;p>In the meantime, I encourage you to read through the comprehensive &lt;a href="https://www.netbsd.org/docs/guide/en/part-compile.html">Building the system&lt;/a> portion of &lt;a href="https://www.netbsd.org/docs/guide/en/index.html">The NetBSD guide&lt;/a>, and to play with building a NetBSD image straight from your Linux machine. You may like it.&lt;/p></description><enclosure url="https://jmmv.dev/images/2024-12-28-cover-image.jpg" length="403124" type="image/jpeg"/></item></channel></rss>
+&lt;p>Now, have fun with this, but please don&amp;rsquo;t use Make for new projects if you can avoid it!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-01-10-make-help.png" length="110230" type="image/jpeg"/></item></channel></rss>
