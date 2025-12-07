@@ -1,4 +1,181 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Sun, 07 Dec 2025 12:00:00 -0800</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>BazelCon 2025 recap</title><link>https://jmmv.dev/2025/11/bazelcon-2025-recap.html</link><pubDate>Sun, 23 Nov 2025 17:00:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/11/bazelcon-2025-recap.html</guid><description>&lt;p>It has been just over two years since I started Blog System/5, and that means it&amp;rsquo;s time for the now-usual(?) BazelCon 2025 trip report!&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2025 Julio Merino</copyright><lastBuildDate>Sun, 07 Dec 2025 12:00:00 -0800</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>From Azure Functions to FreeBSD</title><link>https://jmmv.dev/2025/12/from-azure-functions-to-freebsd.html</link><pubDate>Sun, 07 Dec 2025 12:00:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/12/from-azure-functions-to-freebsd.html</guid><description>&lt;p>&lt;em>Putting FreeBSD&amp;rsquo;s &amp;ldquo;power to serve&amp;rdquo; motto to the test.&lt;/em>&lt;/p>
+&lt;p>On Thanksgiving morning, I woke up to one of my web services being unavailable. All HTTP requests failed with a &amp;ldquo;503 Service unavailable&amp;rdquo; error. I logged into the console, saw a simplistic &amp;ldquo;Runtime version: Error&amp;rdquo; message, and was not able to diagnose the problem.&lt;/p>
+&lt;p>I did not spend a lot of time trying to figure the issue out and I didn&amp;rsquo;t even want to contact the support black hole. Because&amp;hellip; there was something else hidden behind an innocent little yellow warning at the top of the dashboard:&lt;/p>
+&lt;blockquote>
+&lt;p>Migrate your app to Flex Consumption as Linux Consumption will reach EOL on September 30 2028 and will no longer be supported.&lt;/p>&lt;/blockquote>
+&lt;p>I had known for a few weeks now, while trying to set up a new app, that all of my Azure Functions apps were on death row. The free plan I was using was going to be decommissioned and the alternatives I tried didn&amp;rsquo;t seem to support custom handlers written in Rust. I still had three years to deal with this, but hitting a showstopper error pushed me to take action.&lt;/p>
+&lt;p>All of my web services are now hosted by the FreeBSD server in my garage with just a few tweaks to their codebase. This is their migration story.&lt;/p>
+&lt;h1 id="how-did-i-get-here">How did I get here?&lt;/h1>
+&lt;p>Back in 2021, I had been developing my &lt;a href="https://www.endbasic.dev/">EndBASIC language&lt;/a> for over a year and I wanted to create a file sharing service for it. Part of this was to satisfy my users, but another part was to force myself into the web services world as I felt &amp;ldquo;behind&amp;rdquo;.&lt;/p>
+&lt;p>At that time, I had also &lt;a href="/2020/10/bye-google-hi-microsoft.html">been at Microsoft&lt;/a> for a few months already working on Azure Storage. One of the perks of the job was something like $300 of &lt;em>yearly&lt;/em> credit to deploy stuff on Azure for learning purposes. It was only &amp;ldquo;natural&amp;rdquo; that I&amp;rsquo;d pick Azure for what I wanted to do with EndBASIC.&lt;/p>
+&lt;p>Now&amp;hellip; $300 can be plentiful for a simple app, but it can also be paltry. Running a dedicated VM would eat through this in a couple of months, but the serverless model offered by Azure Functions with its &amp;ldquo;infinite&amp;rdquo; free tier would go a long way. I looked at their online documentation, found a very good guide on &lt;a href="https://learn.microsoft.com/en-us/azure/azure-functions/how-to-create-function-vs-code?pivots=programming-language-other&amp;amp;tabs=rust%2Clinux">how to deploy Rust-native functions onto a Linux runtime&lt;/a>, and&amp;hellip; I was sold.&lt;/p>
+&lt;p>I quickly got a bare bones service up and running on Azure Functions and I built it up from there. Based on these foundations, I later developed a separate service for my own site analytics (poorly named &lt;a href="https://endtracker.jmmv.dev/">EndTRACKER&lt;/a>), and I recently started working on a new service to provide secure auto-unlock of encrypted ZFS volumes (stay tuned!).&lt;/p>
+&lt;p>And, for the most part, the experience with Azure has been neat. I learned a bunch and I got to a point where I had set up &amp;ldquo;push on green&amp;rdquo; via GitHub Actions and dual staging vs. prod deployments. The apps ran completely on their own for the last three years, a testament to the stability of the platform &lt;em>and&lt;/em> to the value of &lt;a href="/2023/07/unit-testing-a-web-service.html">designing for testability&lt;/a>. Until now that is.&lt;/p>
+&lt;h1 id="the-cloud-database">The cloud database&lt;/h1>
+&lt;p>Compute-wise, I was set: Azure Functions worked fine as the runtime for my apps&amp;rsquo; logic and it cost pennies to run, so the $300 was almost untouched. But web services aren&amp;rsquo;t made of compute alone: they need to store data, which means they need a database.&lt;/p>
+&lt;p>My initial research in 2021 concluded that the only option for a database instance with a free plan was to go with, no surprise, &lt;em>serverless&lt;/em> Microsoft SQL Server (MSSQL). I had never used Microsoft&amp;rsquo;s offering but it couldn&amp;rsquo;t be that different from PostgreSQL or MySQL, could it?&lt;/p>
+&lt;p>Maybe so, but I didn&amp;rsquo;t get very far in that line of research. The very first blocker I hit was that the MSSQL connection &lt;em>required&lt;/em> TLS and this hadn&amp;rsquo;t been implemented in the &lt;code>sqlx&lt;/code> connector I chose to use for my Rust-based functions. I wasted two weeks implementing TLS support in &lt;code>sqlx&lt;/code> (see &lt;a href="https://github.com/launchbadge/sqlx/pull/1200">PR #1200&lt;/a> and &lt;a href="https://github.com/launchbadge/sqlx/pull/1203">PR #1203&lt;/a>) and got it to work, but that code was not accepted upstream because it conflicted with their business strategy. Needless to say, this was disappointing because getting that &lt;a href="https://github.com/jmmv/sqlx/blob/8ac975b1b267d64e7b6b9ec48436e5bf1c92c8a7/sqlx-core/src/mssql/connection/tls.rs">&lt;code>TlsStreamWrapper&lt;/code>&lt;/a> to work was a frigging nightmare. In any case, once I passed that point, I started discovering more missing features and bugs in the MSSQL connector, and then I also found some really weird surprises in MSSQL&amp;rsquo;s dialect of SQL. TL;DR, this turned into a dead end.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-12-07-azure-postgres-costs.png" width="100%" />
+&lt;figcaption>On the left, the default instance and cost selected by Azure when choosing to create a managed PostgreSQL server today. On the right, minimum possible cost after dialing down CPU, RAM, disk, and availability requirements.&lt;/figcaption>
+&lt;/figure>
+&lt;p>I had no choice other than to provision a full PostgreSQL server on Azure. Their onboarding wizard tried to push me towards a pretty beefy and redundant instance that would cost over $600 per month when all I needed was the lowest machine you could get for the amount of traffic I expected. Those options were hidden under a &amp;ldquo;for development only&amp;rdquo; panel and riddled with warnings about no redundancy, but after I dialed all the settings down and accepted the &amp;ldquo;serious risks&amp;rdquo;, I was left with an instance that&amp;rsquo;d cost $15 per month or so. This fit well well within the free yearly credit I had access to, so that was it.&lt;/p>
+&lt;h1 id="the-outage-and-trigger">The outage and trigger&lt;/h1>
+&lt;p>About two months ago, I started working on &lt;a href="https://x.com/jmmv/status/1964517899101725041">a new service to securely auto-unlock ZFS encrypted volumes&lt;/a> (more details coming). For this, I had to create a new Azure Functions deployment&amp;hellip; and I started seeing the writing on the wall. I don&amp;rsquo;t remember the exact details, but it was really difficult to get the creation wizard to provision me the same flex plan I had used for my other services, and it was warning me that the selected plan was going to be axed in 2028.&lt;/p>
+&lt;p>At the time of this writing, 2028 is still three years out and this warning was for a new service I was creating. I didn&amp;rsquo;t want to consider migrating neither EndBASIC nor EndTRACKER to something else just yet. Until Thanksgiving, that was.&lt;/p>
+&lt;p>On Thanksgiving morning, I noticed that my web analytics had stopped working. All HTTP API requests failed with a &amp;ldquo;503 Service unavailable.&amp;rdquo; error but, interestingly, the cron-triggered APIs were still running in the background just fine and the staging deployment slot of the same app worked fine end-to-end as well. I tried redeploying the app with a fresh binary, thinking that a refresh would fix the problem, but that was of no use. I also poked through the dashboard trying to figure out what &amp;ldquo;Runtime version: Error&amp;rdquo; would be about, making sure the version spec in &lt;code>host.json&lt;/code> was up-to-date, and couldn&amp;rsquo;t figure it out either.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-12-07-azure-functions-runtime-error.png" width="100%" class="with-border" />
+&lt;figcaption>Summary state of my problematic Azure Functions deployment. Note the cryptic runtime error along with the subtle warning at the top about upcoming deprecations.&lt;/figcaption>
+&lt;/figure>
+&lt;p>So&amp;hellip; I had to get out of Azure Functions, quick.&lt;/p>
+&lt;p>Not accidentally, I had bought a second-hand, over-provisioned ThinkStation (2x36-core Xeon E5-2697, 64 GB of RAM, a 2 TB NVMe drive, and a 4x4 TB HDD array) just two years back. The justification I gave myself was to use it as my development server, but I had this idea in the back of my mind to use it to host my own services at some point. The time to put it to serving real-world traffic with FreeBSD 14.x had come.&lt;/p>
+&lt;h1 id="from-serverless-to-serverful">From serverless to serverful&lt;/h1>
+&lt;p>The way you run a serverless Rust (or Go) service on Azure Functions is by creating a binary that exposes an HTTP server on the port provided to it by the &lt;code>FUNCTIONS_CUSTOMHANDLER_PORT&lt;/code> environment variable. Then, you package the binary along a set of metadata JSON files that tell the runtime what HTTP routes the binary serves and push the packaged ZIP file to Azure. From there on, the Azure Functions runtime handles TLS termination for those routes, spawns your binary server on a micro VM on demand, and redirects the requests to it.&lt;/p>
+&lt;p>By removing the Azure Functions runtime from the picture, I had to make my server binary stand alone. This was actually pretty simple because the binary was already an HTTP server: it just had to be coerced into playing nicely with FreeBSD&amp;rsquo;s approach to running services. In particular, I had to:&lt;/p>
+&lt;ul>
+&lt;li>Inject configuration variables into the server process at startup time. These used to come from the Azure Functions configuration page, and are necessary to tell the server where the database lives and what credentials to use.&lt;/li>
+&lt;li>Make the service run as an unprivileged user, easily.&lt;/li>
+&lt;li>Create a PID file to track the execution of the process so that the &lt;code>rc.d&lt;/code> framework could handle restarts and stop requests.&lt;/li>
+&lt;li>Store the logs that the service emits via stderr to a log file, and rotate the log to prevent local disk overruns.&lt;/li>
+&lt;/ul>
+&lt;p>Most daemons implement all of the above as features in their own code, but I did not want to have to retrofit all of these into my existing HTTP service in a rush. Fortunately, FreeBSD provides this little tool, &lt;a href="https://man.freebsd.org/cgi/man.cgi?daemon(8)">&lt;code>daemon(8)&lt;/code>&lt;/a>, which wraps an existing binary and offers all of the above.&lt;/p>
+&lt;p>This incantation was enough to get me going:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">daemon &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -P /var/run/endbasic.pid &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -o /var/log/endbasic.log &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -H &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -u endbasic &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -t endbasic &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> /bin/sh -c &lt;span class="s1">&amp;#39;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s1"> . /usr/local/etc/endbasic.conf
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s1"> /usr/local/sbin/endbasic&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>I won&amp;rsquo;t dive into the details of each flag, but to note: &lt;code>-P&lt;/code> specifies which PID file to create; &lt;code>-o&lt;/code> specifies where to store the stdout and stderr of the process; &lt;code>-H&lt;/code> is required for log rotation (much more below); &lt;code>-u&lt;/code> drops privileges to the given user; and &lt;code>-t&lt;/code> specifies the &amp;ldquo;title&amp;rdquo; of the process to display in &lt;code>ps ax&lt;/code> output.&lt;/p>
+&lt;p>The &lt;code>. /usr/local/etc/endbasic.conf&lt;/code> trick was sufficient to inject configuration variables upon process startup, simulating the same environment that my server used to see when spawned by the Azure Functions runtime.&lt;/p>
+&lt;p>Hooking that up into an &lt;code>rc.d&lt;/code> service script was then trivial:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#! /bin/sh
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># PROVIDE: endbasic&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># REQUIRE: NETWORKING postgresql&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">. /etc/rc.subr
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">name&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;endbasic&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">command&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;daemon&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">rcvar&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;endbasic_enable&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">pidfile&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;/var/run/&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">name&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">.pid&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">start_cmd&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;endbasic_start&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">required_files&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> /usr/local/etc/endbasic.conf
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2"> /usr/local/sbin/endbasic&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">endbasic_start&lt;span class="o">()&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> &lt;span class="o">[&lt;/span> ! -f /var/log/endbasic.log &lt;span class="o">]&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="k">then&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> touch /var/log/endbasic.log
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> chmod &lt;span class="m">600&lt;/span> /var/log/endbasic.log
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> chown endbasic /var/log/endbasic.log
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">fi&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> &lt;span class="s2">&amp;#34;Starting &lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">name&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">.&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> daemon &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -P &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">pidfile&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span> &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -o /var/log/endbasic.log &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -H &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -u endbasic &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> -t endbasic &lt;span class="se">\
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="se">&lt;/span> /bin/sh -c &lt;span class="s1">&amp;#39;
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s1"> . /usr/local/etc/endbasic.conf
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s1"> /usr/local/sbin/endbasic&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">load_rc_config &lt;span class="nv">$name&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">run_rc_command &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="nv">$1&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And with that:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">sysrc &lt;span class="nv">endbasic_enabled&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;YES&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">service endbasic start
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Ta-da! I had the service running locally and listening to a local port determined in the configuration file.&lt;/p>
+&lt;p>As part of the migration out of Azure Functions, I switched to self-hosting PostgreSQL as well. This was straightforward but required a couple of extra improvements to my web framework: one to &lt;a href="https://github.com/jmmv/iii-iv/commit/eefd8f4453348de8c01688b7d972fc8f207d04be">stop using a remote PostgreSQL instance for tests&lt;/a>(something I should have done eons ago), and another to &lt;a href="https://github.com/jmmv/iii-iv/commit/bc6508959b75ba2ad7107625a5c14f269d742a58">support local peer authentication&lt;/a> to avoid unnecessary passwords.&lt;/p>
+&lt;h1 id="log-rotation">Log rotation&lt;/h1>
+&lt;p>In the call to &lt;code>daemon&lt;/code> above, I briefly mentioned the need for the &lt;code>-H&lt;/code> flag to support log rotation. What&amp;rsquo;s that about?&lt;/p>
+&lt;p>You see, in Unix-like systems, when a process opens a file, the process holds a &lt;em>handle&lt;/em> to the open file. If you delete or rename the file, the handle &lt;em>continues to exist exactly as it was&lt;/em>. This has two consequences:&lt;/p>
+&lt;ul>
+&lt;li>If you rename the file, all subsequent reads and writes go to the new file location, not the old one.&lt;/li>
+&lt;li>If you delete the file, all subsequent reads and writes continue to go to disk but to a file you cannot reference anymore. You can run out of disk space and, while &lt;code>df&lt;/code> will confirm the fact, &lt;code>du&lt;/code> will not let you find what file is actually consuming it!&lt;/li>
+&lt;/ul>
+&lt;p>For a long-running daemon that spits out verbose logs, writing them to a file can become problematic because you can end up running out of disk space. To solve this problem, daemons typically implement &lt;em>log rotation&lt;/em>: a mechanism to keep log sizes in check by moving them aside when a certain period of time passes or when they cross a size threshold, and then only keeping the last N files around. Peeking into one of the many examples in my server, note how &lt;code>maillog&lt;/code> is the &amp;ldquo;live&amp;rdquo; log where writes go to but there is a daily &lt;code>maillog.N.bz2&lt;/code> archive for up to a week:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">$ ls -l /var/log/maillog*
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">4206&lt;/span> Dec &lt;span class="m">6&lt;/span> 05:41 maillog
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">823&lt;/span> Dec &lt;span class="m">6&lt;/span> 00:00 maillog.0.bz2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">876&lt;/span> Dec &lt;span class="m">5&lt;/span> 00:00 maillog.1.bz2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">791&lt;/span> Dec &lt;span class="m">4&lt;/span> 00:00 maillog.2.bz2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">820&lt;/span> Dec &lt;span class="m">3&lt;/span> 00:00 maillog.3.bz2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">808&lt;/span> Dec &lt;span class="m">2&lt;/span> 00:00 maillog.4.bz2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">759&lt;/span> Dec &lt;span class="m">1&lt;/span> 00:00 maillog.5.bz2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-rw-r----- &lt;span class="m">1&lt;/span> root wheel &lt;span class="m">806&lt;/span> Nov &lt;span class="m">30&lt;/span> 00:00 maillog.6.bz2
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ █
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Having all daemons implement log rotation logic on their own would be suboptimal because you&amp;rsquo;d have duplicate logic throughout the system and you would not be able to configure policy easily for them all. This is where &lt;a href="https://man.freebsd.org/cgi/man.cgi?newsyslog(8)">&lt;code>newsyslog(8)&lt;/code>&lt;/a> on FreeBSD (or &lt;code>logrotate(8)&lt;/code> on Linux) comes into play.&lt;/p>
+&lt;p>&lt;code>newsyslog&lt;/code> is a tool that rotates log files based on criteria such as size or time and optionally compresses them. But remember: the semantics of open file handles mean that simply renaming log files is insufficient! Once &lt;code>newsyslog&lt;/code> takes action and moves a log file aside, it must ensure that the process that was writing to that file &lt;em>closes&lt;/em> the file handle and &lt;em>reopens it&lt;/em> so that writes start going to the new place. This is typically done via sending a &lt;code>SIGHUP&lt;/code> to the daemon, and is why we need to pass &lt;code>-H&lt;/code> to the &lt;code>daemon&lt;/code> call. To illustrate the sequence:&lt;/p>
+&lt;ol>
+&lt;li>The system starts a service via &lt;code>daemon&lt;/code> and redirects logs to &lt;code>/var/log/service.log&lt;/code>.&lt;/li>
+&lt;li>&lt;code>newsyslog&lt;/code> runs and determines that &lt;code>/var/log/service.log&lt;/code> needs to be rotated because a day has passed.&lt;/li>
+&lt;li>&lt;code>newsyslog&lt;/code> &lt;em>renames&lt;/em> &lt;code>/var/log/service.log&lt;/code> to &lt;code>/var/log/service.log.0&lt;/code> and creates a new and empty &lt;code>/var/log/service.log&lt;/code>. At this point &lt;code>daemon&lt;/code> is &lt;em>still writing&lt;/em> to &lt;code>/var/log/service.log.0&lt;/code>!&lt;/li>
+&lt;li>&lt;code>newsyslog&lt;/code> sends a &lt;code>SIGHUP&lt;/code> to the &lt;code>daemon&lt;/code> process.&lt;/li>
+&lt;li>The &lt;code>daemon&lt;/code> process closes its file handle for the log, reopens &lt;code>/var/log/service.log&lt;/code> (which is the fresh new log file), and resumes writing.&lt;/li>
+&lt;li>&lt;code>newsyslog&lt;/code> compresses the &lt;code>/var/log/service.log.0&lt;/code> file for archival now that it&amp;rsquo;s quiesced.&lt;/li>
+&lt;/ol>
+&lt;p>Configuring &lt;code>newsyslog&lt;/code> is easy, but cryptic. We can create a service-specific configuration file under &lt;code>/usr/local/etc/newsyslog.d/&lt;/code> that provides entries for our service, such as:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-plain" data-lang="plain">&lt;span class="line">&lt;span class="cl">/var/log/endbasic.log endbasic:wheel 600 7 * @T00 JC /var/run/endbasic.pid
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>I&amp;rsquo;ll leave you to the manpage to figure out what the &lt;code>7 * @T00 JC&lt;/code> magic is (but in short, it controls retention count, rotation schedule, and compression).&lt;/p>
+&lt;h1 id="tls-termination">TLS termination&lt;/h1>
+&lt;p>As I briefly mentioned earlier, the Azure Functions runtime was responsible for TLS termination in my previous setup. Without such a runtime in place, I had to configure TLS on my own in my HTTP server&amp;hellip; or did I?&lt;/p>
+&lt;p>I had been meaning to play with &lt;a href="https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/">Cloudflare Tunnels&lt;/a> for a while given that I already use Cloudflare for DNS. Zero Trust Tunnels allow you to expose a service without opening &lt;em>inbound&lt;/em> ports in your firewall. The way this works is by installing the &lt;code>cloudflared&lt;/code> tunnel daemon on your machine and configuring the tunnel to redirect certain URL routes to an internal address (typically &lt;code>http://localhost:PORT&lt;/code>). Cloudflare then acts as the frontend for the requests, handles TLS termination and DDOS protection, and &lt;em>then&lt;/em> redirects the request to your local service.&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-12-07-cloudflared.png" width="100%" class="with-border" />
+&lt;figcaption>Interactions between client machines, Cloudflare servers, the cloudflared tunnel agent, and the actual HTTP servers I wrote.&lt;/figcaption>
+&lt;/figure>
+&lt;p>The obvious downside of relying on someone &lt;em>else&lt;/em> to do TLS termination instead of doing it yourself on your own server is that they can intercept and modify your traffic. For the kinds of services I run this isn&amp;rsquo;t a big deal for me, and the simplicity of others dealing with certificates is well welcome. Note that I was already offloading TLS termination to Azure Functions anyway, so this isn&amp;rsquo;t a downgrade in security or privacy.&lt;/p>
+&lt;h1 id="cors">CORS&lt;/h1>
+&lt;p>But using Cloudflare as the frontend came with a little annoyance: CORS handling. You see: the services I run require configuring extra allowed origins, and as soon as I tried to connect to them via the Cloudflare tunnel, I&amp;rsquo;d get the dreaded &amp;ldquo;405 Method not allowed&amp;rdquo; error in the requests.&lt;/p>
+&lt;p>Before, I used to configure CORS orgins from the Azure Functions console, but no amount of peeking through the Cloudflare console showed me how to do this for my tunneled routes.&lt;/p>
+&lt;p>At some point during the investigation, I assumed that I had to configure CORS on my own server. I&amp;rsquo;m not sure how I reached that bogus conclusion, but I ended up wasting a few hours implementing &lt;a href="https://github.com/jmmv/iii-iv/blob/bc6508959b75ba2ad7107625a5c14f269d742a58/core/src/rest/cors.rs">a configuration system for CORS in my web framework&lt;/a>. Nice addition&amp;hellip; but ultimately useless.&lt;/p>
+&lt;p>I had not accounted for the fact that because Cloudflare acts as the frontend for the services, it is the one responsible for handling the pre-flight HTTP requests necessary for CORS. In turn, this means that Cloudflare is where CORS needs to be configured but there is nothing &amp;ldquo;obvious&amp;rdquo; about configuring CORS in the Cloudflare portal.&lt;/p>
+&lt;p>AI to the rescue! As skeptical as I am of these tools, it&amp;rsquo;s true that they work well to get answers to common problems&amp;mdash;and figuring out how to deal with CORS in Cloudflare was no exception. They told me to configure &lt;em>a transformation rule&lt;/em> that explicitly sets CORS response headers for specific subdomains, and that did the trick:&lt;/p>
+&lt;figure>
+&lt;img src="/images/2025-12-07-cloudflare-cors-rules.png" width="100%" class="with-border" />
+&lt;figcaption>Sample rule configuration on the Cloudflare portal to rewrite CORS response headers.&lt;/figcaption>
+&lt;/figure>
+&lt;p>Even though AI was correct in this case, the whole thing looked fishy to me, so I did spend time reading about the inner workings of CORS to make sure I understood what this proposed solution was about and to gain my own confidence that it was correct.&lt;/p>
+&lt;h1 id="results-of-the-transition">Results of the transition&lt;/h1>
+&lt;p>By now, my web services are now fully running on my FreeBSD machine. The above may have seemed complicated, but in reality it was all just a few hours of work on Thanksgiving morning. Let&amp;rsquo;s conclude by analyzing the results of the transition.&lt;/p>
+&lt;p>On the plus side, here is what I&amp;rsquo;ve gained:&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Predictability:&lt;/strong> Running in the cloud puts you at the mercy of the upgrade and product discontinuation treadmill of big cloud providers. It&amp;rsquo;s no fun to have to be paying attention to deprecation messages and adjust to changes no matter how long the deadlines are. FreeBSD also evolves, of course, but it has remained pretty much the same over the last 30 years and I have no reason to believe it&amp;rsquo;ll significantly change in the years to come.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Performance:&lt;/strong> My apps are &lt;em>so&lt;/em> much faster now it&amp;rsquo;s ridiculous. The serverless runtime of Azure Functions starts quickly for sure, but it just can&amp;rsquo;t beat a server that&amp;rsquo;s continuously running and that has hot caches at all layers. That said, I bet the real difference in performance for my use case comes from collocating the app servers with the database, duh.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Ease of management:&lt;/strong> In the past, having automated deployments via GitHub Actions to Azure Functions was pretty cool, not gonna lie. But&amp;hellip; being now able to deploy with a trivial &lt;code>sudo make install&lt;/code>, perform administration PostgreSQL tasks with just a &lt;code>sudo -u postgres psql&lt;/code>, and inspecting logs trivially &lt;em>and quickly&lt;/em> by looking at &lt;code>/var/log/&lt;/code> beats any sort of online UI and distributed system. &amp;ldquo;Doesn&amp;rsquo;t scale&amp;rdquo; you say, but it scales up &lt;em>my time&lt;/em>.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Cost:&lt;/strong> My Azure bill has gone from $20/month, the majority of which was going into the managed PostgreSQL instance, to almost zero. Yes, the server I&amp;rsquo;m running in the garage is probably costing me the same or more in electricity, but I was running it &lt;em>anyway&lt;/em> already for other reasons.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>And here is what I&amp;rsquo;ve lost (for now):&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;strong>Availability (and redundancy):&lt;/strong> The cloud gives you the chance of very high availability by providing access to multiple regions. Leveraging these extra availability features is not cheap and often requires extra work, and I wasn&amp;rsquo;t taking advantage of them in my previous setup. So, I haven&amp;rsquo;t &lt;em>really&lt;/em> decreased redundancy, but it&amp;rsquo;s funny that the day right after I finished the migration, I lost power for about 2 hours. Hah, I think I hadn&amp;rsquo;t suffered any outages with Azure other than the one described in this article.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>A staging deployment:&lt;/strong> In my previous setup, I had dual prod and staging deployments (via Azure Functions slots and separate PostgreSQL databases&amp;mdash;not servers) and it was cool to deploy first to staging, perform some manual validations, and then promote the deployment to prod. In practice, this was rather annoying because the deployment flow was very slow and not fully automated (see &amp;ldquo;manual testing&amp;rdquo;), but it indeed saved me from breaking prod a few times.&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Auto-deployments:&lt;/strong> Lastly and also in my previous setup, I had automated the push to staging and prod by simply updating tags in the GitHub repository. Once again, this was convenient, but the biggest benefit of it all was that the prod build process was &amp;ldquo;containerized&amp;rdquo; and not subject to environmental interference. I&amp;rsquo;d very well set up a cron job or webhook-triggered local service that rebuilt and deployed my services on push&amp;hellip; but it&amp;rsquo;s now hard to beat the simplicity of &lt;code>sudo make install&lt;/code>.&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;p>None of the above losses are inherent to self-hosting, of course. I could provide alternatives for them all and at some point I will; consider them to-dos!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-12-07-azure-vs-freebsd.jpg" length="144470" type="image/jpeg"/></item><item><title>BazelCon 2025 recap</title><link>https://jmmv.dev/2025/11/bazelcon-2025-recap.html</link><pubDate>Sun, 23 Nov 2025 17:00:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/11/bazelcon-2025-recap.html</guid><description>&lt;p>It has been just over two years since I started Blog System/5, and that means it&amp;rsquo;s time for the now-usual(?) BazelCon 2025 trip report!&lt;/p>
 &lt;p>The conference, arranged by the Linux Foundation, took place in Atlanta, GA, USA over three days: one for tutorials and two for the main talks. An extra hackathon day, organized by Aspect Build, followed. Unfortunately, a canceled flight meant I missed the tutorials, but I attended the rest of the events. As usual, it was a super-fun time to connect with old acquaintances and an energizing event that left me with plenty of new topics to research.&lt;/p>
 &lt;p>What follows is not a complete summary of the conference, as there were many talks I did not attend and conversations I missed. If you want the full firehose of videos, see the &lt;a href="https://www.youtube.com/playlist?list=PLak8-7eFSpowmNiR2lhvJEomLA140yban">Bazel Con 2025 YouTube playlist&lt;/a>. And if you want a TL;DR&amp;hellip; I&amp;rsquo;d pick the following highlights:&lt;/p>
 &lt;ul>
@@ -2618,102 +2795,4 @@ class="form-control input-sm text-center my-1"/>
 &lt;/video>
 &lt;figcaption>&lt;/figcaption>
 &lt;/figure>
-&lt;p>Stay tuned. In the meantime, what will &lt;em>YOU&lt;/em> build? For those of us in the U.S., there is a 3-day weekend ahead and this can be a good distraction. Have fun!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-01-17-cover-image.png" length="25978" type="image/jpeg"/></item><item><title>Self-documenting Makefiles</title><link>https://jmmv.dev/2025/01/make-help.html</link><pubDate>Fri, 10 Jan 2025 09:00:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/01/make-help.html</guid><description>&lt;p>Make, as arcane as a build tool can be, may still be a good first fit for certain scenarios. &amp;ldquo;Heresy!&amp;rdquo;, you say, as you hear a so-called &amp;ldquo;Bazel expert&amp;rdquo; utter these words.&lt;/p>
-&lt;p>The specific problem I&amp;rsquo;m facing is that I need to glue together &lt;a href="/2024/12/netbsd-build-system.html">the NetBSD build system&lt;/a>, &lt;a href="/2013/11/patch-management-with-quilt.html">a quilt patch set&lt;/a>, EndBASIC&amp;rsquo;s Cargo-based Rust build, and a couple of QEMU invocations to produce a Frankenstein disk image for a Raspberry Pi. And the thing is: Make allows doing this sort of stitching with relative ease. Sure, Make is not the best option because the overall build performance is &amp;ldquo;meh&amp;rdquo; and because incremental builds are almost-impossible to get right&amp;hellip; but adopting Bazel for this project would be an almost-infinite time sink.&lt;/p>
-&lt;p>Anyway. When using Make in this manner, you often end up with what&amp;rsquo;s essentially a &amp;ldquo;command dispatcher&amp;rdquo; and, over time, the number of commands grows and it&amp;rsquo;s hard to make sense of which one to use for what. Sure, you can write a &lt;code>README.md&lt;/code> with instructions, but I guarantee you that the text will get out of sync faster than you can read this article. There is a better way, though.&lt;/p>
-&lt;figure>
-&lt;img src="/images/2025-01-10-make-help.png" />
-&lt;figcaption>Sample output of the &lt;tt>make help&lt;/tt> command that we will implement in this article.&lt;/figcaption>
-&lt;/figure>
-&lt;p>What if we could provide a &lt;code>make help&lt;/code> command that showed an overview of the project&amp;rsquo;s &amp;ldquo;build interface&amp;rdquo;? And what if we could embed such information inside the &lt;code>Makefile&lt;/code>s themselves, close to the entities that they document? This idea is neither new nor mine, and it has been written about before by different people. However, I bet that most of you haven&amp;rsquo;t heard about it before so it&amp;rsquo;s worth for me to repeat it. And I think that my solution is a bit more comprehensive than others I&amp;rsquo;ve found. So here you go.&lt;/p>
-&lt;div class="container action-highlight p-4 my-4 d-md-none">
-&lt;div class="row text-center">
-&lt;p>A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p>
-&lt;/div>
-&lt;div class="row">
-&lt;div class="col">
-&lt;div class="form-group">
-&lt;form action="https://endtracker.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post">
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control input-sm text-center my-1"/>
-&lt;button type="submit" class="btn btn-primary btn-block my-1">Subscribe&lt;/button>
-&lt;/form>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;div class="row px-2">
-&lt;div class="col col-sm-5 text-left">
-&lt;small>&lt;span class="subscriber-count">0&lt;/span> subscribers&lt;/small>
-&lt;/div>
-&lt;div class="col col-sm-7 text-right">
-&lt;p>
-&lt;a rel="me" href="https://mastodon.online/@jmmv">
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon">
-&lt;/a>
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv">
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter">
-&lt;/a>
-&lt;a href="/feed.xml">&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed">&lt;/a>
-&lt;/p>
-&lt;/div>
-&lt;/div>
-&lt;/div>
-&lt;h1 id="targets">Targets&lt;/h1>
-&lt;p>As I mentioned in the introduction, Make is often used as a command dispatcher: with very little code, you can write what essentially are multiple shell scripts with automatic chaining, all wrapped in one single interface. It&amp;rsquo;s all pretty terrible, but people are used to this pattern due to Make&amp;rsquo;s ubiquity and somehow expect it when they face a Make-based project.&lt;/p>
-&lt;p>To implement this command dispatcher idea, each user-facing action is exposed via a &lt;em>target&lt;/em>. These targets tend to be marked as &amp;ldquo;phony&amp;rdquo;&amp;mdash;i.e. they are targets that produce no outputs of their own. Take a look at this &lt;code>Makefile&lt;/code>:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="nf">.PHONY&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">build&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">build&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">target&lt;/span>/&lt;span class="n">debug&lt;/span>/&lt;span class="n">program&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">target/debug/program&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">main&lt;/span>.&lt;span class="n">rs&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">lib&lt;/span>.&lt;span class="n">rs&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> cargo build
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">.PHONY&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">test&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">test&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">build&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> cargo &lt;span class="nb">test&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In the snippet above, the &lt;code>target/debug/program&lt;/code> target represents a built &lt;em>file&lt;/em>. This target depends on a list of sources and specifies what command to run to generate the output when it is missing or out of date (according to file modification times, &lt;a href="/2020/12/google-no-clean-builds.html#file-modification-times">yikes&lt;/a>). When you type &lt;code>make target/debug/program&lt;/code>, you expect the file &lt;code>target/debug/program&lt;/code> to exist on disk after the command completes.&lt;/p>
-&lt;p>But the snippet also shows two phony targets: &lt;code>build&lt;/code> and &lt;code>test&lt;/code>. When you type &lt;code>make build&lt;/code> or &lt;code>make test&lt;/code>, you do not expect neither a &lt;code>build&lt;/code> nor a &lt;code>test&lt;/code> file to be created, no. What you expect is that the project is built and tested. And for this, Make evaluates the dependencies of the phony targets (if any are specified, as is the case for &lt;code>build&lt;/code>) and then unconditionally executes any commands in the phony targets (as is the case for &lt;code>test&lt;/code>).&lt;/p>
-&lt;p>With this in mind, the first thing we want to do in our &lt;code>make help&lt;/code> command is to document these &amp;ldquo;special&amp;rdquo; targets that represent user-facing actions. To do this, we&amp;rsquo;ll leverage one not-well-known aspect of Make&amp;rsquo;s syntax: the list of dependencies of a target is &lt;em>cumulative&lt;/em> across multiple target definitions of the same name. Basically, these target definitions are equivalent:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="c"># All dependencies in one line.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c">&lt;/span>&lt;span class="nf">target/debug/program&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">main&lt;/span>.&lt;span class="n">rs&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">lib&lt;/span>.&lt;span class="n">rs&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c"># Dependencies spread over multiple lines.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c">&lt;/span>&lt;span class="nf">target/debug/program&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">main&lt;/span>.&lt;span class="n">rs&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">target/debug/program&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">lib&lt;/span>.&lt;span class="n">rs&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Knowing this, we can add &amp;ldquo;extra&amp;rdquo; lines for a target and use one of those to document the target so that we do not end up with super-long lines. For example, we can do:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="nf">target/debug/program&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="c"># Builds the program.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c">&lt;/span>&lt;span class="nf">target/debug/program&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">main&lt;/span>.&lt;span class="n">rs&lt;/span> &lt;span class="n">src&lt;/span>/&lt;span class="n">lib&lt;/span>.&lt;span class="n">rs&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>And then we are just one &lt;code>grep&lt;/code> away from extracting the targets and their documentation:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">sed -e&lt;span class="s1">&amp;#39;s/^\([^: ]\+\):.*#\(.*\)$/\1 \2/p;d&amp;#39;&lt;/span> Makefile &lt;span class="p">|&lt;/span> column -t -l &lt;span class="m">2&lt;/span> &lt;span class="p">|&lt;/span> sort
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>OK fine. It&amp;rsquo;s a bit more complicated than just &lt;code>grep&lt;/code> because we have to reformat the lines a bit and we need to create a nicely formatted table. Also, I know the &lt;code>sed&lt;/code> syntax is awful, but I really don&amp;rsquo;t want to call into Perl or Python as other guides tell you just for this silly string manipulation. There are native Unix tools that can help us here, and they are much lighter-weight.&lt;/p>
-&lt;h1 id="variables">Variables&lt;/h1>
-&lt;p>All other &amp;ldquo;self-documenting &lt;code>Makefile&lt;/code>&amp;rdquo; tutorials I found out there focus exclusively on documenting targets. But &lt;code>Makefile&lt;/code>s often expose another dimension of their API, and this is the collection of user-settable configuration variables that they accept.&lt;/p>
-&lt;p>Many &lt;code>Makefile&lt;/code>s do things like:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">CFLAGS&lt;/span> &lt;span class="o">?=&lt;/span> -O2
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&amp;hellip; to indicate that &lt;code>CFLAGS&lt;/code> is set to &lt;code>-O2&lt;/code>. But note: the &lt;code>?=&lt;/code> operator invites users to override the variable&amp;rsquo;s value if they choose to. For example, if the user wanted to build the project in debug mode, they could probably do the following and get the code to build without optimizations and with debug symbols:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ make &lt;span class="nv">CFLAGS&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;-O0 -g&amp;#34;&lt;/span> build
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Given that these variables are user-facing, we should document them as well as part of the &lt;code>make help&lt;/code> output.&lt;/p>
-&lt;p>To document variables, we don&amp;rsquo;t have the luxury of splitting their definition into multiple lines like we did with targets to prevent super-long lines. That said, we can still add comments at the end of the line, like shown below, and those comments won&amp;rsquo;t be part of the variable&amp;rsquo;s default value. It is important, however, to not leave any space between the default value and the comment, or else the spaces become part of the variable&amp;rsquo;s value.&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="nv">DEVELOPER&lt;/span> &lt;span class="o">?=&lt;/span> 0# Set to &lt;span class="m">1&lt;/span> to &lt;span class="nb">enable&lt;/span> developer builds.
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Like with targets, we are also just one &lt;code>grep&lt;/code> away from extracting the variables and their documentation:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="line">&lt;span class="cl">sed -e &lt;span class="s1">&amp;#39;s/^\([^ ]\+\)[ ]*?=[^#]\+#\(.*\)$/\1 \2/p;d&amp;#39;&lt;/span> Makefile &lt;span class="p">|&lt;/span> column -t -l &lt;span class="m">2&lt;/span> &lt;span class="p">|&lt;/span> sort
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Again, more complicated than just a &lt;code>grep&lt;/code>, but you get the idea.&lt;/p>
-&lt;h1 id="putting-it-all-together">Putting it all together&lt;/h1>
-&lt;p>Alright. So now we know how to extract a table documenting targets and a table documenting variables, but these two lists may still be too obscure on their own. Which targets are important? Which variables might the user want to look into first?&lt;/p>
-&lt;p>To address this deficiency, we can preface those tables with some prose that explains, at a very high level, what to do when interacting with the project for the first time. To implement this, we can write the instructions in a separate file (like a &lt;code>README.md&lt;/code>) next to the &lt;code>Makefile&lt;/code>, and then have our &lt;code>make help&lt;/code> command print out the text file&amp;rsquo;s contents.&lt;/p>
-&lt;p>And so without further ado, here is how we can tie everything together:&lt;/p>
-&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-make" data-lang="make">&lt;span class="line">&lt;span class="cl">&lt;span class="nf">.PHONY&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">help&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nf">help&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="c"># Shows interactive help.
-&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c">&lt;/span> @cat README.md
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo &lt;span class="s2">&amp;#34;make variables:&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @sed -e &lt;span class="s1">&amp;#39;s/^\([^ ]\+\)[ ]*?=[^#]\+#\(.*\)$$/\1 \2/p;d&amp;#39;&lt;/span> Makefile &lt;span class="p">|&lt;/span> column -t -l &lt;span class="m">2&lt;/span> &lt;span class="p">|&lt;/span> sort
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo &lt;span class="s2">&amp;#34;make targets:&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @echo
-&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> @sed -e&lt;span class="s1">&amp;#39;s/^\([^: ]\+\):.*#\(.*\)$$/\1 \2/p;d&amp;#39;&lt;/span> Makefile &lt;span class="p">|&lt;/span> column -t -l &lt;span class="m">2&lt;/span> &lt;span class="p">|&lt;/span> sort
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>If you copy/paste this text, beware that there are embedded tabs in it. The ones at the beginning of the line are obvious, but the ones in the &lt;code>[ ]&lt;/code> character classes are not. The latter are supposed to be &lt;code>[ &amp;lt;tab&amp;gt;]&lt;/code>.&lt;/p>
-&lt;p>Now, have fun with this, but please don&amp;rsquo;t use Make for new projects if you can avoid it!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-01-10-make-help.png" length="110230" type="image/jpeg"/></item></channel></rss>
+&lt;p>Stay tuned. In the meantime, what will &lt;em>YOU&lt;/em> build? For those of us in the U.S., there is a 3-day weekend ahead and this can be a good distraction. Have fun!&lt;/p></description><enclosure url="https://jmmv.dev/images/2025-01-17-cover-image.png" length="25978" type="image/jpeg"/></item></channel></rss>
