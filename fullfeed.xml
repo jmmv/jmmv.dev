@@ -1,4 +1,93 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/index.html</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2026 Julio Merino</copyright><lastBuildDate>Mon, 16 Mar 2026 00:00:00 +0000</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Grumpy Julio plays with CLI coding agents</title><link>https://jmmv.dev/2026/02/one-week-with-claude-code.html</link><pubDate>Mon, 09 Feb 2026 09:30:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2026/02/one-week-with-claude-code.html</guid><description>&lt;p&gt;&lt;em&gt;Or the more tired &amp;ldquo;One week with Claude Code&amp;rdquo;-type article.&lt;/em&gt;&lt;/p&gt;
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/index.html</link><description>Recent content on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2026 Julio Merino</copyright><lastBuildDate>Mon, 16 Mar 2026 00:00:00 +0000</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>Reflections on vibecoding ticket.el</title><link>https://jmmv.dev/2026/03/vibecoding-ticket-el.html</link><pubDate>Fri, 06 Mar 2026 08:00:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2026/03/vibecoding-ticket-el.html</guid><description>&lt;p&gt;It has now been a month since &lt;a href="/2026/02/one-week-with-claude-code.html"&gt;I started playing with Claude Code&lt;/a&gt; &amp;ldquo;for real&amp;rdquo; and by now I&amp;rsquo;ve mostly switched to Codex CLI: it is much snappier&amp;mdash;who would imagine that a &amp;ldquo;Rewrite in Rust&amp;rdquo; would make things tangibly faster&amp;mdash;and the answers feel more to-the-point than Claude&amp;rsquo;s to me.&lt;/p&gt;
+&lt;p&gt;As part of this experiment, I decided to go all-in with the crazy idea of vibecoding a project without even looking at the code. The project I embarked on is an Emacs module to wrap a CLI ticket tracking tool designed to be used in conjunction with coding agents. Quite fitting for the journey, I&amp;rsquo;d say.&lt;/p&gt;
+&lt;p&gt;In this article, I&amp;rsquo;d like to present a bunch of reflections on this relatively-simple vibecoding journey. But first, let&amp;rsquo;s look at what the Emacs module does.&lt;/p&gt;
+&lt;div class="container action-highlight p-4 my-4 d-md-none"&gt;
+&lt;div class="row text-center"&gt;
+&lt;p&gt;A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="row"&gt;
+&lt;div class="col"&gt;
+&lt;div class="form-group"&gt;
+&lt;form action="https://endtracker.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post"&gt;
+&lt;input type="text" name="email"
+placeholder="Enter your email"
+class="form-control form-control-sm text-center my-1"/&gt;
+&lt;div class="d-grid my-1"&gt;
+&lt;button type="submit" class="btn btn-primary"&gt;Subscribe&lt;/button&gt;
+&lt;/div&gt;
+&lt;/form&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="row px-2"&gt;
+&lt;div class="col col-sm-5 text-start"&gt;
+&lt;small&gt;&lt;span class="subscriber-count"&gt;0&lt;/span&gt; subscribers&lt;/small&gt;
+&lt;/div&gt;
+&lt;div class="col col-sm-7 text-end"&gt;
+&lt;p&gt;
+&lt;a rel="me" href="https://mastodon.online/@jmmv"&gt;
+&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon"&gt;
+&lt;/a&gt;
+&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv"&gt;
+&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter"&gt;
+&lt;/a&gt;
+&lt;a href="/feed.xml"&gt;&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed"&gt;&lt;/a&gt;
+&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;h1 id="background"&gt;Background&lt;/h1&gt;
+&lt;p&gt;CLI-based ticket tracking seems to be a necessity to support driving multiple agents at once, for long periods of time, and to execute complex tasks. A bunch of tools have shown up to track tickets via Markdown files in a way that the agents can interact with.&lt;/p&gt;
+&lt;p&gt;The prime example is &lt;a href="https://steve-yegge.medium.com/introducing-beads-a-coding-agent-memory-system-637d7d92514a"&gt;Beads by Steve Yegge&lt;/a&gt;. I would have used it if I hadn&amp;rsquo;t read otherwise, but then the article &lt;a href="https://www.jtolio.com/2026/01/tinyemu-go/"&gt;&amp;ldquo;A &amp;lsquo;Pure Go&amp;rsquo; Linux environment, ported by Claude, inspired by Fabrice Bellard&amp;rdquo;&lt;/a&gt; showed up and it contained this gem, paraphrased by yours truly:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Beads is a 300k SLOC vibecoded monster backed by a 128MB Git repository, sporting a background daemon, and it is sluggish enough to increase development latency&amp;hellip; all to manage a bunch of Markdown files.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Like, WTH. The article went on to suggest &lt;a href="https://github.com/wedow/ticket"&gt;Ticket (tk)&lt;/a&gt; instead: a pure shell implementation of a task tracking tool backed by Markdown files stored in a &lt;code&gt;.tickets/&lt;/code&gt; directory in your repo. This sort of simple tool is my jam and I knew I could start using it right away to replace the ad-hoc &lt;code&gt;TODO&lt;/code&gt; text files I typically write. Once I installed the tool and &lt;a href="https://github.com/NixOS/nixpkgs/pull/487500"&gt;created a nixpkgs package for it&lt;/a&gt;&amp;mdash;which still requires approval, wink wink&amp;mdash;I got to creating a few tickets.&lt;/p&gt;
+&lt;h1 id="welcome-to-ticketel"&gt;Welcome to ticket.el&lt;/h1&gt;
+&lt;p&gt;As I started using Ticket more and more to keep a local backlog for my EndBASIC compiler and VM rewrite, I started longing for some sort of integration in Doom Emacs. I could edit the Markdown files produced by &lt;code&gt;tk create&lt;/code&gt; just fine, of course, but I wanted the ability to find them with ease and to create new tickets right from the editor.&lt;/p&gt;
+&lt;p&gt;Normally, I would have discarded this idea because I don&amp;rsquo;t know Elisp. However, it quickly hit me: &amp;ldquo;I can surely ask Claude to write this Emacs module for me&amp;rdquo;. As it turns out, I could, and within a few minutes I had a barebones module that gave me rudimentary ticket creation and navigation features within Emacs. I didn&amp;rsquo;t even look at the code, so I continued down the path of refining the module via prompts to fix every bug I found and implement every new idea I had.&lt;/p&gt;
+&lt;p&gt;By now, &lt;code&gt;ticket.el&lt;/code&gt; works reasonably well and fulfills a real need I had, so I&amp;rsquo;m pretty happy &lt;em&gt;with the result&lt;/em&gt;. If you care to look, the nicest thing you&amp;rsquo;ll find is a tree-based interactive browser that shows dependencies and offers shortcuts to quickly manipulate tickets. &lt;code&gt;tk&lt;/code&gt; doesn&amp;rsquo;t offer these features, so these are all implemented in Elisp by parsing the tickets&amp;rsquo; front matter and implementing graph building and navigation algorithms. After all, Elisp is a much more powerful language than the shell, so this was easier than modifying &lt;code&gt;tk&lt;/code&gt; itself.&lt;/p&gt;
+&lt;figure&gt;
+&lt;video width="100%" controls&gt;
+&lt;source src="/images/2026-03-06-ticket.el-demo.mp4" type="video/mp4"&gt;
+&lt;/video&gt;
+&lt;figcaption&gt;Demo of the &lt;tt&gt;ticket.el&lt;/tt&gt; hierarchical ticket browser.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;Should you want to try this out, visit &lt;a href="https://github.com/jmmv/ticket.el"&gt;&lt;code&gt;jmmv/ticket.el&lt;/code&gt;&lt;/a&gt; on GitHub for instructions on how to install this plugin and to learn how to use it. I can&amp;rsquo;t promise it will function on anything but Doom Emacs even if the vibewritten &lt;code&gt;README&lt;/code&gt; claims that it does, but if it doesn&amp;rsquo;t, feel free to send a PR.&lt;/p&gt;
+&lt;h1 id="reflections"&gt;Reflections&lt;/h1&gt;
+&lt;p&gt;Alright, so it&amp;rsquo;s time for those reflections I promised.&lt;/p&gt;
+&lt;h2 id="does-the-project-work"&gt;Does the project work?&lt;/h2&gt;
+&lt;p&gt;Well, yes! It took more-or-less prodding to convince the AI that certain features it implemented didn&amp;rsquo;t work, but with little effort in additional prompts, I was able to fix them in minutes.&lt;/p&gt;
+&lt;p&gt;A big part of why the AI failed to come up with fully working solutions upfront was that I did not set up an end-to-end feedback cycle for the agent. If you take the time to do this and tell the AI what exactly it must satisfy before claiming that a task is &amp;ldquo;done&amp;rdquo;, it can generally one-shot changes. But I didn&amp;rsquo;t do that here.&lt;/p&gt;
+&lt;p&gt;At some point I asked the agent to write unit tests, and it did that, but those seem to be insufficient to catch &amp;ldquo;real world&amp;rdquo; Emacs behavior because even if the tests pass, I still find that features are broken when trying to use them. And for the most part, the failures I&amp;rsquo;ve observed have always been about wiring shortcuts, not about bugs in program logic. I think I&amp;rsquo;ve only come across &lt;em&gt;one&lt;/em&gt; case in which parentheses were unbalanced.&lt;/p&gt;
+&lt;h2 id="would-i-have-built-this-without-ai"&gt;Would I have built this without AI?&lt;/h2&gt;
+&lt;p&gt;Certainly not. While learning Lisp and Elisp has been in my backlog for &lt;em&gt;years&lt;/em&gt; and I&amp;rsquo;d love to learn more about these languages, I just don&amp;rsquo;t have the time nor sufficient interest to do so. Furthermore, without those foundations already in place, I would just not have been able to create this at all.&lt;/p&gt;
+&lt;p&gt;AI agents allowed me to prototype this idea &lt;em&gt;trivially&lt;/em&gt;, for literal pennies, and now I have something that I can &lt;em&gt;use&lt;/em&gt; day to day. It&amp;rsquo;s quite rewarding in that sense: I&amp;rsquo;ve scratched my own itch with little effort and without making a big deal out of it.&lt;/p&gt;
+&lt;h2 id="do-i-feel-proud-about-the-project"&gt;Do I feel proud about the project?&lt;/h2&gt;
+&lt;p&gt;Nope. Even though I just said that getting the project to work was rewarding, I can&amp;rsquo;t &lt;em&gt;feel&lt;/em&gt; proud about it. I don&amp;rsquo;t have any connection to what I have made and published, so if it works, great, and if it doesn&amp;rsquo;t&amp;hellip; well, too bad.&lt;/p&gt;
+&lt;p&gt;This is&amp;hellip; not a good feeling. I actually enjoy the process of coding probably more than getting to a finished product. I like paying attention to the details because coding feels like art to me, and there is beauty in navigating the thinking process to find a clean and elegant solution. Unfortunately, AI agents pretty much strip this journey out completely. At the end of the day, I have something that I can use, though I don&amp;rsquo;t feel it is mine.&lt;/p&gt;
+&lt;h2 id="did-this-free-up-my-time"&gt;Did this free up my time?&lt;/h2&gt;
+&lt;p&gt;Not really, and supports why people keep bringing up the &lt;a href="https://en.wikipedia.org/wiki/Jevons_paradox"&gt;Jevons paradox&lt;/a&gt;. Yes, I did prompt the agent to write this code for me but I did not just wait idly while it was working: I spent the time doing &lt;em&gt;something else&lt;/em&gt;, so in a sense my productivity increased because I delivered an extra new thing that I would have not done otherwise.&lt;/p&gt;
+&lt;p&gt;One interesting insight is that I did not require extended blocks of free focus time&amp;mdash;which are hard to come by with kids around&amp;mdash;to make progress. I could easily prompt the AI in a few minutes of spare time, test out the results, and iterate. In the past, if I ever wanted to get this done, I&amp;rsquo;d have needed to make the expensive choice of using my little free time on this at the expense of other ideas&amp;hellip; but here, the agent did everything for me in the background.&lt;/p&gt;
+&lt;h2 id="did-i-learn-anything-in-doing-this"&gt;Did I learn anything in doing this?&lt;/h2&gt;
+&lt;p&gt;Other than how to better prompt the AI and the sort of failures to routinely expect? No.&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;m as clueless as ever about Elisp. If you were to ask me to write a new Emacs module today, I would have to rely on AI to do so again: I wouldn&amp;rsquo;t be able to tell you how long it might take me to get it done nor whether I would succeed at it. And if the agent got stuck and was unable to implement the idea, I would be lost.&lt;/p&gt;
+&lt;p&gt;This is a very different feeling from other tasks I&amp;rsquo;ve &amp;ldquo;mastered&amp;rdquo;. If you ask me to write a CLI tool or to debug a certain kind of bug, I &lt;em&gt;know&lt;/em&gt; I&amp;rsquo;ll succeed and have a pretty good intuition on how long the task is going to take me. But by working with AI on a new domain&amp;hellip; I just don&amp;rsquo;t, and I don&amp;rsquo;t see how I could build that intuition. This is uncomfortable and dangerous. You can try asking the agent to give you an estimate, and it will, but funnily enough the estimate will be in &amp;ldquo;human time&amp;rdquo; so it won&amp;rsquo;t have any meaning. And when you try working on the problem, the agent&amp;rsquo;s stochastic behavior could lead you to a super-quick win or to a dead end that never converges on a solution.&lt;/p&gt;
+&lt;h2 id="is-the-code-slop"&gt;Is the code slop?&lt;/h2&gt;
+&lt;p&gt;Of course it is. Regardless, I just don&amp;rsquo;t care &lt;em&gt;in this specific case&lt;/em&gt;. This is a project I started to play with AI and to solve a specific problem I had. The solution works and it works sufficiently well that I just don&amp;rsquo;t care how it&amp;rsquo;s done: after all, I&amp;rsquo;m not going to turn this Emacs module into &amp;ldquo;my next big thing&amp;rdquo;.&lt;/p&gt;
+&lt;p&gt;The fact that I put the code as open source on GitHub is because it helps &lt;em&gt;me&lt;/em&gt; install this plugin across all machines in which I run Doom Emacs, not because I expect to build a community around it or anything like that. If you care about using the code after reading this text and you are happy with it, that&amp;rsquo;s great, but that&amp;rsquo;s just a plus.&lt;/p&gt;
+&lt;h2 id="what-about-bloat"&gt;What about bloat?&lt;/h2&gt;
+&lt;p&gt;I opened the article ranting about Beads&amp;rsquo; 300K SLOC codebase, and &amp;ldquo;bloat&amp;rdquo; is maybe the biggest concern I have with pure vibecoding. From my limited experience, coding agents tend to take the path of least resistance to adding new features, and most of the time this results in duplicating code left and right.&lt;/p&gt;
+&lt;p&gt;Coding agents rarely think about introducing new abstractions to avoid duplication, or even to move common code into auxiliary functions. They&amp;rsquo;ll do great if you &lt;em&gt;tell them&lt;/em&gt; to make these changes&amp;mdash;and profoundly confirm that the refactor is a great idea&amp;mdash;but you must look at their changes and think through them to know what to ask. You may not be typing code, but you are still coding in a higher-level sense.&lt;/p&gt;
+&lt;p&gt;But left unattended, you&amp;rsquo;ll end up with vast amounts of duplication: aka bloat. I fear we are about to see an explosion of slow software like we have never imagined before. And there is also the cynical take: the more bloat there is in the code, the more context and tokens agents need to understand it, so the more you have to pay their providers to keep up with the project.&lt;/p&gt;
+&lt;h2 id="whats-the-meaning-for-open-software"&gt;What&amp;rsquo;s the meaning for open software?&lt;/h2&gt;
+&lt;p&gt;And speaking of open source&amp;hellip; we must ponder what this sort of coding process means in this context. I&amp;rsquo;m worried that vibecoding can lead to a new type of abuse of open source that is hard to imagine: yes, yes, &lt;em&gt;training&lt;/em&gt; the AI models has already been done by abusing open source, but that&amp;rsquo;s nothing compared to what might come in terms of taking over existing projects or drowning them with poor contributions.&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;m starting to question my preference for BSD-style licenses all along&amp;hellip; and this is such an interesting and important topic that I have more to say, but I&amp;rsquo;m going to save those thoughts for the next article.&lt;/p&gt;
+&lt;h1 id="conclusion"&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;Vibecoding &lt;code&gt;ticket.el&lt;/code&gt; has been an interesting experiment. I got exactly what I wanted with almost no effort but it all feels hollow. I&amp;rsquo;ve traded the joy of building for the speed of prompting, and while the result is useful, it&amp;rsquo;s still just &amp;ldquo;slop&amp;rdquo; to me. I&amp;rsquo;m glad it works, but I&amp;rsquo;m worried about what this means for the future of software.&lt;/p&gt;
+&lt;p&gt;Visit &lt;a href="https://github.com/wedow/ticket"&gt;ticket&lt;/a&gt; and &lt;a href="https://github.com/jmmv/ticket.el"&gt;ticket.el&lt;/a&gt; to play with these tools if you are curious or need some sort of lightweight ticket management system for your AI interactions.&lt;/p&gt;</description><enclosure url="https://jmmv.dev/images/2026-03-06-ticket.el.png" length="84434" type="image/jpeg"/></item><item><title>Grumpy Julio plays with CLI coding agents</title><link>https://jmmv.dev/2026/02/one-week-with-claude-code.html</link><pubDate>Mon, 09 Feb 2026 09:30:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2026/02/one-week-with-claude-code.html</guid><description>&lt;p&gt;&lt;em&gt;Or the more tired &amp;ldquo;One week with Claude Code&amp;rdquo;-type article.&lt;/em&gt;&lt;/p&gt;
 &lt;p&gt;It&amp;rsquo;s no secret that I&amp;rsquo;ve been grumpy about the new AI-based coding trend. I&amp;rsquo;ve been grumpy about the &amp;ldquo;push from above to use AI or else&amp;rdquo;. I&amp;rsquo;ve been grumpy about the eye-rolling hype I see on LinkedIn. I&amp;rsquo;ve been grumpy about being on the receiving end of vibe-coded PRs that over-engineer solutions to simple problems. I&amp;rsquo;ve been grumpy about the thought that we are about to see an amount of bloat like we have never imagined before.&lt;/p&gt;
 &lt;p&gt;But, at the same time, I&amp;rsquo;ve been using LLMs to review my articles, to perform deep research, to generate cover pictures, and before last week, I had even dipped my toes into AI-based coding agents to help me with boring, repetitive tasks. And you know what? I see their promise of increased productivity, yet the amounts of slop I&amp;rsquo;ve witnessed make me skeptical and I have had little experience with coding agents myself to judge their promised usefulness.&lt;/p&gt;
 &lt;p&gt;So&amp;hellip; surprise! Last weekend I decided to start a Claude Code subscription and, after spending a week on it, I am uncomfortably excited to use it more. How has this happened? Let&amp;rsquo;s take a look at how I ended here, the kinds of mini-projects I worked on throughout this past week, and the (semi-expected) downsides I encountered.&lt;/p&gt;
@@ -1979,225 +2068,4 @@ class="form-control form-control-sm text-center my-1"/&gt;
 &lt;/figure&gt;
 &lt;p&gt;And finally, the crown jewel. This is the official article published just yesterday where I present the 2-year journey of our migration. In it, I explain the challanges that we faced with our C++ and Java codebases specifically, the choices behind our use of remote execution, and the path we took to production. I conclude with a glimpse on what lies ahead of us.&lt;/p&gt;
 &lt;hr&gt;
-&lt;p&gt;That&amp;rsquo;s all for today. I promised it would be short :)&lt;/p&gt;</description><enclosure url="https://jmmv.dev/images/2025-03-14-bazel-at-snowflake-cover.jpg" length="792369" type="image/jpeg"/></item><item><title>Hardware discovery: ACPI &amp; Device Tree</title><link>https://jmmv.dev/2025/02/hardware-autoconfiguration.html</link><pubDate>Fri, 28 Feb 2025 16:15:00 -0800</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/02/hardware-autoconfiguration.html</guid><description>&lt;p&gt;If you grew up in the PC scene during the 1980s or early 1990s, you know how painful it was to get hardware to work. And if you did not witness that (lucky you) here is how it went: every piece of hardware in your PC&amp;mdash;say a sound card or a network card&amp;mdash;had physical switches or jumpers in it. These switches configured the card&amp;rsquo;s I/O address space, interrupts, and DMA ports, and you had to be careful to select values that did not overlap with other cards.&lt;/p&gt;
-&lt;p&gt;But that wasn&amp;rsquo;t all. Once you had configured the physical switches, you had to tell the operating system and/or software &lt;em&gt;which&lt;/em&gt; specific cards you had and how you had configured them. Remember &lt;code&gt;SET BLASTER=A220 I5 D1 H5&lt;/code&gt;? This DOS environment variable told programs which specific Sound Blaster you had installed and which I/O settings you had selected via its jumpers.&lt;/p&gt;
-&lt;p&gt;Not really fun. It was common to have hardware conflicts that yielded random lock-ups, and thus &lt;a href="https://wiki.osdev.org/ISA"&gt;ISA &amp;ldquo;Plug and Play&amp;rdquo;&lt;/a&gt;, or PnP for short, was born in the early 1990s&amp;mdash;a protocol for the legacy ISA bus to enumerate its devices and to configure their settings via software. Fast-forward to today&amp;rsquo;s scene where we just attach devices to external USB connectors and things &amp;ldquo;magically work&amp;rdquo;.&lt;/p&gt;
-&lt;p&gt;But how? How does the kernel know which physical devices exist and how does it know which of the many device drivers it contains can handle each device? Enter the world of hardware discovery.&lt;/p&gt;
-&lt;div class="container action-highlight p-4 my-4 d-md-none"&gt;
-&lt;div class="row text-center"&gt;
-&lt;p&gt;A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class="row"&gt;
-&lt;div class="col"&gt;
-&lt;div class="form-group"&gt;
-&lt;form action="https://endtracker.jmmv.dev/api/sites/e8da9f62-b7ac-4fe9-bf20-7c527199a376/subscribers/add" method="post"&gt;
-&lt;input type="text" name="email"
-placeholder="Enter your email"
-class="form-control form-control-sm text-center my-1"/&gt;
-&lt;div class="d-grid my-1"&gt;
-&lt;button type="submit" class="btn btn-primary"&gt;Subscribe&lt;/button&gt;
-&lt;/div&gt;
-&lt;/form&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class="row px-2"&gt;
-&lt;div class="col col-sm-5 text-start"&gt;
-&lt;small&gt;&lt;span class="subscriber-count"&gt;0&lt;/span&gt; subscribers&lt;/small&gt;
-&lt;/div&gt;
-&lt;div class="col col-sm-7 text-end"&gt;
-&lt;p&gt;
-&lt;a rel="me" href="https://mastodon.online/@jmmv"&gt;
-&lt;img src="/images/badges/mastodon-logo.svg" width="32px" height="32px" alt="Follow @jmmv on Mastodon"&gt;
-&lt;/a&gt;
-&lt;a href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;amp;screen_name=jmmv"&gt;
-&lt;img src="/images/badges/Twitter_logo_blue.svg" width="32px" height="32px" alt="Follow @jmmv on Twitter"&gt;
-&lt;/a&gt;
-&lt;a href="/feed.xml"&gt;&lt;img src="/images/badges/feed-icon-28x28.png" alt="RSS feed"&gt;&lt;/a&gt;
-&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;h1 id="hardware-topology"&gt;Hardware topology&lt;/h1&gt;
-&lt;p&gt;When you learn about the &lt;a href="https://en.wikipedia.org/wiki/Von_Neumann_architecture"&gt;Von Neumann architecture&lt;/a&gt; in school, you are typically told that there is a CPU, a chunk of memory, and&amp;hellip; &amp;ldquo;I/O devices&amp;rdquo;. The CPU and memory portions are where all the focus is put and the I/O devices portion is always &amp;ldquo;left to the reader&amp;rdquo;. However, there is &lt;em&gt;a lot&lt;/em&gt; of stuff happening in that nebulous cloud.&lt;/p&gt;
-&lt;p&gt;The first question that arises is: what&amp;rsquo;s in that I/O cloud? Well, take a look:&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-02-28-w2k-device-manager.png" /&gt;
-&lt;figcaption&gt;The Windows 2000 Device Manager showing the devices by their connection, not by their type. I've chosen to show you this configuration of a virtual machine instead of what a current Windows 11 system shows because the older view is simpler to digest.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;Whoa, that&amp;rsquo;s a lot of stuff, but we can classify the items in the &amp;ldquo;nebulous cloud of I/O devices&amp;rdquo; into two categories:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;The devices themselves, obviously.&lt;/li&gt;
-&lt;li&gt;The busses that connect those devices to the CPU.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Both are important: you might have a fancy keyboard with extra keys that requires a special driver, and this keyboard might come in PS/2 and USB versions. The driver for the keyboard may be the same for each version, but the &amp;ldquo;glue&amp;rdquo; that attaches this keyboard to either bus is different, and the way the kernel can tell whether the keyboard is attached to one port or another also differs.&lt;/p&gt;
-&lt;p&gt;So how does the kernel know how to find hardware without tons of repeated code for every bus, you ask? It does so via its knowledge of the hardware topology. Just above, I showed you Windows&amp;rsquo; view of this, but for the rest of this article, I&amp;rsquo;ll use the BSD internals (and NetBSD specifically) because that&amp;rsquo;s what I know best. Don&amp;rsquo;t let that put you off though: all kernels have to do something similar and the differences among them are likely not meaningful.&lt;/p&gt;
-&lt;p&gt;Here is a little snippet of the &lt;a href="https://github.com/NetBSD/src/blob/a6998e32a89571344dc476036a4af47672d183f0/sys/arch/amd64/conf/GENERIC"&gt;default NetBSD kernel configuration file for the amd64 platform&lt;/a&gt;. This snippet lays out the topology of serial ports in the PC and the busses in which they may appear:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;pci* at mainbus? bus ?
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;pcib* at pci? dev ? function ?
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;puc* at pci? dev ? function ?
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;com* at puc? port ?
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;isa0 at mainbus?
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;isa0 at pcib?
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;com0 at isa? port 0x3f8 irq 4
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;com1 at isa? port 0x2f8 irq 3
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;acpi0 at mainbus0
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;com* at acpi?
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Daunting if you have never seen anything like this, I know, but let me translate this to a diagram:&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-02-28-com-device-tree.png" /&gt;
-&lt;figcaption&gt;Representation of how the &lt;tt&gt;com&lt;/tt&gt; device is expected to appear under various busses according to the kernel configuration file.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;Much clearer in picture form, right? What this chunk of configuration does is tell the kernel the places where the &lt;code&gt;com&lt;/code&gt; driver can find serial ports. We have a chunk that says that &lt;code&gt;com0&lt;/code&gt; and &lt;code&gt;com1&lt;/code&gt; can appear on the ISA bus at &lt;em&gt;specific&lt;/em&gt; I/O addresses and interrupts, and in turn that the ISA bus may be a directly-addressable physical bus (&lt;code&gt;isa0 at mainbus?&lt;/code&gt;) and/or an ISA bus exposed via a PCI bridge (&lt;code&gt;isa0 at pcib?&lt;/code&gt;). Then, we have additional entries telling us that the serial ports can also be configured via ACPI (&lt;code&gt;com* at acpi?&lt;/code&gt;), and that the serial ports may exist on expansion cards (&lt;code&gt;com* at puc?&lt;/code&gt;) providing communication ports via the PCI bus (&lt;code&gt;puc* at pci?&lt;/code&gt;).&lt;/p&gt;
-&lt;p&gt;The problem is: the kernel configuration tells us &lt;em&gt;what may exist&lt;/em&gt;, not &lt;em&gt;what actually exists&lt;/em&gt; on a machine. In a sense, the configuration file &amp;ldquo;wires&amp;rdquo; the code of the device drivers like &lt;code&gt;com&lt;/code&gt; so that they can find devices that appear under the &lt;code&gt;isa&lt;/code&gt;, &lt;code&gt;pci&lt;/code&gt;, or &lt;code&gt;acpi&lt;/code&gt; busses. But the kernel must still, at runtime, check and see where the devices actually are. How does that happen?&lt;/p&gt;
-&lt;h1 id="hardware-auto-configuration"&gt;Hardware auto-configuration&lt;/h1&gt;
-&lt;p&gt;To answer the question of how the kernel discovers which hardware is present and where it is, let&amp;rsquo;s dissect NetBSD&amp;rsquo;s &lt;a href="https://man.netbsd.org/autoconf.9"&gt;autoconf(9)&lt;/a&gt; manual page:&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;Autoconfiguration is the process of matching hardware devices with an appropriate device driver. In its most basic form, autoconfiguration consists of the recursive process of finding and attaching all devices on a bus, including other busses.&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;From this paragraph, we can extract the following: the kernel contains a collection of device drivers (like the &lt;code&gt;com&lt;/code&gt; presented earlier). Device drivers are just code that knows how to interact with specific devices, but the &amp;ldquo;location&amp;rdquo; of these devices in the hardware topology may vary (the &amp;ldquo;bindings&amp;rdquo; to &lt;code&gt;isa&lt;/code&gt;, &lt;code&gt;puc&lt;/code&gt;, and &lt;code&gt;acpi&lt;/code&gt; in the earlier example). Moving on:&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;The autoconfiguration framework supports direct configuration where the bus driver can determine the devices present. The autoconfiguration framework also supports indirect configuration where the drivers must probe the bus looking for the presence of a device. Direct configuration is preferred since it can find hardware regardless of the presence of proper drivers.&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;Direct and indirect configuration. Hmm. This sounds like the PnP story, and it kinda does. See, pay close attention to these two lines from the earlier snippet:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;com0 at isa? port 0x3f8 irq 4
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;com1 at isa? port 0x2f8 irq 3
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;These are the BSD equivalent of the &lt;code&gt;SET BLASTER=A220 I5 D1 H5&lt;/code&gt; command for DOS I mentioned in the introduction: they tell the kernel which precise addresses and interrupts to use for the two standard PC serial ports &lt;em&gt;if an ISA bus is present&lt;/em&gt;.&lt;/p&gt;
-&lt;p&gt;But what about &lt;code&gt;com* at puc?&lt;/code&gt; and &lt;code&gt;com* at acpi?&lt;/code&gt;? These lines are neat because they do &lt;em&gt;not&lt;/em&gt; tell us, in advance, where to find the serial ports: we expect the kernel to discover those details at runtime so that we don&amp;rsquo;t have to recompile the kernel when the hardware changes. But even if these two look similar, they are quite different: the &lt;code&gt;com* at puc?&lt;/code&gt; is an indirect configuration entry: the &lt;code&gt;puc&lt;/code&gt; driver will have to probe the PCI bus for the presence of a communications card and, if one exists, tell the &lt;code&gt;com&lt;/code&gt; driver that it can attach to it. On the other hand, the &lt;code&gt;com* at acpi?&lt;/code&gt; entry is direct: the kernel will read the ACPI configuration (a static table) to know where the ports are and then use those details to configure the &lt;code&gt;com&lt;/code&gt; driver.&lt;/p&gt;
-&lt;p&gt;Alright, so this raises &lt;em&gt;another&lt;/em&gt; question. What &lt;em&gt;is&lt;/em&gt; ACPI?&lt;/p&gt;
-&lt;h1 id="acpi"&gt;ACPI&lt;/h1&gt;
-&lt;p&gt;ACPI, despite being declared with &lt;code&gt;acpi0 at mainbus0&lt;/code&gt; in a form similar to &lt;code&gt;isa0 at mainbus?&lt;/code&gt;, is &lt;em&gt;not&lt;/em&gt; a bus: ACPI does not physically connect devices to one another. To understand what ACPI does, we can start by realizing that it stands for &lt;a href="https://en.wikipedia.org/wiki/ACPI"&gt;Advanced Configuration and Power Interface&lt;/a&gt; and then, quoting the Wikipedia article:&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;Advanced Configuration and Power Interface (ACPI) is an open standard that operating systems can use to discover and configure computer hardware components, to perform power management (e.g. putting unused hardware components to sleep), auto configuration (e.g. Plug and Play and hot swapping), and status monitoring.&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;ACPI is about configuration, and the kernel uses the ACPI tables, present in any modern PC, to find where devices are. To illustrate how this works, let&amp;rsquo;s look at the &lt;code&gt;com* at acpi?&lt;/code&gt; line. This line says that the serial port can be configured via ACPI if ACPI happens to have an entry for it. And you know, we can peek into the ACPI tables of a running machine to see what that might be:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# acpidump -dt | grep -A15 COM1
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;Device (COM1)
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;{
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; Name (_HID, EisaId (&amp;#34;PNP0501&amp;#34;) /* 16550A-compatible COM Serial Port */) // _HID: Hardware ID
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; Name (_UID, One) // _UID: Unique ID
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; Name (_CRS, ResourceTemplate () // _CRS: Current Resource Settings
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; {
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; IO (Decode16,
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; 0x03F8, // Range Minimum
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; 0x03F8, // Range Maximum
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; 0x01, // Alignment
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; 0x08, // Length
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; )
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; IRQNoFlags ()
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; {4}
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; })
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;}
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# █
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;em&gt;(Pro-tip: you can use &lt;code&gt;acpidump&lt;/code&gt; to extract the Windows license key bound to your machine, if any. I&amp;rsquo;ve needed to do this in the past to install Windows in a VM after replacing the host OS with FreeBSD.)&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;Voila. The ACPI tables provided by the system tell us a similar story to what the explicit &lt;code&gt;com0 at isa?&lt;/code&gt; entry did (and no surprise here because this is a legacy device): there is a serial port at base address 0x3f8 that uses interrupt 4. But also, this table tells us the hardware identifier for this entry: &lt;code&gt;PNP0501&lt;/code&gt;. Grepping through the NetBSD kernel code base for this identifier, we land on the &lt;a href="https://github.com/NetBSD/src/blob/caa9bad5633244c08bb86b00eab45f3d92882415/sys/dev/acpi/com_acpi.c#L60"&gt;&lt;code&gt;dev/acpi/com_acpi.c&lt;/code&gt;&lt;/a&gt; file:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-c" data-lang="c"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;device_compatible_entry&lt;/span&gt; &lt;span class="n"&gt;compat_data&lt;/span&gt;&lt;span class="p"&gt;[]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; &lt;span class="c1"&gt;// ...
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="c1"&gt;&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; &lt;span class="cm"&gt;/* 16550A-compatible COM port */&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;compat&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s"&gt;&amp;#34;PNP0501&amp;#34;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;value&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;COM_TYPE_NORMAL&lt;/span&gt; &lt;span class="p"&gt;},&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; &lt;span class="c1"&gt;// ...
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="c1"&gt;&lt;/span&gt;&lt;span class="p"&gt;};&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;em&gt;(Another pro-tip: master &lt;a href="https://github.com/BurntSushi/ripgrep"&gt;ripgrep&lt;/a&gt;. Knowing how to find a needle in the haystack of a large code base will grant you super-powers among your coworkers. Being able to pinpoint where specifically to start an investigation based on a &amp;ldquo;random-looking&amp;rdquo; string is invaluable.)&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;Aha! This &lt;code&gt;com_acpi.c&lt;/code&gt; file provides the necessary glue to direct the generic serial port &lt;code&gt;com&lt;/code&gt; driver to the hardware via whatever the ACPI tables prescribe. From here, the kernel can proceed to &lt;em&gt;attach&lt;/em&gt; the driver to the device and connect the dots between the user-space &lt;code&gt;/dev/ttyS0&lt;/code&gt; interface to the physical serial port.&lt;/p&gt;
-&lt;h1 id="device-tree"&gt;Device Tree&lt;/h1&gt;
-&lt;p&gt;In the world of embedded devices powered by SOCs&amp;mdash;&amp;quot;&lt;a href="https://en.wikipedia.org/wiki/System_on_a_chip"&gt;System on a Chip&lt;/a&gt;&amp;quot;, a term that describes single chips that provide all functions to build a computer, ranging from the CPU to sound and network cards&amp;mdash;we don&amp;rsquo;t have ACPI tables. What we used to have instead was explicit code &lt;em&gt;for every board/chip combination&lt;/em&gt; that knew how to address the hardware in each SOC. Linux used to be a mess of half-baked and abandoned forks, each supporting a different board without hopes of unification into mainline due to the lack of generic interfaces.&lt;/p&gt;
-&lt;p&gt;The &lt;a href="https://www.devicetree.org/"&gt;Device Tree&lt;/a&gt; specification fixed this issue for the most part for architectures like aarch64. With Device Tree, each hardware or OS vendor provides a static table that describes the layout of a board&amp;rsquo;s hardware separately from the code of the kernel. Then, the kernel peeks into this table to know which devices exist and where they are in the machine layout, much like it does with ACPI.&lt;/p&gt;
-&lt;p&gt;A big difference with ACPI, however, is that the kernel cannot query the Device Tree from the hardware because&amp;hellip; well, the Device Tree is external to the hardware. The kernel expects the Device Tree to &amp;ldquo;exist in memory&amp;rdquo; either because the kernel image &lt;em&gt;embeds&lt;/em&gt; the Device Tree for the target board or because the boot loader loads the Device Tree from disk and passes it to the kernel.&lt;/p&gt;
-&lt;p&gt;Once the kernel has the Device Tree though, the hardware discovery process is similar to the one in ACPI: the kernel scans the Device Tree and looks for drivers that can attach to device nodes based on hardware identifiers. From the perspective of the kernel configuration, things look very similar between amd64 and aarch64. See this snippet from the &lt;a href="https://github.com/NetBSD/src/blob/a6998e32a89571344dc476036a4af47672d183f0/sys/arch/evbarm/conf/GENERIC64"&gt;generic kernel of the evbarm port&lt;/a&gt;:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;armfdt0 at root
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;simplebus* at fdt? pass 0
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;com* at fdt? pass 4
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;This configuration snippet tells the aarch64 kernel that a &lt;code&gt;com&lt;/code&gt; device may appear on &lt;code&gt;fdt&lt;/code&gt;, which stands for &amp;ldquo;Flat Device Tree&amp;rdquo;. In turn, &lt;code&gt;armfdt0 at root&lt;/code&gt; says that there is a specific driver named &lt;code&gt;armfdt0&lt;/code&gt; that provides access to the &lt;code&gt;fdt&lt;/code&gt; loaded by the boot loader on an ARM machine.&lt;/p&gt;
-&lt;p&gt;We can inspect the Device Tree from the command line as the Device Tree is exposed via the same interface that OpenFirmware used due to its historical roots. For example, to fetch the portion of the Device Tree for the serial port on an aarch64 machine:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-shell" data-lang="shell"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="c1"&gt;# ofctl serial1&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="o"&gt;[&lt;/span&gt;Caching &lt;span class="m"&gt;121&lt;/span&gt; nodes and &lt;span class="m"&gt;781&lt;/span&gt; properties&lt;span class="o"&gt;]&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;clocks 0000000e &lt;span class="m"&gt;00000000&lt;/span&gt; ........ ........ ........
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;compatible 6272636d 2c62636d &lt;span class="m"&gt;32383335&lt;/span&gt; 2d617578 &lt;span class="s2"&gt;&amp;#34;brcm,bcm2835-aux
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s2"&gt; 0010: 2d756172 7400.... ........ ........ -uart&amp;#34;&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;interrupts &lt;span class="m"&gt;00000001&lt;/span&gt; 0000001d ........ ........ ........
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;name &lt;span class="m"&gt;73657269&lt;/span&gt; 616c00.. ........ ........ &lt;span class="s2"&gt;&amp;#34;serial&amp;#34;&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;phandle 0000004c ........ ........ ........ ...L
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;pinctrl-0 0000000f ........ ........ ........ ....
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;pinctrl-names &lt;span class="m"&gt;64656661&lt;/span&gt; 756c7400 ........ ........ default.
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;reg 7e215040 &lt;span class="m"&gt;00000040&lt;/span&gt; ........ ........ ~!P@...@
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;status 6f6b6179 00...... ........ ........ okay.
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="c1"&gt;# █&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;A binary dump. OK, fine, we can intuit &lt;em&gt;something&lt;/em&gt; out of this, but it isn&amp;rsquo;t particularly clear. The problem here is that we are looking at the binary encoding of the Device Tree (the DTB). But the DTB is built from a set of corresponding source files (one or more DTS files), and if we look at the common &lt;a href="https://github.com/NetBSD/src/blob/caa9bad5633244c08bb86b00eab45f3d92882415/sys/external/gpl2/dts/dist/arch/arm/boot/dts/bcm283x.dtsi#L385"&gt;DTS for Broadcom 283x boards&lt;/a&gt;, we find the following more-readable content:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;/ {
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; aliases {
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; /* ... */
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; serial1 = &amp;#34;/soc/serial@7e215040&amp;#34;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; };
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; soc {
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; /* ... */
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; serial@7e215040 {
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; compatible = &amp;#34;brcm,bcm2835-aux-uart&amp;#34;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; reg = &amp;lt;0x7e215040 0x40&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; interrupts = &amp;lt;0x01 0x1d&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; clocks = &amp;lt;0x0e 0x00&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; status = &amp;#34;okay&amp;#34;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; pinctrl-names = &amp;#34;default&amp;#34;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; pinctrl-0 = &amp;lt;0x0f&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; phandle = &amp;lt;0x4c&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; };
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; };
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;};
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The detail to highlight here is the &lt;code&gt;brcm,bcm2835-aux-uart&lt;/code&gt; identifier. If we search for this in the code base with the ripgrep super-powers you gained earlier, we find the &lt;a href="https://github.com/NetBSD/src/blob/caa9bad5633244c08bb86b00eab45f3d92882415/sys/arch/arm/broadcom/bcm2835_com.c#L54"&gt;&lt;code&gt;arch/arm/broadcom/bcm2835_com.c&lt;/code&gt;&lt;/a&gt; file, which contains:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-c" data-lang="c"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;device_compatible_entry&lt;/span&gt; &lt;span class="n"&gt;compat_data&lt;/span&gt;&lt;span class="p"&gt;[]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;compat&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s"&gt;&amp;#34;brcm,bcm2835-aux-uart&amp;#34;&lt;/span&gt; &lt;span class="p"&gt;},&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; &lt;span class="n"&gt;DEVICE_COMPAT_EOL&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="p"&gt;};&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Once again: we found the glue that connects a generic &lt;code&gt;com&lt;/code&gt; driver to a specific hardware device.&lt;/p&gt;
-&lt;h1 id="loading-dtbs-at-boot-time"&gt;Loading DTBs at boot time&lt;/h1&gt;
-&lt;p&gt;Let&amp;rsquo;s dig a bit further though. I mentioned earlier that the boot loader is responsible for loading the Device Tree into memory and passing it to the kernel. How is that done? Well, it really depends on the specific machine you are dealing with. In here, I&amp;rsquo;m just going to &lt;em&gt;very briefly&lt;/em&gt; touch upon how the Raspberry Pi does it because that&amp;rsquo;s the specific non-PC hardware I have access to. And for this, I&amp;rsquo;ll take you through the investigative journey I took.&lt;/p&gt;
-&lt;p&gt;The specific problem I faced was that NetBSD was &lt;em&gt;not&lt;/em&gt; able to discover the SPI bus even when I had enabled the right SPI driver in the kernel for my Raspberry Pi 3B. By that point, I was aware that DTBs existed and I suspected that something might be wrong with them, so my first instinct was to check and see what the DTB had to say about the SPI.&lt;/p&gt;
-&lt;p&gt;Digging through the FAT partition of the disk image I was using, I found the &lt;code&gt;dtb/broadcom/bcm2837-rpi-3-b.dtb&lt;/code&gt; file&amp;mdash;the DTB for my specific board. The way the Raspberry Pi boot loader finds this file is by looking for a file matching the board&amp;rsquo;s own name (&lt;code&gt;bcm2837-rpi-3-b.dtb&lt;/code&gt;) in the location specified by the &lt;a href="https://www.raspberrypi.com/documentation/computers/config_txt.html#os_prefix"&gt;&lt;code&gt;os_prefix&lt;/code&gt; configuration property&lt;/a&gt; in the &lt;code&gt;config.txt&lt;/code&gt; placed at the root of the FAT partition.&lt;/p&gt;
-&lt;p&gt;Once I found that file and after learning about the &lt;code&gt;dtc&lt;/code&gt; tool (the Device Tree Compiler) which transforms DTS files into DTBs and vice versa, I could decompile the DTS:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;$ dtc -I dtb -O dts bcm2837-rpi-3-b.dtb -o bcm2837-rpi-3-b.dts
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;... various warnings ...
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;$ █
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then, peeking into the decompiled DTS file, I found:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;spi@7e204000 {
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; compatible = &amp;#34;brcm,bcm2835-spi&amp;#34;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; reg = &amp;lt;0x7e204000 0x200&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; interrupts = &amp;lt;0x02 0x16&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; clocks = &amp;lt;0x06 0x14&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; #address-cells = &amp;lt;0x01&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; #size-cells = &amp;lt;0x00&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; status = &amp;#34;disabled&amp;#34;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; dmas = &amp;lt;0x0b 0x06 0x0b 0x07&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; dma-names = &amp;#34;tx\0rx&amp;#34;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt; phandle = &amp;lt;0x49&amp;gt;;
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;};
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;I verified that the SPI kernel driver recognized the &lt;code&gt;brcm,bcm2835-spi&lt;/code&gt; identifier just as we did earlier on for the serial port. And it did match, so I was puzzled for a moment.&lt;/p&gt;
-&lt;p&gt;But then I noticed the innocuous &lt;code&gt;status = &amp;quot;disabled&amp;quot;&lt;/code&gt; line. Aha! The SPI device was disabled by default. I modified that line with &lt;code&gt;status = &amp;quot;okay&amp;quot;&lt;/code&gt; following what other entries in the DTS did, recompiled the DTS into the DTB:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;$ dtc -I dts -O dtb bcm2837-rpi-3-b.dts -o bcm2837-rpi-3-b.dtb
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;... various warnings ...
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;$ █
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&amp;hellip; rebooted the board and&amp;hellip; voila!&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# dmesg | grep spi
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;[ 1.000003] bcmspi0 at simplebus1: SPI
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;[ 1.000003] bcmspi0: interrupting on icu irq 54
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;[ 1.000003] spi0 at bcmspi0: SPI bus
-&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# █
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The kernel successfully attached the SPI driver and the SPI bus started working, which in turn led to a multi-hour debugging session to make the EndBASIC ST7735S driver work&amp;mdash;but in the end it did.&lt;/p&gt;
-&lt;figure&gt;
-&lt;video width="100%" controls&gt;
-&lt;source src="/images/2025-02-28-rpi3-lcd-endbox.mp4" type="video/mp4"&gt;
-&lt;/video&gt;
-&lt;figcaption&gt;Demonstration of the "EndBASIC Dev Kit" box I'm working on, booting NetBSD, showing the EndBASIC console on a small LCD, and then running the Game of Life.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;Yes, there are nicer ways to do what I did here because the DTBs are provided by upstream and you should not be modifying them. What you should do instead is create a DTB overlay, which is a separate small DTB that &amp;ldquo;patches&amp;rdquo; the upstream DTB, and then tell the boot loader to process it via the &lt;code&gt;dtoverlay&lt;/code&gt; stanza in the &lt;code&gt;config.txt&lt;/code&gt; file. Details left to you, reader. Just beware that the Raspberry Pi boot loader is picky about file paths and &lt;a href="https://www.raspberrypi.com/documentation/computers/config_txt.html"&gt;the documentation is your friend&lt;/a&gt; here.&lt;/p&gt;
-&lt;h1 id="how-do-acpi-and-device-tree-differ"&gt;How do ACPI and Device Tree differ?&lt;/h1&gt;
-&lt;p&gt;Based on everything I told you about here, ACPI and Device Tree look oddly similar&amp;mdash;and that&amp;rsquo;s because they are! From the perspective of &lt;em&gt;describing&lt;/em&gt; hardware to the kernel, the two technologies are equivalent, but they differ for historical reasons. ACPI has its roots in APM, a PC technology, whereas Device Tree is based on &lt;a href="https://en.wikipedia.org/wiki/Open_Firmware"&gt;OpenFirmware&lt;/a&gt;, a technology that originated at Sun Microsystems for its SPARC machines and that was later used by Apple on their PowerPC-based Macs.&lt;/p&gt;
-&lt;p&gt;One difference between the two, though, is that ACPI does more than just describe hardware. ACPI provides a bunch of hardware-specific routines in a bytecode that the operating system can call into to manipulate the hardware. This is often maligned because ACPI introduces non-free and opaque blobs in the interaction between the operating system kernel and the hardware, but &lt;a href="https://mjg59.dreamwidth.org/68350.html"&gt;Matthew Garret has a great essay on why ACPI is necessary&lt;/a&gt; and why it is better than all other alternatives, possibly including Device Tree.&lt;/p&gt;
-&lt;p&gt;In any case, that&amp;rsquo;s all for today. I found this exercise of dealing with the Device Tree pretty fun and I thought I could share something interesting with you all. I intentionally omitted many details because the topic of hardware configuration is vast and tricky, but you can continue building your knowledge from the bits above and from the fabulous &lt;a href="https://wiki.osdev.org/"&gt;OSDev wiki&lt;/a&gt;.&lt;/p&gt;</description><enclosure url="https://jmmv.dev/images/2025-02-28-jumpers.jpg" length="89630" type="image/jpeg"/></item></channel></rss>
+&lt;p&gt;That&amp;rsquo;s all for today. I promised it would be short :)&lt;/p&gt;</description><enclosure url="https://jmmv.dev/images/2025-03-14-bazel-at-snowflake-cover.jpg" length="792369" type="image/jpeg"/></item></channel></rss>
