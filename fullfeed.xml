@@ -1,4 +1,121 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino's corner on Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/index.html</link><description>Recent content in Julio Merino's corner on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2026 Julio Merino</copyright><lastBuildDate>Fri, 08 May 2026 09:00:00 +0200</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>What if there was no BASIC in EndBASIC?</title><link>https://jmmv.dev/2026/05/no-basic-in-endbasic.html</link><pubDate>Fri, 08 May 2026 09:00:00 +0200</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2026/05/no-basic-in-endbasic.html</guid><description>&lt;p&gt;Six years have passed since I started building &lt;a href="https://www.endbasic.dev/"&gt;EndBASIC&lt;/a&gt;: a retro-looking BASIC interpreter that works on the web, on the desktop, and on embedded hardware&amp;mdash;and that allows writing cross-platform apps that leverage graphics, a cloud file sharing system, and even access to local hardware via GPIO.&lt;/p&gt;
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Julio Merino's corner on Julio Merino (jmmv.dev)</title><link>https://jmmv.dev/index.html</link><description>Recent content in Julio Merino's corner on Julio Merino (jmmv.dev)</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><managingEditor>julio@meroh.net (Julio Merino)</managingEditor><webMaster>julio@meroh.net (Julio Merino)</webMaster><copyright>Copyright 2004&#150;2026 Julio Merino</copyright><lastBuildDate>Sun, 17 May 2026 14:50:00 -0700</lastBuildDate><atom:link href="https://jmmv.dev/feed.xml" rel="self" type="application/rss+xml"/><item><title>A Markdown-based test suite</title><link>https://jmmv.dev/2026/05/markdown-based-test-suite.html</link><pubDate>Sun, 17 May 2026 14:50:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2026/05/markdown-based-test-suite.html</guid><description>&lt;p&gt;This article is not about AI and it is not written with AI, but the work that I&amp;rsquo;m about to present was definitely motivated by AI. And because I generally like telling stories, I have to give you that background. Do with that whatever you want, but&amp;hellip; it&amp;rsquo;d be a pity if you left just because the AI word showed up in the first paragraph! I think the technical explanation that follows is at the very least entertaining and also interesting independently of AI.&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;Back in December, I started toying with coding agents. One thing I tried, and for which I didn&amp;rsquo;t expect a lot of success, was to point an AI agent to the EndBASIC public documentation and ask it to write games like Space Invaders or Mario from scratch. And even though the results weren&amp;rsquo;t perfect and they didn&amp;rsquo;t work on the first try, they did work with a few tiny tweaks. Combining that with a bunch of hand-written &lt;code&gt;AGENTS.md&lt;/code&gt; rules, I had an agent producing EndBASIC demos with ease.&lt;/p&gt;
+&lt;p&gt;This experiment was impressive because I did not expect an agent to be able to write EndBASIC code&amp;hellip; and because it worked, it fueled my interest to pick EndBASIC&amp;rsquo;s own development back up. Three thoughts came to mind:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Increase EndBASIC&amp;rsquo;s &amp;ldquo;self-documenting&amp;rdquo; aspects so that an AI agent can learn about its idiosyncrasies unsupervised.&lt;/li&gt;
+&lt;li&gt;Speed up EndBASIC so that it can run more elaborate games.&lt;/li&gt;
+&lt;li&gt;Extend EndBASIC with long-desired primitives like sprites and sound, to finally realize the vision behind the project.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;These thoughts combined sparked the rewrite of EndBASIC&amp;rsquo;s core that I&amp;rsquo;ve been pursuing since January and which should see the light of day in the upcoming release. But before that happens, I want to talk to you about just one of the cool pieces behind the new core: namely, its approach to testing. I&amp;rsquo;ve stopped writing unit tests for the compiler and VM in Rust and I&amp;rsquo;ve switched to writing them in Markdown. And I believe this has turned out to be a pretty nice approach.&lt;/p&gt;
+&lt;h1 id="so-wait-why-markdown"&gt;So wait, why Markdown?&lt;/h1&gt;
+&lt;p&gt;One of the things I had to do to convince an AI agent to write proper EndBASIC code was to hand-craft a bunch of &lt;code&gt;AGENTS.md&lt;/code&gt; rules to tell it how EndBASIC differs from other, more traditional BASIC dialects. That worked OK, but writing these rules by hand was error-prone and difficult to make exhaustive. So I wanted to let LLMs extract that information directly from EndBASIC.&lt;/p&gt;
+&lt;p&gt;The idea was simple: if I wrote the integration tests for the new core in Markdown, the lingua franca of AI, the tests would serve as the canonical and correct documentation demonstrating language behaviors. LLMs are great at summarizing information, so if I unleashed them over a large set of these hands-on &amp;ldquo;examples&amp;rdquo;, they would &lt;em&gt;probably&lt;/em&gt; figure stuff out, right?&lt;/p&gt;
+&lt;p&gt;And they actually do! I gave the following prompt to GPT 5.4:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Based on your pre-existing knowledge of BASIC dialects, I want you to read all of the &lt;code&gt;core/tests/*.md&lt;/code&gt; files, analyze how the EndBASIC dialect differs from your knowledge, and come up with a bunch of rules &lt;em&gt;for yourself&lt;/em&gt; to know how to write EndBASIC code later on. You can ignore the &lt;em&gt;Disassembly&lt;/em&gt; sections.&lt;/p&gt;
+&lt;p&gt;Beware that all functions and commands in these integration tests are test-only: the real functions and commands that you can use are documented in &lt;code&gt;cli/tests/repl/help.out&lt;/code&gt;, so read those too to learn what functionality is available.&lt;/p&gt;
+&lt;p&gt;Write your findings to a &lt;code&gt;rules.md&lt;/code&gt; file.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;And this produced a very comprehensive file with spot-on rules: here, &lt;a href="/notes/2026-05-17-endbasic-rules.md"&gt;take a look&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;But leaving that aside, let&amp;rsquo;s peek into the internals of this new Markdown-based test suite.&lt;/p&gt;
+&lt;h1 id="what-is-a-markdown-test-suite"&gt;What is a Markdown test suite?&lt;/h1&gt;
+&lt;p&gt;It&amp;rsquo;s a collection of Markdown files:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;endbasic$ ls -l core/tests/*.md | head -n 10
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 22771 May 11 14:18 core/tests/test_args.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 3785 May 11 13:22 core/tests/test_arithmetic_add.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 2653 May 11 13:22 core/tests/test_arithmetic_div.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 2668 May 11 13:22 core/tests/test_arithmetic_mod.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 2131 May 11 13:22 core/tests/test_arithmetic_mul.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 1466 May 11 13:22 core/tests/test_arithmetic_neg.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 2517 May 11 13:22 core/tests/test_arithmetic_pow.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 2208 May 11 13:22 core/tests/test_arithmetic_sub.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 20388 May 11 13:22 core/tests/test_arrays.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;-rw-r--r-- 1 jmmv users 5885 May 11 13:22 core/tests/test_assignments.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;endbasic$ █
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Where each file acts as a container of one or more &lt;em&gt;test cases&lt;/em&gt;:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-plain" data-lang="plain"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;endbasic$ grep &amp;#39;^# &amp;#39; core/tests/test_end.md | head -n 5
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# Test: Call to END and nothing else
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# Test: Exit code is an integer immediate
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# Test: Exit code is a double immediate and needs demotion
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# Test: Exit code is in a global variable
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;# Test: Exit code is in a local variable
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;endbasic$ █
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h1 id="what-do-test-cases-look-like"&gt;What do test cases look like?&lt;/h1&gt;
+&lt;p&gt;Every test case has a section &lt;em&gt;title&lt;/em&gt; describing what the test is about and various subsections to define the test scenario:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;A &lt;em&gt;Source&lt;/em&gt; code block that is the input to the compiler.&lt;/li&gt;
+&lt;li&gt;If compilation fails, a &lt;em&gt;Compilation errors&lt;/em&gt; section with the error messages and nothing else afterwards.&lt;/li&gt;
+&lt;li&gt;If compilation succeeds:
+&lt;ul&gt;
+&lt;li&gt;A &lt;em&gt;Disassembly&lt;/em&gt; section that contains the compiled bytecode.&lt;/li&gt;
+&lt;li&gt;An optional &lt;em&gt;Exit code&lt;/em&gt; section showing the program&amp;rsquo;s exit code, if different from zero.&lt;/li&gt;
+&lt;li&gt;An &lt;em&gt;Output&lt;/em&gt; section that contains any messages printed to the console by the executed program.&lt;/li&gt;
+&lt;li&gt;A &lt;em&gt;Runtime errors&lt;/em&gt; section that contains any errors from the executed program.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Here is a simple example validating the &lt;code&gt;END&lt;/code&gt; command:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre tabindex="0" class="chroma"&gt;&lt;code class="language-markdown" data-lang="markdown"&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gh"&gt;# Test: Exit code is an integer immediate
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gh"&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gu"&gt;## Source
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gu"&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;```basic
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;&lt;/span&gt;&lt;span class="kr"&gt;END&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="il"&gt;42&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;```&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gu"&gt;## Disassembly
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gu"&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;```asm
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;&lt;/span&gt;&lt;span class="err"&gt;0000:&lt;/span&gt; &lt;span class="nf"&gt;LOADI&lt;/span&gt; &lt;span class="no"&gt;R64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;42&lt;/span&gt; &lt;span class="c1"&gt;; 1:5
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="c1"&gt;&lt;/span&gt;&lt;span class="err"&gt;0001:&lt;/span&gt; &lt;span class="nf"&gt;END&lt;/span&gt; &lt;span class="no"&gt;R64&lt;/span&gt; &lt;span class="c1"&gt;; 1:1
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="c1"&gt;&lt;/span&gt;&lt;span class="err"&gt;0002:&lt;/span&gt; &lt;span class="nf"&gt;EOF&lt;/span&gt; &lt;span class="c1"&gt;; 0:0
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="c1"&gt;&lt;/span&gt;&lt;span class="s"&gt;```&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gu"&gt;## Exit code
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="gu"&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;```plain
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;&lt;/span&gt;42
+&lt;/span&gt;&lt;/span&gt;&lt;span class="line"&gt;&lt;span class="cl"&gt;&lt;span class="s"&gt;```&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;There is no section to validate the lexer nor parser internals right now but I&amp;rsquo;m considering to further extend the format and dump the AST too in order to simplify the tests for these components.&lt;/p&gt;
+&lt;h1 id="how-do-the-tests-run"&gt;How do the tests run?&lt;/h1&gt;
+&lt;p&gt;&lt;a href="https://github.com/endbasic/endbasic/blob/24eb10e990668c01f2a71e4abb90632c4e4be8a2/core/tests/integration_test.rs"&gt;The driver&lt;/a&gt; for this test suite enumerates all Markdown files in the tests directory and processes them one at a time.&lt;/p&gt;
+&lt;p&gt;For each file, the driver extracts all test case &lt;em&gt;titles&lt;/em&gt; and their &lt;em&gt;Source&lt;/em&gt; subsections to compute all the test cases to execute. Once the driver has this subset of information from the Markdown files, the driver feeds each individual test case to the compiler and, if compilation succeeds, to the VM. All side-effects are captured and the driver emits a &lt;em&gt;new&lt;/em&gt; Markdown file from scratch with the results of the test.&lt;/p&gt;
+&lt;p&gt;Once the driver has terminated producing a new version of the Markdown file for a test, the driver compares the produced file (actual) against the pre-recorded, checked-in version (golden). If they differ, the test fails and the driver uses the &lt;code&gt;diff&lt;/code&gt; tool to print the differences.&lt;/p&gt;
+&lt;p&gt;And that&amp;rsquo;s it. Easy peasy, right? This keeps the driver super-simple as the only thing it has to do is parse a minimal subset of Markdown, and the diffs it produces are trivial to understand to a human.&lt;/p&gt;
+&lt;h1 id="is-this-maintainable"&gt;Is this maintainable?&lt;/h1&gt;
+&lt;p&gt;There are currently 448 test cases and 13k lines of Markdown in this test suite so maintaining them &amp;ldquo;by hand&amp;rdquo; is not an option. You wouldn&amp;rsquo;t want to implement an optimization to the compiler and then have to rewrite hundreds of disassembly chunks in the golden files to reflect the changes, would you?&lt;/p&gt;
+&lt;p&gt;The thing is that, due to the design described earlier, regenerating the golden files after a core change is easy: the driver is &lt;em&gt;already&lt;/em&gt; doing exactly that to execute the tests! The trick is, simply put, to ask the driver to rewrite the golden file instead of producing an actual file by setting the &lt;code&gt;REGEN=true&lt;/code&gt; environment variable. And voila: all golden files are regenerated in place. I can then use Git to validate the changes and commit them along with the actual code change.&lt;/p&gt;
+&lt;h1 id="impressions-so-far"&gt;Impressions so far?&lt;/h1&gt;
+&lt;p&gt;Let&amp;rsquo;s start with the pros of this Markdown-based test suite framework:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;It is much easier to work with than what I had before. I used to dread touching the compiler and VM of the previous EndBASIC core implementation because tweaking tens of tests was painful. Changes required me to fiddle with positions and deeply nested types, and now the tests are trivial to tweak and diff against previous state.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Pretty much any decent text editor has Markdown support, including formatting fenced code blocks. This makes it easy to skim through the test suite and modify the files and is actually the primary reason I used Markdown instead of a bespoke textual format.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;LLMs can &amp;ldquo;learn&amp;rdquo; with ease. OK, fair, this is just a guess: I did not try the same prompt at the beginning of this article against the old core with its Rust-based tests, and maybe the LLMs would have done a good job at reverse-engineering the rules. But because the Markdown tests are so much easier to read by humans, I have to assume that they also are for LLMs.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;And now, of course, some cons:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Regenerating the output of a test, or all tests, is &lt;em&gt;way too easy&lt;/em&gt;. With the older Rust-based tests, I was forced to manually punch in things like line numbers and nested AST trees. This process forced me to &lt;em&gt;think&lt;/em&gt; through the changes in detail. With the new approach&amp;hellip; regenerating the golden files is trivial, so it&amp;rsquo;s easy to miss little mistakes in source positions or disassembled code.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Differences in disassembly are usually noisy and hard to review because every line carries an address and thus any new or deleted instruction will introduce offsets into all other addresses. I could of course choose to &lt;em&gt;not&lt;/em&gt; include the instruction addresses in the dump, but they come in handy when manually validating jump targets, so it felt better to keep them around.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Rust cannot generate first-class test cases on the fly which means that the various test cases within a Markdown file are &amp;ldquo;invisible&amp;rdquo; to the driver: I can run them all or none, but regular test filtering via &lt;code&gt;cargo test&lt;/code&gt; doesn&amp;rsquo;t apply. I was able to &amp;ldquo;expose&amp;rdquo; the different Markdown files as different Rust-native test cases, but this involves a hardcoded list of test files&amp;mdash;which must be kept in sync with the files on disk, and so I mitigated the chances of divergence by adding a test that cross-references the two.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;This idea does not generalize well. The Markdown-based test suite presented here works well for components where end-to-end testing is favorable and, more importantly, &lt;em&gt;cheap&lt;/em&gt;, but I wouldn&amp;rsquo;t recommend it for other scenarios. Keeping tests fast is a must for quick iteration.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;And I think that&amp;rsquo;s about it. If the above feels too abstract, I encourage you to take a look at &lt;a href="https://github.com/endbasic/endbasic/blob/24eb10e990668c01f2a71e4abb90632c4e4be8a2/core/tests/integration_test.rs"&gt;the driver&lt;/a&gt;, its &lt;a href="https://github.com/endbasic/endbasic/blob/24eb10e990668c01f2a71e4abb90632c4e4be8a2/core/tests/testutils/mod.rs"&gt;helper code&lt;/a&gt;, and the &lt;a href="https://github.com/endbasic/endbasic/tree/24eb10e990668c01f2a71e4abb90632c4e4be8a2/core/tests"&gt;directory with test suites&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Now that you have this new trick up your sleeve, what do &lt;em&gt;you&lt;/em&gt; think?&lt;/p&gt;</description><enclosure url="https://jmmv.dev/images/2026-05-17-endbasic-test-md.png" length="72154" type="image/jpeg"/></item><item><title>What if there was no BASIC in EndBASIC?</title><link>https://jmmv.dev/2026/05/no-basic-in-endbasic.html</link><pubDate>Fri, 08 May 2026 09:00:00 +0200</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2026/05/no-basic-in-endbasic.html</guid><description>&lt;p&gt;Six years have passed since I started building &lt;a href="https://www.endbasic.dev/"&gt;EndBASIC&lt;/a&gt;: a retro-looking BASIC interpreter that works on the web, on the desktop, and on embedded hardware&amp;mdash;and that allows writing cross-platform apps that leverage graphics, a cloud file sharing system, and even access to local hardware via GPIO.&lt;/p&gt;
 &lt;p&gt;But as cool as this sounds, and as exciting as the journey has been, there is something that keeps bugging me about the future of the project: who wants to invest time building something new on an abandoned language? Even Visual Basic, a real platform that evolved over many years and gained &amp;ldquo;serious language features&amp;rdquo;, has fallen out of fashion and is, as far as I know, &lt;a href="https://learn.microsoft.com/en-us/dotnet/visual-basic/getting-started/strategy"&gt;in &amp;ldquo;maintenance mode&amp;rdquo; by Microsoft&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;So I&amp;rsquo;ve been thinking&amp;hellip; &lt;em&gt;&amp;ldquo;What if there was no BASIC in EndBASIC?&amp;rdquo;&lt;/em&gt; Or, in other words, how could I leverage the many pieces I&amp;rsquo;ve created underneath this project to build something that people actually &lt;em&gt;want&lt;/em&gt; to use, be it for retro-style development or for other purposes?&lt;/p&gt;
 &lt;hr&gt;
@@ -1972,126 +2089,4 @@ class="form-control form-control-sm text-center my-1"/&gt;
 &lt;h1 id="is-sandboxfs-needed"&gt;Is sandboxfs needed?&lt;/h1&gt;
 &lt;p&gt;I still believe that Bazel needs something like sandboxfs for efficient sandboxed builds. As I mentioned earlier, creating symlink forests does not scale for action execution, and with ever-growing toolchain sizes, the problem is getting worse over time. However, the benefits of local sandboxing are unclear if you are already using remote execution.&lt;/p&gt;
 &lt;p&gt;That said, people keep complaining about poor Bazel sandboxing performance on macOS, which means there still is a clear user need to make this better. And I&amp;rsquo;m not convinced the various &amp;ldquo;workarounds&amp;rdquo; that have been tried in this area (like reusing sandboxes) are sound designs nor that they can actually deliver on their promise.&lt;/p&gt;
-&lt;p&gt;In my case&amp;hellip; I don&amp;rsquo;t run Bazel on Mac anymore at work. What&amp;rsquo;s more: I do not even use a Mac for personal reasons these days, which means my ulterior motive to use sandboxfs in &lt;code&gt;pkg_comp&lt;/code&gt; is gone. But! If you wanted to redesign sandboxfs from scratch, let&amp;rsquo;s talk!&lt;/p&gt;</description><enclosure url="https://jmmv.dev/images/2025-06-11-sandboxfs-cover-concept.png" length="7119929" type="image/jpeg"/></item><item><title>Beginning 3D printing</title><link>https://jmmv.dev/2025/05/beginning-3d-printing.html</link><pubDate>Wed, 28 May 2025 09:00:00 -0700</pubDate><author>julio@meroh.net (Julio Merino)</author><guid>https://jmmv.dev/2025/05/beginning-3d-printing.html</guid><description>&lt;p&gt;Hello readers and sorry for the 2-month radio silence. I&amp;rsquo;ve been pretty busy at work, traveling during school breaks, hacking on EndBASIC when time permitted, and&amp;hellip; as of two weeks ago&amp;hellip; tinkering with 3D printing as a complete beginner. So, today, I&amp;rsquo;d like to walk you through the latter because it has been a really fun and rewarding journey, albeit frustrating at times.&lt;/p&gt;
-&lt;p&gt;You&amp;rsquo;d think that to use a 3D printer, you&amp;rsquo;d design a 3D model and then&amp;hellip; just&amp;hellip; send it to the printer? That&amp;rsquo;s almost true, but it ignores the realities of producing a physical object from an &amp;ldquo;abstract&amp;rdquo; model: when designing such a model, you need to take into account the limitations of 3D printing and you need to translate your model into something the 3D printer can understand via a process called &lt;em&gt;slicing&lt;/em&gt;.&lt;/p&gt;
-&lt;p&gt;Let&amp;rsquo;s take a brief peek at all of these steps. I&amp;rsquo;ll assume you are a complete beginner like I am. The pictures I&amp;rsquo;ll show are all for a &amp;ldquo;first project&amp;rdquo; I did to remake the bars of a bird cage I have, as the birds had fully destroyed the previous ones.&lt;/p&gt;
-&lt;h1 id="step-1-modeling"&gt;Step 1: Modeling&lt;/h1&gt;
-&lt;p&gt;The very first step in printing a 3D object is to create the model of what you want to print, of course. You might think that this is trivial, but there are two difficulties: the first lies in choosing and using the software, and the second lies in the physical constraints of 3D printing.&lt;/p&gt;
-&lt;p&gt;As for the software part, you&amp;rsquo;ll need a CAD program, and there are many to choose from. Here are the ones I considered:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://www.freecad.org/"&gt;&lt;strong&gt;FreeCAD&lt;/strong&gt;&lt;/a&gt; is &lt;em&gt;the&lt;/em&gt; free and open source solution. This is the first program I reached for given my preferences to favor free software but&amp;hellip; oh my: if you have ever thought that the &lt;a href="https://www.gimp.org/"&gt;GIMP&lt;/a&gt;&amp;rsquo;s UI was difficult, you are in for a shock here. FreeCAD&amp;rsquo;s UI is not beginner friendly &lt;em&gt;at all&lt;/em&gt; and it&amp;rsquo;s also not high-DPI friendly: the buttons that show up in my monitor are &lt;em&gt;tiny&lt;/em&gt;, which brings a new meaning to hunt-and-peck. It seems extremely comprehensive though.&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-05-28-freecad.png" /&gt;
-&lt;figcaption&gt;Simple FreeCAD project showing the design of a bar for a bird cage.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://www.autodesk.com/products/fusion-360/overview"&gt;&lt;strong&gt;Fusion 360&lt;/strong&gt;&lt;/a&gt; is Autodesk&amp;rsquo;s answer to 3D modeling. This is a product I did not know about: I had never done &amp;ldquo;Computer Assisted Design&amp;rdquo; before, and the only times I heard of this term were in the context of AutoCAD by the same company, so I was a little surprised to see that they have another flagship brand for 3D design. As it turns out, Fusion 360 is free for non-commercial use and for hobbyist use if your revenue is less than 1K a year. I chose to steer clear of this product because I did not want to be bound by these terms &lt;em&gt;and&lt;/em&gt; I did not want to be tied to Windows or macOS.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://www.tinkercad.com/"&gt;&lt;strong&gt;TinkerCAD&lt;/strong&gt;&lt;/a&gt; is another product from Autodesk, but this one is completely free and available as a web application. TinkerCAD is really well made and it is beginner friendly: after just a couple of minutes (literally), I was up and running designing my first model, and I have watched my kid come up with cool objects on his own with close to zero instructions. Unfortunately, as I made progress in my designs, I started suffering from its simplicity and by now I regret not having spent the time to learn FreeCAD from the get go.&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-05-28-tinkercad.png" /&gt;
-&lt;figcaption&gt;Simple TinkerCAD project showing the design of a bar for a bird cage.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://openscad.org/"&gt;&lt;strong&gt;OpenSCAD&lt;/strong&gt;&lt;/a&gt; is a scriptable CAD application where you write code to generate your model. Interestingly, I only came across this program because KDE&amp;rsquo;s Discover app mentioned it to me when I searched for &amp;ldquo;CAD&amp;rdquo;, not because I saw it recommended in any 3D printing-related forums. If you have ever used &lt;a href="https://github.com/POV-Ray/povray"&gt;POV-Ray&lt;/a&gt; before, you know what this is about, and to be honest, the idea behind scripting the models sounds really tempting. But that&amp;rsquo;s where I left it.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;There are several more options out there so go explore them if none of these satisfy you. My personal suggestion is that you start with TinkerCAD to quickly get something out of your printer and scratch your itch. But, as soon as you get into designing anything &amp;ldquo;moderately complex&amp;rdquo;, that you watch a couple of introductory videos for FreeCAD to rip the band-aid off and use a real application. I&amp;rsquo;ve started doing that now and the &amp;ldquo;parametric&amp;rdquo; aspects of FreeCAD make me feel much more confident that my creations will work out and that they&amp;rsquo;ll not be messed up by me touching &amp;ldquo;the wrong mouse button&amp;rdquo;.&lt;/p&gt;
-&lt;p&gt;With software out of the way, let&amp;rsquo;s move to the fact that 3D models are just that: conceptual models that only exist on the computer. When you want to bring those to reality, you need to account for the constraints that 3D printing brings. Here are some:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Layered plastic deposition.&lt;/strong&gt; This concept is &lt;em&gt;the&lt;/em&gt; key to designing something you can actually print. A 3D printer works by melting &lt;em&gt;filament&lt;/em&gt; (a long string of plastic) and depositing such plastic horizontally on top of another surface. Objects are printed layer by layer, starting from the layer that touches the bed and moving &lt;em&gt;up&lt;/em&gt; the Z axis. Which means that&amp;hellip; some shapes are impossible to print! If your model has any overhang larger than maybe a couple millimeters, you can&amp;rsquo;t print it&amp;mdash;unless you add superfluous support structures that need to be removed later.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Colors&amp;hellip; or lack thereof.&lt;/strong&gt; While it is certainly possible to print objects with multiple colors on them, the printer add-on to auto-switch colors is pretty expensive, and even if you buy that, you&amp;rsquo;ll likely be bound to a limited set (4, maybe 8) anyway. This means you have to design your model as separate pieces and perform some post-processing if you need multiple colors. You &lt;em&gt;can&lt;/em&gt; combine different colors in one print if they are isolated to different layers though&amp;mdash;but as you can imagine, manually switching colors half-way through a print is going to be annoying.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Warping.&lt;/strong&gt; Matter shrinks as it cools, and you may end up in the situation that your print shrinks and warps as it cools down. This has happened to me a few times already and it was obviously annoying and not something I was expecting. You need to be aware that this can happen and design your model accordingly. I&amp;rsquo;ve seen various suggestions online but haven&amp;rsquo;t put them in practice yet, so I have nothing to suggest here.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;These constraints are just the very minimum. I&amp;rsquo;ll leave you with this excellent 80-minute guide on &lt;a href="https://blog.rahix.de/design-for-3d-printing/"&gt;designing for 3D printing&lt;/a&gt; written by Rahix, which covers these topics and more to try to get to a good print on the first try.&lt;/p&gt;
-&lt;h1 id="step-2-slicing"&gt;Step 2: Slicing&lt;/h1&gt;
-&lt;p&gt;Let&amp;rsquo;s say you are done creating your 3D model. Can you send it to the printer? No! The printer doesn&amp;rsquo;t know anything about &amp;ldquo;3D models&amp;rdquo;: it only knows about &lt;a href="https://en.wikipedia.org/wiki/Logo_(programming_language)"&gt;Logo&lt;/a&gt;-like instructions&amp;mdash;known as G-Code&amp;mdash;that tell it how to operate on a layer by layer basis. The process of converting your 3D model to G-Code is called &lt;em&gt;slicing&lt;/em&gt; and is performed by a &lt;em&gt;slicer&lt;/em&gt; application.&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-05-28-slicer-model.png" /&gt;
-&lt;figcaption&gt;PrusaSlicer model view showing the imported bird cage bar model (in orange) with auto-generated support structures (in green).&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;The slicer takes the model as an input, &amp;ldquo;slices&amp;rdquo; through it on the horizontal plane to generate very fine layers, and then produces G-Code to make the printer operate the &lt;em&gt;extruder&lt;/em&gt; (the word for the part that melts filament and deposits it on the printing plane) across the plane of every layer. The output of the slicer is a G-Code file which contains such instructions in detail, and &lt;em&gt;this&lt;/em&gt; is the file that can be fed to the printer.&lt;/p&gt;
-&lt;p&gt;This slicing step is very interesting and is also where you&amp;rsquo;ll typically mess things up (assuming you got a 3D printable design in the first place) because of the myriad parameters that exist.&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-05-28-slicer-settings.png" /&gt;
-&lt;figcaption&gt;PrusaSlicer settings view in Expert Mode. There are &lt;i&gt;a lot&lt;/i&gt; of settings.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;During slicing you&amp;rsquo;ll do things like:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Laying out your model on the printing bed, possibly combining multiple objects to print them in one go and rotating them so that they can be printed.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Adjusting settings like the infill, which tells the printer how much plastic to use in the &amp;ldquo;inner&amp;rdquo; parts of the object: more infill means a sturdier object, but also a more expensive and slower to print object.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Asking the slicer to auto-generate a brim (an extra support structure on the base layer that increases bed adhesion), to add support structures for overhangs, or to add &amp;ldquo;mouse ears&amp;rdquo; to help with adhesion.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Choosing the type of filament to use and its properties.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Selecting the right printer (because the G-Code instructions are printer-specific, as you can imagine).&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Configuring whether you want to switch colors half-way through the print or not.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;And a long list of etceteras. The nice thing is that the slicer detects various problematic conditions and offers to resolve them before sending the output to the printer&amp;mdash;but the bad thing is that it doesn&amp;rsquo;t detect everything, and some of the choices it makes are maybe-not-so-great. For example, if you ask the slicer to add support structures for overhangs, it may generate structures that you don&amp;rsquo;t like or that are harder to remove later on, whereas if you manually adjust the model to contain such structures, you have more control over the results.&lt;/p&gt;
-&lt;p&gt;As for which pieces of software exist for slicing, every printer comes with its own slicer software. In my case, I&amp;rsquo;ve been using &lt;a href="https://github.com/prusa3d/PrusaSlicer"&gt;PrusaSlicer&lt;/a&gt; which is the one that matches my printer and is open source. And because PrusaSlicer is open source&amp;hellip; you can imagine that other companies have taken it as the basis for their own printers, like Bambu Lab has done with their &lt;a href="https://bambulab.com/en-us/download/studio"&gt;Bambu Studio&lt;/a&gt;.&lt;/p&gt;
-&lt;h1 id="step-3-printing"&gt;Step 3: Printing&lt;/h1&gt;
-&lt;p&gt;And finally, we come to the printing process itself. Once you send the G-Code to the printer, the printer starts by heating up the extruder and the bed. You need a hot extruder to melt the filament, and you need a hot bed to help the filament attach to the printing surface. The printer then performs &lt;em&gt;mesh bed leveling&lt;/em&gt; (which not all printers do) to understand subtle variations in the height of the bed across its surface. And then the printer starts moving the extruder on the XY plane to generate the object one layer at a time. It is fascinating to watch; look:&lt;/p&gt;
-&lt;figure&gt;
-&lt;video width="100%" controls&gt;
-&lt;source src="/images/2025-05-28-prusa-printing.mp4" type="video/mp4"&gt;
-&lt;/video&gt;
-&lt;figcaption&gt;Prusa i3 MK3S+ printing one of the bird cage bars shown in the project above.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;But&amp;hellip; how do you send the G-Code to the printer? Well, it depends on the printer. If you choose to go the &lt;a href="https://bambulab.com/"&gt;Bambu Lab&lt;/a&gt; route, which is &amp;ldquo;the Apple of 3D printers&amp;rdquo; as a coworker put it to me (hey Daniel!), it&amp;rsquo;s simple: you click a button from their slicing app and boom, the printer starts working. No need to worry about file transfers and no need to worry about calibration steps; it just works. And in fact, if you look for recommendations online, most people will point you towards choosing one of these printers:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://amzn.to/4kfvKy8"&gt;Bambu Lab A1 Mini&lt;/a&gt;: Maximum print volume of 180 x 180 x 180 mm.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://amzn.to/4kHCGE5"&gt;Bambu Lab A1&lt;/a&gt;: Maximum print volume of 256 x 256 x 256 mm.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;But do you know &lt;em&gt;how&lt;/em&gt; Bambu Lab&amp;rsquo;s magic operation happens? Via a cloud service, &lt;em&gt;&amp;ldquo;of course&amp;rdquo;&lt;/em&gt;. And if the cloud service is down, good luck printing: from what I could find, it seems like these printers cannot operate without a network connection. And if the printer requires a cloud service, then you also face all the usual privacy and security (or lack thereof) problems, with possibly some risky ones (malicious G-Code trying to make the printer malfunction, maybe?).&lt;/p&gt;
-&lt;p&gt;So, what are the alternatives? Well, there are a ton of them. Two machines from other vendors that pop up in almost all reviews are:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://amzn.to/3HeKwGI"&gt;Prusa MK4S&lt;/a&gt;: This is the &amp;ldquo;entry level&amp;rdquo; machine from &lt;a href="https://www.prusa3d.com/"&gt;Prusa&lt;/a&gt;, another big brand in this space with similar price points to the well-regarded Bambu Lab machines.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href="https://amzn.to/3Fx7w35"&gt;Ender 3 V3&lt;/a&gt;: This is a much more affordable printer and comes from &lt;a href="https://www.creality.com/"&gt;Creality&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Which one to pick? As a beginner, it&amp;rsquo;s difficult. I read many reviews online and, as I mention above, most people suggested to &amp;ldquo;just&amp;rdquo; choose Bambu Lab for its simplicity and beginner-friendliness to achieve good quality results. These reviewers highlighted that other machines require a lot of manual tinkering (which actually made them more appetizing to me) and also warned to stay clear of Creality due to quality and safety issues. And if you research deeper, you&amp;rsquo;ll start to realize that the way to &amp;ldquo;level up&amp;rdquo; in 3D printing is to build your own printer while 3D-printing some of its own pieces.&lt;/p&gt;
-&lt;p&gt;In the end, I chose to go the Prusa route, but the high prices put me off: after all, I&amp;rsquo;m just getting started and I do not need to make a huge investment in a &amp;ldquo;hobby&amp;rdquo; that may not last, so I got a second-hand, lightly-used &lt;a href="https://amzn.to/4dxTD1c"&gt;Prusa i3 MK3S+&lt;/a&gt; for a fraction of the price of a new one. And then the surprises started: the printer has &lt;em&gt;zero&lt;/em&gt; network connectivity. This was a bit unexpected (I somehow assumed it&amp;rsquo;d offer local-only network printing), but in the end turned out to be &lt;em&gt;great&lt;/em&gt; because this means that there is zero cloud garbage involved in the printing process. The printer just has an SD card slot and a USB port, so I plugged the latter into a computer running PrusaSlicer and&amp;hellip; nothing. PrusaSlicer did not have any option to actually &lt;em&gt;print&lt;/em&gt; to the physically-attached printer. Weird.&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-05-28-prusa-and-mac-pro.jpg" /&gt;
-&lt;figcaption&gt;Pursa i3 MK3S+ next to the Mac Pro 2013 controlling it.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;As it turns out, you need a print &lt;em&gt;server&lt;/em&gt; to actually control the machine from its USB port. Researching this topic online will almost certainly convince you that you need &lt;a href="https://github.com/guysoft/OctoPi"&gt;OctoPi&lt;/a&gt; running on a Raspberry Pi in order to print. But&amp;hellip; a Pi is just a computer, so whatever OctoPi does can also be done on a Linux machine&amp;mdash;the Mac Pro I had already connected to the printer in the picture right above. And indeed that&amp;rsquo;s the case: once I installed &lt;a href="https://octoprint.org/"&gt;OctoPrint&lt;/a&gt;, I could connect to the printer and drive it. (What&amp;rsquo;s more, it &lt;em&gt;is&lt;/em&gt; possible to add a &amp;ldquo;physical printer&amp;rdquo; to the PrusaSlicer, but all PrusaSlicer will do is embed the print server&amp;rsquo;s web interface.)&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-05-28-octoprint.png" class="with-border" /&gt;
-&lt;figcaption&gt;PrusaSlicer printer view connected to the OctoPrint server.&lt;/figcaption&gt;
-&lt;/figure&gt;
-&lt;p&gt;OctoPrint itself is &amp;ldquo;the CUPS of 3D printing&amp;rdquo;. It&amp;rsquo;s a piece of software that knows how to send the G-Code to the printer via its USB connection, but it&amp;rsquo;s also a system that queues print jobs, provides monitoring and G-Code inspection features, allows for timelapse recording via a webcam, and much more. It feels overkill to be honest, but it does the job and there don&amp;rsquo;t seem to be any simpler alternatives, so that&amp;rsquo;s what it is.&lt;/p&gt;
-&lt;p&gt;The very last thing to touch on regarding the printing process are the filament materials. The basic filament type is PLA, and it seems like it&amp;rsquo;s the easiest one to get started with. There are alternatives of different quality and properties out there for different applications, but that&amp;rsquo;s a world I haven&amp;rsquo;t explored yet.&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;And with that, you should now have the very basic knowledge to start creating your own objects and feel like a Real Engineer (like I did). Keep in mind that you don&amp;rsquo;t actually need to &lt;em&gt;own&lt;/em&gt; a 3D printer though: there are on-demand print services available that will ship the prints back to you for cheap&amp;mdash;but there is no getting around to learning CAD modeling within the constraints of 3D printing. I&amp;rsquo;d also recommend playing with the slicer software to understand the implications of certain choices in the model regarding printing limitations (the need for support structures and the like) and print times. In the end, I&amp;rsquo;m happy I got my own printer because of the various trial-and-error iterations I went through before getting some decent prints out.&lt;/p&gt;
-&lt;figure&gt;
-&lt;img src="/images/2025-05-28-bird-cage-bar.jpg" /&gt;
-&lt;figcaption&gt;Finished project of the bird cage bars.&lt;/figcaption&gt;
-&lt;/figure&gt;</description><enclosure url="https://jmmv.dev/images/2025-05-28-prusa-box.jpg" length="3411105" type="image/jpeg"/></item></channel></rss>
+&lt;p&gt;In my case&amp;hellip; I don&amp;rsquo;t run Bazel on Mac anymore at work. What&amp;rsquo;s more: I do not even use a Mac for personal reasons these days, which means my ulterior motive to use sandboxfs in &lt;code&gt;pkg_comp&lt;/code&gt; is gone. But! If you wanted to redesign sandboxfs from scratch, let&amp;rsquo;s talk!&lt;/p&gt;</description><enclosure url="https://jmmv.dev/images/2025-06-11-sandboxfs-cover-concept.png" length="7119929" type="image/jpeg"/></item></channel></rss>
