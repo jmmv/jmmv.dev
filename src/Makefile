@@ -2,6 +2,7 @@
 all: builder-pattern-for-tests
 all: cmdline-args-unix-vs-windows
 all: djgpp
+all: hello-getoptsargs
 all: inline-array-go
 all: ioctls-rust
 all: netbsd-graphics-wo-x11
@@ -13,6 +14,7 @@ all: wait-for-process-group
 clean: clean-builder-pattern-for-tests
 clean: clean-cmdline-args-unix-vs-windows
 clean: clean-djgpp
+clean: clean-hello-getoptsargs
 clean: clean-inline-array-go
 clean: clean-ioctls-rust
 clean: clean-netbsd-graphics-wo-x11
@@ -40,6 +42,12 @@ djgpp:
 	( cd djgpp && make all )
 clean-djgpp:
 	( cd djgpp && make clean )
+
+.PHONY: clean-hello-getoptsargs hello-getoptsargs
+hello-getoptsargs:
+	( cd hello-getoptsargs && cargo build )
+clean-hello-getoptsargs:
+	( cd hello-getoptsargs && cargo clean )
 
 .PHONY: clean-inline-array-go inline-array-go
 inline-array-go:
