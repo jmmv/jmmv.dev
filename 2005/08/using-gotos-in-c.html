@@ -9,7 +9,58 @@ However, there are some situations in which it is very useful and, despite what 
 About 2 minutes
 &#183;
 Tags:
-<a href=/tags/tmpfs>tmpfs</a></p></div></div><div class="container post-body"><div class=row><div class=col-md-9><div class=row><div class=col><article><p>It is common knowledge that usages of the <tt>goto</tt> statement are potentially dangerous in any structured programming language, as their abuse can quickly make your code unreadable. This is why this construction is seldom explained to people learning how to program and their use is strongly discouraged.</p><p>However, there are some situations in which it is very useful and, despite what some people might say, makes your code more readable. I had never used <tt>goto</tt>s before, but have experienced this recently while writing <a href=http://netbsd-soc.sourceforge.net/projects/tmpfs/>tmpfs</a>.</p><p>One of the situations where a <tt>goto</tt> is useful is when you need break from within a set of nested loops. This is the most cited example of "correct" usage of this statement, but personally, I don't like it. FWIW some languages, such as <a href=http://www.perl.com/>Perl</a>, provide a nice <tt>break</tt> statement to do exactly this.</p><p>Another scenario where <tt>goto</tt> is useful is what I'm using it for now: to control all exit conditions from a function. Instead of placing <tt>return</tt> statements all around inside them (after each error check, for example), I put a <tt>goto</tt> that jumps to the end of the function; that block is responsible for checking postconditions, doing any necessary cleanup and return the correct error code.</p><p>Here is an outline of such a function:</p><pre>int<br>foo(...)<br>{<br>    int error;<br><br>    /* Check function preconditions here using assert(3). */<br><br>    if (error condition one) {<br>        error = EFOO;<br>        goto out;<br>    }<br>    if (error condition two) {<br>        error = EBAR;<br>        goto out;<br>    }<br><br>    /* Code executed when there are no errors. */<br><br>    error = 0;<br>out:<br>    /* Release unneeded resources here. */<br><br>    /* Check function postconditions here using assert(3). */<br>    return error;<br>}</pre><p>As you can see, if I wanted to avoid using <tt>goto</tt>s, I'd have to duplicate a lot of code inside each error condition check. Using this structure, all exit-related stuff is kept in just one place; specially postconditions (remember that they must be fulfilled whichever action the function did). And the function is far more readable (at least to my eyes).</p><p>If you have any other example of nice <tt>goto</tt> usages, or if you see another way to do what I described above, please share! ;-)</p><p><b><a href=http://julipedia.meroh.net/feeds/posts/default>Subscribe to the Julipedia</a> to stay tuned on posts similar to this one and <a href=http://julipedia.meroh.net/p/about.html>read more about this blog</a> to see what you may be missing!</b></p></article><p class="mt-4 text-muted"><i>(Content also available at: <a href=gemini://capsule.jmmv.dev/post/2005/08/using-gotos-in-c.gmi>gemini://capsule.jmmv.dev/post/2005/08/using-gotos-in-c.gmi</a>)</i></p></div></div><div class="container post-links"><div class=row><div class="col me-auto text-start"><span><a href=https://jmmv.dev/2005/08/dedicated-machine-for-kernel-testing.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ms-auto text-end"><span><a href=https://jmmv.dev/2005/08/soc-status-report-4.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn w-100 btn-outline-success" id=thumbs-up-btn>👍
+<a href=/tags/tmpfs>tmpfs</a></p></div></div><div class="container post-body"><div class=row><div class=col-md-9><div class=row><div class=col><article><p>It is common knowledge that usages of the <code>goto</code> statement are
+potentially dangerous in any structured programming language, as their
+abuse can quickly make your code unreadable. This is why this
+construction is seldom explained to people learning how to program and
+their use is strongly discouraged.</p><p>However, there are some situations in which it is very useful and,
+despite what some people might say, makes your code more readable. I had
+never used <code>goto</code>s before, but have experienced this recently while
+writing <a href=http://netbsd-soc.sourceforge.net/projects/tmpfs/>tmpfs</a>.</p><p>One of the situations where a <code>goto</code> is useful is when you need break
+from within a set of nested loops. This is the most cited example of
+&ldquo;correct&rdquo; usage of this statement, but personally, I don&rsquo;t like it. FWIW
+some languages, such as <a href=http://www.perl.com/>Perl</a>, provide a nice
+<code>break</code> statement to do exactly this.</p><p>Another scenario where <code>goto</code> is useful is what I&rsquo;m using it for now: to
+control all exit conditions from a function. Instead of placing <code>return</code>
+statements all around inside them (after each error check, for example),
+I put a <code>goto</code> that jumps to the end of the function; that block is
+responsible for checking postconditions, doing any necessary cleanup and
+return the correct error code.</p><p>Here is an outline of such a function:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-text data-lang=text><span class=line><span class=cl>int
+</span></span><span class=line><span class=cl>foo(...)
+</span></span><span class=line><span class=cl>{
+</span></span><span class=line><span class=cl>    int error;
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    /* Check function preconditions here using assert(3). */
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    if (error condition one) {
+</span></span><span class=line><span class=cl>        error = EFOO;
+</span></span><span class=line><span class=cl>        goto out;
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>    if (error condition two) {
+</span></span><span class=line><span class=cl>        error = EBAR;
+</span></span><span class=line><span class=cl>        goto out;
+</span></span><span class=line><span class=cl>    }
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    /* Code executed when there are no errors. */
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    error = 0;
+</span></span><span class=line><span class=cl>out:
+</span></span><span class=line><span class=cl>    /* Release unneeded resources here. */
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    /* Check function postconditions here using assert(3). */
+</span></span><span class=line><span class=cl>    return error;
+</span></span><span class=line><span class=cl>}
+</span></span></code></pre></div><p>As you can see, if I wanted to avoid using <code>goto</code>s, I&rsquo;d have to
+duplicate a lot of code inside each error condition check. Using this
+structure, all exit-related stuff is kept in just one place; specially
+postconditions (remember that they must be fulfilled whichever action
+the function did). And the function is far more readable (at least to my
+eyes).</p><p>If you have any other example of nice <code>goto</code> usages, or if you see
+another way to do what I described above, please share! ;-)</p><p><strong><a href=http://julipedia.meroh.net/feeds/posts/default>Subscribe to the
+Julipedia</a> to stay tuned
+on posts similar to this one and <a href=http://julipedia.meroh.net/p/about.html>read more about this
+blog</a> to see what you may be
+missing!</strong></p></article><p class="mt-4 text-muted"><i>(Content also available at: <a href=gemini://capsule.jmmv.dev/post/2005/08/using-gotos-in-c.gmi>gemini://capsule.jmmv.dev/post/2005/08/using-gotos-in-c.gmi</a>)</i></p></div></div><div class="container post-links"><div class=row><div class="col me-auto text-start"><span><a href=https://jmmv.dev/2005/08/dedicated-machine-for-kernel-testing.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ms-auto text-end"><span><a href=https://jmmv.dev/2005/08/soc-status-report-4.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn w-100 btn-outline-success" id=thumbs-up-btn>👍
 (<span id=thumbs-up-count>0</span>)</a></div><div class=col><a onclick=voteThumbsDown() class="btn w-100 btn-outline-danger" id=thumbs-down-btn>👎
 (<span id=thumbs-down-count>0</span>)</a></div></div></div><div class="col-lg-8 my-2 d-none d-sm-block"><div class=row><div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Using+%27goto%27s+in+C&amp;url=https%3A%2F%2Fjmmv.dev%2F2005%2F08%2Fusing-gotos-in-c.html" class="btn w-100 btn-outline-primary">Share on
 <img src=/images/badges/reddit.png alt=Reddit width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Using+%27goto%27s+in+C&amp;u=https%3A%2F%2Fjmmv.dev%2F2005%2F08%2Fusing-gotos-in-c.html" class="btn w-100 btn-outline-primary">Share on

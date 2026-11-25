@@ -1,77 +1,68 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Validating format strings in custom C functions - Julio Merino (jmmv.dev)</title><meta property="og:title" content="Validating format strings in custom C functions - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Validating format strings in custom C functions - Julio Merino …"><meta name=description content='In C, particularly due to the lack of dynamic strings, it&#39;s common to pass format strings around together with a variable set of arguments. A prototype like this is very common:
-void&nbsp;my_printf(const char*, ...);
-For the standard printf and similar functions, some compilers will ensure that the variable list of arguments matches the positional parameters in the format string and, if they don&#39;t match, raise a warning. &nbsp;This is, however, just a warning "hardcoded" to match these functions, as the compiler can&#39;t know how the variable arguments of our custom my_printf function relate to the first argument.
-Or can it?
-I was made aware of a nice GCC attribute that allows developers to tag printf-like functions in a manner that allows the compiler to perform the same validation of variable arguments and format strings. &nbsp;This is in the form of a GCC __attribute__ that also happens to work with CLang. &nbsp;Let&#39;s see an example to illustrate how this works:
-#include <stdarg.h>
-#include <stdio.h>
-static void my_printf(const char*, ...)
-&nbsp; &nbsp; __attribute__((format(printf, 1, 2)));
-static void
-my_printf(const char* format, ...)
-{
-&nbsp; &nbsp; va_list ap;
-&nbsp; &nbsp; printf("Custom printf: ");
-&nbsp; &nbsp; va_start(ap, format);
-&nbsp; &nbsp; vprintf(format, ap);
-&nbsp; &nbsp; va_end(ap);
-}
-int
-main(void)
-{
-&nbsp; &nbsp; my_printf("this is valid %dn", 3);
-&nbsp; &nbsp; my_printf("but this is not %fn", 3);
-}
-If we compile the code above:
-$&nbsp;clang example.c
-example.c:22:33: warning: conversion specifies type &#39;double&#39; but
-the argument has type &#39;int&#39; [-Wformat]
-&nbsp; &nbsp; my_printf("but this is not %fn", 3);
-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;~^ &nbsp; &nbsp; ~
-1 warning generated.
-Very useful. &nbsp;This function attribute has been applied to many functions in the NetBSD tree and many bugs have been spotted thanks to it.
-Instead of me explaining how the format attribute works, I&#39;ll refer you to the official documentation. The attribute recognizes several format styles and takes different arguments depending on them, so it is a bit tricky to explain. Plus, if you look at the extensive list of attributes, you may find some useful stuff ;-)
-Happy debugging!'><meta property="og:description" content='In C, particularly due to the lack of dynamic strings, it&#39;s common to pass format strings around together with a variable set of arguments. A prototype like this is very common:
-void&nbsp;my_printf(const char*, ...);
-For the standard printf and similar functions, some compilers will ensure that the variable list of arguments matches the positional parameters in the format string and, if they don&#39;t match, raise a warning. &nbsp;This is, however, just a warning "hardcoded" to match these functions, as the compiler can&#39;t know how the variable arguments of our custom my_printf function relate to the first argument.
-Or can it?
-I was made aware of a nice GCC attribute that allows developers to tag printf-like functions in a manner that allows the compiler to perform the same validation of variable arguments and format strings. &nbsp;This is in the form of a GCC __attribute__ that also happens to work with CLang. &nbsp;Let&#39;s see an example to illustrate how this works:
-#include <stdarg.h>
-#include <stdio.h>
-static void my_printf(const char*, ...)
-&nbsp; &nbsp; __attribute__((format(printf, 1, 2)));
-static void
-my_printf(const char* format, ...)
-{
-&nbsp; &nbsp; va_list ap;
-&nbsp; &nbsp; printf("Custom printf: ");
-&nbsp; &nbsp; va_start(ap, format);
-&nbsp; &nbsp; vprintf(format, ap);
-&nbsp; &nbsp; va_end(ap);
-}
-int
-main(void)
-{
-&nbsp; &nbsp; my_printf("this is valid %dn", 3);
-&nbsp; &nbsp; my_printf("but this is not %fn", 3);
-}
-If we compile the code above:
-$&nbsp;clang example.c
-example.c:22:33: warning: conversion specifies type &#39;double&#39; but
-the argument has type &#39;int&#39; [-Wformat]
-&nbsp; &nbsp; my_printf("but this is not %fn", 3);
-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;~^ &nbsp; &nbsp; ~
-1 warning generated.
-Very useful. &nbsp;This function attribute has been applied to many functions in the NetBSD tree and many bugs have been spotted thanks to it.
-Instead of me explaining how the format attribute works, I&#39;ll refer you to the official documentation. The attribute recognizes several format styles and takes different arguments depending on them, so it is a bit tricky to explain. Plus, if you look at the extensive list of attributes, you may find some useful stuff ;-)
-Happy debugging!'><meta property="twitter:description" content="In C, particularly due to the lack of dynamic strings, it's common to pass format strings around together with a variable set of arguments. A prototype like this is very common: …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.164.0"><meta property="og:url" content="https://jmmv.dev/2011/06/validating-format-strings-in-custom-c.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2011/06/validating-format-strings-in-custom-c.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.28e5ba177d95c6cfba489124bf3615b49163c3509490f9ff9b7c8eed52c524bb.css><link rel=stylesheet href=/css/chroma.css><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="og:image" content="/images/favicons/favicon-1200x1200.png"><meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><header class=site-header><nav class="navbar navbar-expand-md fixed-top navbar-dark bg-primary"><div class=container><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Validating format strings in custom C functions - Julio Merino (jmmv.dev)</title><meta property="og:title" content="Validating format strings in custom C functions - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Validating format strings in custom C functions - Julio Merino …"><meta name=description content="In C, particularly due to the lack of dynamic strings, it&rsquo;s common to pass format strings around together with a variable set of arguments. A prototype like this is very common:
+void my_printf(const char*, ...);
+For the standard printf and similar functions, some compilers will ensure that the variable list of arguments matches the positional parameters in the format string and, if they don&rsquo;t match, raise a warning. This is, however, just a warning &ldquo;hardcoded&rdquo; to match these functions, as the compiler can&rsquo;t know how the variable arguments of our custom my_printf function relate to the first argument.
+"><meta property="og:description" content="In C, particularly due to the lack of dynamic strings, it&rsquo;s common to pass format strings around together with a variable set of arguments. A prototype like this is very common:
+void my_printf(const char*, ...);
+For the standard printf and similar functions, some compilers will ensure that the variable list of arguments matches the positional parameters in the format string and, if they don&rsquo;t match, raise a warning. This is, however, just a warning &ldquo;hardcoded&rdquo; to match these functions, as the compiler can&rsquo;t know how the variable arguments of our custom my_printf function relate to the first argument.
+"><meta property="twitter:description" content="In C, particularly due to the lack of dynamic strings, it&rsquo;s common to pass format strings around together with a variable set of arguments. A prototype like this is very common:
+void …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.164.0"><meta property="og:url" content="https://jmmv.dev/2011/06/validating-format-strings-in-custom-c.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2011/06/validating-format-strings-in-custom-c.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.28e5ba177d95c6cfba489124bf3615b49163c3509490f9ff9b7c8eed52c524bb.css><link rel=stylesheet href=/css/chroma.css><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="og:image" content="/images/favicons/favicon-1200x1200.png"><meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><header class=site-header><nav class="navbar navbar-expand-md fixed-top navbar-dark bg-primary"><div class=container><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
 &nbsp;jmmv.dev
 </a><button class=navbar-toggler type=button data-bs-toggle=collapse data-bs-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
 <span class=navbar-toggler-icon></span></button><div class="collapse navbar-collapse" id=navbarSupportedContent><ul class="navbar-nav me-auto"><li class=nav-item><a class=nav-link href=/about.html>About</a></li><li class="nav-item d-md-none"><a class=nav-link href=/archive.html>Archive</a></li><li class="nav-item d-md-none"><a class=nav-link href=/blog/index.html>Blog</a></li><li class="nav-item d-md-none"><a class=nav-link href=/privacy.html>Privacy policy</a></li><li class="nav-item d-md-none"><a class=nav-link href=/series.html>Series</a></li><li class=nav-item><a class=nav-link href=/software.html>Software</a></li><li class="nav-item d-md-none"><a class=nav-link href=/tags.html>Tags</a></li></ul><ul class="navbar-nav ms-auto"><li class=nav-item><a class=nav-link rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=24 height=24 alt="Follow @jmmv on Mastodon"></a></li><li class=nav-item><a class=nav-link href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=24 height=24 alt="Follow @jmmv on Twitter"></a></li><li class=nav-item><a class=nav-link href=/feed.xml><img src=/images/badges/feed-icon-28x28.png width=24 height=24 alt="RSS feed"></a></li></ul></div></div></nav></header><div class=page-header><div class=container><h1>Validating format strings in custom C functions</h1><p>June 17, 2011 &#183;
 About 2 minutes
 &#183;
 Tags:
-<a href=/tags/c>c</a></p></div></div><div class="container post-body"><div class=row><div class=col-md-9><div class=row><div class=col><article>In C, particularly due to the lack of dynamic strings, it's common to pass format strings around together with a variable set of arguments. A prototype like this is very common:<br><br><tt>void&nbsp;my_printf(const char*, ...);</tt><br><br>For the standard <tt>printf</tt> and similar functions, some compilers will ensure that the variable list of arguments matches the positional parameters in the format string and, if they don't match, raise a warning. &nbsp;This is, however, just a warning "hardcoded" to match these functions, as the compiler can't know how the variable arguments of our custom <tt>my_printf</tt> function relate to the first argument.<br><br>Or can it?<br><br><a href=http://mail-index.netbsd.org/source-changes/2011/06/11/msg023084.html>I was made aware</a> of a nice GCC attribute that allows developers to tag printf-like functions in a manner that allows the compiler to perform the same validation of variable arguments and format strings. &nbsp;This is in the form of a GCC <tt>__attribute__</tt> that also happens to work with CLang. &nbsp;Let's see an example to illustrate how this works:<br><br><pre>#include &lt;stdarg.h&gt;<br>#include &lt;stdio.h&gt;<br><br>static void my_printf(const char*, ...)<br>&nbsp; &nbsp; __attribute__((format(printf, 1, 2)));<br><br>static void<br>my_printf(const char* format, ...)<br>{<br>&nbsp; &nbsp; va_list ap;<br><br>&nbsp; &nbsp; printf("Custom printf: ");<br>&nbsp; &nbsp; va_start(ap, format);<br>&nbsp; &nbsp; vprintf(format, ap);<br>&nbsp; &nbsp; va_end(ap);<br>}<br><br>int<br>main(void)<br>{<br>&nbsp; &nbsp; my_printf("this is valid %dn", 3);<br>&nbsp; &nbsp; my_printf("but this is not %fn", 3);<br>}</pre><br>If we compile the code above:<br><br><pre>$&nbsp;clang example.c<br>example.c:22:33: warning: conversion specifies type 'double' but<br>the argument has type 'int' [-Wformat]<br>&nbsp; &nbsp; my_printf("but this is not %fn", 3);<br>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;~^ &nbsp; &nbsp; ~<br>1 warning generated.</pre><div><br></div><div>Very useful. &nbsp;This function attribute has been applied to many functions in the NetBSD tree and many bugs have been spotted thanks to it.</div><div><br></div><div>Instead of me explaining how the format attribute works, I'll refer you to the <a href=http://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html#Function-Attributes>official documentation</a>. The attribute recognizes several format styles and takes different arguments depending on them, so it is a bit tricky to explain. Plus, if you look at the extensive list of attributes, you may find some useful stuff ;-)</div><div><br></div><div>Happy debugging!</div></article><p class="mt-4 text-muted"><i>(Content also available at: <a href=gemini://capsule.jmmv.dev/post/2011/06/validating-format-strings-in-custom-c.gmi>gemini://capsule.jmmv.dev/post/2011/06/validating-format-strings-in-custom-c.gmi</a>)</i></p></div></div><div class="container post-links"><div class=row><div class="col me-auto text-start"><span><a href=https://jmmv.dev/2011/06/kyua-weekly-status-report_13.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ms-auto text-end"><span><a href=https://jmmv.dev/2011/06/kyua-weekly-status-report_19.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn w-100 btn-outline-success" id=thumbs-up-btn>👍
+<a href=/tags/c>c</a></p></div></div><div class="container post-body"><div class=row><div class=col-md-9><div class=row><div class=col><article><p>In C, particularly due to the lack of dynamic strings, it&rsquo;s common to
+pass format strings around together with a variable set of arguments. A
+prototype like this is very common:</p><p><code>void my_printf(const char*, ...);</code></p><p>For the standard <code>printf</code> and similar functions, some compilers will
+ensure that the variable list of arguments matches the positional
+parameters in the format string and, if they don&rsquo;t match, raise a
+warning.  This is, however, just a warning &ldquo;hardcoded&rdquo; to match
+these functions, as the compiler can&rsquo;t know how the variable arguments
+of our custom <code>my_printf</code> function relate to the first argument.</p><p>Or can it?</p><p><a href=http://mail-index.netbsd.org/source-changes/2011/06/11/msg023084.html>I was made
+aware</a>
+of a nice GCC attribute that allows developers to tag printf-like
+functions in a manner that allows the compiler to perform the same
+validation of variable arguments and format strings.  This is in
+the form of a GCC <code>__attribute__</code> that also happens to work with CLang.
+ Let&rsquo;s see an example to illustrate how this works:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-c data-lang=c><span class=line><span class=cl><span class=cp>#include</span> <span class=cpf>&lt;stdarg.h&gt;</span><span class=cp>
+</span></span></span><span class=line><span class=cl><span class=cp>#include</span> <span class=cpf>&lt;stdio.h&gt;</span><span class=cp>
+</span></span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>static</span> <span class=kt>void</span> <span class=nf>my_printf</span><span class=p>(</span><span class=k>const</span> <span class=kt>char</span><span class=o>*</span><span class=p>,</span> <span class=p>...)</span>
+</span></span><span class=line><span class=cl>    <span class=nf>__attribute__</span><span class=p>((</span><span class=nf>format</span><span class=p>(</span><span class=n>printf</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>)));</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>static</span> <span class=kt>void</span>
+</span></span><span class=line><span class=cl><span class=nf>my_printf</span><span class=p>(</span><span class=k>const</span> <span class=kt>char</span><span class=o>*</span> <span class=n>format</span><span class=p>,</span> <span class=p>...)</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>va_list</span> <span class=n>ap</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=nf>printf</span><span class=p>(</span><span class=s>&#34;Custom printf: &#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>va_start</span><span class=p>(</span><span class=n>ap</span><span class=p>,</span> <span class=n>format</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>vprintf</span><span class=p>(</span><span class=n>format</span><span class=p>,</span> <span class=n>ap</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>va_end</span><span class=p>(</span><span class=n>ap</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=kt>int</span>
+</span></span><span class=line><span class=cl><span class=nf>main</span><span class=p>(</span><span class=kt>void</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nf>my_printf</span><span class=p>(</span><span class=s>&#34;this is valid %dn&#34;</span><span class=p>,</span> <span class=mi>3</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=nf>my_printf</span><span class=p>(</span><span class=s>&#34;but this is not %fn&#34;</span><span class=p>,</span> <span class=mi>3</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></div><p>If we compile the code above:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-console data-lang=console><span class=line><span class=cl><span class=gp>$</span> clang example.c
+</span></span><span class=line><span class=cl><span class=go>example.c:22:33: warning: conversion specifies type &#39;double&#39; but
+</span></span></span><span class=line><span class=cl><span class=go>the argument has type &#39;int&#39; [-Wformat]
+</span></span></span><span class=line><span class=cl><span class=go>    my_printf(&#34;but this is not %fn&#34;, 3);
+</span></span></span><span class=line><span class=cl><span class=go>                               ~^     ~
+</span></span></span><span class=line><span class=cl><span class=go>1 warning generated.
+</span></span></span></code></pre></div><p>Very useful.  This function attribute has been applied to many
+functions in the NetBSD tree and many bugs have been spotted thanks to
+it.</p><p>Instead of me explaining how the format attribute works, I&rsquo;ll refer you
+to the <a href=http://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html#Function-Attributes>official
+documentation</a>.
+The attribute recognizes several format styles and takes different
+arguments depending on them, so it is a bit tricky to explain. Plus, if
+you look at the extensive list of attributes, you may find some useful
+stuff ;-)</p><p>Happy debugging!</p></article><p class="mt-4 text-muted"><i>(Content also available at: <a href=gemini://capsule.jmmv.dev/post/2011/06/validating-format-strings-in-custom-c.gmi>gemini://capsule.jmmv.dev/post/2011/06/validating-format-strings-in-custom-c.gmi</a>)</i></p></div></div><div class="container post-links"><div class=row><div class="col me-auto text-start"><span><a href=https://jmmv.dev/2011/06/kyua-weekly-status-report_13.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ms-auto text-end"><span><a href=https://jmmv.dev/2011/06/kyua-weekly-status-report_19.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn w-100 btn-outline-success" id=thumbs-up-btn>👍
 (<span id=thumbs-up-count>0</span>)</a></div><div class=col><a onclick=voteThumbsDown() class="btn w-100 btn-outline-danger" id=thumbs-down-btn>👎
 (<span id=thumbs-down-count>0</span>)</a></div></div></div><div class="col-lg-8 my-2 d-none d-sm-block"><div class=row><div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Validating+format+strings+in+custom+C+functions&amp;url=https%3A%2F%2Fjmmv.dev%2F2011%2F06%2Fvalidating-format-strings-in-custom-c.html" class="btn w-100 btn-outline-primary">Share on
 <img src=/images/badges/reddit.png alt=Reddit width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Validating+format+strings+in+custom+C+functions&amp;u=https%3A%2F%2Fjmmv.dev%2F2011%2F06%2Fvalidating-format-strings-in-custom-c.html" class="btn w-100 btn-outline-primary">Share on

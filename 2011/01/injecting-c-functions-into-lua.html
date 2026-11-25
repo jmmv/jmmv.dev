@@ -1,99 +1,90 @@
-<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Injecting C++ functions into Lua - Julio Merino (jmmv.dev)</title><meta property="og:title" content="Injecting C++ functions into Lua - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Injecting C++ functions into Lua - Julio Merino (jmmv.dev)"><meta name=description content='The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the lua::state class.
-Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the lua_CFunction type:typedef int (*lua_CFunction)(lua_State*);Now, let&#39;s consider this code:int
-awesome_native_function(lua_State* state)
-{
-// Uh, we have access to s, so we bypass the lua::state!
-... do something nasty ...
-// Oh, and we can throw an exception here...
-//with bad consequences.
-}
-void
-setup(...)
-{
-lua::state state;
-state.push_c_function(awesome_native_function);
-state.set_global("myfunc");
-... run some script ...
-}The fact that we must pass a lua_CFunction prototype to the lua_pushcfunction object means that such function must have access to the raw lua_State* pointer... which we want to avoid.
-What we really want is the caller code to define a function such as:typedef int (*cxx_function)(lua::state&)In an ideal world, the lua::state class would implement a push_cxx_function that took a cxx_function, generated a thin C wrapper and injected such generated wrapper into Lua. Unfortunately, we are not in an ideal world: C++ does not have high-order functions and thus the "generate a wrapper function" part of the previous proposal does not really work.
-What we can do instead, though, is to make the creation of C wrappers for these C++ functions trivial. And this is what r42 did. The approach I took is similar to this overly-simplified (and broken) example:template< cxx_function Function >
-int
-wrap_cxx_function(lua_State* state)
-{
-try {
-lua::state state_wrapper(state);
-return Function(state_wrapper);
-} catch (...) {
-luaL_error(state, "Geez, don&#39;t go into C&#39;s land!");
-}
-}This template wrapper takes a cxx_function object and generates a corresponding C function at compile time. This wrapper function ensures that C++ state does not propagate into the C world, as that often has catastrophical consequences. (Due to language limitations, the input function must have external linkage. So no, it cannot be static.)
-As a result, we can rewrite our original snippet as:int
-awesome_native_function(lua::state& state)
-{
-// See, we cannot access lua_State* now.
-... do something ...
-throw std::runtime_error("And we can even do this!");
-}
-void
-setup(...)
-{
-lua::state state;
-state.push_c_function(
-wrap_cxx_function< awesome_native_function >);
-state.set_global("myfunc");
-... run some script ...
-}Neat? I think so, but maybe not so much. I&#39;m pretty sure there are cooler ways of achieving the above purpose in a cleaner way, but this one works nicely and has few overhead.'><meta property="og:description" content='The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the lua::state class.
-Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the lua_CFunction type:typedef int (*lua_CFunction)(lua_State*);Now, let&#39;s consider this code:int
-awesome_native_function(lua_State* state)
-{
-// Uh, we have access to s, so we bypass the lua::state!
-... do something nasty ...
-// Oh, and we can throw an exception here...
-//with bad consequences.
-}
-void
-setup(...)
-{
-lua::state state;
-state.push_c_function(awesome_native_function);
-state.set_global("myfunc");
-... run some script ...
-}The fact that we must pass a lua_CFunction prototype to the lua_pushcfunction object means that such function must have access to the raw lua_State* pointer... which we want to avoid.
-What we really want is the caller code to define a function such as:typedef int (*cxx_function)(lua::state&)In an ideal world, the lua::state class would implement a push_cxx_function that took a cxx_function, generated a thin C wrapper and injected such generated wrapper into Lua. Unfortunately, we are not in an ideal world: C++ does not have high-order functions and thus the "generate a wrapper function" part of the previous proposal does not really work.
-What we can do instead, though, is to make the creation of C wrappers for these C++ functions trivial. And this is what r42 did. The approach I took is similar to this overly-simplified (and broken) example:template< cxx_function Function >
-int
-wrap_cxx_function(lua_State* state)
-{
-try {
-lua::state state_wrapper(state);
-return Function(state_wrapper);
-} catch (...) {
-luaL_error(state, "Geez, don&#39;t go into C&#39;s land!");
-}
-}This template wrapper takes a cxx_function object and generates a corresponding C function at compile time. This wrapper function ensures that C++ state does not propagate into the C world, as that often has catastrophical consequences. (Due to language limitations, the input function must have external linkage. So no, it cannot be static.)
-As a result, we can rewrite our original snippet as:int
-awesome_native_function(lua::state& state)
-{
-// See, we cannot access lua_State* now.
-... do something ...
-throw std::runtime_error("And we can even do this!");
-}
-void
-setup(...)
-{
-lua::state state;
-state.push_c_function(
-wrap_cxx_function< awesome_native_function >);
-state.set_global("myfunc");
-... run some script ...
-}Neat? I think so, but maybe not so much. I&#39;m pretty sure there are cooler ways of achieving the above purpose in a cleaner way, but this one works nicely and has few overhead.'><meta property="twitter:description" content="The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.164.0"><meta property="og:url" content="https://jmmv.dev/2011/01/injecting-c-functions-into-lua.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2011/01/injecting-c-functions-into-lua.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.28e5ba177d95c6cfba489124bf3615b49163c3509490f9ff9b7c8eed52c524bb.css><link rel=stylesheet href=/css/chroma.css><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="og:image" content="/images/favicons/favicon-1200x1200.png"><meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><header class=site-header><nav class="navbar navbar-expand-md fixed-top navbar-dark bg-primary"><div class=container><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
+<!doctype html><html lang=en xmlns=http://www.w3.org/1999/xhtml xmlns:fb=http://ogp.me/ns/fb#><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta property="og:site_name" content="Julio Merino (jmmv.dev)"><meta property="twitter:site" content="@jmmv"><title>Injecting C++ functions into Lua - Julio Merino (jmmv.dev)</title><meta property="og:title" content="Injecting C++ functions into Lua - Julio Merino (jmmv.dev)"><meta property="twitter:title" content="Injecting C++ functions into Lua - Julio Merino (jmmv.dev)"><meta name=description content="The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the lua::state class.
+Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the lua_CFunction type:
+typedef int (*lua_CFunction)(lua_State*);
+Now, let&rsquo;s consider this code:
+"><meta property="og:description" content="The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the lua::state class.
+Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the lua_CFunction type:
+typedef int (*lua_CFunction)(lua_State*);
+Now, let&rsquo;s consider this code:
+"><meta property="twitter:description" content="The C++ interface to Lua implemented in Kyua exposes a lua::state class that wraps the lower-level lua_State* type. This class completely hides the internal C type of Lua to ensure that all calls that …"><meta name=author content="Julio Merino"><meta property="twitter:creator" content="@jmmv"><meta name=generator content="Hugo 0.164.0"><meta property="og:url" content="https://jmmv.dev/2011/01/injecting-c-functions-into-lua.html"><meta property="og:type" content="blog"><meta property="twitter:card" content="summary"><link rel=canonical href=https://jmmv.dev/2011/01/injecting-c-functions-into-lua.html><link rel=alternate type=application/rss+xml title="Julio Merino (jmmv.dev)" href=/feed.xml><link rel=stylesheet href=/sass/main.min.28e5ba177d95c6cfba489124bf3615b49163c3509490f9ff9b7c8eed52c524bb.css><link rel=stylesheet href=/css/chroma.css><link rel=icon type=image/png href=/images/favicons/favicon-16x16.png sizes=16x16><link rel=icon type=image/png href=/images/favicons/favicon-32x32.png sizes=32x32><link rel=icon type=image/png href=/images/favicons/favicon-96x96.png sizes=96x96><meta property="og:image" content="/images/favicons/favicon-1200x1200.png"><meta property="twitter:image" content="https://jmmv.dev/images/favicons/favicon-1200x1200.png"><script>const SITE_ID="e8da9f62-b7ac-4fe9-bf20-7c527199a376",BASE_URL="https://jmmv.dev/"</script></head><body><header class=site-header><nav class="navbar navbar-expand-md fixed-top navbar-dark bg-primary"><div class=container><a class=navbar-brand href=/><img src=/images/favicons/favicon-30x30.png width=30 height=30 class="d-inline-block align-top" alt>
 &nbsp;jmmv.dev
 </a><button class=navbar-toggler type=button data-bs-toggle=collapse data-bs-target=#navbarSupportedContent aria-controls=navbarSupportedContent aria-expanded=false aria-label="Toggle navigation">
 <span class=navbar-toggler-icon></span></button><div class="collapse navbar-collapse" id=navbarSupportedContent><ul class="navbar-nav me-auto"><li class=nav-item><a class=nav-link href=/about.html>About</a></li><li class="nav-item d-md-none"><a class=nav-link href=/archive.html>Archive</a></li><li class="nav-item d-md-none"><a class=nav-link href=/blog/index.html>Blog</a></li><li class="nav-item d-md-none"><a class=nav-link href=/privacy.html>Privacy policy</a></li><li class="nav-item d-md-none"><a class=nav-link href=/series.html>Series</a></li><li class=nav-item><a class=nav-link href=/software.html>Software</a></li><li class="nav-item d-md-none"><a class=nav-link href=/tags.html>Tags</a></li></ul><ul class="navbar-nav ms-auto"><li class=nav-item><a class=nav-link rel=me href=https://mastodon.online/@jmmv><img src=/images/badges/mastodon-logo.svg width=24 height=24 alt="Follow @jmmv on Mastodon"></a></li><li class=nav-item><a class=nav-link href="https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&amp;screen_name=jmmv"><img src=/images/badges/Twitter_logo_blue.svg width=24 height=24 alt="Follow @jmmv on Twitter"></a></li><li class=nav-item><a class=nav-link href=/feed.xml><img src=/images/badges/feed-icon-28x28.png width=24 height=24 alt="RSS feed"></a></li></ul></div></div></nav></header><div class=page-header><div class=container><h1>Injecting C++ functions into Lua</h1><p>January 17, 2011 &#183;
-About 2 minutes
+About 3 minutes
 &#183;
 Tags:
-<a href=/tags/cxx>cxx</a>, <a href=/tags/kyua>kyua</a>, <a href=/tags/lua>lua</a></p></div></div><div class="container post-body"><div class=row><div class=col-md-9><div class=row><div class=col><article>The <a href=/2011/01/c-interface-to-lua.html>C++ interface to Lua</a> implemented in <a href=http://code.google.com/p/kyua/>Kyua</a> exposes a <tt>lua::state</tt> class that wraps the lower-level <tt>lua_State*</tt> type. This class completely hides the internal C type of Lua to ensure that all calls that affect the state go through the <tt>lua::state</tt> class.<br><br>Things get a bit messy when we want to inject native functions into the Lua environment. These functions follow the prototype represented by the <tt>lua_CFunction</tt> type:<blockquote><tt>typedef int (*lua_CFunction)(lua_State*);</tt></blockquote>Now, let's consider this code:<pre>int<br>awesome_native_function(lua_State* state)<br>{<br>    // Uh, we have access to s, so we bypass the lua::state!<br>    ... do something nasty ...<br><br>    // Oh, and we can throw an exception here...<br>    //with bad consequences.<br>}<br><br>void<br>setup(...)<br>{<br>    lua::state state;<br>    state.push_c_function(awesome_native_function);<br>    state.set_global("myfunc");<br>    ... run some script ...<br>}</pre>The fact that we must pass a <tt>lua_CFunction</tt> prototype to the <tt>lua_pushcfunction</tt> object means that such function must have access to the raw <tt>lua_State*</tt> pointer... which we want to avoid.<br><br>What we really want is the caller code to define a function such as:<blockquote><tt>typedef int (*cxx_function)(lua::state&)</tt></blockquote>In an ideal world, the <tt>lua::state</tt> class would implement a <tt>push_cxx_function</tt> that took a <tt>cxx_function</tt>, generated a thin C wrapper and injected such generated wrapper into Lua. Unfortunately, we are not in an ideal world: C++ does not have high-order functions and thus the "generate a wrapper function" part of the previous proposal does not really work.<br><br>What we can do instead, though, is to make the creation of C wrappers for these C++ functions trivial. And this is what <a href="http://code.google.com/p/kyua/source/detail?r=42">r42</a> did. The approach I took is similar to this overly-simplified (and broken) example:<pre>template&lt; cxx_function Function &gt;<br>int<br>wrap_cxx_function(lua_State* state)<br>{<br>    try {<br>        lua::state state_wrapper(state);<br>        return Function(state_wrapper);<br>    } catch (...) {<br>        luaL_error(state, "Geez, don't go into C's land!");<br>    }<br>}</pre>This template wrapper takes a <tt>cxx_function</tt> object and generates a corresponding C function <i>at compile time</i>. This wrapper function ensures that C++ state does not propagate into the C world, as that often has catastrophical consequences. (Due to language limitations, the input function must have external linkage. So no, it cannot be static.)<br><br>As a result, we can rewrite our original snippet as:<pre>int<br>awesome_native_function(lua::state& state)<br>{<br>    // See, we cannot access lua_State* now.<br><br>    ... do something ...<br>    throw std::runtime_error("And we can even do this!");<br>}<br><br>void<br>setup(...)<br>{<br>    lua::state state;<br>    state.push_c_function(<br>        wrap_cxx_function< awesome_native_function >);<br>    state.set_global("myfunc");<br>    ... run some script ...<br>}</pre>Neat? I think so, but maybe not so much. I'm pretty sure there are cooler ways of achieving the above purpose in a cleaner way, but this one works nicely and has few overhead.</article><p class="mt-4 text-muted"><i>(Content also available at: <a href=gemini://capsule.jmmv.dev/post/2011/01/injecting-c-functions-into-lua.gmi>gemini://capsule.jmmv.dev/post/2011/01/injecting-c-functions-into-lua.gmi</a>)</i></p></div></div><div class="container post-links"><div class=row><div class="col me-auto text-start"><span><a href=https://jmmv.dev/2011/01/error-handling-in-lua-kyua-approach.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ms-auto text-end"><span><a href=https://jmmv.dev/2011/01/teeny-tiny-review-of-twitterville.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn w-100 btn-outline-success" id=thumbs-up-btn>👍
+<a href=/tags/cxx>cxx</a>, <a href=/tags/kyua>kyua</a>, <a href=/tags/lua>lua</a></p></div></div><div class="container post-body"><div class=row><div class=col-md-9><div class=row><div class=col><article><p>The <a href=/2011/01/c-interface-to-lua.html>C++ interface to Lua</a>
+implemented in <a href=http://code.google.com/p/kyua/>Kyua</a> exposes a
+<code>lua::state</code> class that wraps the lower-level <code>lua_State*</code> type. This
+class completely hides the internal C type of Lua to ensure that all
+calls that affect the state go through the <code>lua::state</code> class.</p><p>Things get a bit messy when we want to inject native functions into the
+Lua environment. These functions follow the prototype represented by the
+<code>lua_CFunction</code> type:</p><blockquote><p><code>typedef int (*lua_CFunction)(lua_State*);</code></p></blockquote><p>Now, let&rsquo;s consider this code:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-lua data-lang=lua><span class=line><span class=cl><span class=n>int</span>
+</span></span><span class=line><span class=cl><span class=n>awesome_native_function</span><span class=p>(</span><span class=n>lua_State</span><span class=o>*</span> <span class=n>state</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=o>//</span> <span class=n>Uh</span><span class=p>,</span> <span class=n>we</span> <span class=n>have</span> <span class=n>access</span> <span class=n>to</span> <span class=n>s</span><span class=p>,</span> <span class=n>so</span> <span class=n>we</span> <span class=n>bypass</span> <span class=n>the</span> <span class=n>lua</span><span class=p>::</span><span class=nl>state</span><span class=err>!</span>
+</span></span><span class=line><span class=cl>    <span class=err>...</span> <span class=nl>do</span> <span class=nl>something</span> <span class=nl>nasty</span> <span class=err>...</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=err>//</span> <span class=nl>Oh</span><span class=err>,</span> <span class=nl>and</span> <span class=nl>we</span> <span class=nl>can</span> <span class=nl>throw</span> <span class=nl>an</span> <span class=nl>exception</span> <span class=nl>here</span><span class=err>...</span>
+</span></span><span class=line><span class=cl>    <span class=err>//</span><span class=nl>with</span> <span class=nl>bad</span> <span class=nl>consequences</span><span class=err>.</span>
+</span></span><span class=line><span class=cl><span class=err>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nl>void</span>
+</span></span><span class=line><span class=cl><span class=nl>setup</span><span class=err>(...)</span>
+</span></span><span class=line><span class=cl><span class=err>{</span>
+</span></span><span class=line><span class=cl>    <span class=nl>lua</span><span class=p>::</span><span class=n>state</span> <span class=n>state</span><span class=p>;</span>
+</span></span><span class=line><span class=cl>    <span class=n>state.push_c_function</span><span class=p>(</span><span class=n>awesome_native_function</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=n>state.set_global</span><span class=p>(</span><span class=s2>&#34;myfunc&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl>    <span class=p>...</span> <span class=n>run</span> <span class=n>some</span> <span class=n>script</span> <span class=p>...</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></div><p>The fact that we must pass a <code>lua_CFunction</code> prototype to the
+<code>lua_pushcfunction</code> object means that such function must have access to
+the raw <code>lua_State*</code> pointer&mldr; which we want to avoid.</p><p>What we really want is the caller code to define a function such as:</p><blockquote><p><code>typedef int (*cxx_function)(lua::state&)</code></p></blockquote><p>In an ideal world, the <code>lua::state</code> class would implement a
+<code>push_cxx_function</code> that took a <code>cxx_function</code>, generated a thin C
+wrapper and injected such generated wrapper into Lua. Unfortunately, we
+are not in an ideal world: C++ does not have high-order functions and
+thus the &ldquo;generate a wrapper function&rdquo; part of the previous proposal
+does not really work.</p><p>What we can do instead, though, is to make the creation of C wrappers
+for these C++ functions trivial. And this is what
+<a href="http://code.google.com/p/kyua/source/detail?r=42">r42</a> did. The
+approach I took is similar to this overly-simplified (and broken)
+example:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-lua data-lang=lua><span class=line><span class=cl><span class=n>template</span><span class=o>&lt;</span> <span class=n>cxx_function</span> <span class=n>Function</span> <span class=o>&gt;</span>
+</span></span><span class=line><span class=cl><span class=n>int</span>
+</span></span><span class=line><span class=cl><span class=n>wrap_cxx_function</span><span class=p>(</span><span class=n>lua_State</span><span class=o>*</span> <span class=n>state</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>try</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=n>lua</span><span class=p>::</span><span class=nl>state</span> <span class=nl>state_wrapper</span><span class=err>(</span><span class=nl>state</span><span class=err>);</span>
+</span></span><span class=line><span class=cl>        <span class=nl>return</span> <span class=nl>Function</span><span class=err>(</span><span class=nl>state_wrapper</span><span class=err>);</span>
+</span></span><span class=line><span class=cl>    <span class=err>}</span> <span class=nl>catch</span> <span class=err>(...)</span> <span class=err>{</span>
+</span></span><span class=line><span class=cl>        <span class=nl>luaL_error</span><span class=err>(</span><span class=nl>state</span><span class=err>,</span> <span class=err>&#34;</span><span class=nl>Geez</span><span class=err>,</span> <span class=nl>don</span><span class=err>&#39;</span><span class=nl>t</span> <span class=nl>go</span> <span class=nl>into</span> <span class=nl>C</span><span class=err>&#39;</span><span class=nl>s</span> <span class=nl>land</span><span class=err>!&#34;);</span>
+</span></span><span class=line><span class=cl>    <span class=err>}</span>
+</span></span><span class=line><span class=cl><span class=err>}</span>
+</span></span></code></pre></div><p>This template wrapper takes a <code>cxx_function</code> object and generates a
+corresponding C function <em>at compile time</em>. This wrapper function
+ensures that C++ state does not propagate into the C world, as that
+often has catastrophical consequences. (Due to language limitations, the
+input function must have external linkage. So no, it cannot be
+static.)</p><p>As a result, we can rewrite our original snippet as:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-lua data-lang=lua><span class=line><span class=cl><span class=n>int</span>
+</span></span><span class=line><span class=cl><span class=n>awesome_native_function</span><span class=p>(</span><span class=n>lua</span><span class=p>::</span><span class=nl>state</span><span class=err>&amp;</span> <span class=nl>state</span><span class=err>)</span>
+</span></span><span class=line><span class=cl><span class=err>{</span>
+</span></span><span class=line><span class=cl>    <span class=err>//</span> <span class=nl>See</span><span class=err>,</span> <span class=nl>we</span> <span class=nl>cannot</span> <span class=nl>access</span> <span class=nl>lua_State</span><span class=err>*</span> <span class=nl>now</span><span class=err>.</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>    <span class=err>...</span> <span class=nl>do</span> <span class=nl>something</span> <span class=err>...</span>
+</span></span><span class=line><span class=cl>    <span class=nl>throw</span> <span class=nl>std</span><span class=p>::</span><span class=n>runtime_error</span><span class=p>(</span><span class=s2>&#34;And we can even do this!&#34;</span><span class=p>);</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=n>void</span>
+</span></span><span class=line><span class=cl><span class=n>setup</span><span class=p>(...)</span>
+</span></span><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=n>lua</span><span class=p>::</span><span class=nl>state</span> <span class=nl>state</span><span class=err>;</span>
+</span></span><span class=line><span class=cl>    <span class=nl>state</span><span class=err>.</span><span class=nl>push_c_function</span><span class=err>(</span>
+</span></span><span class=line><span class=cl>        <span class=nl>wrap_cxx_function</span><span class=err>&lt;</span> <span class=nl>awesome_native_function</span> <span class=err>&gt;);</span>
+</span></span><span class=line><span class=cl>    <span class=nl>state</span><span class=err>.</span><span class=nl>set_global</span><span class=err>(&#34;</span><span class=nl>myfunc</span><span class=err>&#34;);</span>
+</span></span><span class=line><span class=cl>    <span class=err>...</span> <span class=nl>run</span> <span class=nl>some</span> <span class=nl>script</span> <span class=err>...</span>
+</span></span><span class=line><span class=cl><span class=err>}</span>
+</span></span></code></pre></div><p>Neat? I think so, but maybe not so much. I&rsquo;m pretty sure there are
+cooler ways of achieving the above purpose in a cleaner way, but this
+one works nicely and has few overhead.</p></article><p class="mt-4 text-muted"><i>(Content also available at: <a href=gemini://capsule.jmmv.dev/post/2011/01/injecting-c-functions-into-lua.gmi>gemini://capsule.jmmv.dev/post/2011/01/injecting-c-functions-into-lua.gmi</a>)</i></p></div></div><div class="container post-links"><div class=row><div class="col me-auto text-start"><span><a href=https://jmmv.dev/2011/01/error-handling-in-lua-kyua-approach.html>&#171; Previous</a></span></div><div class="col text-center"><span><a href=/archive.html>All posts</a></span></div><div class="col ms-auto text-end"><span><a href=https://jmmv.dev/2011/01/teeny-tiny-review-of-twitterville.html>Next &#187;</a></span></div></div></div><div class="container post-votes"><div class=row><div class="col-lg-4 my-2"><div class=row><div class=col><a onclick=voteThumbsUp() class="btn w-100 btn-outline-success" id=thumbs-up-btn>👍
 (<span id=thumbs-up-count>0</span>)</a></div><div class=col><a onclick=voteThumbsDown() class="btn w-100 btn-outline-danger" id=thumbs-down-btn>👎
 (<span id=thumbs-down-count>0</span>)</a></div></div></div><div class="col-lg-8 my-2 d-none d-sm-block"><div class=row><div class="col-md-4 text-center"><a href="https://www.reddit.com/submit?title=Injecting+C%2B%2B+functions+into+Lua&amp;url=https%3A%2F%2Fjmmv.dev%2F2011%2F01%2Finjecting-c-functions-into-lua.html" class="btn w-100 btn-outline-primary">Share on
 <img src=/images/badges/reddit.png alt=Reddit width=24 height=24></a></div><div class="col-md-4 text-center"><a href="https://news.ycombinator.com/submitlink?t=Injecting+C%2B%2B+functions+into+Lua&amp;u=https%3A%2F%2Fjmmv.dev%2F2011%2F01%2Finjecting-c-functions-into-lua.html" class="btn w-100 btn-outline-primary">Share on
